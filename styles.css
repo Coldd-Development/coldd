@@ -1672,6 +1672,10 @@ body.no-scroll { overflow: hidden; }
   background-color: var(--fg-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat; }
 .pd-faq-item[open] summary::after { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat; }
 .pd-faq-item p { font-size: 14px; color: var(--fg-2); line-height: 1.65; padding: 0 0 16px; }
+/* Links inside an answer body inherited no color rule, so they fell back to
+   the browser's default link blue against this page's dark background -
+   readable on white, not on near-black. */
+.pd-faq-item p a { color: var(--accent); text-decoration: underline; }
 .pd-faq-contact { font-size: 13px; color: var(--fg-3); margin-top: 18px; }
 .pd-faq-contact a { color: var(--accent); text-decoration: none; }
 
