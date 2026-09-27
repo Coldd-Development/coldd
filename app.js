@@ -6932,7 +6932,7 @@
               if (window.coldAuth && window.coldAuth.logClientError) {
                 ecode = window.coldAuth.logClientError('checkout', (err && err.message) || 'Checkout could not start', err && err.stack, {
                   fnName: checkoutFn,
-                  context: { payMethod: payMethod, itemCount: (checkoutBody.items || []).length, coupon: checkoutBody.couponCode || null, gift: !!checkoutBody.giftRecipientUserId }
+                  context: { payMethod: payMethod, paymentMethodType: checkoutBody.paymentMethodType || null, itemCount: (checkoutBody.items || []).length, coupon: checkoutBody.couponCode || null, gift: !!checkoutBody.giftRecipientUserId }
                 });
               }
             } catch (e) {}
