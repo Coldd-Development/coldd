@@ -137,32 +137,6 @@
         has: function (slug, licence) { return !!(cache && cache[slug + (licence === 'resell' ? '--resell' : '')]); },
         ready: function () { return !!cache; }
       };
-      // Shared by any owned-product download button (catalog/home grids,
-      // dashboard licenses, product page) so each place doesn't need its
-      // own copy of the get-download-url + blob-download plumbing.
-      window.__coldRequestDownload = function (slug, btn) {
-        var prev = btn.textContent;
-        btn.disabled = true; btn.textContent = 'Preparing…';
-        (window.coldAuth ? window.coldAuth.invokeFn('get-download-url', { slug: slug }) :
-          window.coldSupabase.functions.invoke('get-download-url', { body: { slug: slug } }).then(function (res) {
-            if (res.error || !res.data || !res.data.ok) throw new Error((res.data && res.data.error) || 'Unavailable');
-            return res.data;
-          }))
-          .then(function (data) {
-            return fetch(data.url).then(function (r) {
-              if (!r.ok) throw new Error('Download failed.');
-              return r.blob();
-            }).then(function (blob) {
-              var objectUrl = URL.createObjectURL(blob);
-              var a = document.createElement('a');
-              a.href = objectUrl; a.download = data.filename || '';
-              document.body.appendChild(a); a.click(); a.remove();
-              setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
-            });
-          })
-          .then(function () { btn.disabled = false; btn.textContent = prev; })
-          .catch(function (err) { btn.textContent = (err && err.message) || 'Unavailable'; btn.disabled = false; });
-      };
     })();
 
     (function () {
@@ -1556,14 +1530,7 @@
             if (buyBtn) buyBtn.disabled = owned;
             var thumb = card.querySelector('.p-thumb');
             var badge = thumb ? thumb.querySelector('.p-owned-badge') : null;
-            if (owned && thumb && !badge) {
-              thumb.insertAdjacentHTML('beforeend', '<button type="button" class="p-owned-badge">Download</button>');
-              badge = thumb.querySelector('.p-owned-badge');
-              badge.addEventListener('click', function (e) {
-                e.preventDefault(); e.stopPropagation();
-                window.__coldRequestDownload(card.getAttribute('data-id'), badge);
-              });
-            }
+            if (owned && thumb && !badge) thumb.insertAdjacentHTML('beforeend', '<span class="p-owned-badge">Owned</span>');
           });
         });
       }
@@ -1880,14 +1847,8 @@
             if (buyBtn) buyBtn.disabled = owned;
             var thumb = card.querySelector('.p-thumb');
             var badge = thumb ? thumb.querySelector('.p-owned-badge') : null;
-            if (owned && thumb && !badge) {
-              thumb.insertAdjacentHTML('beforeend', '<button type="button" class="p-owned-badge">Download</button>');
-              badge = thumb.querySelector('.p-owned-badge');
-              badge.addEventListener('click', function (e) {
-                e.preventDefault(); e.stopPropagation();
-                window.__coldRequestDownload(card.getAttribute('data-id'), badge);
-              });
-            } else if (!owned && badge) badge.remove();
+            if (owned && thumb && !badge) thumb.insertAdjacentHTML('beforeend', '<span class="p-owned-badge">Owned</span>');
+            else if (!owned && badge) badge.remove();
           });
         }
         window.__coldOwned.load().then(markOwned);
