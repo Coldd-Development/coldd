@@ -848,6 +848,13 @@
         background: var(--bg-3); border-radius: 10px;
       }
       body.nav-menu-open { overflow: hidden; }
+      /* .tc (currency/cart pill) is a separate fixed element with its own
+         z-index (250) so it stays clickable over normal page content - but
+         that same z-index also floats it on top of the full-screen mobile
+         menu (z-index 1) once open, reading as a stray button overlapping
+         the menu rather than an actual navbar control. Hide it while the
+         menu is open; the menu itself has no cart action to preserve. */
+      body.nav-menu-open .tc { display: none; }
     }
 
     @media (max-width: 900px) {
