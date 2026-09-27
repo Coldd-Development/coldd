@@ -315,7 +315,7 @@ Deno.serve(async (req: Request) => {
 
       return json({ ok: true, url: session.url });
     } catch (stripeErr) {
-      console.error("[create-checkout-session] stripe error:", stripeErr);
+      console.error("[create-checkout-session] stripe error (requestedMethod=" + requestedMethod + ", currency=" + currency + "):", stripeErr);
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
       return json({ ok: false, error: "Could not start checkout with Stripe." }, 500);
     }
