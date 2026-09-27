@@ -3081,26 +3081,48 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
   .co-more-methods-bar:hover { border-color: var(--hairline-strong); color: var(--fg); }
 }
 .confirm-modal.co-methods { width: 560px; max-width: 96vw; max-height: 88vh; padding: 0; text-align: left;
-  display: flex; flex-direction: column; overflow: hidden; }
+  display: flex; flex-direction: column; overflow: hidden; background: var(--bg-2); }
 .co-methods .mkt-popup-x { top: 15px; right: 15px; }
-.co-methods-search { margin: 16px 26px 0; padding: 11px 16px; border-radius: var(--r-pill);
-  border: 1px solid var(--hairline); background: var(--ink-25); color: var(--fg); font-family: inherit; font-size: 13px; }
-.co-methods-grid { flex: 1 1 auto; overflow-y: auto; padding: 16px 26px 26px;
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.co-method-tile { padding: 16px 12px; border-radius: var(--r-sm); background: var(--bg-3); border: 1px solid var(--hairline);
-  color: var(--fg); font-family: inherit; font-size: 13px; font-weight: 700; text-align: center; cursor: pointer;
-  transition: border-color .18s var(--ease), background .18s var(--ease);
-  display: flex; align-items: center; justify-content: center; min-height: 64px; }
-.co-method-tile:has(img) { padding: 10px 14px; }
-.co-method-tile img { max-width: 100%; max-height: 32px; object-fit: contain; display: block; }
+.co-methods-sub { margin: 6px 26px 0; padding: 0; font-size: 13px; color: var(--fg-3); line-height: 1.5; }
+.co-methods-search { margin: 16px 26px 0; padding: 11px 16px 11px 40px; border-radius: var(--r-pill);
+  border: 1px solid var(--hairline); background: var(--ink-25); color: var(--fg); font-family: inherit; font-size: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8494' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 15px center; background-size: 15px;
+  transition: border-color .18s var(--ease), background-color .18s var(--ease); }
+.co-methods-search:focus { outline: none; border-color: var(--hairline-strong); background-color: rgba(255,255,255,0.05); }
+/* Tile grid on a dark surface: every brand mark keeps its own required
+   background (a monochrome logo gets a small white card so it stays
+   legible, a mark that already ships on its own brand colour - Zip,
+   Satispay, BLIK, EPS, Bizum, Pix - keeps that colour as-is), but none of
+   them are allowed to fill the tile - the tile itself always reads dark,
+   with the mark sitting inside it as a contained chip rather than a wall
+   of white or colour. */
+.co-methods-grid { flex: 1 1 auto; overflow-y: auto; padding: 18px 26px 26px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.co-method-tile { padding: 18px 10px; border-radius: 14px; background: var(--bg-3); border: 1px solid var(--hairline);
+  color: var(--fg-2); font-family: inherit; font-size: 12.5px; font-weight: 700; text-align: center; cursor: pointer;
+  transition: border-color .18s var(--ease), background .18s var(--ease), transform .18s var(--ease);
+  display: flex; align-items: center; justify-content: center; min-height: 72px; }
+.co-method-badge { display: inline-flex; align-items: center; justify-content: center;
+  padding: 9px 14px; border-radius: 9px; background: #fff; box-shadow: 0 4px 14px -6px var(--ink-75); }
+.co-method-badge img { max-width: 100%; max-height: 20px; object-fit: contain; display: block; }
+/* Marks that already carry their own brand-colour background (not white)
+   keep that colour instead of sitting on an added white card - clipped to
+   the same chip shape so the grid still reads as one consistent system. */
+.co-method-badge.co-method-badge-tint { padding: 0; overflow: hidden; background: none; box-shadow: none; }
+.co-method-badge.co-method-badge-tint img { max-height: 40px; border-radius: 9px; }
+.co-method-tile-text { font-size: 13px; }
 @media (hover: hover) and (pointer: fine) {
-  .co-method-tile:hover { border-color: var(--accent); background: rgba(255,255,255,0.06); }
+  .co-method-tile:hover { border-color: var(--accent); background: rgba(255,255,255,0.06); transform: translateY(-1px); }
 }
+.co-method-tile:active { transform: translateY(0) scale(0.98); }
+.co-method-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .co-method-tile[hidden] { display: none; }
 .co-methods-empty { font-size: 13px; color: var(--fg-3); text-align: center; padding: 0 26px 26px; margin: 0; }
 @media (max-width: 520px) {
+  .co-methods-sub { margin-left: 20px; margin-right: 20px; }
   .co-methods-search { margin-left: 20px; margin-right: 20px; }
-  .co-methods-grid { grid-template-columns: repeat(2, 1fr); padding: 14px 20px 20px; }
+  .co-methods-grid { grid-template-columns: repeat(2, 1fr); padding: 16px 20px 20px; }
 }
 
 .co-empty a { color: var(--accent); text-decoration: none; }
