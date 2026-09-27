@@ -208,7 +208,18 @@
           <div class="dash-stat glass"><span class="ds-label">Available</span><span class="ds-num" id="refStatAvailable"> - </span></div>
           <div class="dash-stat glass"><span class="ds-label">Paid out</span><span class="ds-num" id="refStatPaid"> - </span></div>
         </div>
-        <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Your product links</h2></div><table class="dash-table ref-prod-table"><thead><tr><th>Product</th><th>Earn per sale</th><th></th></tr></thead><tbody id="refProdBody"></tbody></table></div>
+        <div class="dash-card glass">
+          <div class="dash-card-head"><h2>Your product links</h2></div>
+          <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="refProdSearch" placeholder="Search products…" aria-label="Search products" /></div>
+          <div class="dash-filter-row" style="margin-bottom:0;">
+            <label class="dash-filter-field"><span>Category</span>
+              <select id="refProdCat" data-csel>
+                <option value="all">All categories</option>
+              </select>
+            </label>
+          </div>
+          <div class="dash-rows" id="refProdBody"></div>
+        </div>
         <div class="dash-card glass" id="refPayoutCard">
           <div class="dash-card-head"><h2>Request a payout</h2></div>
           <form class="auth-form" id="refPayoutForm" novalidate style="max-width:420px;">

@@ -4621,18 +4621,54 @@
       var refProdBody = document.getElementById('refProdBody');
       if (refProdBody) {
         var fmt = function (n) { return window.__money ? window.__money(n) : ('$' + n); };
-        var cat = (window.__CATALOG || []).slice(0, 6);
-        // Real sales/earnings for these links live in the "Referral sales"
-        // table below (get-referral-stats), keyed off orders.ref_product_slug
-        // - this row is just the link itself plus its flat "Earn per sale"
-        // rate (20% of the product's own price).
-        window.coldAuth.invokeFn('get-referral-code', {}).then(function (r) {
-          var code = r && r.code; if (!code) return;
-          refProdBody.innerHTML = cat.map(function (p) {
+        var refProdSearch = document.getElementById('refProdSearch');
+        var refProdCatSel = document.getElementById('refProdCat');
+        var refCode = null;
+
+        // Populated straight from window.__CATALOG (catalog.js has already
+        // resolved by the time app.js runs - see catalog.js's data-then
+        // chain), not a fixed slice of it, so a product added, renamed or
+        // retired later shows up here with no further changes. Category
+        // options are collected from whatever's actually in the catalog
+        // right now rather than a hardcoded list, for the same reason.
+        var allProducts = (window.__CATALOG || []).slice().sort(function (a, b) { return a.title.localeCompare(b.title); });
+        if (refProdCatSel) {
+          var cats = [];
+          allProducts.forEach(function (p) { if (p.cat && cats.indexOf(p.cat) < 0) cats.push(p.cat); });
+          cats.sort();
+          refProdCatSel.innerHTML = '<option value="all">All categories</option>' +
+            cats.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+          // __coldSelect enhances data-csel selects once, at page load, off
+          // whatever options they had then (just "All categories" - the
+          // catalog wasn't necessarily in yet). Options just changed, so the
+          // built dropdown from that first pass is stale - tear it down and
+          // let __coldSelect build a fresh one off the real category list.
+          if (refProdCatSel.__csel) {
+            var staleWrap = refProdCatSel.nextElementSibling;
+            if (staleWrap && staleWrap.classList.contains('csel')) staleWrap.remove();
+            refProdCatSel.__csel = false;
+            refProdCatSel.classList.remove('csel-native');
+          }
+          if (window.__coldSelect) window.__coldSelect(refProdCatSel);
+        }
+
+        function renderProdRows() {
+          var q = (refProdSearch && refProdSearch.value || '').trim().toLowerCase();
+          var wantCat = (refProdCatSel && refProdCatSel.value) || 'all';
+          var rows = allProducts.filter(function (p) {
+            if (wantCat !== 'all' && p.cat !== wantCat) return false;
+            if (q && p.title.toLowerCase().indexOf(q) < 0) return false;
+            return true;
+          });
+          if (!rows.length) { refProdBody.innerHTML = '<p class="dash-empty-note">No products match your search.</p>'; return; }
+          if (!refCode) { refProdBody.innerHTML = '<p class="dash-empty-note">Loading…</p>'; return; }
+          refProdBody.innerHTML = rows.map(function (p) {
             var earn = Math.round(p.priceNum * 0.2 * 100) / 100;
-            var link = (p.page || '/product') + '/' + p.id + '?ref=' + encodeURIComponent(code);
-            return '<tr><td>' + esc(p.title) + '</td><td><span class="p-price" data-usd="' + earn + '">' + fmt(earn) + '</span></td>' +
-              '<td><button class="btn btn-ghost ref-prod-copy" type="button" data-link="' + link + '">Copy link</button></td></tr>';
+            var link = (p.page || '/product') + '/' + p.id + '?ref=' + encodeURIComponent(refCode);
+            return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'' + esc(p.image) + '\')"></span>' +
+              '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div>' +
+              '<div class="dr-sub">' + esc(p.cat || '') + (p.cat ? ' · ' : '') + 'Earn ' + fmt(earn) + ' per sale</div></div>' +
+              '<div class="dr-actions"><button class="btn btn-primary ref-prod-copy" type="button" data-link="' + esc(link) + '">Copy link</button></div></div>';
           }).join('');
           refProdBody.querySelectorAll('.ref-prod-copy').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -4641,6 +4677,19 @@
               var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1400);
             });
           });
+        }
+
+        if (refProdSearch) refProdSearch.addEventListener('input', renderProdRows);
+        if (refProdCatSel) refProdCatSel.addEventListener('change', renderProdRows);
+
+        renderProdRows();
+        // Real sales/earnings for these links live in the "Referral sales"
+        // table below (get-referral-stats), keyed off orders.ref_product_slug
+        // - this list is just each link plus its flat "Earn per sale" rate
+        // (20% of the product's own price).
+        window.coldAuth.invokeFn('get-referral-code', {}).then(function (r) {
+          refCode = r && r.code;
+          renderProdRows();
         }).catch(function () {});
       }
 
