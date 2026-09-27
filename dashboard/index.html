@@ -172,8 +172,8 @@
         <div class="dash-head"><h1>Purchase history</h1><p>Every order on your account.</p></div>
         <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="dashPurchSearch" placeholder="Search by product or order number…" aria-label="Search purchase history" /></div>
         <div class="dash-filter-row">
-          <label class="dash-filter-field"><span>From</span><input type="date" id="dashPurchFrom" /></label>
-          <label class="dash-filter-field"><span>To</span><input type="date" id="dashPurchTo" /></label>
+          <label class="dash-filter-field"><span>From</span><input type="date" id="dashPurchFrom" data-cdate data-placeholder="Any date" /></label>
+          <label class="dash-filter-field"><span>To</span><input type="date" id="dashPurchTo" data-cdate data-placeholder="Any date" /></label>
           <label class="dash-filter-field"><span>Min amount</span><input type="number" id="dashPurchMinAmt" min="0" step="0.01" placeholder="$0" /></label>
           <label class="dash-filter-field"><span>Max amount</span><input type="number" id="dashPurchMaxAmt" min="0" step="0.01" placeholder="Any" /></label>
           <label class="dash-filter-field"><span>Status</span>
@@ -186,7 +186,7 @@
           </label>
           <button class="btn btn-ghost dash-filter-clear" id="dashPurchClear" type="button">Clear filters</button>
         </div>
-        <div class="dash-card glass">
+        <div class="dash-card glass flat">
           <div class="dash-rows" id="dashPurchasesBody"><p class="dash-empty-note">Loading…</p></div>
         </div>
       </section>
@@ -197,64 +197,50 @@
       </section>
       <section class="dash-panel" id="panel-wishlist" hidden>
         <div class="dash-head"><h1>Wishlist</h1><p>Saved for later.</p></div>
-        <div class="dash-grid" id="dashWishlistRows"><p class="dash-empty-note">Loading…</p></div>
+        <div class="dash-card glass flat">
+          <div class="dash-grid" id="dashWishlistRows"><p class="dash-empty-note">Loading…</p></div>
+        </div>
       </section>
       <section class="dash-panel" id="panel-referrals" hidden>
-        <div class="dash-head"><h1>Referrals</h1><p>Refer friends to coldd or to a specific product and earn on every sale.</p></div>
+        <div class="dash-head"><h1>Referrals</h1><p>Share a link to any single product and earn 20% of its price on every purchase made through your link.</p></div>
         <div class="dash-stats">
           <div class="dash-stat glass"><span class="ds-label">Total earned</span><span class="ds-num" id="refStatEarned"> - </span></div>
           <div class="dash-stat glass"><span class="ds-label">Available</span><span class="ds-num" id="refStatAvailable"> - </span></div>
           <div class="dash-stat glass"><span class="ds-label">Paid out</span><span class="ds-num" id="refStatPaid"> - </span></div>
         </div>
-        <div class="ref-tabs">
-          <button class="ref-tab active" type="button" data-reftab="account">Account referral</button>
-          <button class="ref-tab" type="button" data-reftab="product">Product referrals</button>
-        </div>
-        <div class="ref-pane" data-refpane="account">
-          <div class="dash-card glass ref-link"><span class="ref-label">Your sign-up referral link</span><div class="ref-box"><input id="refLink" type="text" readonly aria-label="Your sign-up referral link" value="" /><button class="btn btn-primary" id="refCopy" type="button">Copy</button></div><p class="ref-note">Earn 20% of every purchase made by users who sign up through your link. Payouts are requested manually below and reviewed by our team - nothing is sent automatically.</p></div>
-          <div class="dash-stats">
-            <div class="dash-stat glass"><span class="ds-label">Link clicks</span><span class="ds-num" id="refStatClicks">0</span></div>
-            <div class="dash-stat glass"><span class="ds-label">Sign-ups</span><span class="ds-num" id="refStatSignups">0</span></div>
-            <div class="dash-stat glass"><span class="ds-label">Conversions</span><span class="ds-num" id="refStatConversions">0</span></div>
-            <div class="dash-stat glass"><span class="ds-label">Conversion rate</span><span class="ds-num" id="refStatRate">0%</span></div>
-          </div>
-          <div class="dash-card glass" id="refPayoutCard">
-            <div class="dash-card-head"><h2>Request a payout</h2></div>
-            <form class="auth-form" id="refPayoutForm" novalidate style="max-width:420px;">
-              <div class="auth-field" data-for="method"><label for="refPayoutMethod">Method</label>
-                <div class="ref-method-dd">
-                  <select id="refPayoutMethod" name="method" class="ref-method-native">
-                    <option value="usd">USD</option>
-                    <option value="robux">Robux</option>
-                    <option value="store_credit">Store credit (USD)</option>
-                  </select>
-                  <button type="button" class="ref-method-btn" aria-haspopup="listbox" aria-expanded="false">
-                    <span class="ref-method-val">USD</span>
-                    <svg class="ref-method-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
-                  <div class="ref-method-menu" role="listbox" aria-label="Payout method" hidden>
-                    <button type="button" class="ref-method-opt active" data-value="usd" role="option" aria-selected="true"><span>USD</span><span class="ref-method-radio"></span></button>
-                    <button type="button" class="ref-method-opt" data-value="robux" role="option" aria-selected="false"><span>Robux</span><span class="ref-method-radio"></span></button>
-                    <button type="button" class="ref-method-opt" data-value="store_credit" role="option" aria-selected="false"><span>Store credit (USD)</span><span class="ref-method-radio"></span></button>
-                  </div>
+        <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Your product links</h2></div><table class="dash-table ref-prod-table"><thead><tr><th>Product</th><th>Earn per sale</th><th></th></tr></thead><tbody id="refProdBody"></tbody></table></div>
+        <div class="dash-card glass" id="refPayoutCard">
+          <div class="dash-card-head"><h2>Request a payout</h2></div>
+          <form class="auth-form" id="refPayoutForm" novalidate style="max-width:420px;">
+            <div class="auth-field" data-for="method"><label for="refPayoutMethod">Method</label>
+              <div class="ref-method-dd">
+                <select id="refPayoutMethod" name="method" class="ref-method-native">
+                  <option value="usd">USD</option>
+                  <option value="robux">Robux</option>
+                  <option value="store_credit">Store credit (USD)</option>
+                </select>
+                <button type="button" class="ref-method-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="ref-method-val">USD</span>
+                  <svg class="ref-method-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="ref-method-menu" role="listbox" aria-label="Payout method" hidden>
+                  <button type="button" class="ref-method-opt active" data-value="usd" role="option" aria-selected="true"><span>USD</span><span class="ref-method-radio"></span></button>
+                  <button type="button" class="ref-method-opt" data-value="robux" role="option" aria-selected="false"><span>Robux</span><span class="ref-method-radio"></span></button>
+                  <button type="button" class="ref-method-opt" data-value="store_credit" role="option" aria-selected="false"><span>Store credit (USD)</span><span class="ref-method-radio"></span></button>
                 </div>
               </div>
-              <div class="auth-field" data-for="amount"><label for="refPayoutAmount">Amount</label><input id="refPayoutAmount" name="amount" type="number" min="0.01" step="0.01" /><span class="auth-err"></span></div>
-              <button class="btn btn-primary auth-submit" type="submit" style="width:auto;align-self:flex-start;"><span class="btn-label">Request payout</span><span class="btn-spinner" hidden></span></button>
-              <div class="auth-msg"></div>
-            </form>
-          </div>
-          <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Referral activity</h2></div><table class="dash-table"><thead><tr><th>User</th><th>Signed up</th><th>Status</th><th>Earned</th></tr></thead><tbody id="refActivityBody">
-            <tr><td colspan="4" class="adm-empty">No referrals yet.</td></tr>
-          </tbody></table></div>
-          <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Payout history</h2></div><table class="dash-table"><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead><tbody id="refPayoutBody">
-            <tr><td colspan="4" class="adm-empty">No payout requests yet.</td></tr>
-          </tbody></table></div>
+            </div>
+            <div class="auth-field" data-for="amount"><label for="refPayoutAmount">Amount</label><input id="refPayoutAmount" name="amount" type="number" min="0.01" step="0.01" /><span class="auth-err"></span></div>
+            <button class="btn btn-primary auth-submit" type="submit" style="width:auto;align-self:flex-start;"><span class="btn-label">Request payout</span><span class="btn-spinner" hidden></span></button>
+            <div class="auth-msg"></div>
+          </form>
         </div>
-        <div class="ref-pane" data-refpane="product" hidden>
-          <p class="ref-note ref-note-top">Share a link to any single product and earn 20% of its price on every purchase made through your link.</p>
-          <div class="dash-card glass dash-tablewrap"><table class="dash-table ref-prod-table"><thead><tr><th>Product</th><th>Earn per sale</th><th></th></tr></thead><tbody id="refProdBody"></tbody></table></div>
-        </div>
+        <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Referral sales</h2></div><table class="dash-table"><thead><tr><th>Product</th><th>Date</th><th>Earned</th></tr></thead><tbody id="refActivityBody">
+          <tr><td colspan="3" class="adm-empty">No referral sales yet.</td></tr>
+        </tbody></table></div>
+        <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Payout history</h2></div><table class="dash-table"><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead><tbody id="refPayoutBody">
+          <tr><td colspan="4" class="adm-empty">No payout requests yet.</td></tr>
+        </tbody></table></div>
       </section>
       <section class="dash-panel" id="panel-account" hidden>
         <div class="dash-head"><h1>Account settings</h1><p>Update your details, manage security, or close your account.</p></div>
