@@ -310,9 +310,9 @@
     /* Flat ember, no gradient, no coloured halo. Depth comes from a real border
        and a neutral shadow; state comes from the fill stepping up. */
     .btn-primary { color: #fff; background: var(--accent-deep);
-      border-color: rgba(255,255,255,0.14); box-shadow: var(--e-2); }
+      border-color: rgba(255,255,255,0.14); }
     .btn-primary:hover { background: var(--accent); border-color: rgba(255,255,255,0.24); }
-    .btn-primary:active { background: #cf2f27; box-shadow: var(--e-1); }
+    .btn-primary:active { background: #cf2f27; }
     .btn-ghost { color: var(--fg); background: var(--glass-top); border-color: var(--hairline); }
     .btn-ghost:hover { background: rgba(255,255,255,0.10); border-color: var(--hairline-strong); }
     .btn-ghost:active { background: rgba(255,255,255,0.06); }
@@ -1057,8 +1057,8 @@
 .p-body { padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }
 .p-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .p-price-row { display: flex; align-items: baseline; gap: 9px; margin-top: 8px; }
-.p-price-row .p-price { font-size: 17px; font-weight: 700; color: var(--price); }
-.p-price-row .p-price-free { font-size: 17px; font-weight: 700; color: var(--price); }
+.p-price-row .p-price { font-size: 17px; font-weight: 700; color: var(--accent-deep); }
+.p-price-row .p-price-free { font-size: 17px; font-weight: 700; color: var(--accent-deep); }
 .p-price-row .p-was { font-size: 13px; font-weight: 600; color: var(--fg-3); text-decoration: line-through; }
 /* Ratings are drawn, not typed. The ★ / ☆ text glyphs rendered at whatever
    weight and baseline the font happened to give them, which is the tell. These
@@ -1353,7 +1353,7 @@ html[data-ann="on"] .tc { top: 56px; }
 .cart-fab.has-items .cart-fab-count { transform: scale(1); opacity: 1; }
 .cart-fab-total { flex: 0 0 auto; margin-left: 11px; font-size: 13px; font-weight: 700; letter-spacing: -0.01em;
   color: var(--fg-3); white-space: nowrap; transition: color .25s var(--ease); }
-.cart-fab.has-items .cart-fab-total { color: var(--price); }
+.cart-fab.has-items .cart-fab-total { color: var(--accent-deep); }
 @media (max-width: 520px) { .tc { right: 14px; } }
 
 body.no-scroll { overflow: hidden; }
@@ -1409,7 +1409,7 @@ body.no-scroll { overflow: hidden; }
 .ci-info { flex: 1; min-width: 0; cursor: pointer; }
 .ci-info:hover .ci-title { color: var(--accent); }
 .ci-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ci-price { font-size: 13px; color: var(--price); margin-top: 3px; font-weight: 700; }
+.ci-price { font-size: 13px; color: var(--accent-deep); margin-top: 3px; font-weight: 700; }
 .ci-qty { display: inline-flex; align-items: center; gap: 2px; background: var(--ink-25);
   border: 1px solid var(--hairline); border-radius: 999px; padding: 3px; }
 .ci-qty button { width: 24px; height: 24px; border-radius: 999px; border: none; background: transparent; color: var(--fg);
@@ -1423,7 +1423,7 @@ body.no-scroll { overflow: hidden; }
 .cart-foot { padding: 18px 22px 22px; border-top: 1px solid var(--hairline); background: var(--ink-25); }
 .cart-sub { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
 .cart-sub span:first-child { font-size: 12px; color: var(--fg-2); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
-.cart-sub span:last-child { color: var(--price); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.cart-sub span:last-child { color: var(--accent-deep); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
 .cart-checkout { width: 100%; justify-content: center; }
 .cart-note { font-size: 11px; color: var(--fg-3); text-align: center; margin-top: 11px; }
 
@@ -1441,7 +1441,7 @@ body.no-scroll { overflow: hidden; }
 .pm-lic-name { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
 .pm-lic-note { font-size: 12px; color: var(--fg-3); line-height: 1.35; }
 .pm-lic-price { flex: 0 0 auto; font-size: 15px; font-weight: 800; color: var(--fg); letter-spacing: -0.01em; white-space: nowrap; }
-.pm-lic.active .pm-lic-price { color: var(--price); }
+.pm-lic.active .pm-lic-price { color: var(--accent-deep); }
 
 .pm-x { position: absolute; top: 14px; right: 14px; z-index: 2; background: rgba(10,11,14,0.55); }
 .product { cursor: pointer; }
@@ -1619,7 +1619,7 @@ body.no-scroll { overflow: hidden; }
 @media (max-width: 760px) { .adm-sticky-save { top: auto; bottom: 16px; right: 16px; } }
 .pd-price-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .pd-price-main { display: flex; align-items: baseline; gap: 10px; }
-.pd-price { font-size: 30px; font-weight: 800; color: var(--price); letter-spacing: -0.02em; }
+.pd-price { font-size: 30px; font-weight: 800; color: var(--accent-deep); letter-spacing: -0.02em; }
 .pd-price-was { font-size: 16px; font-weight: 600; color: var(--fg-3); text-decoration: line-through; }
 .pd-price-rbx { font-size: 14px; font-weight: 700; color: var(--fg-2); }
 .pd-price-note { font-size: 12px; color: var(--fg-3); margin-top: 6px; }
@@ -1838,7 +1838,7 @@ body.no-scroll { overflow: hidden; }
 .sresult-title b { color: var(--accent); font-weight: 700; }
 .sresult-meta { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
 .sresult-meta b { color: var(--accent); font-weight: 600; }
-.sresult-price { flex: 0 0 auto; font-size: 14px; font-weight: 700; color: var(--price); }
+.sresult-price { flex: 0 0 auto; font-size: 14px; font-weight: 700; color: var(--accent-deep); }
 .search-empty { padding: 26px 18px; text-align: center; color: var(--fg-3); font-size: 14px; }
 .search-empty b { color: var(--fg-2); font-weight: 600; }
 @media (max-width: 520px) { .search-panel { width: calc(100vw - 24px); } }
@@ -2001,7 +2001,7 @@ html[data-ann="on"] header.nav { top: 52px; }
 .product.deal .p-body { padding: 15px 17px 17px; }
 .product.deal h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .product.deal .p-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
-.product.deal .p-prices .p-price { font-size: 16px; font-weight: 700; color: var(--price); }
+.product.deal .p-prices .p-price { font-size: 16px; font-weight: 700; color: var(--accent-deep); }
 .product.deal .p-btn { font-size: 13px; font-weight: 600; color: var(--fg); padding: 7px 14px; border-radius: 999px;
   background: rgba(255,255,255,0.05); border: 1px solid var(--hairline); transition: background .2s, border-color .2s; }
 .product.deal:hover .p-btn { background: rgba(255,77,68,0.18); border-color: rgba(255,77,68,0.4); }
@@ -2117,6 +2117,8 @@ body.auth-page { min-height: 100vh; min-height: 100dvh; }
 .auth-msg { margin-top: 8px; padding: 12px 14px; border-radius: 12px; font-size: 13px; font-weight: 500; line-height: 1.5;
   background: rgba(255,77,68,0.1); border: 1px solid rgba(255,77,68,0.28); color: var(--fg-1); display: none; }
 .auth-msg.show { display: flex; align-items: flex-start; gap: 9px; }
+.auth-msg a { color: var(--accent); font-weight: 600; }
+.auth-msg a:hover { text-decoration: underline; }
 .auth-msg::before { content: ""; flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; background: var(--accent);
   -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>') center / contain no-repeat;
   mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>') center / contain no-repeat; }
@@ -2417,7 +2419,7 @@ button.dt-badge:disabled { cursor: default; opacity: 0.6; }
 .dp-lic-badge svg { width: 12px; height: 12px; flex: 0 0 auto; }
 .dp-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }
 .dp-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; }
-.dp-price { font-size: 16px; font-weight: 700; color: var(--price); margin-top: -6px; }
+.dp-price { font-size: 16px; font-weight: 700; color: var(--accent-deep); margin-top: -6px; }
 .dp-was { font-size: 13px; font-weight: 600; color: var(--fg-3); text-decoration: line-through; margin-right: 6px; }
 /* Wishlist bundle-deal state (?bundle= token from a wishlist-reminder or
    post-purchase-upsell email, read via get-bundle-deal) - a discounted
@@ -2703,7 +2705,7 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
 .tu-item.is-in { border-color: rgba(52,224,138,0.4); }
 .tu-item .dl-thumb { flex: 0 0 46px; width: 46px; height: 46px; }
 .tu-was { color: var(--fg-3); text-decoration: line-through; margin-right: 5px; }
-.tu-now { color: var(--price); font-weight: 700; }
+.tu-now { color: var(--accent-deep); font-weight: 700; }
 .tu-off { display: inline-block; margin-left: 7px; font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
   color: var(--accent); background: rgba(255,77,68,0.12); padding: 2px 7px; border-radius: var(--r-pill); vertical-align: 1px; }
 .tu-toggle { min-height: 36px; padding: 0 16px; font-size: 13px; }
@@ -2885,7 +2887,7 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
 .co-item-info { flex: 1; min-width: 0; }
 .co-item-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .co-item-sub { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
-.co-item-price { font-size: 13px; font-weight: 700; color: var(--price); white-space: nowrap; }
+.co-item-price { font-size: 13px; font-weight: 700; color: var(--accent-deep); white-space: nowrap; }
 .co-item-x { flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: var(--fg-3); border-radius: var(--r-ctl); cursor: pointer; transition: color .15s var(--ease), background .15s var(--ease); }
 @media (hover: hover) and (pointer: fine) { .co-item-x:hover { color: var(--fg-1); background: rgba(255,255,255,0.07); } }
@@ -2946,7 +2948,7 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
   background: #0f1014 center / cover no-repeat; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
 .co-cross-info { flex: 1; min-width: 0; }
 .co-cross-title { font-size: 14px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.co-cross-price { font-size: 13px; font-weight: 700; color: var(--price); margin-top: 4px; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.co-cross-price { font-size: 13px; font-weight: 700; color: var(--accent-deep); margin-top: 4px; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
 .co-cross-was { color: var(--fg-3); text-decoration: line-through; font-weight: 400; font-size: 12px; }
 .co-cross-off { color: var(--fg-3); font-weight: 600; font-size: 10.5px; letter-spacing: 0.02em; }
 .co-cross-note { flex-basis: 100%; color: var(--fg-3); font-weight: 500; font-size: 11px; }
@@ -2993,7 +2995,7 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
 .co-offer-info { flex: 1; min-width: 0; }
 .co-offer-name { font-size: 14.5px; font-weight: 700; line-height: 1.3;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.co-offer-price { font-size: 17px; font-weight: 800; color: var(--price); margin-top: 5px;
+.co-offer-price { font-size: 17px; font-weight: 800; color: var(--accent-deep); margin-top: 5px;
   display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; letter-spacing: -0.01em; }
 .co-offer-was { color: var(--fg-3); text-decoration: line-through; font-weight: 400; font-size: 13px; letter-spacing: 0; }
 .co-offer-off { color: var(--fg-3); font-weight: 600; font-size: 11px; letter-spacing: 0.02em; }
@@ -3045,16 +3047,10 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
   color: var(--fg); font-family: inherit; font-size: 13px; font-weight: 700; text-align: center; cursor: pointer;
   transition: border-color .18s var(--ease), background .18s var(--ease);
   display: flex; align-items: center; justify-content: center; min-height: 64px; }
-/* Logo tiles get a white card regardless of theme - most of these brand
-   marks (Apple Pay's black wordmark, Klarna's pink lockup, etc.) are only
-   legible on a light background, same as how Stripe's own checkout shows
-   payment-method icons. The one text-only tile (Pay by Bank, no logo
-   supplied) keeps the ordinary dark tile styling. */
-.co-method-tile:has(img) { background: #fff; padding: 10px 14px; }
+.co-method-tile:has(img) { padding: 10px 14px; }
 .co-method-tile img { max-width: 100%; max-height: 32px; object-fit: contain; display: block; }
 @media (hover: hover) and (pointer: fine) {
   .co-method-tile:hover { border-color: var(--accent); background: rgba(255,255,255,0.06); }
-  .co-method-tile:has(img):hover { background: #fff; border-color: var(--accent); }
 }
 .co-method-tile[hidden] { display: none; }
 .co-methods-empty { font-size: 13px; color: var(--fg-3); text-align: center; padding: 0 26px 26px; margin: 0; }
@@ -3078,7 +3074,7 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
 .co-line { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--fg-2); padding: 6px 0; }
 .co-line[hidden] { display: none; }
 .co-line span:last-child { color: var(--fg); font-weight: 600; }
-.co-disc span { color: var(--price) !important; }
+.co-disc span { color: var(--accent-deep) !important; }
 .co-grand { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--hairline); font-size: 16px; }
 .co-grand span { font-weight: 800 !important; }
 .co-grand span:last-child { font-size: 20px; color: var(--fg); }
@@ -3092,7 +3088,7 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
 .co-sg-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .co-sg-price { font-size: 12px; margin-top: 2px; }
 .co-sg-was { color: var(--fg-3); text-decoration: line-through; margin-right: 6px; }
-.co-sg-now { color: var(--price); font-weight: 700; }
+.co-sg-now { color: var(--accent-deep); font-weight: 700; }
 .co-sg-add { font-family: inherit; font-size: 12px; font-weight: 600; color: #fff; cursor: pointer; padding: 7px 13px; border-radius: 10px; border: none; background: rgba(255,77,68,0.18); border: 1px solid rgba(255,77,68,0.4); transition: background .2s; }
 .co-sg-add:hover { background: rgba(255,77,68,0.3); }
 @media (max-width: 920px) {
@@ -3144,18 +3140,27 @@ html[data-theme="light"] .hero-h1 .hl.hl-minecraft { color: #2e7d32; }
    dropped, so this stays flat and opaque like everything else. No border:
    against the hero art a hairline ring read as a floating glass chip, so
    depth comes from a real shadow instead, same device .glass panels use. */
-.hero-copy .hero-cta .btn-primary,
 .hero-copy .hero-cta .btn-minecraft {
   color: var(--fg); background: var(--bg-3);
   border-color: transparent; box-shadow: var(--e-2);
 }
-.hero-copy .hero-cta .btn-primary:hover,
 .hero-copy .hero-cta .btn-minecraft:hover {
   background: var(--bg-2); border-color: transparent; color: var(--fg); box-shadow: var(--e-3);
 }
-.hero-copy .hero-cta .btn-primary:active,
 .hero-copy .hero-cta .btn-minecraft:active {
   background: var(--bg-3); box-shadow: var(--e-1);
+}
+/* Join Discord sits beside the shop CTA in the old neutral chip look the
+   shop button itself used to have, before that button became solid ember. */
+.hero-copy .hero-cta .btn-discord {
+  color: var(--fg); background: var(--bg-3);
+  border-color: transparent;
+}
+.hero-copy .hero-cta .btn-discord:hover {
+  background: var(--bg-2); border-color: transparent; color: var(--fg);
+}
+.hero-copy .hero-cta .btn-discord:active {
+  background: var(--bg-3);
 }
 /* Read as a sentence of facts on one baseline, not as a stat-card row. The
    stacked big-number-over-tiny-uppercase-label arrangement is the generated
@@ -3184,7 +3189,7 @@ html[data-theme="light"] .hero-h1 .hl.hl-minecraft { color: #2e7d32; }
 .hsc-foot { position: absolute; left: 20px; right: 20px; bottom: 18px; z-index: 2; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .hsc-cat { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-2); margin-bottom: 4px; }
 .hsc-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
-.hsc-price { font-size: 24px; font-weight: 800; color: var(--price); white-space: nowrap; }
+.hsc-price { font-size: 24px; font-weight: 800; color: var(--accent-deep); white-space: nowrap; }
 .hero-mini { position: absolute; z-index: 3; width: 194px; height: 124px; border-radius: 16px; overflow: hidden;
   border: 1px solid rgba(255,255,255,0.14); background-size: cover; background-position: center; color: #fff; text-decoration: none;
   box-shadow: 0 24px 46px -18px var(--ink-75); display: flex; align-items: flex-end; transition: transform .3s var(--ease); }
@@ -3310,7 +3315,7 @@ html.js .nr-frame .nr-slide.is-active .nr-cap > :nth-child(3) { animation-delay:
 .bundle-name { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
 .bundle-meta { font-size: 12.5px; color: var(--fg-2); line-height: 1.5; }
 .bundle-price-row { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
-.bundle-price-row .p-price { font-size: 18px; font-weight: 800; color: var(--price); }
+.bundle-price-row .p-price { font-size: 18px; font-weight: 800; color: var(--accent-deep); }
 .bundle-add { margin-top: auto; width: 100%; justify-content: center; }
 
 /* ==================== Admin dashboard ==================== */
@@ -4042,7 +4047,7 @@ html[data-theme="light"] .adm-reseller-row:hover { background: rgba(0,0,0,0.03);
 .rel-product-body { display: grid; gap: 5px; padding: 14px 16px 16px; }
 .rel-product-cat { color: var(--fg-3); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .rel-product-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
-.rel-product-price { color: var(--price); font-size: 13px; font-weight: 700; }
+.rel-product-price { color: var(--accent-deep); font-size: 13px; font-weight: 700; }
 /* A compact product changelog: dates and release type live on a fixed rail,
    while the updates keep the same practical density as the rest of the site. */
 .rel-timeline { position: relative; display: flex; flex-direction: column; max-width: 820px; margin: 0 auto; padding-left: 156px; }
@@ -4182,7 +4187,7 @@ body.auth-page .backdrop, body.auth-page .scrim { position: fixed; inset: 0; hei
 .mkt-popup-modal .mkt-popup-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; margin: 0 0 10px; color: var(--fg); }
 /* the checkout co-offer modal keeps its X, so it needs the title inset back */
 .co-offer .mkt-popup-modal .mkt-popup-title { margin-right: 30px; }
-.mkt-popup-pct { color: var(--price); }
+.mkt-popup-pct { color: var(--accent-deep); }
 .mkt-popup-modal .mkt-popup-sub { font-size: 14px; color: var(--fg-2); line-height: 1.55; margin: 0 0 22px; font-weight: 400; max-width: 34ch; }
 .mkt-popup-form { display: flex; flex-direction: column; gap: 10px; }
 .mkt-popup-field { display: flex; gap: 8px; }
