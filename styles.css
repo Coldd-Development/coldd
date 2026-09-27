@@ -1124,7 +1124,13 @@
 .shop-pager button:disabled { opacity: 0.4; cursor: default; }
 .shop-pager:empty { display: none; }
 
-.shop-side { position: sticky; top: 96px; order: -1; }
+/* Sticky alone isn't enough once the panel (all categories/subcategories
+   expanded) is taller than the viewport - a sticky element that's taller
+   than its scroll range just rides along with the page like a normal one,
+   cutting off whatever falls past the bottom edge. Capping it to the
+   viewport and giving it its own scrollbar keeps the whole filter list
+   reachable without scrolling the product grid out of view. */
+.shop-side { position: sticky; top: 96px; order: -1; max-height: calc(100vh - 96px - 32px); overflow-y: auto; }
 /* Reads as a tool panel bolted to the catalog, not a floating frosted card.
    The blurred translucent slab, the 24px radius, the inset white top-light and
    the wide-tracked micro-caps were the generic part; structure now comes from
