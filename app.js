@@ -271,6 +271,19 @@
           '</div>';
         document.body.appendChild(overlay);
 
+        // Autofill for a signed-in visitor who already has a real email on
+        // file - a Roblox-only account has none (its profile.email is ''),
+        // so this naturally leaves the field blank for them instead of
+        // filling in the synthetic @roblox.coldd.internal address. Still a
+        // normal editable field either way, not locked to the prefill.
+        try {
+          var knownProfile = window.coldAuth && window.coldAuth.getProfile && window.coldAuth.getProfile();
+          var knownEmail = knownProfile && knownProfile.email;
+          if (knownEmail && !/@roblox\.coldd\.internal$/i.test(knownEmail)) {
+            overlay.querySelector('#mktPopupEmail').value = knownEmail;
+          }
+        } catch (e) {}
+
         // Click-outside = minimize to the corner tab. There is no X - the
         // only way past the popup is "I don't want a discount" (a real
         // dismissal) or claiming a code.
@@ -4460,7 +4473,20 @@
       if (window.coldSupabase) {
         window.coldSupabase.auth.getSession().then(function (res) {
           var session = res && res.data ? res.data.session : null;
-          if (!session) { location.href = '/signin'; return; }
+          if (!session) {
+            // A stale coldd_auth="in" flag (session expired without ever
+            // signing out through this tab) is what caused the loop here:
+            // signin's own <head> pre-check reads that same flag and
+            // bounces straight back to /dashboard before this authoritative
+            // check even runs there, so the two pages redirected to each
+            // other forever. Clearing it (and the cached profile) before
+            // leaving is what makes signin's pre-check agree there's no
+            // session, same as an explicit sign-out would.
+            (window.coldAuth ? window.coldAuth.signOut() : Promise.resolve()).then(function () {
+              location.href = '/signin';
+            });
+            return;
+          }
           loadRealData(session.user.id);
           loadNotificationPrefs(session.user.id);
           // The cached local profile (localStorage) can have a blank email
@@ -6028,7 +6054,7 @@
       if (giftVerifyBtn) giftVerifyBtn.addEventListener('click', function () {
         var q = (giftInput && giftInput.value || '').trim();
         clearGiftRecipient();
-        if (!q) { if (giftMsg) { giftMsg.className = 'co-coupon-msg no'; giftMsg.textContent = 'Enter an email or username.'; } return; }
+        if (!q) { if (giftMsg) { giftMsg.className = 'co-coupon-msg no'; giftMsg.textContent = 'Enter their email.'; } return; }
         if (!window.coldAuth) return;
         giftVerifyBtn.disabled = true;
         window.coldAuth.invokeFn('lookup-gift-recipient', { query: q }).then(function (data) {
@@ -6038,7 +6064,7 @@
             giftRecipientName = data.displayName;
             if (giftMsg) { giftMsg.className = 'co-coupon-msg ok'; giftMsg.textContent = 'Gifting to ' + data.displayName + '.'; }
           } else if (giftMsg) {
-            giftMsg.className = 'co-coupon-msg no'; giftMsg.textContent = 'No coldd account found with that email/username.';
+            giftMsg.className = 'co-coupon-msg no'; giftMsg.textContent = 'No coldd account found with that email.';
           }
         }).catch(function (err) {
           giftVerifyBtn.disabled = false;

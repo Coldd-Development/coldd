@@ -3,20 +3,27 @@
 // Deploy with:
 //   supabase functions deploy lookup-gift-recipient
 //
-// Checkout's "gift this order" flow: resolves a buyer-typed email or
-// username to a real coldd account before checkout will let them proceed
-// with the gift toggle on. Any signed-in caller can use this (not admin-
-// only) - see admin-upsert-product/index.ts for the auth boilerplate this
-// mirrors, minus the is_admin gate.
+// Checkout's "gift this order" flow: resolves a buyer-typed email to a
+// real coldd account before checkout will let them proceed with the gift
+// toggle on. Any signed-in caller can use this (not admin-only) - see
+// admin-upsert-product/index.ts for the auth boilerplate this mirrors,
+// minus the is_admin gate.
 //
 // Deliberately returns the minimum: { found, userId, displayName } and
-// never the resolved account's email, even when the caller searched by
-// email themselves - a username search must not become a way to fish out
-// someone else's email address.
+// never the resolved account's email.
+//
+// Email-only (a username lookup used to also be accepted, but a display
+// name is public/guessable in a way an email isn't - that turned this into
+// a way to probe arbitrary usernames for a hit). Rate limited per caller
+// (supabase/rate_limits.sql) on top of that, since even an email-only
+// lookup is still an { found: true/false } oracle a signed-in account
+// could otherwise hammer to scan for real addresses.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
+const RATE_LIMIT_MAX = 15;
+const RATE_LIMIT_WINDOW_SECONDS = 60;
 
 function corsHeaders() {
   return {
@@ -32,6 +39,8 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders(), "Content-Type": "application/json" },
   });
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
@@ -50,18 +59,28 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    const body = await req.json().catch(() => ({}));
-    const query = String(body.query || "").trim();
-    if (!query) return json({ ok: false, error: "Enter an email or username." }, 400);
+    // Keyed on the caller's own account, not IP - this is auth-gated, so
+    // the account itself is the identity worth throttling regardless of
+    // how many IPs it's used from.
+    const { data: allowed, error: rlErr } = await admin.rpc("check_rate_limit", {
+      p_key: `gift-lookup:${userData.user.id}`,
+      p_max: RATE_LIMIT_MAX,
+      p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+    });
+    if (!rlErr && allowed === false) {
+      return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
+    }
 
-    // Email is matched exactly (case-insensitive); username the same. Never
-    // a partial/fuzzy match - this resolves ONE specific account the buyer
-    // already knows, not a directory search.
-    const isEmail = query.includes("@");
+    const body = await req.json().catch(() => ({}));
+    const query = String(body.query || "").trim().toLowerCase();
+    if (!query || !EMAIL_RE.test(query)) return json({ ok: false, error: "Enter a valid email." }, 400);
+
+    // Matched exactly (case-insensitive) - this resolves ONE specific
+    // account the buyer already knows, not a directory search.
     const { data: profile } = await admin
       .from("profiles")
       .select("id, username, email")
-      .ilike(isEmail ? "email" : "username", query)
+      .ilike("email", query)
       .maybeSingle();
 
     if (!profile) return json({ ok: true, found: false });
