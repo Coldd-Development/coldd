@@ -299,8 +299,7 @@
       role: row.role || (row.is_admin ? 'admin' : 'customer'),
       emailVerified: !!row.email_verified,
       marketingUnsubscribed: !!row.marketing_unsubscribed,
-      referralCode: row.referral_code || null,
-      referredBy: row.referred_by || null
+      referralCode: row.referral_code || null
     };
   }
   function refreshUsers() {
@@ -371,46 +370,53 @@
     });
   }
 
-  // Real data from public.profiles (referral_code/referred_by/referral_clicks)
-  // and public.orders, read via the signed-in admin's own session. Earnings
-  // are computed client-side (20% of each referred paid order, matching
-  // REFERRAL_RATE server-side) since it's just a display aggregate, not a
-  // ledger - the actual source of truth for payouts is referral_payouts.
+  // Real data from public.profiles (referral_code) and public.orders
+  // (referrer_id/ref_product_slug, set at checkout - see
+  // _shared/referrals.ts), read via the signed-in admin's own session.
+  // Referrals are per-product only: an order only counts if its
+  // ref_product_slug matches one of its own order_items, and only that
+  // line item's price earns 20% - never the rest of the cart. Earnings
+  // are computed client-side as a display aggregate, not a ledger - the
+  // actual source of truth for payouts is referral_payouts.
   var REFERRALS = [];
   function refreshAdminReferrals() {
     if (!window.coldSupabase) return Promise.resolve();
-    return window.coldSupabase.from('profiles').select('id, username, email, referral_code, referral_clicks, referred_by').limit(20000).then(function (res) {
+    return window.coldSupabase.from('profiles').select('id, username, email, referral_code').limit(20000).then(function (res) {
       if (res.error) { console.error('[admin] failed to load referrals:', res.error.message); return; }
       var rows = res.data || [];
       var referrers = rows.filter(function (p) { return p.referral_code; });
-      return window.coldSupabase.from('referral_payouts').select('user_id, amount_usd, status').limit(20000).then(function (payRes) {
-        var paidByUser = {};
-        (payRes.data || []).forEach(function (pay) {
-          if (pay.status !== 'paid') return;
-          paidByUser[pay.user_id] = (paidByUser[pay.user_id] || 0) + Number(pay.amount_usd || 0);
-        });
-        REFERRALS = referrers.map(function (r) {
-          var referredIds = rows.filter(function (p) { return p.referred_by === r.id; }).map(function (p) { return p.id; });
-          var earnedUSD = 0;
-          var convertedSet = {};
-          ORDERS.forEach(function (o) {
-            if (o.status !== 'completed' || referredIds.indexOf(o.userId) < 0) return;
-            convertedSet[o.userId] = true;
-            if (o.currency !== 'robux') earnedUSD += o.total * 0.2;
+      return window.coldSupabase.from('orders')
+        .select('referrer_id, ref_product_slug, status, order_items(product_slug, unit_price_usd, qty)')
+        .not('referrer_id', 'is', null).limit(20000).then(function (orderRes) {
+        var refOrders = orderRes.data || [];
+        return window.coldSupabase.from('referral_payouts').select('user_id, amount_usd, status').limit(20000).then(function (payRes) {
+          var paidByUser = {};
+          (payRes.data || []).forEach(function (pay) {
+            if (pay.status !== 'paid') return;
+            paidByUser[pay.user_id] = (paidByUser[pay.user_id] || 0) + Number(pay.amount_usd || 0);
           });
-          return {
-            ownerId: r.id,
-            code: r.referral_code,
-            owner: r.username || (r.email ? r.email.split('@')[0] : 'user'),
-            clicks: r.referral_clicks || 0,
-            signups: referredIds.length,
-            conversions: Object.keys(convertedSet).length,
-            earnedUSD: Math.round(earnedUSD * 100) / 100,
-            paidUSD: Math.round((paidByUser[r.id] || 0) * 100) / 100
-          };
+          REFERRALS = referrers.map(function (r) {
+            var sales = 0;
+            var earnedUSD = 0;
+            refOrders.forEach(function (o) {
+              if (o.referrer_id !== r.id || o.status !== 'paid') return;
+              var match = (o.order_items || []).filter(function (it) { return it.product_slug === o.ref_product_slug; })[0];
+              if (!match) return;
+              sales++;
+              earnedUSD += Number(match.unit_price_usd || 0) * match.qty * 0.2;
+            });
+            return {
+              ownerId: r.id,
+              code: r.referral_code,
+              owner: r.username || (r.email ? r.email.split('@')[0] : 'user'),
+              sales: sales,
+              earnedUSD: Math.round(earnedUSD * 100) / 100,
+              paidUSD: Math.round((paidByUser[r.id] || 0) * 100) / 100
+            };
+          });
+          if (curPanel === 'analytics') renderAnalytics();
+          if (curPanel === 'marketing') renderMarketing();
         });
-        if (curPanel === 'analytics') renderAnalytics();
-    if (curPanel === 'marketing') renderMarketing();
       });
     });
   }
@@ -2275,16 +2281,13 @@
   if (campaignDetailOverlay) campaignDetailOverlay.addEventListener('click', function (e) { if (e.target === campaignDetailOverlay) campaignDetailOverlay.hidden = true; });
 
   function renderMarketing() {
-    var signups = REFERRALS.reduce(function (s, r) { return s + r.signups; }, 0);
-    var clicks = REFERRALS.reduce(function (s, r) { return s + r.clicks; }, 0);
-    var conversions = REFERRALS.reduce(function (s, r) { return s + r.conversions; }, 0);
+    var sales = REFERRALS.reduce(function (s, r) { return s + r.sales; }, 0);
     var owed = REFERRALS.reduce(function (s, r) { return s + (r.earnedUSD - r.paidUSD); }, 0);
 
     if ($('admMktStats')) {
       $('admMktStats').innerHTML = [
         statTile('Discord members', DISCORD_STATS.memberCount != null ? DISCORD_STATS.memberCount.toLocaleString('en-US') : '–', DISCORD_STATS.onlineCount != null ? (DISCORD_STATS.onlineCount.toLocaleString('en-US') + ' online') : '', ''),
-        statTile('Referral clicks', clicks.toLocaleString('en-US'), null, ''),
-        statTile('Referral signups', signups.toLocaleString('en-US'), null, ''),
+        statTile('Referral sales', sales.toLocaleString('en-US'), null, ''),
         statTile('Owed to affiliates', usd(owed), null, '')
       ].join('');
     }
@@ -2350,13 +2353,11 @@
 
     if ($('admReferralBody')) {
       $('admReferralBody').innerHTML = REFERRALS.map(function (r) {
-        var rate = r.clicks ? (r.conversions / r.clicks * 100) : 0;
-        return '<tr><td class="dt-mono">' + esc(r.code) + '</td><td>' + esc(r.owner) + '</td><td>' + r.clicks + '</td><td>' + r.signups + '</td><td>' + r.conversions + '</td><td>' + pct(rate) + '</td><td>' + usd(r.earnedUSD) + '</td></tr>';
-      }).join('') || '<tr><td colspan="7" class="adm-empty">No referral codes yet.</td></tr>';
+        return '<tr><td class="dt-mono">' + esc(r.code) + '</td><td>' + esc(r.owner) + '</td><td>' + r.sales + '</td><td>' + usd(r.earnedUSD) + '</td></tr>';
+      }).join('') || '<tr><td colspan="4" class="adm-empty">No referral codes yet.</td></tr>';
       if ($('admAffiliateOwed')) $('admAffiliateOwed').textContent = usd(owed);
       renderPayouts();
     }
-    void conversions;
   }
 
   /* ================================================================
@@ -2364,7 +2365,7 @@
      ================================================================ */
   var EMAIL_STATS = { total: 0, optedIn: 0, unsubscribed: 0, allAccounts: 0 };
   var EMAIL_CAMPAIGNS = [];
-  var EMAIL_RECIPIENTS = []; // consented addresses only: { email, username, status, joined, provider, optInSource, optInAt, unsubscribed, referredBy }
+  var EMAIL_RECIPIENTS = []; // consented addresses only: { email, username, status, joined, provider, optInSource, optInAt, unsubscribed }
   var EMAIL_CONFIGURED = null; // null = not checked yet
   var EMAIL_CAN_ANNOUNCE = false; // caller is whitelisted to send announcements
   var SYNTH_EMAIL_RE = /@roblox\.coldd\.internal$/i;
@@ -2388,7 +2389,7 @@
     // ban state) and to fold in toggle-based opt-ins.
     return refreshMarketingOptins().then(function () {
     return window.coldSupabase.from('profiles')
-      .select('id, email, username, marketing_unsubscribed, banned, created_at, discord_id, roblox_id, referred_by, notification_prefs')
+      .select('id, email, username, marketing_unsubscribed, banned, created_at, discord_id, roblox_id, notification_prefs')
       .limit(20000).then(function (res) {
       if (res.error) { console.error('[admin] failed to load subscriber stats:', res.error.message); return; }
       var profiles = (res.data || []).filter(function (r) { return r.email; });
@@ -2421,7 +2422,6 @@
           email: m.email,
           username: p ? (p.username || null) : null,
           provider: p ? (p.roblox_id ? 'Roblox' : p.discord_id ? 'Discord' : 'Email / Google') : 'Guest (no account)',
-          referredBy: p ? (p.referred_by || null) : null,
           optInSource: m.optInSource,
           optInAt: m.optInAt,
           joined: p ? (p.created_at || null) : (m.optInAt || null),
@@ -2449,10 +2449,6 @@
     lines.push(['Marketing status', r.status === 'optedin' ? 'Opted in'
       : r.status === 'unsubscribed' ? 'Unsubscribed'
       : 'Banned (excluded)']);
-    if (r.referredBy) {
-      var ref = REFERRALS.filter(function (x) { return x.ownerId === r.referredBy; })[0];
-      lines.push(['Referred by', ref ? ref.owner : r.referredBy]);
-    }
     return lines;
   }
   // Per-recipient campaign history from email_events (Resend webhook).
@@ -5119,8 +5115,6 @@
     set('admUdRoblox', u.robloxId ? ('Linked (' + u.robloxId + ')') : 'Not linked');
     set('admUdMarketing', u.marketingUnsubscribed ? 'Unsubscribed' : 'Subscribed');
     set('admUdRefCode', u.referralCode || '–');
-    var referrer = u.referredBy ? USERS.filter(function (x) { return x.id === u.referredBy; })[0] : null;
-    set('admUdReferredBy', referrer ? referrer.name : (u.referredBy || '–'));
     var userOrders = ORDERS.filter(function (o) { return o.userId === u.id; })
       .slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
     set('admUdOrdersTotal', String(userOrders.length));

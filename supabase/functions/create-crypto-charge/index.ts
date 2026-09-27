@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { priceItems, resolveCoupon, spendTierDiscount, clampCombinedDiscount, activeSaleEvent, saleEventDiscount } from "../_shared/coupon.ts";
 import { resolveCampaignCode } from "../_shared/campaign.ts";
+import { resolveProductReferral } from "../_shared/referrals.ts";
 import { activeProvider } from "../_shared/crypto.ts";
 import { isSiteInMaintenance } from "../_shared/maintenance.ts";
 import { genClaimToken, sha256Hex } from "../_shared/order_access.ts";
@@ -91,6 +92,7 @@ Deno.serve(async (req: Request) => {
 
     const provider = activeProvider();
     const campaignCode = await resolveCampaignCode(admin, body.campaignCode);
+    const productReferral = await resolveProductReferral(admin, body.refCode, body.refSlug, lines, user?.id ?? null);
 
     // Gifting: same server-side re-verification as create-checkout-session -
     // never trust the recipient id the client got from lookup-gift-recipient
@@ -137,6 +139,8 @@ Deno.serve(async (req: Request) => {
         crypto_provider: provider.name,
         campaign_code: campaignCode,
         marketing_opt_in: marketingOptIn,
+        referrer_id: productReferral?.referrerId ?? null,
+        ref_product_slug: productReferral?.slug ?? null,
       })
       .select()
       .single();

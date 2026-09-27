@@ -214,25 +214,35 @@
   checkIsAdmin.cached = isAdminCached;
 
   var REF_KEY = 'coldd_ref_code';
-  // Captures ?ref=CODE off any page URL (referral link click), stores it for
-  // attribution at signup time, and fires a vanity click count. Runs on
-  // every page load, not just signup/signin pages, since a referral link
-  // can point anywhere on the site.
+  var REF_SLUG_KEY = 'coldd_ref_slug';
+  // Referrals are per-product only: a link only ever looks like
+  // /product/<slug>?ref=CODE (see the product page's "Refer this product"
+  // widget and the dashboard's per-product link table), so the product is
+  // read straight off the URL path rather than tracked server-side at
+  // click time. Checkout reads both back via getReferralAttribution() -
+  // same "carried in localStorage until order-creation time" pattern as
+  // getCampaignCode() below - and the order-creation function is the one
+  // that actually validates the code and that the referred product is in
+  // the cart (see _shared/referrals.ts).
   (function captureReferralClick() {
     try {
       var m = /[?&]ref=([^&]+)/.exec(location.search);
       if (!m) return;
       var code = decodeURIComponent(m[1]).trim().toLowerCase();
       if (!code) return;
+      var slugMatch = /^\/product\/([^/?#]+)/.exec(location.pathname);
+      if (!slugMatch) return;
       localStorage.setItem(REF_KEY, code);
-      invokeFn('track-referral-click', { code: code }).catch(function () {});
+      localStorage.setItem(REF_SLUG_KEY, decodeURIComponent(slugMatch[1]));
     } catch (e) {}
   })();
-  function attributeReferral() {
-    var code = null;
-    try { code = localStorage.getItem(REF_KEY); } catch (e) {}
-    if (!code) return Promise.resolve();
-    return invokeFn('track-referral-signup', { code: code }).catch(function () {});
+  function getReferralAttribution() {
+    try {
+      var code = localStorage.getItem(REF_KEY);
+      var slug = localStorage.getItem(REF_SLUG_KEY);
+      if (!code || !slug) return null;
+      return { code: code, slug: slug };
+    } catch (e) { return null; }
   }
 
   var CAMPAIGN_KEY = 'coldd_campaign_code';
@@ -438,7 +448,6 @@
       try { localStorage.setItem(AUTH_KEY, 'in'); } catch (e) {}
       return client.from('profiles').upsert(payload).then(function (res) {
         if (res.error) console.warn('[coldd] profile upsert failed:', res.error.message);
-        else attributeReferral();
       });
     });
   }
@@ -453,7 +462,7 @@
     applyProfile: applyProfile,
     targetGuildId: TARGET_GUILD_ID,
     checkIsAdmin: checkIsAdmin,
-    attributeReferral: attributeReferral,
+    getReferralAttribution: getReferralAttribution,
     getCampaignCode: getCampaignCode,
     signInDiscord: function () {
       var redirectTo = location.origin + '/callback.html';

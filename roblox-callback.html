@@ -112,7 +112,6 @@
           email: '', avatar: signinData.avatarUrl || ''
         });
         try { localStorage.setItem('coldd_auth', 'in'); } catch (e) {}
-        window.coldAuth.attributeReferral();
 
         msg.textContent = 'Signed in as ' + signinData.robloxUsername + '. Redirecting…';
         var signedInDest = returnTo || '/dashboard';

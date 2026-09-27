@@ -1,18 +1,19 @@
 -- Run this once in Supabase Dashboard -> SQL Editor. Safe to re-run
 -- (idempotent - just replaces the function).
 --
--- request-referral-payout previously computed "available balance" (earned
--- minus already-requested) with two separate SELECTs in the Edge Function,
--- then did a plain INSERT - a check-then-act race. Two concurrent requests
--- (a double-clicked "Request payout" button, or two tabs) could both read
--- the same available balance before either INSERT lands, letting a user
--- request more in total payouts than they've actually earned.
+-- request-referral-payout computes "available balance" (earned minus
+-- already-requested) and does the INSERT in one atomic call - see the
+-- original comment history for why (a check-then-act race between two
+-- concurrent requests).
 --
--- This moves the whole read-check-insert into a single Postgres function,
--- serialized per-user with pg_advisory_xact_lock (released automatically
--- at the end of the transaction), so concurrent calls for the same user
--- are forced to run one after another - the second call always sees the
--- first's row once it commits.
+-- Rewritten for per-product-only referrals: earnings are always USD-
+-- denominated (20% of the matching order_items row on an order the
+-- caller referred - see _shared/referrals.ts), there is no separate
+-- Robux-currency earning pool anymore. A 'robux' payout request is still
+-- accepted (the admin fulfills it manually in Robux), but the amount
+-- typed is Robux units converted to its USD-equivalent at ROBUX_PER_USD
+-- (matches app.js/admin.js/_shared/roblox.ts) purely so every payout
+-- request - regardless of method - debits the same single USD balance.
 
 create or replace function public.request_referral_payout(
   p_user_id uuid,
@@ -26,11 +27,11 @@ set search_path = public
 as $$
 declare
   earned_usd numeric := 0;
-  earned_robux numeric := 0;
   reserved_usd numeric := 0;
-  reserved_robux numeric := 0;
-  available numeric;
+  available_usd numeric;
+  requested_usd numeric;
   referral_rate constant numeric := 0.20;
+  robux_per_usd constant numeric := 80;
 begin
   if p_method not in ('usd', 'robux', 'store_credit') then
     return jsonb_build_object('ok', false, 'error', 'Invalid payout method.');
@@ -43,35 +44,30 @@ begin
   -- transaction - hashtext() collapses the uuid into an int4 lock key.
   perform pg_advisory_xact_lock(hashtext(p_user_id::text));
 
-  select
-    coalesce(sum(case when o.currency = 'robux' then 0 else o.total_usd * referral_rate end), 0),
-    coalesce(sum(case when o.currency = 'robux' then o.total_robux * referral_rate else 0 end), 0)
-  into earned_usd, earned_robux
+  select coalesce(sum(oi.unit_price_usd * oi.qty * referral_rate), 0)
+  into earned_usd
   from public.orders o
-  join public.profiles p on p.id = o.user_id
-  where p.referred_by = p_user_id and o.status = 'paid';
+  join public.order_items oi on oi.order_id = o.id and oi.product_slug = o.ref_product_slug
+  where o.referrer_id = p_user_id and o.status = 'paid';
 
-  select
-    coalesce(sum(amount_usd), 0),
-    coalesce(sum(amount_robux), 0)
-  into reserved_usd, reserved_robux
+  select coalesce(sum(amount_usd), 0)
+  into reserved_usd
   from public.referral_payouts
   where user_id = p_user_id and status <> 'denied';
 
+  available_usd := greatest(0, earned_usd - reserved_usd);
+  requested_usd := case when p_method = 'robux' then round(p_amount / robux_per_usd, 2) else p_amount end;
+
+  if requested_usd > available_usd then
+    return jsonb_build_object('ok', false, 'error', 'Amount exceeds your available balance.');
+  end if;
+
   if p_method = 'robux' then
-    available := greatest(0, earned_robux - reserved_robux);
-    if p_amount > available then
-      return jsonb_build_object('ok', false, 'error', 'Amount exceeds your available Robux balance.');
-    end if;
-    insert into public.referral_payouts (user_id, method, status, amount_robux)
-    values (p_user_id, p_method, 'requested', round(p_amount));
+    insert into public.referral_payouts (user_id, method, status, amount_usd, amount_robux)
+    values (p_user_id, p_method, 'requested', requested_usd, round(p_amount));
   else
-    available := greatest(0, earned_usd - reserved_usd);
-    if p_amount > available then
-      return jsonb_build_object('ok', false, 'error', 'Amount exceeds your available USD balance.');
-    end if;
     insert into public.referral_payouts (user_id, method, status, amount_usd)
-    values (p_user_id, p_method, 'requested', round(p_amount, 2));
+    values (p_user_id, p_method, 'requested', requested_usd);
   end if;
 
   return jsonb_build_object('ok', true);

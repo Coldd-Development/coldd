@@ -20,6 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { priceRobuxItems, getValidRobloxToken } from "../_shared/roblox.ts";
 import { leasePassForOrder } from "../_shared/roblox_pool.ts";
 import { resolveCampaignCode } from "../_shared/campaign.ts";
+import { resolveProductReferral } from "../_shared/referrals.ts";
 import {
   priceItems, resolveCoupon, spendTierDiscountRobux, clampCombinedDiscount,
   clampCombinedDiscountRobux, robuxLegalHeadroom, activeSaleEvent, saleEventDiscount,
@@ -135,6 +136,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const campaignCode = await resolveCampaignCode(admin, body.campaignCode);
+    const productReferral = await resolveProductReferral(admin, body.refCode, body.refSlug, lines, userData.user.id);
 
     // Gifting: same server-side re-verification as the other three checkout
     // functions - never trust the recipient id the client got from
@@ -167,6 +169,8 @@ Deno.serve(async (req: Request) => {
         roblox_buyer_id: robloxAcct.roblox_id,
         campaign_code: campaignCode,
         marketing_opt_in: marketingOptIn,
+        referrer_id: productReferral?.referrerId ?? null,
+        ref_product_slug: productReferral?.slug ?? null,
       })
       .select()
       .single();

@@ -85,7 +85,6 @@
 
           window.coldAuth.saveProfile({ id: user.id, provider: provider, name: finalBasicName, email: email, avatar: '' });
           try { localStorage.setItem('coldd_auth', 'in'); } catch (e) {}
-          window.coldAuth.attributeReferral();
 
           msg.textContent = 'Signed in as ' + finalBasicName + '. Redirecting…';
           setTimeout(function () { location.href = '/dashboard'; }, 500);
@@ -151,7 +150,6 @@
 
         window.coldAuth.saveProfile({ id: user.id, provider: 'discord', discordId: discordId, name: finalName, email: email, avatar: avatar, guilds: guilds, memberInfo: memberInfo });
         try { localStorage.setItem('coldd_auth', 'in'); } catch (e) {}
-        window.coldAuth.attributeReferral();
 
         msg.textContent = 'Signed in as ' + finalName + '. Redirecting…';
         setTimeout(function () { location.href = '/dashboard'; }, 500);

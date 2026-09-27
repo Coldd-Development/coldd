@@ -1323,6 +1323,146 @@
       return enhance;
     })();
 
+    // Custom date field - same button-over-hidden-native idiom as
+    // __coldSelect above (the real <input type="date"> stays in the DOM,
+    // hidden, driving everything else via a real 'change' event), because
+    // the native date picker can't be restyled to match the site.
+    window.__coldDate = (function () {
+      var openMenu = null;
+      document.addEventListener('click', function () { if (openMenu) openMenu(); });
+      var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      var DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+      function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+      function toISO(y, m, d) { return y + '-' + pad2(m + 1) + '-' + pad2(d); }
+      function parseISO(v) {
+        if (!v) return null;
+        var parts = String(v).split('-');
+        if (parts.length !== 3) return null;
+        var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1, d = parseInt(parts[2], 10);
+        if (!y || m < 0 || m > 11 || !d) return null;
+        return { y: y, m: m, d: d };
+      }
+      function enhance(inp) {
+        if (!inp || inp.__cdate) return;
+        inp.__cdate = true;
+        var placeholder = inp.getAttribute('data-placeholder') || 'Select date';
+        var today = new Date();
+        var viewY = today.getFullYear(), viewM = today.getMonth();
+
+        var wrap = document.createElement('div');
+        wrap.className = 'cdate';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cdate-btn';
+        btn.setAttribute('aria-haspopup', 'dialog');
+        btn.setAttribute('aria-expanded', 'false');
+        if (inp.id) btn.setAttribute('aria-label', inp.getAttribute('aria-label') || inp.id);
+        btn.innerHTML = '<span class="cdate-val"></span>' +
+          '<svg class="cdate-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+        var valEl = btn.querySelector('.cdate-val');
+
+        var menu = document.createElement('div');
+        menu.className = 'cdate-menu';
+        menu.setAttribute('role', 'dialog');
+        menu.hidden = true;
+        menu.innerHTML =
+          '<div class="cdate-head"><button type="button" class="cdate-nav" data-nav="-1" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+          '<b></b>' +
+          '<button type="button" class="cdate-nav" data-nav="1" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button></div>' +
+          '<div class="cdate-dow">' + DOW.map(function (s) { return '<span>' + s + '</span>'; }).join('') + '</div>' +
+          '<div class="cdate-grid"></div>' +
+          '<div class="cdate-foot"><button type="button" class="cdate-clear">Clear</button></div>';
+        var headEl = menu.querySelector('.cdate-head b');
+        var gridEl = menu.querySelector('.cdate-grid');
+
+        function labelFor(v) {
+          var p = parseISO(v);
+          if (!p) return placeholder;
+          return MONTHS[p.m].slice(0, 3) + ' ' + p.d + ', ' + p.y;
+        }
+        function sync() {
+          valEl.textContent = labelFor(inp.value);
+          btn.classList.toggle('cdate-placeholder', !inp.value);
+        }
+        function renderGrid() {
+          var sel = parseISO(inp.value);
+          var first = new Date(viewY, viewM, 1);
+          var startDow = first.getDay();
+          var daysInMonth = new Date(viewY, viewM + 1, 0).getDate();
+          var daysInPrev = new Date(viewY, viewM, 0).getDate();
+          var cells = [];
+          for (var i = startDow - 1; i >= 0; i--) {
+            cells.push({ d: daysInPrev - i, out: true, y: viewM === 0 ? viewY - 1 : viewY, m: viewM === 0 ? 11 : viewM - 1 });
+          }
+          for (var d = 1; d <= daysInMonth; d++) cells.push({ d: d, out: false, y: viewY, m: viewM });
+          var rem = (7 - (cells.length % 7)) % 7;
+          for (var j = 1; j <= rem; j++) {
+            cells.push({ d: j, out: true, y: viewM === 11 ? viewY + 1 : viewY, m: viewM === 11 ? 0 : viewM + 1 });
+          }
+          headEl.textContent = MONTHS[viewM] + ' ' + viewY;
+          gridEl.innerHTML = cells.map(function (c) {
+            var isToday = c.y === today.getFullYear() && c.m === today.getMonth() && c.d === today.getDate();
+            var isActive = !!sel && c.y === sel.y && c.m === sel.m && c.d === sel.d;
+            return '<button type="button" class="cdate-day' + (c.out ? ' out' : '') + (isToday ? ' today' : '') + (isActive ? ' active' : '') +
+              '" data-y="' + c.y + '" data-m="' + c.m + '" data-d="' + c.d + '">' + c.d + '</button>';
+          }).join('');
+        }
+        Array.prototype.forEach.call(menu.querySelectorAll('[data-nav]'), function (b) {
+          b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var dir = parseInt(b.getAttribute('data-nav'), 10);
+            viewM += dir;
+            if (viewM < 0) { viewM = 11; viewY--; } else if (viewM > 11) { viewM = 0; viewY++; }
+            renderGrid();
+          });
+        });
+        gridEl.addEventListener('click', function (e) {
+          var b = e.target.closest ? e.target.closest('.cdate-day') : null;
+          if (!b) return;
+          inp.value = toISO(parseInt(b.getAttribute('data-y'), 10), parseInt(b.getAttribute('data-m'), 10), parseInt(b.getAttribute('data-d'), 10));
+          sync();
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+          close();
+          btn.focus();
+        });
+        menu.querySelector('.cdate-clear').addEventListener('click', function (e) {
+          e.stopPropagation();
+          inp.value = '';
+          sync();
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+          close();
+          btn.focus();
+        });
+        function open() {
+          if (openMenu && openMenu !== close) openMenu();
+          var p = parseISO(inp.value);
+          viewY = p ? p.y : today.getFullYear();
+          viewM = p ? p.m : today.getMonth();
+          renderGrid();
+          menu.hidden = false; wrap.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); openMenu = close;
+          window.__coldMenuFit && window.__coldMenuFit(menu, wrap);
+        }
+        function close() { menu.hidden = true; wrap.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); if (openMenu === close) openMenu = null; }
+        btn.addEventListener('click', function (e) { e.stopPropagation(); menu.hidden ? open() : close(); });
+        btn.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (menu.hidden) open(); }
+          else if (e.key === 'Escape') close();
+        });
+        menu.addEventListener('click', function (e) { e.stopPropagation(); });
+        inp.addEventListener('change', sync);
+        if (inp.form) inp.form.addEventListener('reset', function () { setTimeout(sync, 0); });
+        inp.insertAdjacentElement('afterend', wrap);
+        wrap.appendChild(btn);
+        wrap.appendChild(menu);
+        inp.classList.add('csel-native');
+        sync();
+      }
+      function run() { Array.prototype.forEach.call(document.querySelectorAll('input[type="date"][data-cdate]'), enhance); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+      else run();
+      return enhance;
+    })();
+
     (function () {
       // Featured products and This week's deals used to be hand-written
       // HTML the admin had to edit by hand and keep in sync with real
@@ -4140,12 +4280,16 @@
       });
       var dashPurchClearBtn = document.getElementById('dashPurchClear');
       if (dashPurchClearBtn) dashPurchClearBtn.addEventListener('click', function () {
+        // dispatch change (not just set .value) on the date/select fields so
+        // their custom-button labels resync - __coldDate/__coldSelect both
+        // listen on the native element, not on whoever changed .value.
         ['dashPurchSearch', 'dashPurchFrom', 'dashPurchTo', 'dashPurchMinAmt', 'dashPurchMaxAmt'].forEach(function (id) {
-          var el = document.getElementById(id); if (el) el.value = '';
+          var el = document.getElementById(id);
+          if (!el || !el.value) return;
+          el.value = '';
+          if (el.type === 'date') el.dispatchEvent(new Event('change', { bubbles: true }));
         });
         var statusEl = document.getElementById('dashPurchStatus');
-        // dispatch change (not just set .value) so the custom-select button
-        // label resyncs - __coldSelect listens on the native element.
         if (statusEl && statusEl.value !== 'all') { statusEl.value = 'all'; statusEl.dispatchEvent(new Event('change', { bubbles: true })); }
         renderPurchasesTable();
       });
@@ -4384,14 +4528,6 @@
         }).finally(function () { robloxUnlinkBtn.disabled = false; });
       });
 
-      var refCopy = document.getElementById('refCopy');
-      if (refCopy) refCopy.addEventListener('click', function () {
-        var inp = document.getElementById('refLink'); if (!inp) return;
-        inp.select();
-        try { navigator.clipboard.writeText(inp.value); } catch (e) { try { document.execCommand('copy'); } catch (_) {} }
-        var t = refCopy.textContent; refCopy.textContent = 'Copied'; setTimeout(function () { refCopy.textContent = t; }, 1400);
-      });
-
       var refStats = null;
       var refLoaded = false;
       function refFmtUsd(n) { return window.__money ? window.__money(n) : ('$' + n); }
@@ -4404,32 +4540,21 @@
       function refreshReferrals() {
         if (refLoaded || !window.coldAuth) return;
         refLoaded = true;
-        window.coldAuth.invokeFn('get-referral-code', {}).then(function (codeRes) {
-          var refLinkEl = document.getElementById('refLink');
-          if (refLinkEl && codeRes && codeRes.code) refLinkEl.value = location.origin + '/?ref=' + codeRes.code;
-        }).catch(function () {});
-
         window.coldAuth.invokeFn('get-referral-stats', {}).then(function (res) {
           refStats = res;
           var earnedEl = document.getElementById('refStatEarned');
-          if (earnedEl) earnedEl.textContent = refFmtUsd(res.earnedUsd) + (res.earnedRobux ? ' + ' + refFmtRobux(res.earnedRobux) : '');
+          if (earnedEl) earnedEl.textContent = refFmtUsd(res.earnedUsd);
           var availEl = document.getElementById('refStatAvailable');
-          if (availEl) availEl.textContent = refFmtUsd(res.availableUsd) + (res.availableRobux ? ' + ' + refFmtRobux(res.availableRobux) : '');
+          if (availEl) availEl.textContent = refFmtUsd(res.availableUsd);
           var paidEl = document.getElementById('refStatPaid');
-          if (paidEl) paidEl.textContent = refFmtUsd(res.paidUsd) + (res.paidRobux ? ' + ' + refFmtRobux(res.paidRobux) : '');
-
-          var clicksEl = document.getElementById('refStatClicks'); if (clicksEl) clicksEl.textContent = res.clicks;
-          var signupsEl = document.getElementById('refStatSignups'); if (signupsEl) signupsEl.textContent = res.signups;
-          var convEl = document.getElementById('refStatConversions'); if (convEl) convEl.textContent = res.conversions;
-          var rateEl = document.getElementById('refStatRate'); if (rateEl) rateEl.textContent = (res.clicks ? Math.round((res.conversions / res.clicks) * 1000) / 10 : 0) + '%';
+          if (paidEl) paidEl.textContent = refFmtUsd(res.paidUsd);
 
           var actBody = document.getElementById('refActivityBody');
           if (actBody) {
-            var rows = res.recentReferrals || [];
+            var rows = res.recentSales || [];
             actBody.innerHTML = rows.length ? rows.map(function (r) {
-              var status = r.converted ? '<span class="dt-badge ok">Converted</span>' : '<span class="dt-badge warn">Signed up</span>';
-              return '<tr><td>' + refEsc(r.name) + '</td><td>' + refFmtDate(r.date) + '</td><td>' + status + '</td><td>' + (r.earned ? refFmtUsd(r.earned) : '') + '</td></tr>';
-            }).join('') : '<tr><td colspan="4" class="adm-empty">No referrals yet.</td></tr>';
+              return '<tr><td>' + refEsc(r.product) + '</td><td>' + refFmtDate(r.date) + '</td><td>' + refFmtUsd(r.earned) + '</td></tr>';
+            }).join('') : '<tr><td colspan="3" class="adm-empty">No referral sales yet.</td></tr>';
           }
 
           var payBody = document.getElementById('refPayoutBody');
@@ -4493,26 +4618,14 @@
         });
       });
 
-      dash.querySelectorAll('.ref-tab').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var k = b.getAttribute('data-reftab');
-          dash.querySelectorAll('.ref-tab').forEach(function (x) { x.classList.toggle('active', x === b); });
-          dash.querySelectorAll('.ref-pane').forEach(function (p) { p.hidden = p.getAttribute('data-refpane') !== k; });
-        });
-      });
       var refProdBody = document.getElementById('refProdBody');
       if (refProdBody) {
         var fmt = function (n) { return window.__money ? window.__money(n) : ('$' + n); };
         var cat = (window.__CATALOG || []).slice(0, 6);
-        // Sales/Earned used to be a hash of the product id (h % 9), not a
-        // real number - nothing tracks referral conversions per specific
-        // product link today (get-referral-stats attributes a sale to
-        // WHO referred the buyer, not which product link they clicked),
-        // so those columns were always fictional. Dropped rather than
-        // faked; "Earn per sale" stays because that one's real math
-        // (20% of the product's own price). Link used the literal string
-        // "you" instead of an actual code - same bug the product page's
-        // own referral widget already had fixed, just never applied here.
+        // Real sales/earnings for these links live in the "Referral sales"
+        // table below (get-referral-stats), keyed off orders.ref_product_slug
+        // - this row is just the link itself plus its flat "Earn per sale"
+        // rate (20% of the product's own price).
         window.coldAuth.invokeFn('get-referral-code', {}).then(function (r) {
           var code = r && r.code; if (!code) return;
           refProdBody.innerHTML = cat.map(function (p) {
@@ -6330,6 +6443,8 @@
           if (msg) { msg.className = 'co-msg'; msg.textContent = ''; }
           var robuxOrderBody = { items: robuxItems };
           if (window.coldAuth.getCampaignCode()) robuxOrderBody.campaignCode = window.coldAuth.getCampaignCode();
+          var robuxRefAttr = window.coldAuth.getReferralAttribution();
+          if (robuxRefAttr) { robuxOrderBody.refCode = robuxRefAttr.code; robuxOrderBody.refSlug = robuxRefAttr.slug; }
           // Matches the Stripe/PayPal/crypto path - create-robux-order
           // re-validates the code server-side the same way those do, this
           // just tells it which one to check.
@@ -6684,6 +6799,8 @@
         var checkoutBody = { items: cartToItems() };
         if (appliedCoupon) checkoutBody.couponCode = appliedCoupon.code;
         if (window.coldAuth && window.coldAuth.getCampaignCode()) checkoutBody.campaignCode = window.coldAuth.getCampaignCode();
+        var checkoutRefAttr = window.coldAuth && window.coldAuth.getReferralAttribution();
+        if (checkoutRefAttr) { checkoutBody.refCode = checkoutRefAttr.code; checkoutBody.refSlug = checkoutRefAttr.slug; }
         if (giftToggle && giftToggle.checked && giftRecipientUserId) checkoutBody.giftRecipientUserId = giftRecipientUserId;
         if (coMktToggle && coMktToggle.checked) checkoutBody.marketingOptIn = true;
         if (payMethod === 'crypto' && !loggedIn) {
