@@ -3083,7 +3083,11 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
 .confirm-modal.co-methods { width: 560px; max-width: 96vw; max-height: 88vh; padding: 0; text-align: left;
   display: flex; flex-direction: column; overflow: hidden; background: var(--bg-2); }
 .co-methods .mkt-popup-x { top: 15px; right: 15px; }
-.co-methods-sub { margin: 6px 26px 0; padding: 0; font-size: 13px; color: var(--fg-3); line-height: 1.5; }
+/* .confirm-modal p (0,1,1) otherwise beats this (0,1,0) and wins the
+   cascade - its own margin-left:0/font-size:15px/weight:600 was overriding
+   this subtitle's indent and size, so it sat flush against the modal edge
+   instead of lining up under the title. */
+.co-methods .co-methods-sub { margin: 6px 26px 0; padding: 0; font-size: 13px; font-weight: 500; color: var(--fg-3); line-height: 1.5; }
 .co-methods-search { margin: 16px 26px 0; padding: 11px 16px 11px 40px; border-radius: var(--r-pill);
   border: 1px solid var(--hairline); background: var(--ink-25); color: var(--fg); font-family: inherit; font-size: 13px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8494' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
