@@ -906,8 +906,6 @@
 .nmt-tab.active { background: rgba(255,255,255,0.11); color: #fff; border-color: var(--hairline-strong); }
 .nav-mega-cats { position: relative; flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; align-content: start; }
 .nav-mega-cats[hidden] { display: none; }
-.nav-mega-cats::before { content: ""; position: absolute; inset: -12px 0; z-index: 0; pointer-events: none;
-  background: url('mega-bg.png') center / contain no-repeat; opacity: 0.15; }
 .nav-mega-cats a { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 10px 13px; border-radius: 10px;
   color: var(--fg-2); text-decoration: none; font-size: 13px; font-weight: 500; white-space: nowrap;
