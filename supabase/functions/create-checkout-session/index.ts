@@ -274,11 +274,19 @@ Deno.serve(async (req: Request) => {
         discounts = [{ coupon: stripeCoupon.id }];
       }
 
+      // Link is a wallet layered on top of card, not a standalone method -
+      // Stripe rejects a session that lists it alone with "must include at
+      // least one payment method supported by the default currency", since
+      // there's no card fallback in the list for it to sit on top of.
+      const paymentMethodTypes = stripeMethodType
+        ? stripeMethodType === "link" ? ["card", "link"] : [stripeMethodType]
+        : undefined;
+
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         ...(user?.email ? { customer_email: user.email } : {}),
         ...(user ? { client_reference_id: user.id } : {}),
-        ...(stripeMethodType ? { payment_method_types: [stripeMethodType] } : {}),
+        ...(paymentMethodTypes ? { payment_method_types: paymentMethodTypes } : {}),
         line_items: lines.map((li, i) => ({
           price_data: {
             currency,
