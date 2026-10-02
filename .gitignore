@@ -13,3 +13,4 @@ scratchpad/
 # secrets
 .env
 media-migration-rollback-*.json
+dist/
