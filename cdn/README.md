@@ -1,74 +1,67 @@
-# cdn.coldd.dev: all file storage on Ultimate Hosting (+ Storage Box)
+# cdn.coldd.dev: file storage on the Hetzner Storage Box
 
-Everything file-shaped lives on your own storage, not Supabase. Supabase keeps only the database and auth.
+The Storage Box is the home of every file. Ultimate Hosting is only the middleman (it runs two small
+PHP scripts); Supabase keeps the database and logins only.
 
-| What | Where it lives | How it is served |
+```
+browser --(HMAC-signed POST, chunked for big files)--> upload.php --SFTP--> Storage Box
+buyer   --(signed GET, resumable)---------------------> download.php <-SFTP-- Storage Box
+edge functions (Supabase) sign the tokens; the secret never reaches the browser
+```
+
+| What | Source of truth | Also on the hosting disk? |
 |---|---|---|
-| Thumbnails, gallery, avatars | `public_html/` of `cdn.coldd.dev` | nginx, public, long browser cache |
-| Paid product files, staged files, legal docs | `private/files/` (Hestia's `private` folder, OUTSIDE the web root) | only via `download.php` with a signed link that expires in minutes, minted after the purchase check |
+| Thumbnails, gallery, avatars | Storage Box `coldd/public/...` | yes, a convenience copy in `public_html/` so nginx serves it fast |
+| Paid product files, staged files, legal docs | Storage Box `coldd/private/...` | no (only a temp folder while a big upload is being assembled) |
 
-```
-browser --(HMAC-signed POST, chunked for big files)--> upload.php --> disk
-buyer   --(signed GET, resumable)---------------------> download.php --> private-files/
-edge fns (Supabase) sign the tokens; the secret never reaches the browser
-nightly: disk --rsync--> Hetzner Storage Box (30 days of history)
-```
+Stored paths: images are `https://cdn.coldd.dev/media/...` or `/avatars/...`; private files are saved as
+`cdn:<path>` in the database. (Never use a `products/` prefix: the `*.coldd.dev/product*` Worker route swallows it.)
 
-Until the CDN secrets are set, everything keeps using Supabase Storage, so nothing breaks while you set this up. Files migrated later keep working: paths starting with `cdn:` are on the hosting account, everything else is a legacy Supabase object.
+If the Storage Box is unreachable, uploads/downloads return a friendly "storage temporarily unavailable, try
+again" message and images already on the hosting disk / Cloudflare keep working.
 
-## Where does the data physically sit? (pick one)
-- **A. On the hosting account's disk (default, no root needed).** `private_root` and `root` default to folders in your Hestia home. Disk shows "unlimited" in your panel. Backups go to the Storage Box (step 5).
-- **B. Directly on the Storage Box (needs root on the server).** If 91.98.39.105 is a VPS where you have root, mount the box (`sshfs` or `rclone mount`, or Hetzner's CIFS) at e.g. `/mnt/storagebox`, then set `'private_root' => '/mnt/storagebox/private-files'` and `'root' => '/mnt/storagebox/public'` in `cdn-config.php` and point the web domain's `public_html` at it. Then use the box's own snapshots as backups. Nothing else changes.
+## Files on the hosting account (Hestia File Manager, domain `coldd.dev`, alias `cdn.coldd.dev`)
+PHP is only allowed to read `public_html`, `private` and `tmp` (open_basedir), so:
 
-## 1. Create the site (Hestia panel, `webpanel.ultimatehosting.com.uy:8083`)
-1. WEB -> Add Web Domain -> `cdn.coldd.dev`; enable Let's Encrypt SSL (after DNS in step 2). Use a PHP 8.1+ template.
-2. Upload `cdn/upload.php` and `cdn/download.php` into `/home/<hestia-user>/web/cdn.coldd.dev/public_html/`.
-3. Create `/home/<hestia-user>/web/<domain>/private/cdn-config.php` (Hestia's `private` folder: PHP is allowed to read it, nginx never serves it; one level above `public_html` is NOT readable because of open_basedir):
-   ```php
-   <?php return ['secret' => 'PASTE_64_HEX_SECRET', 'allowed_origins' => ['https://coldd.dev']];
-   ```
-   Generate the secret with `openssl rand -hex 32` (or any 40+ random characters).
-4. Make sure `/home/<hestia-user>/web/<domain>/private/files/` is not under `public_html` (it is created automatically on first upload).
+| File | Goes in |
+|---|---|
+| `upload.php`, `download.php` | `web/coldd.dev/public_html/` |
+| `cdn-lib.php`, `cdn-config.php`, `storagebox_key`, `storagebox_key.pub` | `web/coldd.dev/private/` |
 
-## 2. DNS (Cloudflare)
-| Type | Name | Content | Proxy |
-|---|---|---|---|
-| A | `cdn` | `91.98.39.105` | DNS only until SSL works, then Proxied is fine for public images |
+The Hestia File Manager does not overwrite: rename the old file first (e.g. `upload.php` -> `upload.v2.txt`), then upload.
 
-If proxied: SSL mode Full (strict), and add a Cache Rule so `cdn.coldd.dev/media/*` and `/avatars/*` cache for a month. **Do not cache `/download.php`** (Cloudflare skips caching it by default; keep it that way). Cloudflare's 100 MB proxied upload limit applies to proxied hosts, so for large product uploads keep `cdn` DNS-only (grey cloud), or give uploads their own unproxied name via `CDN_UPLOAD_URL`.
+## Connect the Storage Box
+1. Hetzner Console -> Storage Box -> enable **SSH support**. Note the username (`uXXXXXX`) and host (`uXXXXXX.your-storagebox.de`).
+2. `node scripts/make-box-config.mjs uXXXXXX uXXXXXX.your-storagebox.de` generates a fresh SSH key and a
+   complete `cdn-config.php` (host key pinned) in `scratchpad/cdn-upload/`.
+3. Add `scratchpad/cdn-upload/private/storagebox_key.pub` as an authorized key on the box (Hetzner Console -> Storage Box -> SSH keys).
+4. Put the files from `scratchpad/cdn-upload/` on the server (table above).
+5. Check: `https://cdn.coldd.dev/upload.php?action=ping` shows `"box":true,"sftp":true`. Then `node scripts/cdn-selftest.mjs`
+   does a signed put/get/delete on the box and names the exact step that fails.
+6. Migrate existing files onto the box: `node scripts/migrate-media-to-cdn.mjs` (re-copies from Supabase, verifies by reading back).
 
-## 3. Turn it on (Supabase secrets)
-```bash
-supabase secrets set CDN_PUBLIC_URL=https://cdn.coldd.dev \
-  CDN_UPLOAD_URL=https://cdn.coldd.dev/upload.php \
-  CDN_UPLOAD_SECRET=<same secret>
-supabase functions deploy admin-get-upload-url get-avatar-upload-url get-download-url admin-get-download-url admin-unreleased-files admin-generate-legal-docx
-```
-Health check: `https://cdn.coldd.dev/upload.php?action=ping` returns `{"ok":true}`.
-Instant rollback for NEW uploads: `supabase secrets set STORAGE_DRIVER=supabase`.
+## DNS / certificates (already done)
+- Cloudflare DNS: `cdn` A record -> hosting IP, proxied. SSL mode Full.
+- Hestia: `cdn.coldd.dev` is an alias of `coldd.dev` (the account allows one web domain); a Cloudflare Origin
+  Certificate (with Cloudflare's Origin CA root in the CA box) is installed on `coldd.dev`.
 
-## 4. Migrate existing files (nothing is deleted)
-```bash
-cp .env.example .env     # fill SUPABASE_SERVICE_ROLE_KEY + CDN_UPLOAD_SECRET, then load it into your shell
-node scripts/migrate-media-to-cdn.mjs            # copies + sha256-verifies every file; DB untouched
-node scripts/migrate-media-to-cdn.mjs --apply    # then switches the DB references (writes a rollback JSON first)
-```
-Covers `product-media` and `product-files`, and rewrites `products.image/gallery/storage_path`, `profiles.avatar_url`, `unreleased_files.storage_path`, `product_legal.proof_files/dev_proof_files`. Supabase copies stay as an extra backup; delete them only after you have run on the new storage for a while.
+## Turn on / roll back (Supabase secrets)
+`CDN_PUBLIC_URL`, `CDN_UPLOAD_URL`, `CDN_UPLOAD_SECRET` (same value as `secret` in `cdn-config.php`). Optional
+`CDN_DOWNLOAD_URL`. `STORAGE_DRIVER=supabase` sends new uploads back to Supabase Storage instantly.
 
-## 5. Backups (Storage Box)
-1. Hetzner Console -> Storage Box -> enable SSH support; install the hosting account's SSH public key on the box.
-2. Copy `cdn/backup.sh` to the account, create `~/.cdn-backup.env` from the "Backup" block in `.env.example`, `chmod +x`. It backs up BOTH `public_html` and `private-files` (set `SRC_PUBLIC` and `SRC_PRIVATE`).
-3. Hestia -> CRON -> `30 3 * * *  /home/<hestia-user>/backup.sh`.
-4. Also enable Hestia's own BACKUP for the account.
-5. Test a restore once: `rsync -a -e "ssh -p 23" uXXXX@uXXXX.your-storagebox.de:coldd-cdn/current/ /tmp/restore-test/`.
-
-If the hosting account has no rsync/SSH, tell me and I will switch the script to SFTP/rclone.
+## Backups
+The Storage Box is the primary, so back IT up:
+1. Hetzner Console -> Storage Box -> **Snapshots**: enable an automatic snapshot plan (daily, keep 7-10). This protects against deletes and bad overwrites.
+2. A second, independent copy elsewhere (a second Storage Box, or Backblaze B2 / Cloudflare R2 via `rclone`), run weekly. Snapshots on the same box do not protect against losing the box itself.
+3. Supabase Storage still holds the original copies of everything migrated so far: keep them until the box backups are verified.
+4. Test a restore once.
 
 ## Moving to another server later
-Deploy `upload.php`, `download.php` and `cdn-config.php` on the new host, restore files from the Storage Box (command above), repoint the `cdn` A record. No code or database changes.
+Install `upload.php`, `download.php`, `cdn-lib.php`, `cdn-config.php` and the key on the new host, repoint the `cdn`
+DNS record. The files stay on the Storage Box, so nothing is copied and no code or database changes.
 
 ## Notes and limits
-- Images: JPG/PNG/WebP/GIF/AVIF, content checked from the bytes, 10 MB (5 MB avatars). Private files: any type, up to 4 GB, uploaded in 4 MB retried chunks.
+- Images: JPG/PNG/WebP/GIF/AVIF, content checked from the bytes, 10 MB (5 MB avatars). Private files: any type, up to 4 GB, uploaded in 4 MB retried chunks; the hosting account needs temporary disk space for one file at a time while it is assembled.
 - Upload links last 5 minutes (1 hour for private files); download links 2 minutes (legal-doc links 7 days).
-- If the host is down, uploads show "storage is temporarily unavailable"; images already cached by Cloudflare/browsers keep showing; downloads fail with a retry message.
-- Not done: automatic WebP/AVIF re-encoding on upload (images are served as uploaded with far-future cache headers).
+- Needs PHP's curl built with SFTP (the `ping` response shows `"sftp":true`).
+- Not done: automatic WebP/AVIF re-encoding on upload.

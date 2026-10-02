@@ -1,18 +1,19 @@
 <?php
 // cdn/download.php - deploy to public_html/download.php on cdn.coldd.dev.
 //
-// Streams a PRIVATE product file (stored outside the web root) to a buyer.
-// Only works with a short-lived HMAC link minted by our Supabase edge functions
-// AFTER they verified the purchase, so the file list is never browsable and a
-// link can't be reused after it expires. Supports Range requests so large
-// downloads can resume.
+// Streams a PRIVATE product file to a buyer. The file lives on the Storage Box (fetched over
+// SFTP) - or, for files not yet migrated, in <private>/files. Only works with a short-lived HMAC
+// link minted by our Supabase edge functions AFTER they verified the purchase, so the file list
+// is never browsable and a link can't be reused after it expires. Supports Range requests so
+// large downloads can resume.
 //
 //   GET /download.php?path=..&name=..&exp=..&sig=..
 
 declare(strict_types=1);
 
-$cfgFile = dirname(__DIR__) . '/private/cdn-config.php';
-$cfg = is_file($cfgFile) ? (require $cfgFile) : [];
+require dirname(__DIR__) . '/private/cdn-lib.php';
+
+$cfg = cdn_cfg();
 $secret = (string)($cfg['secret'] ?? '');
 $privRoot = rtrim((string)($cfg['private_root'] ?? dirname(__DIR__) . '/private/files'), '/');
 
@@ -35,10 +36,17 @@ $expected = hash_hmac('sha256', implode('|', ['v2', 'download', $path, $exp, $na
 if (!hash_equals($expected, $sig)) fail(403, 'Invalid download link.');
 if (!preg_match('#^[a-z0-9][a-z0-9._\-/]{0,240}$#', $path) || str_contains($path, '..') || str_contains($path, '//') || str_contains($path, '/.')) fail(400, 'Bad path.');
 
-$file = $privRoot . '/' . $path;
-if (!is_file($file)) fail(404, 'File not found.');
+// Where is the file? Storage Box first, then (legacy) the hosting disk.
+$local = $privRoot . '/' . $path;
+$source = null; $size = 0;
+if (box_enabled()) {
+    [$st, $sz] = box_size('private/' . $path);
+    if ($st === 'ok') { $source = 'box'; $size = $sz; }
+    elseif ($st === 'error' && !is_file($local)) fail(503, 'Storage is temporarily unavailable. Please try again in a minute.');
+}
+if ($source === null && is_file($local)) { $source = 'local'; $size = (int)filesize($local); }
+if ($source === null) fail(404, 'File not found.');
 
-$size = filesize($file);
 $start = 0;
 $end = $size - 1;
 $status = 200;
@@ -61,7 +69,18 @@ if ($status === 206) header("Content-Range: bytes $start-$end/$size");
 
 @set_time_limit(0);
 while (ob_get_level() > 0) ob_end_clean();
-$fh = fopen($file, 'rb');
+
+if ($source === 'box') {
+    box_stream('private/' . $path, $start, $end, function (string $chunk): int {
+        if (connection_aborted()) return 0; // stop pulling from the box when the buyer disconnects
+        echo $chunk;
+        flush();
+        return strlen($chunk);
+    });
+    exit;
+}
+
+$fh = fopen($local, 'rb');
 fseek($fh, $start);
 $left = $end - $start + 1;
 while ($left > 0 && !feof($fh) && !connection_aborted()) {
