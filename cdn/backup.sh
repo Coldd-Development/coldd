@@ -8,7 +8,7 @@
 # and this account's public key installed. Config in ~/.cdn-backup.env:
 #   BOX_USER=u123456  BOX_HOST=u123456.your-storagebox.de  BOX_DIR=coldd-cdn
 #   SRC_PUBLIC=/home/<hestia-user>/web/cdn.coldd.dev/public_html
-#   SRC_PRIVATE=/home/<hestia-user>/web/cdn.coldd.dev/private-files
+#   SRC_PRIVATE=/home/<hestia-user>/web/<domain>/private/files
 #   SSH_KEY=~/.ssh/storagebox_ed25519
 
 set -euo pipefail

@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
     // Public media (thumbnails/gallery) goes to the CDN host when configured;
     // private files always stay in Supabase Storage.
     if (bucket === MEDIA_BUCKET && cdnEnabled()) {
-      const cdnPath = `products/${path}`;
+      const cdnPath = `media/${path}`; // NOT products/: the *.coldd.dev/product* Worker route would swallow it
       return json({
         ok: true,
         driver: "cdn",

@@ -14,3 +14,9 @@ scratchpad/
 .env
 media-migration-rollback-*.json
 dist/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example

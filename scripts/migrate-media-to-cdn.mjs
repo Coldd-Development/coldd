@@ -32,7 +32,7 @@ const sb = { Authorization: `Bearer ${KEY}`, apikey: KEY };
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 const hmac = (parts) => createHmac("sha256", SECRET).update(parts.join("|")).digest("hex");
-const pubPath = (p) => (p.startsWith("avatars/") ? p : `products/${p}`);
+const pubPath = (p) => (p.startsWith("avatars/") ? p : `media/${p}`);
 
 function signedUpload(path, priv) {
   const exp = Math.floor(Date.now() / 1000) + (priv ? 3600 : 300);

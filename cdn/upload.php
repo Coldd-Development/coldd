@@ -8,7 +8,7 @@
 //
 // The browser never holds a password: our Supabase edge functions mint a short-lived HMAC
 // token after checking the caller is allowed, and this script only verifies it. The secret
-// lives OUTSIDE the web root in ../cdn-config.php (see cdn/README.md).
+// lives OUTSIDE the web root in ../private/cdn-config.php (see cdn/README.md).
 //
 //   POST ?action=upload&path=..&exp=..&max=..&ow=0|1&vis=pub|priv&sig=..   multipart field "file"
 //        private files may be sent in chunks: &offset=N&last=0|1 (offset must equal bytes so far)
@@ -17,12 +17,12 @@
 
 declare(strict_types=1);
 
-$cfgFile = dirname(__DIR__) . '/cdn-config.php';
+$cfgFile = dirname(__DIR__) . '/private/cdn-config.php';
 $cfg = is_file($cfgFile) ? (require $cfgFile) : [];
 $secret = (string)($cfg['secret'] ?? '');
 $origins = (array)($cfg['allowed_origins'] ?? ['https://coldd.dev']);
 $pubRoot = rtrim((string)($cfg['root'] ?? __DIR__), '/');
-$privRoot = rtrim((string)($cfg['private_root'] ?? dirname(__DIR__) . '/private-files'), '/');
+$privRoot = rtrim((string)($cfg['private_root'] ?? dirname(__DIR__) . '/private/files'), '/');
 
 const IMG_EXT = [
     'jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'],

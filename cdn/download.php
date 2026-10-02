@@ -11,10 +11,10 @@
 
 declare(strict_types=1);
 
-$cfgFile = dirname(__DIR__) . '/cdn-config.php';
+$cfgFile = dirname(__DIR__) . '/private/cdn-config.php';
 $cfg = is_file($cfgFile) ? (require $cfgFile) : [];
 $secret = (string)($cfg['secret'] ?? '');
-$privRoot = rtrim((string)($cfg['private_root'] ?? dirname(__DIR__) . '/private-files'), '/');
+$privRoot = rtrim((string)($cfg['private_root'] ?? dirname(__DIR__) . '/private/files'), '/');
 
 function fail(int $code, string $msg): never {
     http_response_code($code);

@@ -5,7 +5,7 @@ Everything file-shaped lives on your own storage, not Supabase. Supabase keeps o
 | What | Where it lives | How it is served |
 |---|---|---|
 | Thumbnails, gallery, avatars | `public_html/` of `cdn.coldd.dev` | nginx, public, long browser cache |
-| Paid product files, staged files, legal docs | `private-files/` (OUTSIDE the web root) | only via `download.php` with a signed link that expires in minutes, minted after the purchase check |
+| Paid product files, staged files, legal docs | `private/files/` (Hestia's `private` folder, OUTSIDE the web root) | only via `download.php` with a signed link that expires in minutes, minted after the purchase check |
 
 ```
 browser --(HMAC-signed POST, chunked for big files)--> upload.php --> disk
@@ -23,19 +23,19 @@ Until the CDN secrets are set, everything keeps using Supabase Storage, so nothi
 ## 1. Create the site (Hestia panel, `webpanel.ultimatehosting.com.uy:8083`)
 1. WEB -> Add Web Domain -> `cdn.coldd.dev`; enable Let's Encrypt SSL (after DNS in step 2). Use a PHP 8.1+ template.
 2. Upload `cdn/upload.php` and `cdn/download.php` into `/home/<hestia-user>/web/cdn.coldd.dev/public_html/`.
-3. Create `/home/<hestia-user>/web/cdn.coldd.dev/cdn-config.php` (one level ABOVE `public_html`, never served):
+3. Create `/home/<hestia-user>/web/<domain>/private/cdn-config.php` (Hestia's `private` folder: PHP is allowed to read it, nginx never serves it; one level above `public_html` is NOT readable because of open_basedir):
    ```php
    <?php return ['secret' => 'PASTE_64_HEX_SECRET', 'allowed_origins' => ['https://coldd.dev']];
    ```
    Generate the secret with `openssl rand -hex 32` (or any 40+ random characters).
-4. Make sure `/home/<hestia-user>/web/cdn.coldd.dev/private-files/` is not under `public_html` (it is created automatically on first upload).
+4. Make sure `/home/<hestia-user>/web/<domain>/private/files/` is not under `public_html` (it is created automatically on first upload).
 
 ## 2. DNS (Cloudflare)
 | Type | Name | Content | Proxy |
 |---|---|---|---|
 | A | `cdn` | `91.98.39.105` | DNS only until SSL works, then Proxied is fine for public images |
 
-If proxied: SSL mode Full (strict), and add a Cache Rule so `cdn.coldd.dev/products/*` and `/avatars/*` cache for a month. **Do not cache `/download.php`** (Cloudflare skips caching it by default; keep it that way). Cloudflare's 100 MB proxied upload limit applies to proxied hosts, so for large product uploads keep `cdn` DNS-only (grey cloud), or give uploads their own unproxied name via `CDN_UPLOAD_URL`.
+If proxied: SSL mode Full (strict), and add a Cache Rule so `cdn.coldd.dev/media/*` and `/avatars/*` cache for a month. **Do not cache `/download.php`** (Cloudflare skips caching it by default; keep it that way). Cloudflare's 100 MB proxied upload limit applies to proxied hosts, so for large product uploads keep `cdn` DNS-only (grey cloud), or give uploads their own unproxied name via `CDN_UPLOAD_URL`.
 
 ## 3. Turn it on (Supabase secrets)
 ```bash
