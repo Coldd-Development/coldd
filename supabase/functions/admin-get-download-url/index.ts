@@ -15,7 +15,7 @@
 // the same admin-only gate is exactly what should guard viewing them.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { downloadName, publicSignedUrl } from "../_shared/download.ts";
+import { downloadName, signPrivateDownload } from "../_shared/download.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const SIGNED_URL_TTL_SECONDS = 120;
@@ -68,14 +68,12 @@ Deno.serve(async (req: Request) => {
       // Constrained to that exact shape rather than trusting an arbitrary
       // client-supplied path into the bucket, even though the admin gate
       // above already limits who can call this at all.
-      if (!/^[a-z0-9.\-]+\/legal\/[a-z0-9.\-]+$/.test(rawPath)) {
+      if (!/^(cdn:)?[a-z0-9.\-]+\/legal\/[a-z0-9.\-]+$/.test(rawPath)) {
         return json({ ok: false, error: "Invalid file path." }, 400);
       }
-      const { data: signed, error: signErr } = await admin.storage
-        .from("product-files")
-        .createSignedUrl(rawPath, SIGNED_URL_TTL_SECONDS);
-      if (signErr || !signed) return json({ ok: false, error: "Could not generate link." }, 500);
-      return json({ ok: true, url: publicSignedUrl(signed.signedUrl) });
+      const url = await signPrivateDownload(admin, rawPath, undefined, SIGNED_URL_TTL_SECONDS);
+      if (!url) return json({ ok: false, error: "Could not generate link." }, 500);
+      return json({ ok: true, url });
     }
 
     const productId = String(body.productId || "");
@@ -89,14 +87,10 @@ Deno.serve(async (req: Request) => {
     if (productErr || !product) return json({ ok: false, error: "Product not found." }, 404);
     if (!product.storage_path) return json({ ok: false, error: "No file has been uploaded for this product yet." }, 404);
 
-    const { data: signed, error: signErr } = await admin.storage
-      .from("product-files")
-      .createSignedUrl(product.storage_path, SIGNED_URL_TTL_SECONDS, {
-        download: downloadName(product.storage_path, product.title),
-      });
-    if (signErr || !signed) return json({ ok: false, error: "Could not generate download link." }, 500);
+    const url = await signPrivateDownload(admin, product.storage_path, downloadName(product.storage_path, product.title), SIGNED_URL_TTL_SECONDS);
+    if (!url) return json({ ok: false, error: "Could not generate download link." }, 500);
 
-    return json({ ok: true, url: publicSignedUrl(signed.signedUrl) });
+    return json({ ok: true, url });
   } catch (err) {
     console.error("[admin-get-download-url] error:", err);
     return json({ ok: false, error: "Server error." }, 500);

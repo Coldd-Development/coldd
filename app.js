@@ -4779,8 +4779,21 @@
           if (file.size > 5 * 1024 * 1024) { acAvatarFlash('Image must be under 5MB.'); return; }
           setBtnLoading(acAvatarBtn, true);
           window.coldAuth.invokeFn('get-avatar-upload-url', { contentType: file.type }).then(function (d) {
-            return window.coldSupabase.storage.from(d.bucket).uploadToSignedUrl(d.path, d.token, file).then(function (upRes) {
-              if (upRes.error) throw new Error(upRes.error.message || 'Upload failed.');
+            var put;
+            if (d.driver === 'cdn') {
+              var fd = new FormData();
+              fd.append('file', file);
+              put = fetch(d.uploadUrl, { method: 'POST', body: fd }).then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (j) {
+                  if (!r.ok || !j.ok) throw new Error(j.error || 'Upload failed (' + r.status + ').');
+                });
+              }, function () { throw new Error('Image storage is temporarily unavailable. Please try again shortly.'); });
+            } else {
+              put = window.coldSupabase.storage.from(d.bucket).uploadToSignedUrl(d.path, d.token, file).then(function (upRes) {
+                if (upRes.error) throw new Error(upRes.error.message || 'Upload failed.');
+              });
+            }
+            return put.then(function () {
               // Same fixed path every time (get-avatar-upload-url overwrites
               // in place), so a browser/CDN cache from the last upload would
               // otherwise keep showing the old picture - the query string

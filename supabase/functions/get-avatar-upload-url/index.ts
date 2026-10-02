@@ -12,6 +12,7 @@
 // user can only ever overwrite their own avatar.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cdnEnabled, cdnPublicUrl, cdnSignedUrl } from "../_shared/cdn.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const MEDIA_BUCKET = "product-media";
@@ -62,6 +63,16 @@ Deno.serve(async (req: Request) => {
     // the previous avatar in place instead of leaving orphaned files behind
     // every time someone changes their picture.
     const path = `avatars/${userData.user.id}.${ext}`;
+
+    if (cdnEnabled()) {
+      return json({
+        ok: true,
+        driver: "cdn",
+        path,
+        uploadUrl: await cdnSignedUrl("upload", path, { maxBytes: 5 * 1024 * 1024, overwrite: true }),
+        publicUrl: cdnPublicUrl(path),
+      });
+    }
 
     const { data: signed, error: signErr } = await admin.storage
       .from(MEDIA_BUCKET)

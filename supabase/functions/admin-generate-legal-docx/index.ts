@@ -14,7 +14,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, ExternalHyperlink, BorderStyle } from "https://esm.sh/docx@8.5.0";
-import { publicSignedUrl } from "../_shared/download.ts";
+import { signPrivateDownload } from "../_shared/download.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 // Long enough to still be valid by the time someone actually opens the
@@ -84,11 +84,7 @@ Deno.serve(async (req: Request) => {
     async function signLegalFile(f: ProofFile): Promise<{ name: string; url: string | null }> {
       const name = f.name || (f.path ? f.path.split("/").pop()! : "file");
       if (!f.path) return { name, url: null };
-      const { data: signed, error } = await admin.storage
-        .from("product-files")
-        .createSignedUrl(f.path, SIGNED_URL_TTL_SECONDS);
-      if (error || !signed) return { name, url: null };
-      return { name, url: publicSignedUrl(signed.signedUrl) };
+      return { name, url: await signPrivateDownload(admin, f.path, name, SIGNED_URL_TTL_SECONDS) };
     }
 
     const proofFiles: ProofFile[] = Array.isArray(legal?.proof_files) ? legal.proof_files : [];

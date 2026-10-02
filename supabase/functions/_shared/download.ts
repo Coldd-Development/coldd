@@ -23,6 +23,8 @@
 //     add-on, or a reverse proxy). Until one exists, leave it unset and the
 //     URL is returned untouched rather than pointed at a host that 404s.
 
+import { cdnDownloadUrl, isCdnPath } from "./cdn.ts";
+
 export function publicSignedUrl(signedUrl: string): string {
   const publicBase = Deno.env.get("PUBLIC_SUPABASE_URL");
   if (!publicBase) return signedUrl;
@@ -46,4 +48,27 @@ export function downloadName(storagePath: string, title?: string): string {
   const dot = base.lastIndexOf(".");
   const ext = dot >= 0 ? base.slice(dot) : "";
   return (title || "download").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ext;
+}
+
+/**
+ * One entry point for "give this caller a link to a private file".
+ * "cdn:" paths come from the Ultimate Hosting storage (signed download.php link);
+ * anything else is a legacy Supabase Storage object. Caller has already
+ * verified the user may have the file. Returns null if no link could be made.
+ */
+export async function signPrivateDownload(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  storagePath: string,
+  filename?: string,
+  ttlSeconds = 600,
+): Promise<string | null> {
+  if (isCdnPath(storagePath)) {
+    return await cdnDownloadUrl(storagePath, filename || downloadName(storagePath), ttlSeconds);
+  }
+  const { data, error } = await admin.storage
+    .from("product-files")
+    .createSignedUrl(storagePath, ttlSeconds, filename ? { download: filename } : undefined);
+  if (error || !data) return null;
+  return publicSignedUrl(data.signedUrl);
 }

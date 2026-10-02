@@ -26,7 +26,7 @@
 // owned-orders lookup (e.g. redownloading later from the dashboard).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { downloadName, publicSignedUrl } from "../_shared/download.ts";
+import { downloadName, signPrivateDownload } from "../_shared/download.ts";
 import { verifyOrderAccess } from "../_shared/order_access.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
@@ -120,14 +120,11 @@ Deno.serve(async (req: Request) => {
       .single();
     if (productErr || !product) return json({ ok: false, error: "Product not found." }, 404);
 
-    const { data: signed, error: signErr } = await admin.storage
-      .from("product-files")
-      .createSignedUrl(product.storage_path, SIGNED_URL_TTL_SECONDS, {
-        download: downloadName(product.storage_path, product.title),
-      });
-    if (signErr || !signed) return json({ ok: false, error: "Could not generate download link." }, 500);
+    const dlName = downloadName(product.storage_path, product.title);
+    const url = await signPrivateDownload(admin, product.storage_path, dlName, SIGNED_URL_TTL_SECONDS);
+    if (!url) return json({ ok: false, error: "Could not generate download link." }, 500);
 
-    return json({ ok: true, url: publicSignedUrl(signed.signedUrl), filename: downloadName(product.storage_path, product.title) });
+    return json({ ok: true, url, filename: dlName });
   } catch (err) {
     console.error("[get-download-url] error:", err);
     return json({ ok: false, error: "Server error." }, 500);

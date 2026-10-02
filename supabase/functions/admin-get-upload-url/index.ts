@@ -16,6 +16,7 @@
 //     purchase-flow setup - reused here for admin-uploaded product files.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cdnEnabled, cdnPublicUrl, cdnSignedUrl, withCdnPrefix } from "../_shared/cdn.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const MEDIA_BUCKET = "product-media";
@@ -82,6 +83,35 @@ Deno.serve(async (req: Request) => {
         const subdir = kind === "productFile" ? "files" : kind === "gallery" ? "gallery" : kind === "legalDoc" ? "legal" : "thumbnails";
         return `${productSlug}/${subdir}/${unique}-${filename}`;
       })();
+
+    // Public media (thumbnails/gallery) goes to the CDN host when configured;
+    // private files always stay in Supabase Storage.
+    if (bucket === MEDIA_BUCKET && cdnEnabled()) {
+      const cdnPath = `products/${path}`;
+      return json({
+        ok: true,
+        driver: "cdn",
+        path: cdnPath,
+        uploadUrl: await cdnSignedUrl("upload", cdnPath, { maxBytes: 10 * 1024 * 1024 }),
+        publicUrl: cdnPublicUrl(cdnPath),
+      });
+    }
+
+    // Private files (paid downloads, staged files, legal docs) also live on the
+    // hosting account, outside the web root. The stored path carries a "cdn:"
+    // prefix so download/delete code knows which backend owns the file. The
+    // browser sends it in chunks (offset/last query params) so file size isn't
+    // capped by PHP's per-request limits.
+    if (bucket === FILES_BUCKET && cdnEnabled()) {
+      return json({
+        ok: true,
+        driver: "cdn",
+        chunked: true,
+        path: withCdnPrefix(path),
+        uploadUrl: await cdnSignedUrl("upload", path, { maxBytes: 4 * 1024 * 1024 * 1024, priv: true }),
+        publicUrl: null,
+      });
+    }
 
     const { data: signed, error: signErr } = await admin.storage
       .from(bucket)

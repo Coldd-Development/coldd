@@ -9,3 +9,7 @@ test.txt
 # local scratch / preview files
 scratchpad/
 .DS_Store
+
+# secrets
+.env
+media-migration-rollback-*.json

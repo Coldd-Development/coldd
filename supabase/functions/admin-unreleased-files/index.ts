@@ -17,7 +17,8 @@
 //       { action: "release", id }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { downloadName, publicSignedUrl } from "../_shared/download.ts";
+import { downloadName, signPrivateDownload } from "../_shared/download.ts";
+import { cdnDeletePrivate, isCdnPath } from "../_shared/cdn.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const FILES_BUCKET = "product-files";
@@ -105,13 +106,9 @@ Deno.serve(async (req: Request) => {
       const { data: row } = await admin.from("unreleased_files").select("storage_path, display_name").eq("id", id).maybeSingle();
       if (!row?.storage_path) return json({ ok: false, error: "File not found." }, 404);
 
-      const { data: signed, error: signErr } = await admin.storage
-        .from(FILES_BUCKET)
-        .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS, {
-          download: downloadName(row.storage_path, row.display_name),
-        });
-      if (signErr || !signed) return json({ ok: false, error: "Could not generate download link." }, 500);
-      return json({ ok: true, url: publicSignedUrl(signed.signedUrl) });
+      const url = await signPrivateDownload(admin, row.storage_path, downloadName(row.storage_path, row.display_name), SIGNED_URL_TTL_SECONDS);
+      if (!url) return json({ ok: false, error: "Could not generate download link." }, 500);
+      return json({ ok: true, url });
     }
 
     // Fires once a staged file has actually become a real product (see
@@ -133,7 +130,10 @@ Deno.serve(async (req: Request) => {
       if (!id) return json({ ok: false, error: "Missing id." }, 400);
 
       const { data: row } = await admin.from("unreleased_files").select("storage_path").eq("id", id).maybeSingle();
-      if (row?.storage_path) await admin.storage.from(FILES_BUCKET).remove([row.storage_path]);
+      if (row?.storage_path) {
+        if (isCdnPath(row.storage_path)) await cdnDeletePrivate(row.storage_path);
+        else await admin.storage.from(FILES_BUCKET).remove([row.storage_path]);
+      }
 
       const { error } = await admin.from("unreleased_files").delete().eq("id", id);
       if (error) return json({ ok: false, error: error.message }, 500);

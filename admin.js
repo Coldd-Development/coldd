@@ -3435,6 +3435,41 @@
       slug = draftSlug;
     }
     return invokeAdminFn('admin-get-upload-url', { kind: kind, productSlug: slug, filename: file.name }, 'Could not prepare upload.').then(function (d) {
+      // driver:'cdn' = signed POST to cdn.coldd.dev/upload.php (Ultimate Hosting);
+      // no driver = Supabase Storage, used until the CDN secrets are set.
+      if (d.driver === 'cdn' && d.chunked) {
+        // Private files go up in 4MB pieces so size isn't limited by PHP's
+        // per-request caps; each piece is retried a few times so a blip on a
+        // multi-hundred-MB upload doesn't force a restart.
+        var CHUNK = 4 * 1024 * 1024;
+        var sendChunk = function (offset, tries) {
+          var end = Math.min(offset + CHUNK, file.size);
+          var body = new FormData();
+          body.append('file', file.slice(offset, end), 'chunk');
+          var last = end >= file.size ? 1 : 0;
+          return fetch(d.uploadUrl + '&offset=' + offset + '&last=' + last, { method: 'POST', body: body }).then(function (r) {
+            return r.json().catch(function () { return {}; }).then(function (j) {
+              if (r.status === 409 && typeof j.have === 'number' && j.have > offset && j.have < file.size) return sendChunk(j.have, 3); // earlier attempt had landed; resume after it
+              if (!r.ok || !j.ok) { var e = new Error(j.error || 'Upload failed (' + r.status + ').'); e.fatal = r.status >= 400 && r.status < 500; throw e; }
+              return last ? null : sendChunk(end, 3);
+            });
+          }).catch(function (e) {
+            if (!e.fatal && tries > 1) return sendChunk(offset, tries - 1);
+            throw new Error(e.fatal ? e.message : 'File storage is temporarily unavailable. Please try again shortly.');
+          });
+        };
+        return sendChunk(0, 3).then(function () { return { path: d.path, publicUrl: d.publicUrl }; });
+      }
+      if (d.driver === 'cdn') {
+        var fd = new FormData();
+        fd.append('file', file);
+        return fetch(d.uploadUrl, { method: 'POST', body: fd }).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            if (!r.ok || !j.ok) throw new Error(j.error || 'Upload failed (' + r.status + ').');
+            return { path: d.path, publicUrl: d.publicUrl };
+          });
+        }, function () { throw new Error('Image storage is temporarily unavailable. Please try again shortly.'); });
+      }
       return window.coldSupabase.storage.from(d.bucket).uploadToSignedUrl(d.path, d.token, file).then(function (upRes) {
         if (upRes.error) throw new Error(upRes.error.message || 'Upload failed.');
         return { path: d.path, publicUrl: d.publicUrl };
