@@ -20,10 +20,10 @@
         // sent them straight back here - an infinite redirect loop.
         // The authoritative check further down handles real expiry.
         if (!parsed || (!parsed.refresh_token && (!parsed.expires_at || parsed.expires_at * 1000 < Date.now()))) {
-          try { localStorage.setItem('coldd_auth', 'out'); } catch (e) {}
+          try { localStorage.setItem('coldd_auth', 'out'); sessionStorage.setItem('coldd_bounce', String(Date.now())); } catch (e) {}
           location.replace('/signin');
         }
-      } catch (e) { try { localStorage.setItem('coldd_auth', 'out'); } catch (e2) {} location.replace('/signin'); }
+      } catch (e) { try { localStorage.setItem('coldd_auth', 'out'); } catch (e2) {} try { sessionStorage.setItem('coldd_bounce', String(Date.now())); } catch (e3) {} location.replace('/signin'); }
     })();
   </script>
   <meta charset="UTF-8" />
@@ -349,6 +349,12 @@
               <p class="auth-hint" style="margin:0 0 12px;">Change your account password.</p>
               <button class="btn btn-ghost" id="openPwModalBtn" type="button">Change password</button>
             </div>
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Download your data</h2></div>
+              <p class="auth-hint" style="margin:0 0 12px;">Get a copy of the personal data we hold about you - profile, orders, reviews, wishlist and notifications - as a JSON file. Want something that isn't in the file? Email <a href="mailto:support@coldd.dev">support@coldd.dev</a>.</p>
+              <button class="btn btn-ghost" id="exportData" type="button"><span class="btn-label">Download my data</span></button>
+              <p class="auth-err" id="exportErr" role="status"></p>
+            </div>
             <div class="dash-card glass danger"><div class="dash-card-head"><h2>Delete account</h2></div>
               <p class="danger-text">This permanently removes your account, licences, and download access. This can't be undone.</p>
               <button class="btn danger-btn" id="delAcct" type="button">Delete my account</button>
@@ -616,7 +622,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20260909a"></script>
   <script src="/site-gate.js?v=20260926a"></script>
-  <script src="/catalog.js?v=20260920d" data-then="/app.js?v=20261002a"></script>
+  <script src="/catalog.js?v=20260920d" data-then="/app.js?v=20261004b"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

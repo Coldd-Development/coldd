@@ -4487,6 +4487,7 @@
             // leaving is what makes signin's pre-check agree there's no
             // session, same as an explicit sign-out would.
             (window.coldAuth ? window.coldAuth.signOut() : Promise.resolve()).then(function () {
+              try { sessionStorage.setItem('coldd_bounce', String(Date.now())); } catch (e) {}
               location.href = '/signin';
             });
             return;
@@ -4856,6 +4857,59 @@
         del.addEventListener('click', function () {
           showDeleteCode();
           conf.hidden = false; del.style.display = 'none';
+        });
+        // Self-serve data export (GDPR Art. 15/20). Runs entirely under the
+        // signed-in user's own session, so row-level security is what limits
+        // it to their rows - no service-role function involved. A table the
+        // user can't read (or that doesn't exist for them) is listed under
+        // not_included instead of failing the whole download.
+        var exportBtn = document.getElementById('exportData'), exportErr = document.getElementById('exportErr');
+        if (exportBtn) exportBtn.addEventListener('click', function () {
+          if (!window.coldSupabase) return;
+          if (exportErr) exportErr.textContent = '';
+          setBtnLoading(exportBtn, true);
+          window.coldSupabase.auth.getUser().then(function (ur) {
+            var user = ur && ur.data ? ur.data.user : null;
+            if (!user) throw new Error('Please sign in again to download your data.');
+            var uid = user.id;
+            var sources = [
+              ['profile', 'profiles', '*', 'id'],
+              ['orders', 'orders', '*, order_items(*)', 'user_id'],
+              ['orders_you_paid_for', 'orders', '*, order_items(*)', 'purchased_by_user_id'],
+              ['reviews', 'reviews', '*', 'user_id'],
+              ['wishlist', 'wishlist_items', '*', 'user_id'],
+              ['notifications', 'notifications', '*', 'user_id']
+            ];
+            return Promise.all(sources.map(function (src) {
+              return window.coldSupabase.from(src[1]).select(src[2]).eq(src[3], uid).then(function (r) {
+                return { key: src[0], data: r.error ? null : (r.data || []), failed: !!r.error };
+              }, function () { return { key: src[0], data: null, failed: true }; });
+            })).then(function (parts) {
+              var out = {
+                exported_at: new Date().toISOString(),
+                account: {
+                  id: uid, email: user.email || null, created_at: user.created_at || null,
+                  last_sign_in_at: user.last_sign_in_at || null,
+                  sign_in_providers: (user.identities || []).map(function (i) { return i.provider; })
+                },
+                not_included: []
+              };
+              parts.forEach(function (p) {
+                if (p.failed) out.not_included.push(p.key); else out[p.key] = p.data;
+              });
+              var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url; a.download = 'coldd-my-data-' + new Date().toISOString().slice(0, 10) + '.json';
+              document.body.appendChild(a); a.click(); a.remove();
+              setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+              setBtnLoading(exportBtn, false);
+              if (exportErr) exportErr.textContent = out.not_included.length ? 'Downloaded. Some sections could not be read: ' + out.not_included.join(', ') + '. Email support@coldd.dev for a full copy.' : 'Downloaded.';
+            });
+          }).catch(function (err) {
+            setBtnLoading(exportBtn, false);
+            if (exportErr) exportErr.textContent = (err && err.message) || 'Could not prepare your data.';
+          });
         });
         var cancel = document.getElementById('delCancel');
         if (cancel) cancel.addEventListener('click', function () { conf.hidden = true; del.style.display = ''; });

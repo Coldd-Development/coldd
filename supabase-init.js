@@ -656,6 +656,27 @@
     } catch (e) { return null; }
   }
 
+  // Keeps a server-side record of each banner decision (see
+  // supabase/migrations/20261004_consent_records.sql). Fire-and-forget: a
+  // failed log must never block or undo the visitor's choice. The visitor id
+  // is random and per-browser - it identifies a consent decision, not a person.
+  function logConsent(rec) {
+    try {
+      var vid = localStorage.getItem('coldd_consent_vid');
+      if (!vid) {
+        vid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
+        localStorage.setItem('coldd_consent_vid', vid);
+      }
+      client.auth.getSession().then(function (res) {
+        var uid = res && res.data && res.data.session && res.data.session.user ? res.data.session.user.id : null;
+        return client.from('consent_log').insert({
+          visitor_id: vid, user_id: uid, analytics: !!rec.analytics,
+          banner_version: rec.version, page: location.pathname.slice(0, 200)
+        });
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   function writeConsent(analytics) {
     var rec = { version: CONSENT_VERSION, analytics: !!analytics, ts: new Date().toISOString() };
     try { localStorage.setItem(CONSENT_KEY, JSON.stringify(rec)); } catch (e) {}
@@ -663,6 +684,7 @@
     // so a visitor who accepts gets counted on the page they accepted from,
     // rather than only from the next navigation onward.
     try { window.dispatchEvent(new CustomEvent('coldd:consent', { detail: rec })); } catch (e) {}
+    logConsent(rec);
     return rec;
   }
 
