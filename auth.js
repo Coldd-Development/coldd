@@ -94,8 +94,20 @@
       if (b.classList.contains('oauth-disabled')) return;
       if (!ageOk()) return;
       var p = b.getAttribute('data-provider');
-      if (p === 'Discord') {
-        if (window.coldAuth) window.coldAuth.signInDiscord();
+      if (p === 'Discord' || p === 'Google') {
+        // Visible feedback for every outcome: previously a failure (or the SDK
+        // not having loaded) left the button silently doing nothing.
+        var card = b.closest('.auth-card'), msg = card && card.querySelector('.auth-msg');
+        var showErr = function (text) { if (msg) { msg.textContent = text; msg.classList.add('show'); } };
+        if (msg) msg.classList.remove('show');
+        if (!window.coldAuth) { showErr('Sign-in did not finish loading. Refresh the page and try again - if it keeps happening, an ad blocker or privacy extension may be blocking it.'); return; }
+        if (b.classList.contains('is-loading')) return;
+        b.classList.add('is-loading');
+        var stuck = setTimeout(function () { b.classList.remove('is-loading'); showErr('That is taking too long. Check your connection and try again.'); }, 12000);
+        var res = p === 'Discord' ? window.coldAuth.signInDiscord() : window.coldAuth.signInGoogle();
+        Promise.resolve(res).then(function (r) {
+          if (r && r.error) { clearTimeout(stuck); b.classList.remove('is-loading'); showErr('Could not start ' + p + ' sign-in: ' + (r.error.message || 'unknown error') + '. Please try again or use another method.'); }
+        });
         return;
       }
       if (p === 'Roblox') {

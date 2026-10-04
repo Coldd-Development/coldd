@@ -35,6 +35,26 @@
   });
   window.coldSupabase = client;
 
+  // Resolves to {} once the browser has been sent to the provider, or
+  // { error } if it could not be. Navigation is done here rather than by the
+  // SDK (skipBrowserRedirect) so a missing/invalid URL is a visible error.
+  function startOAuth(params) {
+    params.options = Object.assign({}, params.options, { skipBrowserRedirect: true });
+    return client.auth.signInWithOAuth(params).then(function (res) {
+      if (res.error || !res.data || !res.data.url) {
+        var err = res.error || new Error('No sign-in URL was returned.');
+        console.error('[coldd] OAuth start failed:', err);
+        return { error: err };
+      }
+      location.assign(res.data.url);
+      return {};
+    }).catch(function (e) {
+      console.error('[coldd] OAuth start threw:', e);
+      return { error: e };
+    });
+  }
+
+
   // Cart and wishlist are both pure localStorage with no per-user
   // namespacing (cart has no backend at all; wishlist mirrors into
   // wishlist_items but always reads back from localStorage first - see
@@ -464,24 +484,26 @@
     checkIsAdmin: checkIsAdmin,
     getReferralAttribution: getReferralAttribution,
     getCampaignCode: getCampaignCode,
+    // Both native providers go through startOAuth so the caller can SEE a
+    // failure. They used to fire signInWithOAuth and drop the result, so a
+    // provider error (or a blocked redirect) left the button doing nothing,
+    // with nothing in the console either - the "Continue with Discord just
+    // doesn't load" report.
     signInDiscord: function () {
-      var redirectTo = location.origin + '/callback.html';
-      client.auth.signInWithOAuth({
+      return startOAuth({
         provider: 'discord',
-        options: { redirectTo: redirectTo, scopes: 'identify email guilds guilds.members.read' }
+        options: { redirectTo: location.origin + '/callback.html', scopes: 'identify email guilds guilds.members.read' }
       });
     },
     // Google is a Supabase-native provider, so this is the same one-call shape
     // as Discord - no hand-rolled exchange like Roblox needs. Requires the
     // Google provider to be enabled in Supabase Auth with a client ID/secret
-    // from Google Cloud; until then Supabase returns a clear provider error
-    // rather than failing silently.
+    // from Google Cloud.
     signInGoogle: function () {
-      var redirectTo = location.origin + '/callback.html';
-      return client.auth.signInWithOAuth({
+      return startOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectTo,
+          redirectTo: location.origin + '/callback.html',
           // Forces the account chooser instead of silently reusing whichever
           // Google account the browser last used - people share machines.
           queryParams: { prompt: 'select_account' }

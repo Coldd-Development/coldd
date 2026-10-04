@@ -4687,3 +4687,4 @@ html.auth-in .nav-notif[hidden] { display: block; }
 .auth-age-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; }
 .auth-age .auth-err { display: block; min-height: 0; margin-top: 6px; }
 .auth-age-row select { padding: 12px 26px 12px 10px; font-size: 15px; background-position: right 8px center; }
+.auth-oauth.is-loading { opacity: 0.6; cursor: progress; pointer-events: none; }
