@@ -55,7 +55,7 @@ sha256-/x7W7R75k8Roq0WaVRQX9blP4OufE5xbAdzklGxsgpw=
 Origins the site actually depends on, from a full sweep of the markup:
 
 - **scripts** - `cdn.jsdelivr.net` (supabase-js, now version-pinned with SRI)
-- **styles / fonts** - `fonts.googleapis.com`, `fonts.gstatic.com`
+- **styles / fonts** - none (Archivo is self-hosted in `/fonts`)
 - **connect** - `ekinmytmudjwfaqaqswp.supabase.co` (REST, Auth, Edge Functions, Storage)
 - **images** - Supabase Storage, plus `data:` URIs
 - **frames** - `youtube.com` / `youtube-nocookie.com` for product video embeds
@@ -68,8 +68,8 @@ Starting policy:
 Content-Security-Policy-Report-Only:
   default-src 'self';
   script-src 'self' https://cdn.jsdelivr.net 'sha256-/x7W7R75k8Roq0WaVRQX9blP4OufE5xbAdzklGxsgpw=';
-  style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
-  font-src 'self' https://fonts.gstatic.com;
+  style-src 'self' 'unsafe-inline';
+  font-src 'self';
   img-src 'self' data: https://ekinmytmudjwfaqaqswp.supabase.co;
   connect-src 'self' https://ekinmytmudjwfaqaqswp.supabase.co;
   frame-src https://www.youtube.com https://www.youtube-nocookie.com;

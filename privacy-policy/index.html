@@ -29,11 +29,8 @@
   <meta name="theme-color" content="#15161b" />
   <!-- meta:end -->
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="/styles.css?v=20261004a" />
+  <link rel="stylesheet" href="/styles.css?v=20261004c" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://coldd.dev/"}, {"@type": "ListItem", "position": 2, "name": "Privacy Policy", "item": "https://coldd.dev/privacy-policy"}]}</script>
   <!-- ld:end -->
@@ -137,7 +134,7 @@
     <section class="section-pad" style="padding-top: 6px;">
       <div class="wrap legal-wrap">
         <div class="glass legal-card">
-                    <p class="legal-meta">Last updated: September 2, 2026</p>
+                    <p class="legal-meta">Last updated: October 4, 2026</p>
 
           <p>This Privacy Policy explains how coldd Development ("coldd", "we", "us"; ABN 34 127 589 633) collects, uses, discloses and protects personal information when you use coldd.dev (the "Site"). This Policy forms part of our <a href="/terms-of-service">Terms of Service</a>.</p>
 
@@ -154,6 +151,7 @@
             <li><strong>Abandoned-cart snapshot</strong> - if you reach checkout with items still in your cart, we save that cart so we can follow up if you don't complete the order. If you're signed in, this snapshot <strong>is</strong> linked to your account and email address, and may be used to send you up to a few reminder emails about that cart (the later ones may include a discount code, only if you've separately opted in to marketing emails). If you're signed out, the snapshot has no account or email attached. Either way, it's cleared as soon as you check out or empty your cart.</li>
           </ul>
           <p>Both run in-house on our own Supabase infrastructure - we do not use a third-party analytics provider, and neither is shared outside coldd or used for third-party advertising. You can grant or withdraw analytics consent at any time using the button below; withdrawing it stops new page-view and cart-snapshot data being collected going forward.</p>
+          <p>So that we can show that you made your choice, we keep a record of each cookie-banner decision: a random identifier generated in your browser (not linked to you unless you were signed in at the time, in which case your account ID is included), whether you accepted analytics, the time, the version of the banner you saw, and the page you were on.</p>
           <p><button type="button" class="btn btn-tinted" id="cookiePrefsBtn">Manage Cookie Preferences</button></p>
           <script>
             // Re-opens the consent bar so a decision is never final. Guarded
@@ -219,8 +217,9 @@
           <p>If you have a concern about how we've handled your information, please contact us first at <a href="mailto:support@coldd.dev">support@coldd.dev</a> so we have a chance to resolve it directly. If you're not satisfied with our response, you can complain to the <a href="https://www.oaic.gov.au" target="_blank" rel="noopener">Office of the Australian Information Commissioner</a>. If you are in the UK or EU, you may also complain to your local data protection authority.</p>
 
           <h2>7. Children's Privacy</h2>
-          <p>coldd is not directed at children. Our account creation flow does not ask for or collect date of birth or other age-verification information, and neither our sign-in providers (Google, Discord, Roblox) nor our own account system are designed to serve children under the minimum age applicable in their country of residence.</p>
-          <p><strong>Minimising information from children:</strong> Because we don't collect age information at signup, we don't knowingly collect more personal information from a child than is necessary to operate the Site, and we don't use information from an account we later learn belongs to a child for marketing or profiling.</p>
+          <p>coldd is not directed at children, and you must be at least 13 years old to create a coldd account. When you create an account on our sign-up page we ask for your date of birth for one reason only: to stop people under 13 from using our services.</p>
+          <p><strong>Your date of birth is not stored anywhere in our systems, whatsoever.</strong> It is checked in your browser at the moment you enter it, compared with today's date, and then discarded. It is never sent to our servers, never saved to your account or profile, never written to your browser's storage, never included in any database, log, backup or analytics, and never shared with anyone. The only thing we keep is a temporary flag in your browser tab (cleared when you close the tab) that records that an age check was not passed, so the form can't simply be retried with a different date; it contains no date of birth or age. Because we do not keep your date of birth, we can't later tell you what you entered. The check relies on what you tell us; we do not verify it against any document.</p>
+          <p><strong>Minimising information from children:</strong> Because we don't keep date of birth or any other age information, we don't knowingly collect more personal information from a child than is necessary to operate the Site, and we don't use information from an account we later learn belongs to a child for marketing or profiling.</p>
           <p><strong>If we learn a user is underage:</strong> If we become aware that an account belongs to a child below the applicable minimum age for using the Site without parental consent, we will take reasonable steps to deactivate the account and remove the associated personal information we're not otherwise legally required to retain (see "Data Retention" below), and, where practical, notify the account holder that this has happened.</p>
           <p><strong>Parent and guardian requests:</strong> A parent or guardian who believes their child has created a coldd account or given us personal information can contact <a href="mailto:support@coldd.dev">support@coldd.dev</a> to ask us to review, restrict, or delete it. We will take reasonable steps to verify the request and respond as set out in "Your Rights" below.</p>
           <p><strong>Roblox-linked accounts:</strong> Roblox sets its own minimum age for using Roblox and linking a Roblox account to third-party services like ours. Where a Roblox account is linked to pay with Robux, we only use that link to verify and process the specific purchase (see "Roblox" above) - we do not use it to collect any further information about a child's Roblox account or activity.</p>
@@ -403,7 +402,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="/supabase-init.js?v=20260909a"></script>
+  <script src="/supabase-init.js?v=20261004a"></script>
   <script src="/site-gate.js?v=20260926a"></script>
   <script src="/catalog.js?v=20260920d" data-then="/app.js?v=20261004b"></script>
   <script>

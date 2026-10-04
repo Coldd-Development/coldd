@@ -646,7 +646,10 @@
   // treated as having declined rather than as having agreed by silence.
   // ---------------------------------------------------------------------
   var CONSENT_KEY = 'coldd_cookie_consent';
-  var CONSENT_VERSION = 1;
+  // Bumped to 2 when the analytics wording started covering abandoned-cart
+  // reminder emails - a materially different thing to agree to, so everyone is
+  // asked again rather than carrying an old yes forward.
+  var CONSENT_VERSION = 2;
 
   function readConsent() {
     try {
@@ -731,7 +734,7 @@
         '<div class="cookie-bar-tx">' +
           '<h2 class="cookie-bar-h">Cookies</h2>' +
           '<p>We use essential cookies to keep you signed in and your cart intact. ' +
-          'We would also like optional analytics cookies to see which pages people actually use. ' +
+          'We would also like optional analytics cookies to see which pages people use and to send cart reminder emails if you leave items behind while signed in. ' +
           '<a href="/privacy-policy">Read our privacy policy</a>.</p>' +
         '</div>' +
         '<div class="cookie-bar-actions">' +
@@ -757,7 +760,7 @@
             '<input type="checkbox" class="cookie-cat-analytics"' + (analyticsChecked ? ' checked' : '') + ' />' +
             '<span class="cookie-cat-tx">' +
               '<span class="cookie-cat-n">Analytics</span>' +
-              '<span class="cookie-cat-d">Tells us which pages get used and whether a cart was abandoned. Never shared, never used to identify you. Off unless you turn it on.</span>' +
+              '<span class="cookie-cat-d">Tells us which pages get used and whether a cart was abandoned. If you are signed in, an abandoned cart is linked to your account and may trigger up to a few reminder emails. Not shared with anyone else. Off unless you turn it on.</span>' +
             '</span>' +
           '</label>' +
           '<button type="button" class="btn btn-primary cookie-save">Save preferences</button>' +

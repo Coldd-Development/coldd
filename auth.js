@@ -47,9 +47,52 @@
     });
   });
 
+
+  // ------------------------------------------------------------------
+  // Age check (/signup only). Users under 13 may not create an account.
+  // The date of birth is read from the three selects, compared with today
+  // and then dropped: it is never put in a form field with a name, never sent
+  // to Supabase or any other server, and never written to storage. The only
+  // thing remembered is a non-identifying "blocked" flag for this tab's
+  // session, so changing the answer after a rejection can't be used to just
+  // retry.
+  // ------------------------------------------------------------------
+  var AGE_MIN = 13, AGE_BLOCK_KEY = 'coldd_age_blocked';
+  var ageM = document.getElementById('su-dob-m'), ageD = document.getElementById('su-dob-d'), ageY = document.getElementById('su-dob-y');
+  var ageErr = document.getElementById('ageErr');
+  function ageBlocked() { try { return sessionStorage.getItem(AGE_BLOCK_KEY) === '1'; } catch (e) { return false; } }
+  function ageSetErr(msg) { if (ageErr) ageErr.textContent = msg || ''; }
+  // true only for a complete, real date at least AGE_MIN years ago.
+  function ageOk() {
+    if (!ageM) return true; // not the signup page
+    if (ageBlocked()) { ageSetErr('You must be 13 or older to create a coldd account.'); return false; }
+    var m = +ageM.value, d = +ageD.value, y = +ageY.value;
+    if (!m || !d || !y) { ageSetErr('Enter your date of birth to continue.'); return false; }
+    var dob = new Date(y, m - 1, d);
+    if (dob.getFullYear() !== y || dob.getMonth() !== m - 1 || dob.getDate() !== d) { ageSetErr('That date doesn\u2019t exist - check the day.'); return false; }
+    var now = new Date(), age = now.getFullYear() - y;
+    if (now.getMonth() < m - 1 || (now.getMonth() === m - 1 && now.getDate() < d)) age--;
+    if (age < AGE_MIN) {
+      try { sessionStorage.setItem(AGE_BLOCK_KEY, '1'); } catch (e) {}
+      ageSetErr('You must be 13 or older to create a coldd account.');
+      return false;
+    }
+    ageSetErr('');
+    return true;
+  }
+  if (ageM && ageY) {
+    var thisYear = new Date().getFullYear();
+    for (var yy = thisYear; yy >= thisYear - 100; yy--) {
+      var o = document.createElement('option'); o.value = String(yy); o.textContent = String(yy); ageY.appendChild(o);
+    }
+    [ageM, ageD, ageY].forEach(function (el) { el.addEventListener('change', function () { if (!ageBlocked()) ageSetErr(''); }); });
+    if (ageBlocked()) ageSetErr('You must be 13 or older to create a coldd account.');
+  }
+
   document.querySelectorAll('.auth-oauth').forEach(function (b) {
     b.addEventListener('click', function () {
       if (b.classList.contains('oauth-disabled')) return;
+      if (!ageOk()) return;
       var p = b.getAttribute('data-provider');
       if (p === 'Discord') {
         if (window.coldAuth) window.coldAuth.signInDiscord();
@@ -202,6 +245,7 @@
     if (!conf || conf !== pass) { fieldErr(su, 'confirm', "Passwords don't match."); ok = false; } else fieldErr(su, 'confirm', '');
     var te = su.querySelector('.auth-err[data-for="tos"]');
     if (tos && !tos.checked) { if (te) te.textContent = 'Please accept the Terms to continue.'; ok = false; } else if (te) te.textContent = '';
+    if (!ageOk()) ok = false;
     if (!ok || !window.coldAuth) return;
     var mkt = su.querySelector('[name="marketing"]');
     pendingMarketingOptIn = !!(mkt && mkt.checked);
