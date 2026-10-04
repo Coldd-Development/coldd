@@ -4649,3 +4649,21 @@ html.auth-in .nav-notif[hidden] { display: block; }
 .adm-toast.ok { border-color: rgba(52,224,138,0.4); box-shadow: 0 10px 34px rgba(0,0,0,0.45), inset 3px 0 0 var(--price); }
 .adm-toast.err { border-color: rgba(255,77,68,0.45); box-shadow: 0 10px 34px rgba(0,0,0,0.45), inset 3px 0 0 var(--accent); }
 @media (max-width: 480px) { .adm-toast { left: 12px; right: 12px; bottom: 12px; max-width: none; } }
+
+/* Phone-width navbar overflow. At <=1100px header.nav is capped at
+   100% - 128px (room reserved for the .tc cart pill) while the signed-in
+   pill (brand + bell + account + Shop + burger) needs ~243px, so on
+   ~360px phones the burger was pushed past the pill's right edge. Tighten
+   the gaps (and re-pull the bell/account by the same amount - their
+   negative margins only exist to cancel .nav-inner's gap) so the content
+   fits the cap, and drop the Shop shortcut on the narrowest phones when
+   signed in; Shop is still the first link in the burger panel. */
+@media (max-width: 420px) {
+  .nav-inner { gap: 6px; padding: 0 6px 0 10px; }
+  .nav-inner, .nav-cta { min-width: 0; }
+  .nav-notif, html:not(.auth-in) .nav-notif[hidden] + .nav-account { margin-left: -2px; }
+  .menu-btn { flex: 0 0 auto; }
+}
+@media (max-width: 350px) {
+  html.auth-in .nav-shop-mobile { display: none; }
+}

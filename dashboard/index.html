@@ -13,10 +13,17 @@
       try {
         var raw = localStorage.getItem('sb-ekinmytmudjwfaqaqswp-auth-token');
         var parsed = raw && JSON.parse(raw);
-        if (!parsed || !parsed.expires_at || parsed.expires_at * 1000 < Date.now()) {
-          location.href = '/signin';
+        // An expired access token is NOT signed-out: the SDK silently
+        // refreshes it from refresh_token, so only bounce when there is
+        // nothing to refresh from. Bouncing on expiry alone sent valid
+        // sessions to /signin, whose own pre-check (coldd_auth='in')
+        // sent them straight back here - an infinite redirect loop.
+        // The authoritative check further down handles real expiry.
+        if (!parsed || (!parsed.refresh_token && (!parsed.expires_at || parsed.expires_at * 1000 < Date.now()))) {
+          try { localStorage.setItem('coldd_auth', 'out'); } catch (e) {}
+          location.replace('/signin');
         }
-      } catch (e) { location.href = '/signin'; }
+      } catch (e) { try { localStorage.setItem('coldd_auth', 'out'); } catch (e2) {} location.replace('/signin'); }
     })();
   </script>
   <meta charset="UTF-8" />
@@ -33,7 +40,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260929f" />
+  <link rel="stylesheet" href="/styles.css?v=20261004a" />
 </head>
 <body class="dash-body">
   <div class="backdrop"></div>
