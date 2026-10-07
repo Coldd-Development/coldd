@@ -27,6 +27,12 @@ const ALLOWED_ORIGIN = "https://coldd.dev";
 const API = "https://api.builtbybit.com/v1";
 const MAX_PAGES = 40;
 const MAX_WAIT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 15000;
+const BUDGET_MS = 100000; // stay well inside the edge function wall-clock limit
+const POOL = 3;
+
+let DEADLINE = Infinity;
+function overBudget() { return Date.now() > DEADLINE; }
 
 function corsHeaders() {
   return {
@@ -78,7 +84,12 @@ class ApiFail extends Error {
 
 async function bbb(token: string, method: string, path: string, body?: Obj): Promise<Obj> {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(API + path, {
+    if (overBudget()) throw new ApiFail(408, "Ran out of time.");
+    const t0 = Date.now();
+    let res: Response;
+    try {
+      res = await fetch(API + path, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       method,
       headers: {
         "Authorization": `Private ${token}`,
@@ -86,7 +97,12 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
         "Accept": "application/json",
       },
       body: body ? JSON.stringify(body) : undefined,
-    });
+      });
+    } catch (e) {
+      console.error("[admin-builtbybit-sync]", method, path, "failed after", Date.now() - t0, "ms:", (e as Error).name);
+      throw new ApiFail(504, "BuiltByBit did not answer in time.");
+    }
+    console.log("[admin-builtbybit-sync]", method, path, res.status, Date.now() - t0, "ms");
     if (res.status === 429) {
       const wait = Math.min(MAX_WAIT_MS, Math.max(500, Number(res.headers.get("Retry-After") ?? "1") * 1000));
       if (attempt === 2) throw new ApiFail(429, "BuiltByBit rate limit hit.");
@@ -166,6 +182,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- full sync ----------------------------------------------------------
+    DEADLINE = Date.now() + BUDGET_MS;
     const errors: string[] = [];
     const seen: Record<string, string[]> = {};
     const noteKeys = (kind: string, row: Obj | undefined) => {
@@ -190,9 +207,31 @@ Deno.serve(async (req: Request) => {
     const purchaseRows: Obj[] = [];
     const reviewRows: Obj[] = [];
 
-    for (const r of resources) {
+    // Save the bare listings straight away (title, price, download and rating totals
+    // BuiltByBit already gives us) so the panel has something even if the detail
+    // calls below run out of time.
+    {
+      const basic = resources.map((r) => ({
+        resource_id: str(pick(r, ["resource_id", "id"])),
+        snapshot_date: today,
+        title: str(pick(r, ["title", "name"])),
+        price: numOr(pick(r, ["price"])),
+        currency: str(pick(r, ["currency"])),
+        downloads: numOr(pick(r, ["download_count", "downloads"])),
+        purchases: numOr(pick(r, ["purchase_count", "purchases"])),
+        reviews: numOr(pick(r, ["review_count", "reviews"])),
+        rating: numOr(pick(r, ["review_average", "rating", "average_rating"])),
+        synced_at: new Date().toISOString(),
+      })).filter((x) => x.resource_id);
+      if (basic.length) {
+        const { error } = await admin.from("bbb_resource_snapshots").upsert(basic, { onConflict: "resource_id,snapshot_date" });
+        if (error) errors.push("save listings: " + error.message);
+      }
+    }
+
+    async function processResource(r: Obj) {
       const rid = str(pick(r, ["resource_id", "id"]));
-      if (!rid) continue;
+      if (!rid) return;
       const title = str(pick(r, ["title", "name"])) ?? `Resource ${rid}`;
       const currency = str(pick(r, ["currency"]));
 
@@ -265,6 +304,13 @@ Deno.serve(async (req: Request) => {
         synced_at: new Date().toISOString(),
       });
     }
+
+    let next = 0;
+    async function worker() {
+      while (next < resources.length && !overBudget()) await processResource(resources[next++]);
+    }
+    await Promise.all(Array.from({ length: Math.min(POOL, resources.length) }, worker));
+    if (next < resources.length) errors.push("Stopped early: ran out of time before every listing was read.");
 
     if (purchaseRows.length) {
       const { error } = await admin.from("bbb_purchases").upsert(purchaseRows, { onConflict: "purchase_id" });

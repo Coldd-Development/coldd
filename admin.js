@@ -4919,7 +4919,8 @@
     if (!force && Date.now() - last < 30 * 60 * 1000) return Promise.resolve();
     BBB.syncing = true; BBB.error = '';
     if (curPanel === 'marketplaces') renderBbb();
-    return invokeAdminFn('admin-builtbybit-sync', { action: 'sync' }, 'Could not sync BuiltByBit.').then(function (d) {
+    var timeout = new Promise(function (_, reject) { setTimeout(function () { reject(new Error('BuiltByBit took too long to answer. Try Sync now again in a minute.')); }, 130000); });
+    return Promise.race([invokeAdminFn('admin-builtbybit-sync', { action: 'sync' }, 'Could not sync BuiltByBit.'), timeout]).then(function (d) {
       BBB.configured = d.configured === false ? false : true;
       if (d.configured !== false) { lsSet(BBB_SYNC_KEY, Date.now()); BBB.syncedAt = d.syncedAt || new Date().toISOString(); }
       if (d.errors && d.errors.length) BBB.error = 'Some data could not be read: ' + d.errors[0];
