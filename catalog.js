@@ -377,8 +377,12 @@
       // runtime an explicit revision here so every page gets behavioural fixes
       // immediately, even where an older HTML shell is still cached.
       if (/\/(?:app|admin)\.js(?:\?|$)/.test(src)) {
+        // The revision is this script's own ?v=, so bumping catalog.js's version
+        // in the HTML also re-versions app.js/admin.js (a hardcoded string here
+        // once pinned every page to an old, long-cached app.js).
+        var selfV = ((thisScript && thisScript.src || '').match(/[?&]v=([^&]+)/) || [])[1] || '20261007d';
         var hadV = /[?&]v=[^&]*/.test(src);
-        src = hadV ? src.replace(/([?&])v=[^&]*/, '$1v=20260920d') : src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=20260920d';
+        src = hadV ? src.replace(/([?&])v=[^&]*/, '$1v=' + selfV) : src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=' + selfV;
       }
       s.src = src;
       s.onload = function () { loadNext(i + 1); };
