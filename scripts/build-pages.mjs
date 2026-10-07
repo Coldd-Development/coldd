@@ -47,6 +47,12 @@ writeFileSync(join(OUT, "_headers"), `/*
   Strict-Transport-Security: max-age=15552000; includeSubDomains
 `);
 
+// A product added in the admin panel has no pre-rendered /product/<slug>/ shell
+// until the next regen + deploy. app.js reads the slug from the path, so any
+// slug without its own file falls back to the generic shell (status 200).
+// Existing static shells still win; this only catches unknown slugs.
+writeFileSync(join(OUT, "_redirects"), "/product/* /product/ 200\n");
+
 for (const must of ["index.html", "404.html", "styles.css", "app.js", "robots.txt"]) {
   if (!existsSync(join(OUT, must))) { console.error(`build: missing ${must}`); process.exit(1); }
 }
