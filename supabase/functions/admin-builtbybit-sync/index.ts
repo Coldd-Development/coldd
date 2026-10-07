@@ -5,31 +5,39 @@
 //
 // Pulls our BuiltByBit listings, purchases, reviews and latest versions through
 // the Ultimate API (https://api.builtbybit.com/v1) into bbb_purchases,
-// bbb_reviews and bbb_resource_snapshots (see supabase/builtbybit.sql), which the
-// admin Marketplaces / Dashboard / Analytics panels read directly.
+// bbb_reviews, bbb_resource_snapshots and bbb_resource_state (see
+// supabase/builtbybit.sql), which the admin Marketplaces / Dashboard / Analytics
+// panels read directly.
 //
 // Secret (a Private token from https://builtbybit.com/account/api):
 //   supabase secrets set BUILTBYBIT_API_TOKEN=...
 // Returns { ok: true, configured: false } when it is not set, so the panels show a
 // clean "not connected" state instead of an error.
 //
+// The account owns hundreds of listings, so one call cannot read everything. A sync
+// is therefore RESUMABLE: each call works through a queue (listings whose stored
+// purchases/reviews lag BuiltByBit's own counters, or that still have pending
+// purchases) for at most BUDGET_MS, saves each listing as it goes, and returns how
+// many are still `remaining`. The admin panel keeps calling with continue=true until
+// that reaches 0.
+//
 // Body:
-//   { action: "sync" }                                   (default)
+//   { action: "sync", continue?: boolean }
 //   { action: "reply_review", resourceId, reviewId, message }
 //
-// The API's response field names are read tolerantly (pick()) and the keys that
-// were actually seen are returned as `seen`, so a mismatch is visible at a glance.
-// Admin only, like the other admin-* functions.
+// The API's response field names are read tolerantly (pick()) and the keys actually
+// seen are returned as `seen`. Admin only, like the other admin-* functions.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const API = "https://api.builtbybit.com/v1";
-const MAX_PAGES = 40;
+const MAX_PAGES = 60;
 const MAX_WAIT_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
-const BUDGET_MS = 100000; // stay well inside the edge function wall-clock limit
-const POOL = 3;
+const BUDGET_MS = 100000; // well inside the edge function wall-clock limit
+const POOL = 4;
+const RECHECK_MS = 20 * 60 * 1000; // a listing is not re-read more often than this
 
 let DEADLINE = Infinity;
 function overBudget() { return Date.now() > DEADLINE; }
@@ -58,6 +66,10 @@ function pick(o: Obj | null | undefined, keys: string[]): unknown {
   return undefined;
 }
 function str(v: unknown): string | null {
+  if (v && typeof v === "object") {
+    const o = v as Obj;
+    return str(pick(o, ["title", "name", "label"]));
+  }
   return v === undefined || v === null || v === "" ? null : String(v);
 }
 function numOr(v: unknown, d: number | null = null): number | null {
@@ -76,6 +88,9 @@ function toIso(v: unknown): string | null {
   const d = new Date(String(v));
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
+function norm(s: string | null | undefined): string {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
 
 class ApiFail extends Error {
   status: number;
@@ -89,22 +104,22 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
     let res: Response;
     try {
       res = await fetch(API + path, {
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      method,
-      headers: {
-        "Authorization": `Private ${token}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        method,
+        headers: {
+          "Authorization": `Private ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: body ? JSON.stringify(body) : undefined,
       });
     } catch (e) {
       console.error("[admin-builtbybit-sync]", method, path, "failed after", Date.now() - t0, "ms:", (e as Error).name);
       throw new ApiFail(504, "BuiltByBit did not answer in time.");
     }
-    console.log("[admin-builtbybit-sync]", method, path, res.status, Date.now() - t0, "ms");
     if (res.status === 429) {
       const wait = Math.min(MAX_WAIT_MS, Math.max(500, Number(res.headers.get("Retry-After") ?? "1") * 1000));
+      console.warn("[admin-builtbybit-sync] 429 on", path, "waiting", wait, "ms");
       if (attempt === 2) throw new ApiFail(429, "BuiltByBit rate limit hit.");
       await new Promise((r) => setTimeout(r, wait));
       continue;
@@ -114,6 +129,7 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
     try { data = text ? JSON.parse(text) : {}; } catch { /* non-JSON */ }
     if (!res.ok || data?.result === "error") {
       const msg = data?.error?.message || data?.message || `BuiltByBit returned ${res.status}.`;
+      console.warn("[admin-builtbybit-sync]", method, path, res.status, Date.now() - t0, "ms", String(msg).slice(0, 120));
       throw new ApiFail(res.status, String(msg));
     }
     return data;
@@ -121,7 +137,7 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
   throw new ApiFail(500, "BuiltByBit request failed.");
 }
 
-// Walks ?page=N until a page comes back empty (or short of a repeat), capped.
+// Walks ?page=N until a page comes back empty (or repeats), capped.
 async function listAll(token: string, path: string): Promise<Obj[]> {
   const out: Obj[] = [];
   const seen = new Set<string>();
@@ -137,33 +153,6 @@ async function listAll(token: string, path: string): Promise<Obj[]> {
     out.push(...rows);
   }
   return out;
-}
-
-const AUTHOR_KEYS = ["author_id", "author_member_id", "member_id", "owner_id"];
-
-async function ownListings(token: string, noteKeys: (k: string, r: Obj | undefined) => void): Promise<Obj[]> {
-  const me = await bbb(token, "GET", "/members/self");
-  const meRow: Obj = Array.isArray(me?.data) ? me.data[0] : me?.data;
-  noteKeys("member", meRow);
-  const selfId = str(pick(meRow, ["member_id", "id"]));
-  if (!selfId) throw new ApiFail(502, "Could not read your BuiltByBit member id.");
-
-  const byId = new Map<string, Obj>();
-  const add = (rows: Obj[]) => { for (const r of rows) { const id = str(pick(r, ["resource_id", "id"])); if (id && !byId.has(id)) byId.set(id, r); } };
-
-  // 1) everything published under our author id
-  try { add(await listAll(token, `/resources/authors/${selfId}`)); } catch (e) { console.warn("[admin-builtbybit-sync] authors list failed:", (e as Error).message); }
-  // 2) listings we collaborate on
-  try { add(await listAll(token, "/resources/collaborated")); } catch (e) { console.warn("[admin-builtbybit-sync] collaborated list failed:", (e as Error).message); }
-  // 3) fallback: the bought list, keeping only rows we authored
-  if (!byId.size) {
-    const owned = await listAll(token, "/resources/owned");
-    noteKeys("owned", owned[0]);
-    const withAuthor = owned.filter((r) => AUTHOR_KEYS.some((k) => r[k] !== undefined && r[k] !== null));
-    if (!withAuthor.length) throw new ApiFail(502, "Could not tell which BuiltByBit listings are yours.");
-    add(withAuthor.filter((r) => AUTHOR_KEYS.some((k) => String(r[k]) === selfId)));
-  }
-  return [...byId.values()];
 }
 
 Deno.serve(async (req: Request) => {
@@ -197,6 +186,7 @@ Deno.serve(async (req: Request) => {
       const message = String(body.message || "").trim();
       if (!resourceId || !reviewId) return json({ ok: false, error: "Missing review." }, 400);
       if (message.length < 2 || message.length > 5000) return json({ ok: false, error: "Reply must be 2 to 5000 characters." }, 400);
+      DEADLINE = Date.now() + 30000;
       try {
         await bbb(token, "PATCH", `/resources/${resourceId}/reviews/${reviewId}`, { response: message });
       } catch (e) {
@@ -208,53 +198,44 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, configured: true });
     }
 
-    // ---- full sync ----------------------------------------------------------
+    // ---- sync ---------------------------------------------------------------
     DEADLINE = Date.now() + BUDGET_MS;
     const errors: string[] = [];
     const seen: Record<string, string[]> = {};
     const noteKeys = (kind: string, row: Obj | undefined) => {
       if (row && !seen[kind]) seen[kind] = Object.keys(row);
     };
-
-    // "/resources/owned" is what this account has BOUGHT (hundreds of other sellers'
-    // products), not what it sells. Our own listings are the ones we author (plus any
-    // we collaborate on), so work out our member id and filter to those.
-    let resources: Obj[];
-    try {
-      resources = await ownListings(token, noteKeys);
-    } catch (e) {
-      const f = e as ApiFail;
-      if (f.status === 401 || f.status === 403) {
-        return json({ ok: false, error: "BuiltByBit rejected the token. Create a new Private token and set BUILTBYBIT_API_TOKEN again." }, 502);
-      }
-      console.error("[admin-builtbybit-sync] listings failed:", f.status, f.message);
-      return json({ ok: false, error: `Could not read your BuiltByBit listings (${f.status}): ${f.message}` }, 502);
-    }
-    noteKeys("resource", resources[0]);
-
-    // Earlier versions crawled every product this account has bought. Drop anything that
-    // is not one of our own listings.
-    {
-      const mine = resources.map((r) => str(pick(r, ["resource_id", "id"]))).filter((x): x is string => !!x);
-      if (mine.length) {
-        const list = `(${mine.map((i) => '"' + i.replace(/[^0-9a-zA-Z_-]/g, "") + '"').join(",")})`;
-        for (const t of ["bbb_purchases", "bbb_reviews", "bbb_resource_snapshots"]) {
-          const { error } = await admin.from(t).delete().not("resource_id", "in", list);
-          if (error) errors.push("cleanup " + t + ": " + error.message);
-        }
-      }
-    }
-
     const today = new Date().toISOString().slice(0, 10);
-    const snapshots: Obj[] = [];
-    const purchaseRows: Obj[] = [];
-    const reviewRows: Obj[] = [];
 
-    // Save the bare listings straight away (title, price, download and rating totals
-    // BuiltByBit already gives us) so the panel has something even if the detail
-    // calls below run out of time.
-    {
-      const basic = resources.map((r) => ({
+    // 1) The listing list. A first call reads it from BuiltByBit and saves it; later
+    //    calls (continue=true) reuse today's saved copy, which saves ~dozens of requests.
+    let listings: Obj[] = []; // normalised snapshot rows
+    if (body.continue) {
+      const { data } = await admin.from("bbb_resource_snapshots")
+        .select("resource_id, title, price, currency, downloads, purchases, reviews, rating, category")
+        .eq("snapshot_date", today).limit(5000);
+      listings = data ?? [];
+    }
+    if (!listings.length) {
+      let rows: Obj[];
+      try {
+        rows = await listAll(token, "/resources/owned");
+      } catch (e) {
+        const f = e as ApiFail;
+        if (f.status === 401 || f.status === 403) {
+          return json({ ok: false, error: "BuiltByBit rejected the token. Create a new Private token and set BUILTBYBIT_API_TOKEN again." }, 502);
+        }
+        console.error("[admin-builtbybit-sync] listings failed:", f.status, f.message);
+        return json({ ok: false, error: `Could not read your BuiltByBit listings (${f.status}): ${f.message}` }, 502);
+      }
+      noteKeys("resource", rows[0]);
+      try {
+        const collab = await listAll(token, "/resources/collaborated");
+        const have = new Set(rows.map((r) => String(pick(r, ["resource_id", "id"]))));
+        for (const c of collab) if (!have.has(String(pick(c, ["resource_id", "id"])))) rows.push(c);
+      } catch { /* collaborated is optional */ }
+
+      listings = rows.map((r) => ({
         resource_id: str(pick(r, ["resource_id", "id"])),
         snapshot_date: today,
         title: str(pick(r, ["title", "name"])),
@@ -264,108 +245,137 @@ Deno.serve(async (req: Request) => {
         purchases: numOr(pick(r, ["purchase_count", "purchases"])),
         reviews: numOr(pick(r, ["review_count", "reviews"])),
         rating: numOr(pick(r, ["review_average", "rating", "average_rating"])),
+        category: str(pick(r, ["category_title", "category", "category_name"])),
         synced_at: new Date().toISOString(),
       })).filter((x) => x.resource_id);
-      if (basic.length) {
-        const { error } = await admin.from("bbb_resource_snapshots").upsert(basic, { onConflict: "resource_id,snapshot_date" });
+      for (let i = 0; i < listings.length; i += 500) {
+        const { error } = await admin.from("bbb_resource_snapshots")
+          .upsert(listings.slice(i, i + 500), { onConflict: "resource_id,snapshot_date" });
         if (error) errors.push("save listings: " + error.message);
       }
     }
 
-    async function processResource(r: Obj) {
-      const rid = str(pick(r, ["resource_id", "id"]));
-      if (!rid) return;
-      const title = str(pick(r, ["title", "name"])) ?? `Resource ${rid}`;
-      const currency = str(pick(r, ["currency"]));
+    // 2) Work queue: listings whose stored purchases/reviews lag BuiltByBit's counters,
+    //    or that still have pending purchases. Nothing is re-read within RECHECK_MS.
+    const { data: countRows } = await admin.rpc("bbb_detail_counts");
+    const stored = new Map<string, Obj>();
+    for (const c of (countRows ?? []) as Obj[]) stored.set(String(c.resource_id), c);
+    const { data: stateRows } = await admin.from("bbb_resource_state").select("resource_id, detail_at").limit(5000);
+    const state = new Map<string, string | null>();
+    for (const s of (stateRows ?? []) as Obj[]) state.set(String(s.resource_id), s.detail_at);
 
-      let latestVersion: string | null = null;
-      try {
-        const v = await bbb(token, "GET", `/resources/${rid}/versions/latest`);
-        const vd: Obj = Array.isArray(v?.data) ? v.data[0] : v?.data;
-        noteKeys("version", vd);
-        latestVersion = str(pick(vd, ["name", "version", "title"]));
-      } catch (e) { errors.push(`version ${rid}: ${(e as Error).message}`); }
-
-      try {
-        const ps = await listAll(token, `/resources/${rid}/purchases`);
-        noteKeys("purchase", ps[0]);
-        for (const p of ps) {
-          const pid = str(pick(p, ["purchase_id", "id"]));
-          const at = toIso(pick(p, ["purchase_date", "date", "created_date", "creation_date", "purchased_at"]));
-          if (!pid || !at) continue;
-          purchaseRows.push({
-            purchase_id: `${rid}:${pid}`,
-            resource_id: rid,
-            resource_title: title,
-            purchaser_id: str(pick(p, ["purchaser_id", "member_id", "buyer_id"])),
-            price: numOr(pick(p, ["price", "amount", "paid"]), 0),
-            currency: str(pick(p, ["currency"])) ?? currency,
-            status: str(pick(p, ["status"])),
-            renewal: Boolean(pick(p, ["renewal", "is_renewal"])),
-            purchased_at: at,
-          });
-        }
-      } catch (e) { errors.push(`purchases ${rid}: ${(e as Error).message}`); }
-
-      let reviewCount = numOr(pick(r, ["review_count", "reviews"]));
-      let rating = numOr(pick(r, ["review_average", "rating", "average_rating"]));
-      try {
-        const rv = await listAll(token, `/resources/${rid}/reviews`);
-        noteKeys("review", rv[0]);
-        for (const x of rv) {
-          const id = str(pick(x, ["review_id", "id"]));
-          if (!id) continue;
-          reviewRows.push({
-            review_id: id,
-            resource_id: rid,
-            resource_title: title,
-            reviewer_id: str(pick(x, ["reviewer_id", "member_id", "author_id"])),
-            rating: numOr(pick(x, ["rating", "score"])),
-            message: str(pick(x, ["message", "text", "content"])),
-            response: str(pick(x, ["response", "reply"])),
-            reviewed_at: toIso(pick(x, ["review_date", "date", "created_date"])),
-          });
-        }
-        if (reviewCount == null) reviewCount = rv.length;
-        if (rating == null && rv.length) {
-          const rs = rv.map((x) => numOr(pick(x, ["rating", "score"]))).filter((n): n is number => n != null);
-          if (rs.length) rating = Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 100) / 100;
-        }
-      } catch (e) { errors.push(`reviews ${rid}: ${(e as Error).message}`); }
-
-      snapshots.push({
-        resource_id: rid,
-        snapshot_date: today,
-        title,
-        price: numOr(pick(r, ["price"])),
-        currency,
-        downloads: numOr(pick(r, ["download_count", "downloads"])),
-        purchases: numOr(pick(r, ["purchase_count", "purchases"])),
-        reviews: reviewCount,
-        rating,
-        latest_version: latestVersion,
-        synced_at: new Date().toISOString(),
-      });
-    }
+    const nowMs = Date.now();
+    const queue = listings.filter((l) => {
+      const id = String(l.resource_id);
+      const done = state.get(id);
+      if (done && nowMs - new Date(done).getTime() < RECHECK_MS) return false;
+      const st = stored.get(id) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
+      const needP = (l.purchases ?? 0) > Number(st.purchases_n) || Number(st.pending_n) > 0;
+      const needR = (l.reviews ?? 0) > Number(st.reviews_n);
+      return needP || needR;
+    }).sort((a, b) => (b.purchases ?? 0) - (a.purchases ?? 0));
 
     let next = 0;
-    async function worker() {
-      while (next < resources.length && !overBudget()) await processResource(resources[next++]);
-    }
-    await Promise.all(Array.from({ length: Math.min(POOL, resources.length) }, worker));
-    if (next < resources.length) errors.push("Stopped early: ran out of time before every listing was read.");
+    let processed = 0;
+    async function processListing(l: Obj) {
+      const rid = String(l.resource_id);
+      const title = l.title ?? `Resource ${rid}`;
+      const st = stored.get(rid) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
+      let note: string | null = null;
 
-    if (purchaseRows.length) {
-      const { error } = await admin.from("bbb_purchases").upsert(purchaseRows, { onConflict: "purchase_id" });
-      if (error) errors.push("save purchases: " + error.message);
+      if ((l.purchases ?? 0) > Number(st.purchases_n) || Number(st.pending_n) > 0) {
+        try {
+          const ps = await listAll(token!, `/resources/${rid}/purchases`);
+          noteKeys("purchase", ps[0]);
+          const rows: Obj[] = [];
+          for (const p of ps) {
+            const pid = str(pick(p, ["purchase_id", "id"]));
+            const at = toIso(pick(p, ["purchase_date", "date", "created_date", "creation_date", "purchased_at"]));
+            if (!pid || !at) continue;
+            rows.push({
+              purchase_id: `${rid}:${pid}`,
+              resource_id: rid,
+              resource_title: title,
+              purchaser_id: str(pick(p, ["purchaser_id", "member_id", "buyer_id"])),
+              price: numOr(pick(p, ["price", "amount", "paid"]), 0),
+              currency: str(pick(p, ["currency"])) ?? l.currency,
+              status: str(pick(p, ["status"])),
+              renewal: Boolean(pick(p, ["renewal", "is_renewal"])),
+              purchased_at: at,
+            });
+          }
+          for (let i = 0; i < rows.length; i += 500) {
+            const { error } = await admin.from("bbb_purchases").upsert(rows.slice(i, i + 500), { onConflict: "purchase_id" });
+            if (error) { errors.push(`save purchases ${rid}: ${error.message}`); note = "purchases save failed"; }
+          }
+        } catch (e) {
+          const f = e as ApiFail;
+          if (f.status === 408) throw e; // out of time: leave it in the queue
+          note = `purchases ${f.status}`;
+          errors.push(`purchases ${rid}: ${f.message}`);
+        }
+      }
+
+      if ((l.reviews ?? 0) > Number(st.reviews_n)) {
+        try {
+          const rv = await listAll(token!, `/resources/${rid}/reviews`);
+          noteKeys("review", rv[0]);
+          const rows: Obj[] = [];
+          for (const x of rv) {
+            const id = str(pick(x, ["review_id", "id"]));
+            if (!id) continue;
+            rows.push({
+              review_id: id,
+              resource_id: rid,
+              resource_title: title,
+              reviewer_id: str(pick(x, ["reviewer_id", "member_id", "author_id"])),
+              rating: numOr(pick(x, ["rating", "score"])),
+              message: str(pick(x, ["message", "text", "content"])),
+              response: str(pick(x, ["response", "reply"])),
+              reviewed_at: toIso(pick(x, ["review_date", "date", "created_date"])),
+            });
+          }
+          if (rows.length) {
+            const { error } = await admin.from("bbb_reviews").upsert(rows, { onConflict: "review_id" });
+            if (error) errors.push(`save reviews ${rid}: ${error.message}`);
+          }
+        } catch (e) {
+          const f = e as ApiFail;
+          if (f.status === 408) throw e;
+          note = (note ? note + "; " : "") + `reviews ${f.status}`;
+          errors.push(`reviews ${rid}: ${f.message}`);
+        }
+      }
+
+      await admin.from("bbb_resource_state").upsert({ resource_id: rid, detail_at: new Date().toISOString(), note }, { onConflict: "resource_id" });
+      processed++;
     }
-    if (reviewRows.length) {
-      const { error } = await admin.from("bbb_reviews").upsert(reviewRows, { onConflict: "review_id" });
-      if (error) errors.push("save reviews: " + error.message);
+    async function worker() {
+      while (next < queue.length && !overBudget()) {
+        const l = queue[next++];
+        try { await processListing(l); } catch (e) { if ((e as ApiFail).status !== 408) errors.push(String((e as Error).message)); }
+      }
     }
-    if (snapshots.length) {
-      const { error } = await admin.from("bbb_resource_snapshots").upsert(snapshots, { onConflict: "resource_id,snapshot_date" });
-      if (error) errors.push("save snapshots: " + error.message);
+    await Promise.all(Array.from({ length: Math.min(POOL, queue.length) }, worker));
+    const remaining = Math.max(0, queue.length - processed);
+
+    // 3) Latest version, only for listings that match one of our own products by title.
+    if (!overBudget()) {
+      try {
+        const { data: prods } = await admin.from("products").select("title");
+        const ours = new Set((prods ?? []).map((p: Obj) => norm(p.title)));
+        const matched = listings.filter((l) => ours.has(norm(l.title)));
+        for (const l of matched) {
+          if (overBudget()) break;
+          try {
+            const v = await bbb(token, "GET", `/resources/${l.resource_id}/versions/latest`);
+            const vd: Obj = Array.isArray(v?.data) ? v.data[0] : v?.data;
+            noteKeys("version", vd);
+            const ver = str(pick(vd, ["name", "version", "title"]));
+            if (ver) await admin.from("bbb_resource_snapshots").update({ latest_version: ver }).eq("resource_id", l.resource_id).eq("snapshot_date", today);
+          } catch (e) { errors.push(`version ${l.resource_id}: ${(e as Error).message}`); }
+        }
+      } catch (e) { errors.push("versions: " + (e as Error).message); }
     }
 
     if (errors.length) console.warn("[admin-builtbybit-sync] partial:", errors.slice(0, 10));
@@ -373,7 +383,9 @@ Deno.serve(async (req: Request) => {
       ok: true,
       configured: true,
       syncedAt: new Date().toISOString(),
-      counts: { resources: snapshots.length, purchases: purchaseRows.length, reviews: reviewRows.length },
+      listings: listings.length,
+      processed,
+      remaining,
       seen,
       errors: errors.slice(0, 10),
     });

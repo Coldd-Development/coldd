@@ -1265,6 +1265,18 @@
       map[it.productId].units += it.qty;
       map[it.productId].revenue += it.revenue;
     });
+    // BuiltByBit sales join the same list; a listing that matches a site product by
+    // title adds to that product's row, otherwise it gets its own row.
+    if (BBB.configured) {
+      var bprods = allProducts();
+      bbbBestSellers(RANGE_DAYS ? rangeStart() : null, new Date(Date.now() + 1000)).forEach(function (e) {
+        var prod = bprods.filter(function (p) { return bbbNorm(p.title) === bbbNorm(e.title); })[0];
+        var key = prod ? prod.id : 'bbb:' + e.id;
+        var m = map[key] = map[key] || { id: key, title: prod ? prod.title : e.title, image: prod ? prod.image : '/mp-logos/builtbybit.png', units: 0, revenue: 0 };
+        m.units += e.units; m.revenue += e.revenue;
+        m.bbbUnits = (m.bbbUnits || 0) + e.units;
+      });
+    }
     return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.revenue - a.revenue; }).slice(0, limit || 6);
   }
   function revenueByCategory() {
@@ -1272,6 +1284,10 @@
     completedItemsInRange().forEach(function (it) {
       map[it.cat] = (map[it.cat] || 0) + it.revenue;
     });
+    if (BBB.configured) {
+      var bc = bbbCategoryRevenue(RANGE_DAYS ? rangeStart() : null, new Date(Date.now() + 1000));
+      Object.keys(bc).forEach(function (k) { map[k] = (map[k] || 0) + bc[k]; });
+    }
     return Object.keys(map).map(function (k) { return { label: k, v: map[k] }; }).sort(function (a, b) { return b.v - a.v; });
   }
   function dailyRevenueSeries() {
@@ -3253,7 +3269,9 @@
       statTile('Abandoned carts', usd(anAbandoned), ABANDONED.length + ' cart' + (ABANDONED.length === 1 ? '' : 's') + ' at risk', '')
     ].join('');
 
-    $('admRevChart').innerHTML = svgBars(dailyRevenueSeries(), { fmt: axisUsd });
+    var revLines = [{ name: 'Site', color: 'var(--accent)', data: dailyRevenueSeries() }];
+    if (BBB.configured) revLines.push({ name: 'BuiltByBit', color: 'var(--price)', data: bbbDailySeries(RANGE_DAYS || 120) });
+    $('admRevChart').innerHTML = svgTrend(revLines, { height: 150, fmt: axisUsd });
     attachChartTooltip($('admRevChart'));
 
     if ($('admRevBreakdown')) {
@@ -3279,12 +3297,16 @@
     var best = bestSellers(6);
     $('admBestSellers').innerHTML = best.length ? best.map(function (p, i) {
       return '<div class="dash-row"><span class="adm-rank">#' + (i + 1) + '</span><span class="dr-thumb" style="background-image:url(\'' + p.image + '\')"></span>' +
-        '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div><div class="dr-sub">' + p.units + ' sold</div></div>' +
+        '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div><div class="dr-sub">' + p.units + ' sold' + (p.bbbUnits ? ' · ' + p.bbbUnits + ' on BuiltByBit' : '') + '</div></div>' +
         '<span class="p-price">' + usd(p.revenue) + '</span></div>';
     }).join('') : '<p class="adm-empty">No completed orders in this range.</p>';
 
     var byCat = revenueByCategory();
     var prevCat = win ? categoryRevenueWindow(prevOrders) : null;
+    if (prevCat && BBB.configured) {
+      var pbc = bbbCategoryRevenue(win.start, win.end);
+      Object.keys(pbc).forEach(function (k) { prevCat[k] = (prevCat[k] || 0) + pbc[k]; });
+    }
     var catTotal = byCat.reduce(function (s, c) { return s + c.v; }, 0);
     var catPalette = ['var(--accent)', '#3b7bbf', '#e8b84b', 'var(--price)', '#9b6dd6', '#5fb0a5', '#d67c4a', '#8a8f98'];
     $('admCatChart').innerHTML = byCat.length ? donutChart(byCat.map(function (c, i) {
@@ -4850,11 +4872,14 @@
      bbb_reviews and bbb_resource_snapshots (supabase/builtbybit.sql); the panels
      read those tables directly. configured: null = not known yet, false = no
      BUILTBYBIT_API_TOKEN secret, true = connected.
+     The account has hundreds of listings, so a sync is resumable: the function
+     returns how many are `remaining` and this keeps calling until it reaches 0.
      ================================================================ */
-  var BBB = { configured: null, purchases: [], reviews: [], snaps: [], syncing: false, error: '', syncedAt: null };
+  var BBB = { configured: null, purchases: [], reviews: [], snaps: [], dismissed: {}, syncing: false, progress: '', error: '', syncedAt: null };
   var BBB_RANGE = lsGet('coldd_admin_bbb_range_v1', 30);
   var BBB_SYNC_KEY = 'coldd_admin_bbb_sync_at_v1';
 
+  function bbbIsUsd(p) { return String(p.currency || 'USD').toUpperCase() === 'USD'; }
   // Refunded / reversed purchases are not revenue.
   function bbbCounts(p) { return !/refund|revers|cancel|charge|dispute|void|fail/.test(String(p.status || '').toLowerCase()); }
   function bbbPurchasesIn(start, end) {
@@ -4865,12 +4890,14 @@
     });
   }
   function bbbSum(list) {
-    var usdTotal = 0, other = 0;
+    var usdTotal = 0, other = 0, pending = 0;
     list.forEach(function (p) {
-      var cur = String(p.currency || 'USD').toUpperCase();
-      if (cur === 'USD') usdTotal += Number(p.price) || 0; else other += 1;
+      if (bbbIsUsd(p)) {
+        usdTotal += Number(p.price) || 0;
+        if (String(p.status).toLowerCase() === 'pending') pending += Number(p.price) || 0;
+      } else other += 1;
     });
-    return { usd: usdTotal, orders: list.length, other: other };
+    return { usd: usdTotal, orders: list.length, other: other, pending: pending };
   }
   // Totals for the dashboard / analytics range and the window before it.
   function bbbRangeTotals() {
@@ -4892,58 +4919,190 @@
     return statTile('BuiltByBit orders', num(t.cur.orders), null, pctDelta(t.cur.orders, t.prev.orders), { panel: 'marketplaces' });
   }
 
+  function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+  function bbbVer(s) { return String(s || '').toLowerCase().replace(/^v/, '').trim(); }
+  // Latest saved listing row per BuiltByBit resource, and the site product it matches by title.
+  function bbbListingByTitle() {
+    var by = {};
+    BBB.snaps.forEach(function (s) { var k = bbbNorm(s.title); if (k && !by[k]) by[k] = s; });
+    return by;
+  }
+  function bbbSnapById() {
+    var by = {};
+    BBB.snaps.forEach(function (s) { by[s.resource_id] = s; });
+    return by;
+  }
+  // Which site category a BuiltByBit listing belongs to: its matched coldd product's
+  // category when there is one, otherwise BuiltByBit's own category name.
+  function bbbCategoryOf(resourceId, title) {
+    var prods = allProducts(), k = bbbNorm(title);
+    var site = prods.filter(function (p) { return bbbNorm(p.title) === k; })[0];
+    if (site && site.cat) return site.cat;
+    var snap = bbbSnapById()[resourceId];
+    var cat = snap && snap.category;
+    if (!cat) return 'Other';
+    var ck = bbbNorm(cat);
+    var cats = {}; prods.forEach(function (p) { if (p.cat) cats[bbbNorm(p.cat)] = p.cat; });
+    return cats[ck] || cat;
+  }
+
+  // BuiltByBit's contribution to the Analytics "Best sellers" list, in the active range.
+  function bbbBestSellers(start, end) {
+    var by = {};
+    bbbPurchasesIn(start, end).forEach(function (p) {
+      var e = by[p.resource_id] = by[p.resource_id] || { id: p.resource_id, title: p.resource_title || p.resource_id, units: 0, revenue: 0 };
+      e.units += 1;
+      if (bbbIsUsd(p)) e.revenue += Number(p.price) || 0;
+    });
+    return Object.keys(by).map(function (k) { return by[k]; });
+  }
+  // BuiltByBit revenue by site category for a window: { category label -> USD }.
+  function bbbCategoryRevenue(start, end) {
+    var map = {};
+    bbbBestSellers(start, end).forEach(function (e) {
+      var c = bbbCategoryOf(e.id, e.title);
+      map[c] = (map[c] || 0) + e.revenue;
+    });
+    return map;
+  }
+
   function bbbRenderAll() {
     if (curPanel === 'marketplaces') renderMarketplaces();
     if (curPanel === 'home') renderHome();
     if (curPanel === 'analytics') renderAnalytics();
   }
+  // PostgREST returns at most 1000 rows per request, so read big tables in pages.
+  function bbbPaged(build) {
+    var all = [];
+    function page(from) {
+      return build().range(from, from + 999).then(function (r) {
+        if (r.error) throw r.error;
+        var rows = r.data || [];
+        all = all.concat(rows);
+        return rows.length === 1000 && all.length < 100000 ? page(from + 1000) : all;
+      });
+    }
+    return page(0);
+  }
   function refreshBbbData() {
     if (!window.coldSupabase) return Promise.resolve();
+    var sb = window.coldSupabase;
     return Promise.all([
-      window.coldSupabase.from('bbb_purchases').select('purchase_id, resource_id, resource_title, price, currency, status, renewal, purchased_at').order('purchased_at', { ascending: false }).limit(20000),
-      window.coldSupabase.from('bbb_reviews').select('review_id, resource_id, resource_title, rating, message, response, reviewed_at').order('reviewed_at', { ascending: false }).limit(200),
-      window.coldSupabase.from('bbb_resource_snapshots').select('resource_id, snapshot_date, title, price, currency, downloads, purchases, reviews, rating, latest_version, synced_at').order('snapshot_date', { ascending: false }).limit(3000)
+      bbbPaged(function () { return sb.from('bbb_purchases').select('purchase_id, resource_id, resource_title, price, currency, status, renewal, purchased_at').order('purchased_at', { ascending: false }).order('purchase_id'); }),
+      sb.from('bbb_reviews').select('review_id, resource_id, resource_title, rating, message, response, reviewed_at').order('reviewed_at', { ascending: false }).limit(200),
+      bbbPaged(function () { return sb.from('bbb_resource_snapshots').select('resource_id, snapshot_date, title, price, currency, downloads, purchases, reviews, rating, latest_version, category').order('snapshot_date', { ascending: false }).order('resource_id'); }),
+      sb.from('bbb_issue_dismissals').select('issue_key')
     ]).then(function (r) {
-      if (r[0].error || r[1].error || r[2].error) { console.error('[admin] builtbybit tables:', (r[0].error || r[1].error || r[2].error).message); return; }
-      BBB.purchases = r[0].data || [];
+      if (r[1].error) throw r[1].error;
+      BBB.purchases = r[0];
       BBB.reviews = r[1].data || [];
-      BBB.snaps = r[2].data || [];
+      // Keep only the newest day's listing rows.
+      var snaps = r[2], newest = snaps.length ? snaps[0].snapshot_date : null;
+      BBB.snaps = snaps.filter(function (s) { return s.snapshot_date === newest; });
+      BBB.dismissed = {};
+      ((r[3] && r[3].data) || []).forEach(function (d) { BBB.dismissed[d.issue_key] = true; });
       if (BBB.configured !== false && (BBB.purchases.length || BBB.snaps.length)) BBB.configured = true;
       bbbRenderAll();
-    });
+    }).catch(function (err) { console.error('[admin] builtbybit tables:', err && err.message); });
   }
-  // Pulls fresh data from BuiltByBit. Throttled to every 30 minutes unless forced.
+
+  // Pulls fresh data from BuiltByBit. The function does a slice at a time and reports
+  // how many listings are still `remaining`; keep going until it is done. Throttled to
+  // every 30 minutes once a full pass has finished, unless forced.
   function bbbSync(force) {
     if (BBB.syncing) return Promise.resolve();
     var last = Number(lsGet(BBB_SYNC_KEY, 0)) || 0;
     if (!force && Date.now() - last < 30 * 60 * 1000) return Promise.resolve();
-    BBB.syncing = true; BBB.error = '';
+    BBB.syncing = true; BBB.error = ''; BBB.progress = 'Starting…';
     if (curPanel === 'marketplaces') renderBbb();
-    var timeout = new Promise(function (_, reject) { setTimeout(function () { reject(new Error('BuiltByBit took too long to answer. Try Sync now again in a minute.')); }, 130000); });
-    return Promise.race([invokeAdminFn('admin-builtbybit-sync', { action: 'sync' }, 'Could not sync BuiltByBit.'), timeout]).then(function (d) {
-      BBB.configured = d.configured === false ? false : true;
-      if (d.configured !== false) { lsSet(BBB_SYNC_KEY, Date.now()); BBB.syncedAt = d.syncedAt || new Date().toISOString(); }
-      if (d.errors && d.errors.length) BBB.error = 'Some data could not be read: ' + d.errors[0];
-    }).catch(function (err) {
+    var rounds = 0;
+    function step(cont) {
+      var timeout = new Promise(function (_, reject) { setTimeout(function () { reject(new Error('BuiltByBit took too long to answer. Try Sync now again in a minute.')); }, 140000); });
+      return Promise.race([invokeAdminFn('admin-builtbybit-sync', { action: 'sync', 'continue': !!cont }, 'Could not sync BuiltByBit.'), timeout]).then(function (d) {
+        rounds++;
+        BBB.configured = d.configured === false ? false : true;
+        if (d.configured === false) return d;
+        BBB.syncedAt = d.syncedAt || new Date().toISOString();
+        if (d.errors && d.errors.length) BBB.error = 'Some data could not be read: ' + d.errors[0];
+        BBB.progress = d.remaining ? 'Reading listings, ' + d.remaining + ' left…' : '';
+        return refreshBbbData().then(function () {
+          if (d.remaining > 0 && d.processed > 0 && rounds < 40) return step(true);
+          if (!d.remaining) lsSet(BBB_SYNC_KEY, Date.now());
+          return d;
+        });
+      });
+    }
+    return step(false).catch(function (err) {
       BBB.error = err.message || 'Could not sync BuiltByBit.';
     }).then(function () {
-      BBB.syncing = false;
+      BBB.syncing = false; BBB.progress = '';
       return refreshBbbData();
     }).then(function () { if (curPanel === 'marketplaces') renderBbb(); });
   }
   function refreshBbb() { return refreshBbbData().then(function () { return bbbSync(false); }); }
 
-  function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
-  function bbbVer(s) { return String(s || '').toLowerCase().replace(/^v/, '').trim(); }
   function bbbStars(n) {
     var r = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
     return '<span class="adm-bbb-stars" aria-label="' + r + ' of 5">' + '★★★★★'.slice(0, r) + '<i>' + '★★★★★'.slice(r) + '</i></span>';
   }
+
+  // Trend chart: each line is the real daily figure (faint) with a moving average on top
+  // (bold, area-filled), so a handful of sales reads as a direction, not a row of spikes.
+  // lines: [{ name, color, data: [{ label, v, tip }], avg: days }]
+  function svgTrend(lines, opts) {
+    opts = opts || {};
+    var w = 640, h = opts.height || 150, fmt = opts.fmt || axisNum;
+    var n = lines[0].data.length;
+    if (n < 2) return svgBars(lines[0].data, opts);
+    function avgOf(data, k) {
+      return data.map(function (d, i) {
+        var from = Math.max(0, i - k + 1), s = 0;
+        for (var j = from; j <= i; j++) s += data[j].v;
+        return s / (i - from + 1);
+      });
+    }
+    var series = lines.map(function (l) {
+      var k = l.avg || Math.max(3, Math.round(n / 12));
+      return { l: l, avg: avgOf(l.data, k), k: k };
+    });
+    var rawMax = 0;
+    series.forEach(function (s) { s.avg.forEach(function (v) { if (v > rawMax) rawMax = v; }); s.l.data.forEach(function (d) { if (d.v > rawMax) rawMax = d.v; }); });
+    var sc = niceScale(rawMax);
+    function X(i) { return (i / (n - 1)) * w; }
+    function Y(v) { return h - (v / sc.top) * h; }
+    var grid = sc.ticks.map(function (t) {
+      return '<line class="adm-chart-grid" x1="0" x2="' + w + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '" vector-effect="non-scaling-stroke"></line>';
+    }).join('');
+    var paths = series.map(function (s, idx) {
+      var color = s.l.color || 'var(--accent)';
+      var raw = s.l.data.map(function (d, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(d.v).toFixed(1); }).join('');
+      var avg = s.avg.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join('');
+      var area = avg + 'L' + w + ' ' + h + 'L0 ' + h + 'Z';
+      return (idx === 0 ? '<path d="' + area + '" fill="' + color + '" opacity=".14"></path>' : '') +
+        '<path d="' + raw + '" fill="none" stroke="' + color + '" stroke-width="1" opacity=".35" vector-effect="non-scaling-stroke"></path>' +
+        '<path d="' + avg + '" fill="none" stroke="' + color + '" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>';
+    }).join('');
+    var colW = w / n;
+    var hover = lines[0].data.map(function (d, i) {
+      var tip = esc(d.label) + series.map(function (s) { return ' · ' + (series.length > 1 ? esc(s.l.name) + ' ' : '') + esc(s.l.data[i].tip != null ? s.l.data[i].tip : s.l.data[i].v); }).join('');
+      return '<rect x="' + (X(i) - colW / 2).toFixed(1) + '" y="0" width="' + colW.toFixed(1) + '" height="' + h + '" fill="transparent"><title>' + tip + '</title></rect>';
+    }).join('');
+    var labels = sc.ticks.map(function (t) { return esc(fmt(t)); });
+    var axisW = Math.max.apply(null, labels.map(function (l) { return l.length; })) + 1;
+    var axis = sc.ticks.map(function (t, i) { return '<span style="bottom:' + (t / sc.top * 100).toFixed(2) + '%">' + labels[i] + '</span>'; }).join('');
+    var xl = '<div class="adm-chart-x"><span>' + esc(lines[0].data[0].label) + '</span><span>' + esc(lines[0].data[n - 1].label) + '</span></div>';
+    var legend = '<div class="adm-trend-legend">' + series.map(function (s) {
+      return '<span><i style="background:' + (s.l.color || 'var(--accent)') + '"></i>' + esc(s.l.name || 'Revenue') + ' <em>' + s.k + '-day average</em></span>';
+    }).join('') + '</div>';
+    return '<div class="adm-chart-wrap"><div class="adm-chart-axis" style="height:' + h + 'px;min-width:' + axisW + 'ch">' + axis + '</div>' +
+      '<div class="adm-chart-main"><svg viewBox="0 0 ' + w + ' ' + h + '" class="adm-chart" style="height:' + h + 'px" preserveAspectRatio="none">' + grid + paths + hover + '</svg>' + xl + '</div></div>' + legend;
+  }
+  // Daily BuiltByBit revenue for the last n days (local days, like the site series).
   function bbbDailySeries(days) {
-    var out = [], byDay = {};
+    var byDay = {};
     bbbPurchasesIn(null, null).forEach(function (p) {
-      if (String(p.currency || 'USD').toUpperCase() !== 'USD') return;
-      var k = String(p.purchased_at).slice(0, 10);
+      if (!bbbIsUsd(p)) return;
+      var k = new Date(p.purchased_at).toDateString();
       byDay[k] = (byDay[k] || 0) + (Number(p.price) || 0);
     });
     var n = days;
@@ -4951,13 +5110,47 @@
       var first = BBB.purchases.length ? new Date(BBB.purchases[BBB.purchases.length - 1].purchased_at) : null;
       n = first ? Math.min(365, Math.max(7, Math.ceil((Date.now() - first.getTime()) / 86400000) + 1)) : 30;
     }
+    var out = [];
     for (var i = n - 1; i >= 0; i--) {
-      var d = new Date(Date.now() - i * 86400000), k = d.toISOString().slice(0, 10);
-      var v = Math.round((byDay[k] || 0) * 100) / 100;
-      out.push({ label: k.slice(5), v: v, tip: usd(v) });
+      var d = daysAgo(i), v = Math.round((byDay[d.toDateString()] || 0) * 100) / 100;
+      out.push({ label: fmtDate(d), v: v, tip: usd(v) });
     }
     return out;
   }
+
+  // Things worth a look: products on the site that are not on BuiltByBit, or that disagree
+  // with their BuiltByBit listing. Each has a stable key so it can be dismissed.
+  function bbbIssues() {
+    var out = [];
+    if (!BBB.snaps.length) return out;
+    var byTitle = bbbListingByTitle();
+    allProducts().forEach(function (p) {
+      if (!p.visible) return;
+      var l = byTitle[bbbNorm(p.title)];
+      var mark = mpStatus(p.dbId, 'builtbybit');
+      if (!l) {
+        out.push({ key: 'missing:' + p.dbId, kind: 'missing', title: p.title,
+          text: 'Not on BuiltByBit' + (mark === 'live' ? ' (your checklist says it is live)' : ''), pid: p.dbId });
+        return;
+      }
+      var bp = l.price == null ? null : Number(l.price);
+      if (bp != null && Math.abs(bp - p.priceNum) > 0.005) {
+        out.push({ key: 'price:' + p.dbId + ':' + p.priceNum + ':' + bp, kind: 'price', title: p.title,
+          text: 'Price differs: site ' + usd(p.priceNum) + ', BuiltByBit ' + usd(bp), pid: p.dbId });
+      }
+      if (l.latest_version && p.siteVersion && bbbVer(l.latest_version) !== bbbVer(p.siteVersion)) {
+        out.push({ key: 'version:' + p.dbId + ':' + bbbVer(p.siteVersion) + ':' + bbbVer(l.latest_version), kind: 'version', title: p.title,
+          text: 'Version differs: site v' + bbbVer(p.siteVersion) + ', BuiltByBit v' + bbbVer(l.latest_version), pid: p.dbId });
+      }
+      if (mark !== 'live' && mark !== 'needs_update') {
+        out.push({ key: 'checklist:' + p.dbId, kind: 'checklist', title: p.title,
+          text: 'On BuiltByBit, but your checklist says it is not uploaded', pid: p.dbId });
+      }
+    });
+    return out;
+  }
+
+  var ADM_ICON_X = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>';
 
   function renderBbb() {
     var body = $('admBbbBody');
@@ -4965,7 +5158,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('#admBbbRange button'), function (b) { b.classList.toggle('active', +b.getAttribute('data-bbb-range') === BBB_RANGE); });
     var sync = $('admBbbSync'); if (sync) { sync.disabled = BBB.syncing; sync.textContent = BBB.syncing ? 'Syncing…' : 'Sync now'; }
     var sub = $('admBbbSub');
-    if (sub) sub.textContent = BBB.configured ? (BBB.syncedAt ? 'Last synced ' + new Date(BBB.syncedAt).toLocaleString() : 'Gross sales as reported by BuiltByBit') : '';
+    if (sub) sub.textContent = !BBB.configured ? '' : BBB.syncing ? (BBB.progress || 'Syncing…') : (BBB.syncedAt ? 'Last synced ' + new Date(BBB.syncedAt).toLocaleString() : 'Sales as reported by BuiltByBit, in USD');
 
     if (BBB.configured === false) {
       body.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Create a <strong>Private</strong> token at builtbybit.com/account/api, then run <code>supabase secrets set BUILTBYBIT_API_TOKEN=your-token</code> and press Sync now.</p>' +
@@ -4975,50 +5168,36 @@
     if (BBB.configured === null) { body.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
 
     var start = BBB_RANGE ? daysAgoStart(BBB_RANGE) : null, now = new Date(Date.now() + 1000);
-    var list = bbbPurchasesIn(start, now), cur = bbbSum(list);
+    var cur = bbbSum(bbbPurchasesIn(start, now));
     var prev = { usd: 0, orders: 0 };
-    if (BBB_RANGE) { prev = bbbSum(bbbPurchasesIn(daysAgoStart(BBB_RANGE * 2), daysAgoStart(BBB_RANGE))); }
+    if (BBB_RANGE) prev = bbbSum(bbbPurchasesIn(daysAgoStart(BBB_RANGE * 2), daysAgoStart(BBB_RANGE)));
     function delta(c, p) { if (!BBB_RANGE) return ''; var s = RANGE_DAYS; RANGE_DAYS = BBB_RANGE; var h = pctDelta(c, p); RANGE_DAYS = s; return h; }
-
-    // best seller in range
-    var byRes = {};
-    list.forEach(function (p) {
-      var r = byRes[p.resource_id] = byRes[p.resource_id] || { id: p.resource_id, title: p.resource_title || p.resource_id, orders: 0, usd: 0 };
-      r.orders += 1; if (String(p.currency || 'USD').toUpperCase() === 'USD') r.usd += Number(p.price) || 0;
-    });
-    var best = Object.keys(byRes).map(function (k) { return byRes[k]; }).sort(function (a, b) { return b.usd - a.usd || b.orders - a.orders; })[0];
 
     var tiles = statGrid([
       statTile('Revenue', aud(cur.usd), usd(cur.usd) + ' USD', delta(cur.usd, prev.usd)),
       statTile('Orders', num(cur.orders), cur.other ? cur.other + ' in another currency, not counted in revenue' : null, delta(cur.orders, prev.orders)),
       statTile('Avg order value', cur.orders ? usd(cur.usd / cur.orders) : '–', null, ''),
-      statTile('Best seller', best ? esc(best.title) : '–', best ? best.orders + ' order' + (best.orders === 1 ? '' : 's') + ' · ' + usd(best.usd) : 'no sales in range', '')
+      statTile('Pending validation', usd(cur.pending), 'included in revenue until BuiltByBit confirms it', '')
     ]);
 
-    // latest snapshot per listing, joined with that range's sales
-    var latest = {};
-    BBB.snaps.forEach(function (s) { if (!latest[s.resource_id]) latest[s.resource_id] = s; });
-    var prods = allProducts();
-    var rows = Object.keys(latest).map(function (id) {
-      var s = latest[id], sales = byRes[id] || { orders: 0, usd: 0 };
-      var site = prods.filter(function (p) { return bbbNorm(p.title) === bbbNorm(s.title); })[0] || null;
-      var health;
-      if (!site) health = '<span class="adm-sub">Not matched to a product</span>';
-      else if (!s.latest_version) health = '<span class="adm-sub">No version on BuiltByBit</span>';
-      else if (!site.siteVersion) health = '<span class="adm-sub">No site version set</span>';
-      else if (bbbVer(site.siteVersion) === bbbVer(s.latest_version)) health = '<span class="dt-badge ok">Up to date</span>';
-      else health = '<span class="dt-badge warn">Site v' + esc(bbbVer(site.siteVersion)) + ' vs BuiltByBit v' + esc(bbbVer(s.latest_version)) + '</span> ' +
-        '<button type="button" class="adm-mp-done" data-bbb-flag="' + esc(site.dbId) + '">Flag needs update</button>';
-      return { title: s.title || id, orders: sales.orders, usd: sales.usd, downloads: s.downloads, rating: s.rating, reviews: s.reviews, ver: s.latest_version, health: health };
-    }).sort(function (a, b) { return b.usd - a.usd || a.title.localeCompare(b.title); });
+    var chart = '<div class="adm-mini-head">Revenue trend</div>' +
+      svgTrend([{ name: 'BuiltByBit', color: 'var(--accent)', data: bbbDailySeries(BBB_RANGE) }], { height: 150, fmt: axisUsd });
 
-    var table = '<div class="adm-mini-head">Listings</div><div class="dash-tablewrap"><table class="dash-table"><thead><tr><th>Listing</th><th>Orders</th><th>Revenue</th><th>Downloads</th><th>Rating</th><th>Version</th><th>Site status</th></tr></thead><tbody>' +
-      (rows.map(function (r) {
-        return '<tr><td>' + esc(r.title) + '</td><td>' + num(r.orders) + '</td><td>' + usd(r.usd) + '</td><td>' + (r.downloads == null ? '–' : num(r.downloads)) + '</td><td>' +
-          (r.rating == null ? '–' : bbbStars(r.rating) + ' <span class="adm-sub">' + Number(r.rating).toFixed(1) + (r.reviews != null ? ' (' + r.reviews + ')' : '') + '</span>') + '</td><td>' + (r.ver ? esc(r.ver) : '–') + '</td><td>' + r.health + '</td></tr>';
-      }).join('') || '<tr><td colspan="7" class="adm-empty">No listings found yet. Press Sync now.</td></tr>') + '</tbody></table></div>';
-
-    var chart = '<div class="adm-mini-head">Revenue per day</div>' + svgBars(bbbDailySeries(BBB_RANGE), { height: 120, fmt: axisUsd });
+    // potential issues (expandable), each with a dismiss icon
+    var issues = bbbIssues(), shown = issues.filter(function (i) { return !BBB.dismissed[i.key]; });
+    var hidden = issues.length - shown.length;
+    var list = shown.map(function (i) {
+      var act = '';
+      if (i.kind === 'version') act = '<button type="button" class="adm-mp-done" data-bbb-flag="' + esc(i.pid) + '">Flag needs update</button>';
+      if (i.kind === 'checklist') act = '<button type="button" class="adm-mp-done" data-bbb-live="' + esc(i.pid) + '">Mark live</button>';
+      return '<li class="adm-bbb-issue"><span class="dt-badge warn">' + esc(i.kind === 'missing' ? 'Missing' : i.kind === 'price' ? 'Price' : i.kind === 'version' ? 'Version' : 'Checklist') + '</span>' +
+        '<span class="adm-bbb-issue-text"><strong>' + esc(i.title) + '</strong> <span class="adm-sub">' + esc(i.text) + '</span></span>' + act +
+        '<button type="button" class="adm-mp-del" data-bbb-dismiss="' + esc(i.key) + '" title="Dismiss" aria-label="Dismiss this issue">' + ADM_ICON_X + '</button></li>';
+    }).join('');
+    var issuesHtml = '<details class="adm-collapse adm-bbb-issues"' + (shown.length && shown.length <= 6 ? '' : '') + '><summary class="adm-bbb-issues-sum"><span>Potential issues <strong>' + shown.length + '</strong>' + (hidden ? ' <span class="adm-sub">' + hidden + ' dismissed</span>' : '') +
+      '</span><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>' +
+      '<div class="adm-collapse-body">' + (list ? '<ul class="adm-bbb-issue-list">' + list + '</ul>' : '<p class="adm-empty">Nothing to fix. Every on-site product matches its BuiltByBit listing.</p>') +
+      (hidden ? '<button type="button" class="btn btn-ghost adm-btn-sm" data-bbb-restore="1">Show dismissed</button>' : '') + '</div></details>';
 
     var revs = BBB.reviews.slice(0, 8).map(function (r) {
       var reply = r.response
@@ -5029,7 +5208,7 @@
     }).join('');
     var reviews = '<div class="adm-mini-head">Latest reviews</div>' + (revs || '<p class="adm-empty">No reviews yet.</p>');
 
-    body.innerHTML = tiles + chart + table + reviews + (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
+    body.innerHTML = tiles + chart + issuesHtml + reviews + (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
   }
 
   document.addEventListener('click', function (e) {
@@ -5037,7 +5216,24 @@
     if (rb) { BBB_RANGE = +rb.getAttribute('data-bbb-range'); lsSet('coldd_admin_bbb_range_v1', BBB_RANGE); renderBbb(); return; }
     if (e.target.closest('#admBbbSync')) { bbbSync(true); return; }
     var fl = e.target.closest('[data-bbb-flag]');
-    if (fl) { fl.disabled = true; mpSaveListings(fl.getAttribute('data-bbb-flag'), [{ key: 'builtbybit', status: 'needs_update' }]).then(function () { admToast('Flagged for update on BuiltByBit', true); }); }
+    if (fl) { fl.disabled = true; mpSaveListings(fl.getAttribute('data-bbb-flag'), [{ key: 'builtbybit', status: 'needs_update' }]).then(function () { admToast('Flagged for update on BuiltByBit', true); renderBbb(); }); return; }
+    var lv = e.target.closest('[data-bbb-live]');
+    if (lv) { lv.disabled = true; mpSaveListings(lv.getAttribute('data-bbb-live'), [{ key: 'builtbybit', status: 'live' }]).then(function () { admToast('Marked live on BuiltByBit', true); renderBbb(); }); return; }
+    var ds = e.target.closest('[data-bbb-dismiss]');
+    if (ds) {
+      var key = ds.getAttribute('data-bbb-dismiss');
+      BBB.dismissed[key] = true; renderBbb();
+      Promise.resolve(window.coldSupabase.from('bbb_issue_dismissals').upsert({ issue_key: key }, { onConflict: 'issue_key' })).then(function (r) {
+        if (r && r.error) { delete BBB.dismissed[key]; renderBbb(); admToast('Could not dismiss that', false); }
+      });
+      return;
+    }
+    if (e.target.closest('[data-bbb-restore]')) {
+      Promise.resolve(window.coldSupabase.from('bbb_issue_dismissals').delete().neq('issue_key', '')).then(function (r) {
+        if (r && r.error) { admToast('Could not restore', false); return; }
+        BBB.dismissed = {}; renderBbb();
+      });
+    }
   });
   document.addEventListener('submit', function (e) {
     var f = e.target.closest ? e.target.closest('.adm-bbb-replyform') : null;

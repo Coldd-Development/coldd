@@ -68,3 +68,54 @@ exception when duplicate_object then null; end $$;
 -- table privileges by default; RLS already blocks them, this is belt and braces.)
 revoke all on public.bbb_purchases, public.bbb_reviews, public.bbb_resource_snapshots from public, anon;
 grant select on public.bbb_purchases, public.bbb_reviews, public.bbb_resource_snapshots to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Part 2: category, resumable sync state, dismissed issues, counts RPC.
+-- ---------------------------------------------------------------------------
+
+alter table public.bbb_resource_snapshots add column if not exists category text;
+
+-- Per listing: when its purchases/reviews were last read. Lets a sync that has
+-- hundreds of listings resume where it left off instead of starting over.
+create table if not exists public.bbb_resource_state (
+  resource_id text primary key,
+  detail_at   timestamptz,
+  note        text
+);
+alter table public.bbb_resource_state enable row level security;
+do $$ begin
+  create policy "bbb_resource_state_admin_select" on public.bbb_resource_state for select using (public.is_admin());
+exception when duplicate_object then null; end $$;
+revoke all on public.bbb_resource_state from public, anon;
+grant select on public.bbb_resource_state to authenticated;
+
+-- "Potential issues" the admin has dismissed (the delete icon). Key is
+-- "<type>:<product or listing id>".
+create table if not exists public.bbb_issue_dismissals (
+  issue_key    text primary key,
+  dismissed_at timestamptz not null default now()
+);
+alter table public.bbb_issue_dismissals enable row level security;
+do $$ begin
+  create policy "bbb_issue_dismissals_admin_all" on public.bbb_issue_dismissals
+    for all using (public.is_admin()) with check (public.is_admin());
+exception when duplicate_object then null; end $$;
+revoke all on public.bbb_issue_dismissals from public, anon;
+grant select, insert, update, delete on public.bbb_issue_dismissals to authenticated;
+
+-- Stored purchase / review counts per listing, for the sync's work queue
+-- (PostgREST caps plain selects at 1000 rows, so aggregate in the database).
+create or replace function public.bbb_detail_counts()
+returns table (resource_id text, purchases_n bigint, pending_n bigint, reviews_n bigint)
+language sql stable security definer set search_path = public
+as $$
+  select coalesce(p.resource_id, r.resource_id),
+         coalesce(p.n, 0), coalesce(p.pending, 0), coalesce(r.n, 0)
+  from (select resource_id, count(*) n, count(*) filter (where status = 'pending') pending
+        from public.bbb_purchases group by 1) p
+  full join (select resource_id, count(*) n from public.bbb_reviews group by 1) r
+    on r.resource_id = p.resource_id;
+$$;
+revoke all on function public.bbb_detail_counts() from public, anon, authenticated;
+
+grant execute on function public.bbb_detail_counts() to service_role;
