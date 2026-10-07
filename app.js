@@ -2507,8 +2507,32 @@
       // it) but is always forced to 1, including for carts saved by an
       // older version of this file that still had the +/- stepper.
       function normalizeCart(arr) { return (arr || []).map(function (i) { i.qty = 1; return i; }); }
+      // A cart item stores the price it had when it was added, and nothing
+      // ever refreshed it, so a later price change (or a weekly deal ending)
+      // left every saved cart quoting the old figure, and the Robux total with
+      // it. Once the live catalog has loaded, re-price each plain item from it
+      // and drop products that are no longer on sale. Bundle and cross-sell
+      // lines carry their own discounted price, so they are left alone.
+      window.__coldRepriceCart = function (arr) {
+        if (!window.__CATALOG_OK) return arr;
+        var byId = {};
+        (window.__CATALOG || []).forEach(function (p) { byId[p.id] = p; });
+        return (arr || []).filter(function (i) {
+          var id = String(i.id);
+          var base = id.replace(/--resell$/, '');
+          if (base.indexOf('--') !== -1) return true;
+          var p = byId[base];
+          if (!p) return false;
+          i.price = /--resell$/.test(id) ? (p.resellPrice != null ? p.resellPrice : Math.round(p.priceNum * 3)) : p.priceNum;
+          return true;
+        });
+      };
       var cart = [];
-      try { cart = normalizeCart(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (_) { cart = []; }
+      try {
+        var rawCart = localStorage.getItem(KEY) || '[]';
+        cart = normalizeCart(window.__coldRepriceCart(JSON.parse(rawCart)));
+        if (JSON.stringify(cart) !== rawCart) { try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch (_) {} }
+      } catch (_) { cart = []; }
 
       var countEl = document.getElementById('cartCount');
       var headCount = document.getElementById('cartHeadCount');
@@ -5553,7 +5577,14 @@
       // Digital licences aren't a quantity - forced to 1 here too so a cart
       // saved by an older version of this file (back when the drawer's
       // +/- stepper existed) can't still check out at qty > 1.
-      function load() { try { return (JSON.parse(localStorage.getItem(CART_KEY) || '[]') || []).map(function (i) { i.qty = 1; return i; }); } catch (e) { return []; } }
+      function load() {
+        try {
+          var raw = localStorage.getItem(CART_KEY) || '[]';
+          var c = (window.__coldRepriceCart ? window.__coldRepriceCart(JSON.parse(raw) || []) : (JSON.parse(raw) || [])).map(function (i) { i.qty = 1; return i; });
+          if (JSON.stringify(c) !== raw) { try { localStorage.setItem(CART_KEY, JSON.stringify(c)); } catch (e) {} }
+          return c;
+        } catch (e) { return []; }
+      }
       function save(c) {
         try { localStorage.setItem(CART_KEY, JSON.stringify(c)); } catch (e) {}
         scheduleCartSnapshot();
