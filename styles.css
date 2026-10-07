@@ -4693,3 +4693,6 @@ html.auth-in .nav-notif[hidden] { display: block; }
 /* Product form: a required field left empty on save */
 .adm-invalid { outline: 1.5px solid #e5484d; outline-offset: 5px; border-radius: 10px; }
 .adm-invalid > span:first-child { color: #ff8a8f; }
+
+/* The corner "Claim discount now" tab sat on top of the cart's Checkout button; hide it while the cart is open. */
+body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
