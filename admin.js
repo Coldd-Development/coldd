@@ -3500,7 +3500,7 @@
     'Boats': [['military', 'Military'], ['civilian', 'Civilian'], ['commercial', 'Commercial']],
     'Weapons': [['military', 'Military'], ['medieval', 'Medieval'], ['scripted', 'Scripted'], ['firearms', 'Firearms'], ['melees', 'Melees']],
     'Vehicles': [['scripted', 'Scripted Vehicles'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services']],
-    'Animations & VFX': [['vfx', 'VFX'], ['animations', 'Animations'], ['vfx-packs', 'VFX Packs'], ['combat', 'VFX & Combat'], ['auras', 'Aura VFX']]
+    'Animations & VFX': [['vfx', 'VFX'], ['animations', 'Animations'], ['vfx-packs', 'VFX Packs'], ['combat', 'Combat VFX'], ['auras', 'Aura VFX'], ['rng-vfx', 'RNG VFX'], ['animation-packs', 'Animation Packs'], ['combat-animations', 'Combat Animations']]
   };
   var editContacts = [];
   var editProofFiles = [];
