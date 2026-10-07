@@ -139,6 +139,33 @@ async function listAll(token: string, path: string): Promise<Obj[]> {
   return out;
 }
 
+const AUTHOR_KEYS = ["author_id", "author_member_id", "member_id", "owner_id"];
+
+async function ownListings(token: string, noteKeys: (k: string, r: Obj | undefined) => void): Promise<Obj[]> {
+  const me = await bbb(token, "GET", "/members/self");
+  const meRow: Obj = Array.isArray(me?.data) ? me.data[0] : me?.data;
+  noteKeys("member", meRow);
+  const selfId = str(pick(meRow, ["member_id", "id"]));
+  if (!selfId) throw new ApiFail(502, "Could not read your BuiltByBit member id.");
+
+  const byId = new Map<string, Obj>();
+  const add = (rows: Obj[]) => { for (const r of rows) { const id = str(pick(r, ["resource_id", "id"])); if (id && !byId.has(id)) byId.set(id, r); } };
+
+  // 1) everything published under our author id
+  try { add(await listAll(token, `/resources/authors/${selfId}`)); } catch (e) { console.warn("[admin-builtbybit-sync] authors list failed:", (e as Error).message); }
+  // 2) listings we collaborate on
+  try { add(await listAll(token, "/resources/collaborated")); } catch (e) { console.warn("[admin-builtbybit-sync] collaborated list failed:", (e as Error).message); }
+  // 3) fallback: the bought list, keeping only rows we authored
+  if (!byId.size) {
+    const owned = await listAll(token, "/resources/owned");
+    noteKeys("owned", owned[0]);
+    const withAuthor = owned.filter((r) => AUTHOR_KEYS.some((k) => r[k] !== undefined && r[k] !== null));
+    if (!withAuthor.length) throw new ApiFail(502, "Could not tell which BuiltByBit listings are yours.");
+    add(withAuthor.filter((r) => AUTHOR_KEYS.some((k) => String(r[k]) === selfId)));
+  }
+  return [...byId.values()];
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
 
@@ -189,18 +216,34 @@ Deno.serve(async (req: Request) => {
       if (row && !seen[kind]) seen[kind] = Object.keys(row);
     };
 
+    // "/resources/owned" is what this account has BOUGHT (hundreds of other sellers'
+    // products), not what it sells. Our own listings are the ones we author (plus any
+    // we collaborate on), so work out our member id and filter to those.
     let resources: Obj[];
     try {
-      resources = await listAll(token, "/resources/owned");
+      resources = await ownListings(token, noteKeys);
     } catch (e) {
       const f = e as ApiFail;
       if (f.status === 401 || f.status === 403) {
         return json({ ok: false, error: "BuiltByBit rejected the token. Create a new Private token and set BUILTBYBIT_API_TOKEN again." }, 502);
       }
-      console.error("[admin-builtbybit-sync] resources failed:", f.status, f.message);
+      console.error("[admin-builtbybit-sync] listings failed:", f.status, f.message);
       return json({ ok: false, error: `Could not read your BuiltByBit listings (${f.status}): ${f.message}` }, 502);
     }
     noteKeys("resource", resources[0]);
+
+    // Earlier versions crawled every product this account has bought. Drop anything that
+    // is not one of our own listings.
+    {
+      const mine = resources.map((r) => str(pick(r, ["resource_id", "id"]))).filter((x): x is string => !!x);
+      if (mine.length) {
+        const list = `(${mine.map((i) => '"' + i.replace(/[^0-9a-zA-Z_-]/g, "") + '"').join(",")})`;
+        for (const t of ["bbb_purchases", "bbb_reviews", "bbb_resource_snapshots"]) {
+          const { error } = await admin.from(t).delete().not("resource_id", "in", list);
+          if (error) errors.push("cleanup " + t + ": " + error.message);
+        }
+      }
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const snapshots: Obj[] = [];
