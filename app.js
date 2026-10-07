@@ -6573,7 +6573,32 @@
           if (emptyEl) emptyEl.hidden = shown > 0;
         }
 
-        openBtn.addEventListener('click', openModal);
+        // The required agreements (Terms of Service, plus the Resell Licence
+        // Terms when a resell licence is in the cart) have to be ticked before
+        // the list of methods opens, not after one is picked. Otherwise a
+        // buyer chose a method, the order tried to start, and only then were
+        // they sent back up the page to a checkbox.
+        function requiredAgreementsOk() {
+          var tos = document.getElementById('coTos');
+          var resellWrap = document.getElementById('coResellWrap');
+          var resell = document.getElementById('coResell');
+          var errEl = document.getElementById('coAgreeErr');
+          var missing = [], scrollEl = null;
+          if (tos && !tos.checked) { missing.push('accept the Terms of Service'); scrollEl = tos.closest('.co-check'); }
+          if (resellWrap && !resellWrap.hidden && resell && !resell.checked) { missing.push('accept the Resell Licence Terms'); scrollEl = scrollEl || resellWrap; }
+          if (errEl) errEl.textContent = missing.length ? 'Please ' + missing.join(' and ') + ' before choosing a payment method.' : '';
+          if (missing.length && scrollEl && scrollEl.scrollIntoView) scrollEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return !missing.length;
+        }
+        // Clear the reminder as soon as the boxes are ticked.
+        ['coTos', 'coResell'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener('change', function () {
+            var errEl = document.getElementById('coAgreeErr');
+            if (errEl && errEl.textContent.indexOf('before choosing a payment method') !== -1) requiredAgreementsOk();
+          });
+        });
+        openBtn.addEventListener('click', function () { if (requiredAgreementsOk()) openModal(); });
         if (closeBtn) closeBtn.addEventListener('click', closeModal);
         modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
         if (searchInput) searchInput.addEventListener('input', function () { filterTiles(searchInput.value); });
