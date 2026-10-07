@@ -15,16 +15,12 @@ name: Regenerate product pages + sitemap
 #     { "event_type": "catalog-changed" } with a fine-grained PAT (contents:
 #     write) stored as a Supabase secret. Not required; the schedule covers it.
 
-#   - push to main: publish site edits (the regen commit is [skip ci], so it
-#     deploys in the same run instead)
 #
-# Publishing: the site is on Cloudflare Pages (project coldd-site, direct
-# upload). Needs the repo secret CLOUDFLARE_API_TOKEN (Pages: Edit). Until it
-# is set the deploy step is skipped and the job behaves as before.
+# Publishing: the live site is the Hestia host. A GitHub push webhook calls
+# https://coldd.dev/deploy.php, which copies the branch over public_html, so
+# this job's commit goes live through that same webhook. Nothing here deploys.
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -66,14 +62,3 @@ jobs:
           git commit -m "chore: regenerate product pages + sitemap [skip ci]"
           git push
 
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: a61418eeea930a75432cc37da9c88099
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "CLOUDFLARE_API_TOKEN not set, skipping deploy."
-            exit 0
-          fi
-          node scripts/build-pages.mjs
-          npx --yes wrangler@4 pages deploy dist --project-name coldd-site --branch main
