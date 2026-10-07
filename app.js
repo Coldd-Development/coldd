@@ -3052,12 +3052,9 @@
           var imgs = p.image ? [p.image] : [];
           if (Array.isArray(p.gallery) && p.gallery.length) {
             p.gallery.forEach(function (src) { if (src && imgs.indexOf(src) < 0) imgs.push(src); });
-            return imgs;
           }
-          var cat = window.__CATALOG || [];
-          for (var i = 0; i < cat.length && imgs.length < 5; i++) {
-            if (cat[i].platform === p.platform && cat[i].image && imgs.indexOf(cat[i].image) < 0) imgs.push(cat[i].image);
-          }
+          // Only the product's own cover + uploaded gallery; never pad with
+          // other products' images.
           return imgs;
         }
         function refreshPrice() {
