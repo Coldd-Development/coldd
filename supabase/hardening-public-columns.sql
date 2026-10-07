@@ -59,19 +59,19 @@ $$;
 revoke all on function public.admin_product_storage_paths() from public, anon;
 grant execute on function public.admin_product_storage_paths() to authenticated;
 
--- ============================== PART 2 ==============================
--- (run after the code that stops using select('*') is deployed)
+============================== PART 2 ==============================
+-- (applied 2026-10-07, after the matching code was live)
 
--- revoke select on public.products from public, anon, authenticated;
--- grant select (
---   id, slug, title, description, long_description, image, gallery, video, cat, subcat,
---   platform, page, tech, price_usd, was_price, robux_price, resell_available,
---   resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id,
---   version, versions, changelog, last_released_version, featured, featured_order,
---   priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto,
---   weekly_deal_excluded, weekly_deal_pct, created_at, updated_at
--- ) on public.products to anon, authenticated;
---
--- revoke select on public.site_status from public, anon, authenticated;
--- grant select (id, mode, maintenance_message, maintenance_ends_at, updated_at)
---   on public.site_status to anon, authenticated;
+revoke select on public.products from public, anon, authenticated;
+grant select (
+  id, slug, title, description, long_description, image, gallery, video, cat, subcat,
+  platform, page, tech, price_usd, was_price, robux_price, resell_available,
+  resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id,
+  version, versions, changelog, last_released_version, featured, featured_order,
+  priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto,
+  weekly_deal_excluded, weekly_deal_pct, created_at, updated_at
+) on public.products to anon, authenticated;
+
+revoke select on public.site_status from public, anon, authenticated;
+grant select (id, mode, maintenance_message, maintenance_ends_at, updated_at)
+  on public.site_status to anon, authenticated;
