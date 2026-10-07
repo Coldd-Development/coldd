@@ -4721,3 +4721,25 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 
 /* New campaign: the audience / format tabs were centred (inherited margin:auto from .bt-switch) */
 .bt-switch.adm-campaign-audience, .bt-switch.adm-campaign-mode { margin-left: 0; margin-right: 0; max-width: none; justify-content: flex-start; }
+
+
+/* Marketplaces */
+.adm-mp-add { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(150px, .8fr) minmax(200px, 1.6fr) auto; gap: 10px; align-items: center; }
+@media (max-width: 860px) { .adm-mp-add { grid-template-columns: 1fr 1fr; } }
+.adm-mp-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.adm-mp-filter button { font: inherit; font-size: 12px; font-weight: 700; color: var(--fg-2); background: none; border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.adm-mp-filter button.active { color: var(--fg); border-color: var(--accent); background: var(--ink-40, rgba(255,255,255,.05)); }
+.adm-mp-group { padding: 14px 0; border-top: 1px solid var(--hairline); }
+.adm-mp-group:first-child { border-top: 0; padding-top: 0; }
+.adm-mp-prod { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-weight: 700; }
+.adm-mp-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; margin-top: 6px; border-radius: 10px; background: var(--ink-40, rgba(255,255,255,.04)); }
+.adm-mp-text { flex: 1; min-width: 0; }
+.adm-mp-checks { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.adm-mp-checks[hidden], .adm-edit-grid[hidden], #admMpUploadCard[hidden] { display: none; }
+.adm-mp-lead { font-weight: 700; margin-right: 6px; }
+.adm-mp-check { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid var(--hairline); border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.adm-mp-check:has(input:checked) { border-color: var(--accent); background: var(--ink-40, rgba(255,255,255,.05)); }
+.adm-mp-check.off { opacity: .55; cursor: default; }
+.adm-mp-check em { font-style: normal; color: var(--fg-3); font-size: 12px; font-weight: 500; }
+.adm-mp-chip { cursor: pointer; font-family: inherit; }
+.adm-textarea-xl { min-height: 280px; }

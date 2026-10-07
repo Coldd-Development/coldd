@@ -45,7 +45,7 @@ ADMIN_DIR = ROOT / 'admin'
 # Must match PANEL_PATH's keys in admin.js (minus 'home', which is
 # admin/index.html itself).
 TOP_LEVEL_SECTIONS = [
-    'products', 'sales', 'marketing', 'analytics',
+    'products', 'sales', 'marketing', 'marketplaces', 'analytics',
     'orders', 'resellers', 'reviews', 'content', 'sitemgmt',
 ]
 # Single fixed sub-pages under /admin/products/ that aren't per-product.

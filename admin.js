@@ -1461,7 +1461,7 @@
   /* ================================================================
      NAV / PANEL SWITCHING
      ================================================================ */
-  var PANELS = ['home', 'analytics', 'marketing', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
+  var PANELS = ['home', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
   var curPanel = 'home';
 
   /* ---- URL routing ----
@@ -1477,7 +1477,7 @@
      refresh on one of those exact deep URLs falls back to its parent list. */
   var PANEL_PATH = {
     home: '/admin/', products: '/admin/products/', sales: '/admin/sales/',
-    marketing: '/admin/marketing/', analytics: '/admin/analytics/', orders: '/admin/orders/',
+    marketing: '/admin/marketing/', marketplaces: '/admin/marketplaces/', analytics: '/admin/analytics/', orders: '/admin/orders/',
     resellers: '/admin/resellers/', reviews: '/admin/reviews/', content: '/admin/content/',
     sitemgmt: '/admin/sitemgmt/'
   };
@@ -1533,6 +1533,7 @@
     if (name === 'home') renderHome();
     else if (name === 'analytics') renderAnalytics();
     else if (name === 'marketing') renderMarketing();
+    else if (name === 'marketplaces') renderMarketplaces();
     else if (name === 'products') renderProducts();
     else if (name === 'unreleased') renderUnreleasedFiles();
     else if (name === 'orders') renderOrders();
@@ -1626,6 +1627,7 @@
     if (newReviews) todo.push({ text: newReviews + ' new review' + (newReviews > 1 ? 's' : '') + ' to look at', panel: 'reviews', badge: 'warn' });
     var pendingPayouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
     if (pendingPayouts) todo.push({ text: pendingPayouts + ' referral payout request' + (pendingPayouts > 1 ? 's' : '') + ' pending', panel: 'analytics', badge: 'warn' });
+    mpTodoLines().forEach(function (t) { todo.push(t); });
     if (UNRELEASED_FILES.length) todo.push({ text: 'You have ' + UNRELEASED_FILES.length + ' product' + (UNRELEASED_FILES.length > 1 ? 's' : '') + ' to release', panel: 'unreleased', badge: 'warn' });
     if (ROBLOX_COOKIE_BROKEN) todo.push({ text: 'Robux fallback cookie is broken - group-transaction verification won\'t work until it\'s refreshed', panel: 'sitemgmt', badge: 'err' });
     if (ROBLOX_CONTAINERS.length && ROBLOX_CONTAINERS.every(function (c) { return !c.active || c.gamepass_count >= 50; })) {
@@ -3858,6 +3860,7 @@
     $('admEditDeleteBtn').hidden = false;
     if ($('admLegalDownloadBtn')) $('admLegalDownloadBtn').hidden = false;
     $('admEditHeading').textContent = 'Edit: ' + p.title;
+    if ($('admMpUploadCard')) $('admMpUploadCard').hidden = true;
     $('admEditSaveBtn').textContent = 'Save changes';
     if ($('admEditStickySave')) $('admEditStickySave').querySelector('.btn-label').textContent = 'Save changes';
     $('admEditMsg').textContent = '';
@@ -4166,6 +4169,7 @@
     $('admEditDeleteBtn').hidden = true;
     if ($('admLegalDownloadBtn')) $('admLegalDownloadBtn').hidden = true;
     $('admEditHeading').textContent = 'Create new product';
+    mpResetUploadChecks();
     $('admEditSaveBtn').textContent = 'Create product';
     if ($('admEditStickySave')) $('admEditStickySave').querySelector('.btn-label').textContent = 'Create product';
     $('admEditMsg').textContent = '';
@@ -4361,8 +4365,10 @@
       var unreleasedIdToRelease = pendingUnreleasedFileId;
       if (saveBtn) saveBtn.disabled = true;
       if (msg) msg.textContent = 'Creating…';
+      var mpUploadTicks = mpReadUploadChecks();
       callUpsertProduct(fields).then(function (res) {
         logAudit('Created product "' + title + '"');
+        mpSaveListings(res.id, MARKETPLACES.map(function (m) { return { key: m.key, status: mpUploadTicks[m.key] ? 'live' : 'pending' }; }));
         // The staged file now belongs to a real product - clear the
         // staging row (not the file itself, see admin-unreleased-files'
         // "release" action) so it stops showing up as still-unreleased.
@@ -4479,11 +4485,12 @@
   /* ================================================================
      PRODUCT UPDATE PANEL (version/changelog/file pushes)
      ================================================================ */
-  var updSelectedId = null;
+  var updSelectedId = null, updPendingPath = null, updPendingTech = null, updDescOriginal = '';
 
   function openUpdatePanel() {
-    updSelectedId = null;
+    updSelectedId = null; updPendingPath = null; updPendingTech = null;
     var search = $('admUpdSearch'); if (search) search.value = '';
+    if ($('admUpdSearchField')) $('admUpdSearchField').hidden = false;
     $('admUpdResults').innerHTML = '';
     $('admUpdSelected').hidden = true;
     showPanel('product-update', { extra: 'update' });
@@ -4515,20 +4522,49 @@
     }).join('') || '<p class="adm-empty">No versions pushed yet.</p>');
   }
 
+  // "Updated on" tick boxes: one per marketplace the product is already
+  // listed on. Ticked = already updated there; unticked becomes a task.
+  function renderUpdMpChecks(p) {
+    var box = $('admUpdMpChecks'); if (!box) return;
+    box.innerHTML = '<span class="adm-mp-lead">Updated on</span>' + MARKETPLACES.map(function (m) {
+      var st = mpStatus(p.dbId, m.key);
+      return st === 'pending'
+        ? '<span class="adm-mp-check off"><span>' + esc(m.label) + '</span><em>not uploaded</em></span>'
+        : '<label class="adm-mp-check"><input type="checkbox" data-mp="' + m.key + '" /><span>' + esc(m.label) + '</span></label>';
+    }).join('');
+  }
+
+  function updSilent() { return !!($('admUpdSilent') && $('admUpdSilent').checked); }
+  function applyUpdSilentUI() {
+    var silent = updSilent();
+    $('admUpdVersionGrid').hidden = silent;
+    $('admUpdDescField').hidden = silent;
+    $('admUpdSubmit').textContent = silent ? 'Replace file' : 'Push update';
+  }
+  var updSilentBox = $('admUpdSilent');
+  if (updSilentBox) updSilentBox.addEventListener('change', applyUpdSilentUI);
+
   function selectUpdateProduct(id) {
     var p = findProduct(id); if (!p) return;
-    updSelectedId = id;
+    updSelectedId = id; updPendingPath = null; updPendingTech = null;
     $('admUpdThumb').style.backgroundImage = "url('" + p.image + "')";
     $('admUpdSelectedName').textContent = p.title;
     $('admUpdVersion').value = '';
     $('admUpdChangelog').value = '';
-    $('admUpdDescWrap').hidden = true;
-    $('admUpdDescInput').value = '';
+    $('admUpdSilent').checked = false;
+    applyUpdSilentUI();
+    updDescOriginal = p.longDesc || '';
+    $('admUpdDescInput').value = updDescOriginal;
+    setFileNote($('admUpdFileNote'), p.storagePath);
     $('admUpdMsg').textContent = '';
     $('admUpdResults').innerHTML = '';
-    $('admUpdSearch').value = p.title;
+    $('admUpdSearch').value = '';
+    // The selected card already names the product, so the search box goes away
+    // until "Change product" is used.
+    if ($('admUpdSearchField')) $('admUpdSearchField').hidden = true;
     $('admUpdSelected').hidden = false;
     renderUpdHistory(p);
+    renderUpdMpChecks(p);
   }
   var updResults = $('admUpdResults');
   if (updResults) updResults.addEventListener('click', function (e) {
@@ -4538,15 +4574,22 @@
   var updChangeBtn = $('admUpdChange');
   if (updChangeBtn) updChangeBtn.addEventListener('click', openUpdatePanel);
 
-  var updDescToggle = $('admUpdDescToggle');
-  if (updDescToggle) updDescToggle.addEventListener('click', function () {
-    var wrap = $('admUpdDescWrap');
-    var opening = wrap.hidden;
-    wrap.hidden = !opening;
-    if (opening && updSelectedId) {
-      var p = findProduct(updSelectedId);
-      $('admUpdDescInput').value = (p && p.longDesc) || '';
-    }
+  wireDropzone($('admUpdFileDrop'), $('admUpdFileInput'), function (files) {
+    var f = files[0]; if (!f || !updSelectedId) return;
+    var note = $('admUpdFileNote');
+    note.textContent = 'Uploading ' + f.name + '…';
+    note.removeAttribute('href');
+    note.classList.remove('adm-note-warn');
+    uploadToStorage('productFile', f).then(function (r) {
+      var dot = f.name.lastIndexOf('.');
+      updPendingPath = r.path;
+      updPendingTech = { format: dot >= 0 ? f.name.slice(dot).toLowerCase() : '', size: formatFileSize(f.size), fileName: f.name };
+      note.textContent = 'Ready: ' + f.name + '. It replaces the current file when you push.';
+    }).catch(function (err) {
+      updPendingPath = null; updPendingTech = null;
+      note.textContent = 'Upload failed: ' + (err.message || 'try again') + '.';
+      note.classList.add('adm-note-warn');
+    });
   });
 
   var updSubmitBtn = $('admUpdSubmit');
@@ -4554,32 +4597,246 @@
     if (!can('admin')) return;
     if (!updSelectedId) return;
     var p = findProduct(updSelectedId); if (!p) return;
-    var version = $('admUpdVersion').value.trim();
-    var changelog = $('admUpdChangelog').value.trim();
     var msg = $('admUpdMsg');
-    if (!version || !changelog) { if (msg) msg.textContent = 'Enter a version number and changelog.'; return; }
+    var silent = updSilent();
+    var overrides = {};
+    var label;
 
-    var versions = (p.versions || []).slice();
-    versions.push({ version: version, changelog: changelog, date: new Date().toISOString() });
-    var overrides = { versions: versions };
-    if (!$('admUpdDescWrap').hidden) overrides.longDesc = $('admUpdDescInput').value.trim();
+    if (silent) {
+      if (!updPendingPath) { if (msg) msg.textContent = 'Upload the new file first.'; return; }
+      label = 'Silent update';
+    } else {
+      var version = $('admUpdVersion').value.trim();
+      var changelog = $('admUpdChangelog').value.trim();
+      if (!version || !changelog) { if (msg) msg.textContent = 'Enter a version number and changelog.'; return; }
+      var versions = (p.versions || []).slice();
+      versions.push({ version: version, changelog: changelog, date: new Date().toISOString() });
+      overrides.versions = versions;
+      var newDesc = $('admUpdDescInput').value.trim();
+      if (newDesc !== updDescOriginal.trim()) overrides.longDesc = newDesc;
+      label = 'Update ' + version;
+    }
+    if (updPendingPath) {
+      overrides.storagePath = updPendingPath;
+      overrides.tech = Object.assign({}, p.tech || {}, updPendingTech || {});
+    }
+    var ticks = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#admUpdMpChecks input[data-mp]'), function (el) { ticks[el.getAttribute('data-mp')] = el.checked; });
 
     updSubmitBtn.disabled = true;
     if (msg) msg.textContent = 'Pushing…';
+    var dbId = p.dbId;
     callUpsertProduct(upsertPayloadFor(p, overrides)).then(function () {
-      logAudit('Pushed update ' + version + ' for "' + p.title + '"');
+      logAudit((silent ? 'Silent file update' : 'Pushed update ' + $('admUpdVersion').value.trim()) + ' for "' + p.title + '"');
+      // Every marketplace it is already live on either gets the tick (done) or
+      // becomes an "Update on X" task.
+      var rows = [];
+      MARKETPLACES.forEach(function (m) {
+        if (mpStatus(dbId, m.key) === 'pending') return;
+        rows.push({ key: m.key, status: ticks[m.key] ? 'live' : 'needs_update' });
+      });
+      mpSaveListings(dbId, rows);
       return refreshProducts();
     }).then(function () {
       updSubmitBtn.disabled = false;
-      if (msg) msg.textContent = 'Update pushed.';
-      admToast('Update ' + version + ' pushed', true);
+      if (msg) msg.textContent = silent ? 'File replaced.' : 'Update pushed.';
+      admToast(label + ' saved', true);
       $('admUpdVersion').value = '';
       $('admUpdChangelog').value = '';
-      renderUpdHistory(findProduct(updSelectedId));
+      updPendingPath = null; updPendingTech = null;
+      var fresh = findProduct(updSelectedId);
+      if (fresh) { updDescOriginal = fresh.longDesc || ''; setFileNote($('admUpdFileNote'), fresh.storagePath); renderUpdHistory(fresh); renderUpdMpChecks(fresh); }
     }).catch(function (err) {
       updSubmitBtn.disabled = false;
       if (msg) msg.textContent = err.message || 'Could not push update.';
       admToast(err.message || 'Could not push update', false);
+    });
+  });
+
+  /* ================================================================
+     MARKETPLACES (BuiltByBit, ClearlyDev, Parcel, Creator Store)
+     A missing listing row means "not uploaded yet". See supabase/marketplaces.sql.
+     ================================================================ */
+  var MARKETPLACES = [
+    { key: 'builtbybit', label: 'BuiltByBit' },
+    { key: 'clearlydev', label: 'ClearlyDev' },
+    { key: 'parcel', label: 'Parcel' },
+    { key: 'creatorstore', label: 'Creator Store' }
+  ];
+  var MP_LISTINGS = {};   // product db id -> { marketplace key -> status }
+  var MP_TASKS = [];      // custom per-product tasks (open and done)
+  var MP_FILTER = 'all';
+  function mpLabel(key) { var m = MARKETPLACES.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
+  function mpStatus(dbId, key) { var l = MP_LISTINGS[dbId]; return (l && l[key]) || 'pending'; }
+
+  function refreshMarketplaces() {
+    if (!window.coldSupabase) return Promise.resolve();
+    return Promise.all([
+      window.coldSupabase.from('marketplace_listings').select('product_id, marketplace, status').limit(5000),
+      window.coldSupabase.from('marketplace_tasks').select('id, product_id, marketplace, title, done, created_at').order('created_at', { ascending: false }).limit(5000)
+    ]).then(function (r) {
+      if (r[0].error || r[1].error) { console.error('[admin] marketplaces:', (r[0].error || r[1].error).message); return; }
+      MP_LISTINGS = {};
+      (r[0].data || []).forEach(function (row) { (MP_LISTINGS[row.product_id] = MP_LISTINGS[row.product_id] || {})[row.marketplace] = row.status; });
+      MP_TASKS = r[1].data || [];
+      if (curPanel === 'marketplaces') renderMarketplaces();
+      if (curPanel === 'home') renderHome();
+    });
+  }
+
+  // Upsert listing rows for one product: rows = [{ key, status }].
+  function mpSaveListings(dbId, rows) {
+    if (!dbId || !rows || !rows.length || !window.coldSupabase) return Promise.resolve();
+    var now = new Date().toISOString();
+    var payload = rows.map(function (r) {
+      return { product_id: dbId, marketplace: r.key, status: r.status, synced_at: r.status === 'live' ? now : null, updated_at: now };
+    });
+    return window.coldSupabase.from('marketplace_listings').upsert(payload, { onConflict: 'product_id,marketplace' }).then(function (res) {
+      if (res.error) { console.error('[admin] could not save marketplace listings:', res.error.message); admToast('Could not save the marketplace ticks', false); return; }
+      rows.forEach(function (r) { (MP_LISTINGS[dbId] = MP_LISTINGS[dbId] || {})[r.key] = r.status; });
+      if (curPanel === 'marketplaces') renderMarketplaces();
+      if (curPanel === 'home') renderHome();
+    });
+  }
+
+  function mpReadUploadChecks() {
+    var out = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#admMpUploadChecks input[data-mp]'), function (el) { out[el.getAttribute('data-mp')] = el.checked; });
+    return out;
+  }
+  function mpResetUploadChecks() {
+    Array.prototype.forEach.call(document.querySelectorAll('#admMpUploadChecks input[data-mp]'), function (el) { el.checked = false; });
+    if ($('admMpUploadCard')) $('admMpUploadCard').hidden = false;
+  }
+
+  // Everything still to do: not uploaded, out of date, or a custom task.
+  // Private products are not listed anywhere yet, so they raise nothing.
+  function mpOpenItems() {
+    var items = [];
+    var prods = allProducts();
+    prods.forEach(function (p) {
+      if (!p.visible) return;
+      MARKETPLACES.forEach(function (m) {
+        var st = mpStatus(p.dbId, m.key);
+        if (st === 'pending') items.push({ kind: 'upload', product: p, mk: m.key, text: 'Upload to ' + m.label });
+        else if (st === 'needs_update') items.push({ kind: 'update', product: p, mk: m.key, text: 'Update on ' + m.label });
+      });
+    });
+    MP_TASKS.forEach(function (t) {
+      if (t.done) return;
+      var p = prods.filter(function (x) { return x.dbId === t.product_id; })[0];
+      if (p) items.push({ kind: 'task', product: p, mk: t.marketplace, text: t.title, taskId: t.id });
+    });
+    return items;
+  }
+  function mpTodoLines() {
+    var items = mpOpenItems();
+    return MARKETPLACES.map(function (m) {
+      var n = items.filter(function (i) { return i.mk === m.key; }).length;
+      return n ? { text: n + ' thing' + (n === 1 ? '' : 's') + ' to do on ' + m.label, panel: 'marketplaces', badge: 'warn' } : null;
+    }).filter(Boolean);
+  }
+
+  var mpProductDD = makeDropdown($('admMpProductDD'), { valueInput: $('admMpProduct'), placeholder: 'Product', searchable: true });
+  var mpMarketDD = makeDropdown($('admMpMarketDD'), { valueInput: $('admMpMarket'), placeholder: 'Marketplace' });
+  mpMarketDD.setOptions(MARKETPLACES.map(function (m) { return { value: m.key, label: m.label }; }), '');
+
+  function renderMarketplaces() {
+    if (!$('admMpTasks')) return;
+    var prods = allProducts();
+    mpProductDD.setOptions(prods.map(function (p) { return { value: p.dbId, label: p.title }; }), $('admMpProduct').value || '');
+
+    var items = mpOpenItems();
+    $('admMpStats').innerHTML = MARKETPLACES.map(function (m) {
+      var n = items.filter(function (i) { return i.mk === m.key; }).length;
+      return statTile(m.label, n, n ? 'to do' : 'all caught up', '');
+    }).join('');
+
+    $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MARKETPLACES).map(function (m) {
+      return '<button type="button" data-mp="' + m.key + '"' + (MP_FILTER === m.key ? ' class="active"' : '') + '>' + esc(m.label) + '</button>';
+    }).join('');
+
+    var shown = items.filter(function (i) { return MP_FILTER === 'all' || i.mk === MP_FILTER; });
+    var groups = {}, order = [];
+    shown.forEach(function (i) {
+      if (!groups[i.product.dbId]) { groups[i.product.dbId] = { product: i.product, rows: [] }; order.push(i.product.dbId); }
+      groups[i.product.dbId].rows.push(i);
+    });
+    order.sort(function (a, b) { return groups[a].product.title.localeCompare(groups[b].product.title); });
+    $('admMpTasks').innerHTML = order.map(function (id) {
+      var g = groups[id];
+      return '<div class="adm-mp-group"><div class="adm-mp-prod"><span class="dr-thumb" style="width:44px;height:32px;border-radius:7px;flex:0 0 auto;background-image:url(\'' + g.product.image + '\')"></span>' +
+        '<span>' + esc(g.product.title) + '</span><span class="adm-sub">' + g.rows.length + ' to do</span></div>' +
+        g.rows.map(function (r) {
+          var attrs = ' data-pid="' + esc(r.product.dbId) + '" data-mk="' + r.mk + '" data-kind="' + r.kind + '"' + (r.taskId ? ' data-task="' + esc(r.taskId) + '"' : '');
+          return '<div class="adm-mp-row"><span class="dt-badge">' + esc(mpLabel(r.mk)) + '</span><span class="adm-mp-text">' + esc(r.text) + '</span>' +
+            '<button type="button" class="btn btn-ghost adm-btn-sm" data-act="done"' + attrs + '>' + (r.kind === 'upload' ? 'Mark uploaded' : r.kind === 'update' ? 'Mark updated' : 'Done') + '</button>' +
+            (r.kind === 'task' ? '<button type="button" class="adm-icon-btn" data-act="delete"' + attrs + ' title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') +
+            '</div>';
+        }).join('') + '</div>';
+    }).join('') || '<p class="adm-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
+
+    $('admMpMatrix').innerHTML = prods.map(function (p) {
+      return '<tr><td>' + esc(p.title) + (p.visible ? '' : ' <span class="adm-sub">Private</span>') + '</td>' + MARKETPLACES.map(function (m) {
+        var st = mpStatus(p.dbId, m.key);
+        var cls = st === 'live' ? 'ok' : st === 'needs_update' ? 'warn' : '';
+        var txt = st === 'live' ? 'Live' : st === 'needs_update' ? 'Needs update' : 'Not uploaded';
+        return '<td><button type="button" class="dt-badge ' + cls + ' adm-mp-chip" data-pid="' + esc(p.dbId) + '" data-mk="' + m.key + '" data-st="' + st + '">' + txt + '</button></td>';
+      }).join('') + '</tr>';
+    }).join('') || '<tr><td colspan="5" class="adm-empty">No products yet.</td></tr>';
+  }
+
+  var mpTasksBox = $('admMpTasks');
+  if (mpTasksBox) mpTasksBox.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-act]'); if (!btn || !can('admin')) return;
+    var pid = btn.getAttribute('data-pid'), mk = btn.getAttribute('data-mk'), kind = btn.getAttribute('data-kind'), taskId = btn.getAttribute('data-task');
+    var p = allProducts().filter(function (x) { return x.dbId === pid; })[0];
+    var title = p ? p.title : 'a product';
+    btn.disabled = true;
+    var op;
+    if (btn.getAttribute('data-act') === 'delete') {
+      op = window.coldSupabase.from('marketplace_tasks').delete().eq('id', taskId);
+    } else if (kind === 'task') {
+      op = window.coldSupabase.from('marketplace_tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', taskId);
+    } else {
+      op = mpSaveListings(pid, [{ key: mk, status: 'live' }]);
+    }
+    Promise.resolve(op).then(function (res) {
+      if (res && res.error) { admToast('Could not update the task', false); btn.disabled = false; return; }
+      logAudit('Marketplaces: ' + (btn.getAttribute('data-act') === 'delete' ? 'deleted a task' : 'marked "' + (kind === 'upload' ? 'upload' : kind === 'update' ? 'update' : 'task') + '" done') + ' on ' + mpLabel(mk) + ' for "' + title + '"');
+      return refreshMarketplaces();
+    });
+  });
+
+  var mpFilterBox = $('admMpFilter');
+  if (mpFilterBox) mpFilterBox.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-mp]'); if (!b) return;
+    MP_FILTER = b.getAttribute('data-mp'); renderMarketplaces();
+  });
+
+  var mpMatrixBox = $('admMpMatrix');
+  if (mpMatrixBox) mpMatrixBox.addEventListener('click', function (e) {
+    var b = e.target.closest('.adm-mp-chip'); if (!b || !can('admin')) return;
+    var next = { pending: 'live', live: 'needs_update', needs_update: 'pending' }[b.getAttribute('data-st')] || 'pending';
+    mpSaveListings(b.getAttribute('data-pid'), [{ key: b.getAttribute('data-mk'), status: next }]);
+  });
+
+  var mpAddForm = $('admMpAddForm');
+  if (mpAddForm) mpAddForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!can('admin')) return;
+    var pid = $('admMpProduct').value, mk = $('admMpMarket').value, title = $('admMpTaskTitle').value.trim();
+    var msg = $('admMpMsg');
+    if (!pid || !mk || !title) { if (msg) msg.textContent = 'Pick a product, a marketplace, and write the task.'; return; }
+    var p = allProducts().filter(function (x) { return x.dbId === pid; })[0];
+    if (msg) msg.textContent = 'Adding…';
+    window.coldSupabase.from('marketplace_tasks').insert({ product_id: pid, marketplace: mk, title: title, created_by: ADMIN.id }).then(function (res) {
+      if (res.error) { if (msg) msg.textContent = 'Could not add the task.'; return; }
+      if (msg) msg.textContent = '';
+      $('admMpTaskTitle').value = '';
+      admToast('Task added', true);
+      logAudit('Marketplaces: added task "' + title + '" on ' + mpLabel(mk) + ' for "' + (p ? p.title : pid) + '"');
+      return refreshMarketplaces();
     });
   });
 
@@ -6841,6 +7098,7 @@
   refreshTraffic();
   refreshClientEvents();
   refreshAbandoned();
+  refreshMarketplaces();
   refreshStaff();
   refreshRobloxCookieHealth();
   refreshLiveSessions();

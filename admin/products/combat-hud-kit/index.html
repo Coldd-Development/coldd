@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261007j" />
+  <link rel="stylesheet" href="/styles.css?v=20261007k" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -111,6 +111,7 @@
             <a href="/admin/analytics/" data-panel="analytics"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg><span>Analytics</span></a>
             <a href="/admin/marketing/" data-panel="marketing"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l4 4V6L7 10H4a1 1 0 0 0-1 1Z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6.5a8 8 0 0 1 0 11"/></svg><span>Marketing</span></a>
             <a href="/admin/products/" data-panel="products"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span>Products</span></a>
+            <a href="/admin/marketplaces/" data-panel="marketplaces"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg><span>Marketplaces</span></a>
             <a href="/admin/orders/" data-panel="orders"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></a>
             <a href="/admin/resellers/" data-panel="resellers"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Resellers</span></a>
             <a href="/admin/reviews/" data-panel="reviews"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9 9 8z"/></svg><span>Reviews</span></a>
@@ -502,6 +503,16 @@
             <form id="admEditForm">
               <input type="hidden" id="admEditId" />
 
+              <div class="dash-card glass" id="admMpUploadCard">
+                <div class="adm-mp-checks" id="admMpUploadChecks">
+                  <span class="adm-mp-lead">Uploaded on</span>
+                  <label class="adm-mp-check"><input type="checkbox" data-mp="builtbybit" /><span>BuiltByBit</span></label>
+                  <label class="adm-mp-check"><input type="checkbox" data-mp="clearlydev" /><span>ClearlyDev</span></label>
+                  <label class="adm-mp-check"><input type="checkbox" data-mp="parcel" /><span>Parcel</span></label>
+                  <label class="adm-mp-check"><input type="checkbox" data-mp="creatorstore" /><span>Creator Store</span></label>
+                </div>
+              </div>
+
               <div class="dash-card glass">
                 <div class="dash-card-head"><h2>Details</h2></div>
                 <input type="hidden" id="admEditPlatform" value="Roblox" />
@@ -660,10 +671,9 @@
             <div class="dash-head">
               <a href="#" class="dt-link lnk-back" data-panel="products">Back to Products</a>
               <h1>Push product update</h1>
-              <p>Add a new version, changelog, and file to an existing product.</p>
             </div>
             <div class="dash-card glass">
-              <div class="adm-field">
+              <div class="adm-field" id="admUpdSearchField">
                 <span>Select product</span>
                 <input type="text" id="admUpdSearch" class="adm-input" placeholder="Search by product name…" autocomplete="off" />
                 <div class="adm-upd-results" id="admUpdResults"></div>
@@ -676,19 +686,26 @@
                   <button type="button" class="dt-link adm-upd-change" id="admUpdChange">Change product</button>
                 </div>
 
-                <div class="adm-edit-grid" style="margin-top:18px;">
+                <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admUpdSilent" /> <span>Silent update (file only)</span></label>
+
+                <div class="adm-edit-grid" id="admUpdVersionGrid" style="margin-top:18px;">
                   <label class="adm-field"><span>Version number</span><input type="text" id="admUpdVersion" class="adm-input" placeholder="v1.1" /></label>
-                  <label class="adm-field adm-field-wide"><span>Changelog</span><textarea id="admUpdChangelog" class="adm-input adm-textarea" rows="3" placeholder="What changed in this version?"></textarea></label>
+                  <label class="adm-field adm-field-wide"><span>Changelog</span><textarea id="admUpdChangelog" class="adm-input adm-textarea" rows="4" placeholder="What changed in this version?"></textarea></label>
                 </div>
 
-                <div class="adm-field" style="margin-top:16px;">
+                <div class="adm-field" style="margin-top:18px;">
                   <span>File</span>
-                  <input type="file" id="admUpdFileInput" disabled />
-                  <p class="adm-note">Pushing a version here only records the version number and changelog. If the file itself changed, replace it in the product's own file section instead.</p>
+                  <div class="adm-dropzone" id="admUpdFileDrop">
+                    <input type="file" id="admUpdFileInput" hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop</p>
+                  </div>
+                  <a class="adm-sub" id="admUpdFileNote" target="_blank" rel="noopener" style="margin-top:8px;display:inline-block;"></a>
                 </div>
 
-                <button type="button" class="btn btn-ghost adm-btn-sm" id="admUpdDescToggle" style="margin-top:18px;">Update description</button>
-                <label class="adm-field adm-field-wide" id="admUpdDescWrap" hidden style="margin-top:12px;"><span>Description</span><textarea id="admUpdDescInput" class="adm-input adm-textarea" rows="3"></textarea></label>
+                <label class="adm-field adm-field-wide" id="admUpdDescField" style="margin-top:18px;"><span>Description</span><textarea id="admUpdDescInput" class="adm-input adm-textarea adm-textarea-xl" rows="14"></textarea></label>
+
+                <div class="adm-mp-checks" id="admUpdMpChecks" style="margin-top:20px;"></div>
 
                 <div class="adm-edit-actions">
                   <button class="btn btn-primary" type="button" id="admUpdSubmit">Push update</button>
@@ -697,6 +714,53 @@
 
                 <div class="adm-upd-history" id="admUpdHistory"></div>
               </div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-marketplaces" hidden>
+            <div class="dash-head"><h1>Marketplaces</h1><p>What still needs doing on BuiltByBit, ClearlyDev, Parcel and Creator Store.</p></div>
+            <div class="dash-stats adm-stats-4" id="admMpStats"></div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Add a task</h2></div>
+              <form class="adm-mp-add" id="admMpAddForm">
+                <div class="adm-dd" id="admMpProductDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val placeholder">Product</span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Product" hidden></div>
+                </div>
+                <input type="hidden" id="admMpProduct" />
+                <div class="adm-dd" id="admMpMarketDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val placeholder">Marketplace</span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Marketplace" hidden></div>
+                </div>
+                <input type="hidden" id="admMpMarket" />
+                <input type="text" id="admMpTaskTitle" class="adm-input" placeholder="Update price" maxlength="200" autocomplete="off" />
+                <button class="btn btn-primary adm-btn-sm" type="submit">Add task</button>
+              </form>
+              <div class="adm-edit-msg" id="admMpMsg"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>To do</h2><div class="adm-mp-filter" id="admMpFilter" role="group" aria-label="Marketplace filter"></div></div>
+              <div id="admMpTasks"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <details class="adm-collapse">
+                <summary class="dash-card-head"><div><h2>All listings</h2></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="dash-tablewrap adm-collapse-body">
+                  <table class="dash-table">
+                    <thead><tr><th>Product</th><th>BuiltByBit</th><th>ClearlyDev</th><th>Parcel</th><th>Creator Store</th></tr></thead>
+                    <tbody id="admMpMatrix"></tbody>
+                  </table>
+                </div>
+              </details>
             </div>
           </section>
 
@@ -1441,6 +1505,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20260926a"></script>
-  <script src="/catalog.js?v=20261007j" data-then="/app.js?v=20261007j,/reviews.js?v=20260729a,/admin.js?v=20261007j"></script>
+  <script src="/catalog.js?v=20261007k" data-then="/app.js?v=20261007k,/reviews.js?v=20260729a,/admin.js?v=20261007k"></script>
 </body>
 </html>
