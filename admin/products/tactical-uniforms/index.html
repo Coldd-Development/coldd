@@ -504,7 +504,7 @@
                 <div class="dash-card-head"><h2>Details</h2></div>
                 <input type="hidden" id="admEditPlatform" value="Roblox" />
                 <div class="adm-edit-grid">
-                  <label class="adm-field"><span>Title</span><input type="text" id="admEditTitleInput" class="adm-input" required /></label>
+                  <label class="adm-field adm-field-wide"><span>Title</span><input type="text" id="admEditTitleInput" class="adm-input" required /></label>
                   <label class="adm-field"><span>Category</span>
                     <div class="adm-dd" id="admEditCatDD">
                       <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -530,19 +530,19 @@
                     <span>Price (Robux)</span>
                     <input type="number" min="0" step="1" id="admEditRobuxPrice" class="adm-input" />
                   </label>
+                  <label class="adm-field-check adm-field-wide" style="margin-top:0;"><input type="checkbox" id="admEditResell" /> <span>Resell licence available</span></label>
+                  <label class="adm-field" id="admEditResellPriceWrap" hidden>
+                    <span>Resell licence price (USD)</span><input type="number" min="0" step="0.01" id="admEditResellPrice" class="adm-input" />
+                  </label>
+                  <label class="adm-field" id="admEditResellRobuxPriceWrap" hidden>
+                    <span>Resell licence price (Robux)</span><input type="number" min="0" step="1" id="admEditResellRobuxPrice" class="adm-input" />
+                  </label>
                 </div>
 
                 <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Subtext (shown on catalog cards)</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="140" /></label>
                 <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Description (shown on the product page)</span><textarea id="admEditLongDesc" class="adm-input adm-textarea" rows="4"></textarea></label>
 
-                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditResell" /> <span>Resell licence available</span></label>
-                <label class="adm-field" id="admEditResellPriceWrap" hidden style="margin-top:12px;max-width:260px;">
-                  <span>Resell licence price (USD)</span><input type="number" min="0" step="0.01" id="admEditResellPrice" class="adm-input" />
-                </label>
-                <label class="adm-field" id="admEditResellRobuxPriceWrap" hidden style="margin-top:12px;max-width:260px;">
-                  <span>Resell licence price (Robux)</span><input type="number" min="0" step="1" id="admEditResellRobuxPrice" class="adm-input" />
-                </label>
-                <label class="adm-field-check"><input type="checkbox" id="admEditReleased" /> <span>Released (visible on storefront)</span></label>
+                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Private (hidden from the catalog; every product is shown otherwise)</span></label>
                 <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority (boost in the catalog's Recommended sort)</span></label>
                 <label class="adm-field" id="admEditWasPriceWrap" style="margin-top:20px;max-width:260px;">
                   <span>Sale price (was)</span>
@@ -555,19 +555,6 @@
                 <div class="dash-card-head"><h2>Media</h2></div>
 
                 <div class="adm-field">
-                  <span>Product file</span>
-                  <div class="adm-dropzone" id="admEditFileDrop">
-                    <input type="file" id="admEditFileInput" hidden />
-                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-                    <p><strong>Click to upload</strong> or drag and drop</p>
-                    <p class="adm-dropzone-hint">Any file type - this becomes the downloadable product file</p>
-                  </div>
-                  <a class="adm-sub" id="admEditFileNote" target="_blank" rel="noopener" style="margin-top:8px;display:inline-block;">No file uploaded yet</a>
-                  <p class="adm-note">Delivery is per-product via Supabase Storage - customers can't download until a file is uploaded here.</p>
-                  <input type="hidden" id="admEditTechFileName" />
-                </div>
-
-                <div class="adm-field" style="margin-top:20px;">
                   <span>Thumbnail image</span>
                   <div class="adm-dropzone" id="admEditThumbDrop">
                     <input type="file" id="admEditThumbInput" accept="image/*" hidden />
@@ -597,6 +584,19 @@
                 </div>
 
                 <label class="adm-field" style="margin-top:20px;max-width:420px;"><span>YouTube demo link</span><input type="url" id="admEditVideoUrl" class="adm-input" placeholder="https://youtube.com/watch?v=…" /></label>
+
+                <div class="adm-field" style="margin-top:20px;">
+                  <span>Product file</span>
+                  <div class="adm-dropzone" id="admEditFileDrop">
+                    <input type="file" id="admEditFileInput" hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop</p>
+                    <p class="adm-dropzone-hint">Any file type - this becomes the downloadable product file</p>
+                  </div>
+                  <a class="adm-sub" id="admEditFileNote" target="_blank" rel="noopener" style="margin-top:8px;display:inline-block;">No file uploaded yet</a>
+                  <p class="adm-note">Delivery is per-product via Supabase Storage - customers can't download until a file is uploaded here.</p>
+                  <input type="hidden" id="admEditTechFileName" />
+                </div>
               </div>
 
               <!-- Format/size are read automatically off the uploaded file (see
@@ -1459,6 +1459,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20260926a"></script>
-  <script src="/catalog.js?v=20260920d" data-then="/app.js?v=20261007a,/reviews.js?v=20260729a,/admin.js?v=20261002a"></script>
+  <script src="/catalog.js?v=20260920d" data-then="/app.js?v=20261007a,/reviews.js?v=20260729a,/admin.js?v=20261007a"></script>
 </body>
 </html>

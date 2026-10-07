@@ -3585,13 +3585,31 @@
           });
         });
         var search = menu.querySelector('.adm-dd-search');
-        if (search) search.addEventListener('input', function () { filterOptions(search.value); });
+        if (search) {
+          search.addEventListener('input', function () { filterOptions(search.value); });
+          // Enter picks the first visible match, so typing "ani" + Enter is the whole interaction.
+          search.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { close(); if (btn) btn.focus(); return; }
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            var first = Array.prototype.filter.call(menu.querySelectorAll('.adm-dd-opt'), function (o) { return !o.hidden; })[0];
+            if (first) first.click();
+          });
+        }
       }
       setValue((selected != null ? selected : current), true);
     }
     if (btn) btn.addEventListener('click', function (e) {
       e.stopPropagation();
       if (menu && menu.hidden) open(); else close();
+    });
+    // Searchable dropdowns: typing a letter on the focused button opens the list with that letter pre-filled.
+    if (btn && opts.searchable) btn.addEventListener('keydown', function (e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1 || e.key === ' ') return;
+      e.preventDefault();
+      open();
+      var search = menu ? menu.querySelector('.adm-dd-search') : null;
+      if (search) { search.value = e.key; filterOptions(e.key); }
     });
     document.addEventListener('click', function (e) { if (!root.contains(e.target)) close(); });
 
@@ -3611,7 +3629,7 @@
     { value: 'price-asc', label: 'Price: Low to High' }
   ], PROD_SORT);
 
-  var subcatDropdown = makeDropdown($('admEditSubcatDD'), { valueInput: $('admEditSubcat'), placeholder: 'None' });
+  var subcatDropdown = makeDropdown($('admEditSubcatDD'), { valueInput: $('admEditSubcat'), placeholder: 'None', searchable: true });
   function populateSubcatSelect(cat, selected) {
     var subs = SUBCATS_BY_CAT[cat] || [];
     var opts = subs.map(function (s) { return { value: s[0], label: s[1] }; });
@@ -3620,8 +3638,13 @@
     subcatDropdown.setOptions(opts, selected || '');
   }
   var catDropdown = makeDropdown($('admEditCatDD'), {
-    valueInput: $('admEditCat'), placeholder: 'Select category',
-    onChange: function (cat) { populateSubcatSelect(cat, null); }
+    valueInput: $('admEditCat'), placeholder: 'Select category', searchable: true,
+    onChange: function (cat) {
+      populateSubcatSelect(cat, null);
+      // Hand focus to Subcategory so the next keystroke starts searching it.
+      var sb = $('admEditSubcatDD') && $('admEditSubcatDD').querySelector('.adm-dd-btn');
+      if (sb && cat) sb.focus();
+    }
   });
   function populateCategorySelect(platform, selected, subcatToKeep) {
     var cats = CATEGORIES_BY_PLATFORM[platform] || [];
@@ -3747,7 +3770,7 @@
     resellRobuxPriceManuallySet = p.resellRobuxPrice != null;
     $('admEditResellPriceWrap').hidden = !p.resell;
     $('admEditResellRobuxPriceWrap').hidden = !p.resell;
-    $('admEditReleased').checked = !!p.visible;
+    $('admEditPrivate').checked = !p.visible;
     $('admEditDeleteBtn').hidden = false;
     if ($('admLegalDownloadBtn')) $('admLegalDownloadBtn').hidden = false;
     $('admEditHeading').textContent = 'Edit: ' + p.title;
@@ -4055,7 +4078,7 @@
     resellRobuxPriceManuallySet = false;
     $('admEditResellPriceWrap').hidden = true;
     $('admEditResellRobuxPriceWrap').hidden = true;
-    $('admEditReleased').checked = false;
+    $('admEditPrivate').checked = false; // new products are shown unless marked Private
     $('admEditDeleteBtn').hidden = true;
     if ($('admLegalDownloadBtn')) $('admLegalDownloadBtn').hidden = true;
     $('admEditHeading').textContent = 'Create new product';
@@ -4116,7 +4139,7 @@
       resell: $('admEditResell').checked,
       resellPrice: $('admEditResell').checked && $('admEditResellPrice').value !== '' ? Math.max(0, parseFloat($('admEditResellPrice').value) || 0) : null,
       resellRobuxPrice: $('admEditResell').checked && $('admEditResellRobuxPrice').value !== '' ? Math.max(0, Math.round(parseFloat($('admEditResellRobuxPrice').value) || 0)) : null,
-      visible: $('admEditReleased').checked,
+      visible: !$('admEditPrivate').checked,
       image: $('admEditThumbUrl').value.trim(),
       gallery: editGallery.slice(),
       video: toYouTubeEmbed($('admEditVideoUrl').value.trim()),
