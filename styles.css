@@ -1518,6 +1518,7 @@ body.no-scroll { overflow: hidden; }
   padding: 0; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; border: 1px solid var(--hairline); background: var(--ink-60); cursor: pointer;
   transition: background .15s var(--ease), border-color .15s var(--ease); }
+.pd-img-nav[hidden] { display: none; }
 .pd-img-nav::after { content: ""; display: block; width: 20px; height: 20px;
   background-color: #fff; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
   -webkit-mask-position: center; mask-position: center; -webkit-mask-size: 20px; mask-size: 20px; }
@@ -4688,3 +4689,8 @@ html.auth-in .nav-notif[hidden] { display: block; }
 .auth-age .auth-err { display: block; min-height: 0; margin-top: 6px; }
 .auth-age-row select { padding: 12px 26px 12px 10px; font-size: 15px; background-position: right 8px center; }
 .auth-oauth.is-loading { opacity: 0.6; cursor: progress; pointer-events: none; }
+
+/* Product form: a required field left empty on save */
+.adm-invalid { outline: 1.5px solid #e5484d; outline-offset: 5px; border-radius: 10px; }
+.adm-invalid > span:first-child { color: #ff8a8f; }
+.dash-card-head:has(#admEditAiFill) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

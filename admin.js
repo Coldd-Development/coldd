@@ -4197,22 +4197,84 @@
     return errs.length ? ("Can't save - " + errs.join('; ') + '. Adjust the price or the Legal settings.') : null;
   }
 
-  // A new listing needs the fields a customer actually sees (plus the file
-  // to deliver) before it can be created at all - catches the "half-filled
-  // draft that got released anyway" mistake at creation time instead of
-  // after a customer already bought it.
-  function productCreateMissingFieldsError() {
-    var missing = [];
-    if (!(parseFloat($('admEditPrice').value) > 0)) missing.push('USD price');
-    if (!$('admEditTitleInput').value.trim()) missing.push('Title');
-    if (!$('admEditCat').value) missing.push('Category');
-    if (!$('admEditSubcat').value) missing.push('Subcategory');
-    if (!$('admEditLongDesc').value.trim()) missing.push('Description');
-    if (!$('admEditSubtext').value.trim()) missing.push('Subtext');
-    if (!pendingStoragePath) missing.push('Product file');
-    if (!$('admEditThumbUrl').value.trim()) missing.push('Thumbnail image');
-    return missing.length ? ('Missing before you can create this product: ' + missing.join(', ') + '.') : null;
+  // Required-field check for saving a product. Every field a customer sees
+  // (plus the file to deliver) must be filled in; each missing one is
+  // outlined in red and the first is scrolled into view. A Private product
+  // is a draft, so it only needs a title and category.
+  function clearInvalidMarks() {
+    Array.prototype.forEach.call(document.querySelectorAll('#admEditForm .adm-invalid'), function (el) { el.classList.remove('adm-invalid'); });
   }
+  function productMissingFieldsError(isCreate) {
+    clearInvalidMarks();
+    var priv = $('admEditPrivate').checked;
+    var missing = [], firstEl = null;
+    function need(ok, label, el) {
+      if (ok) return;
+      missing.push(label);
+      var mark = el && (el.closest('.adm-field') || el);
+      if (mark) { mark.classList.add('adm-invalid'); if (!firstEl) firstEl = mark; }
+    }
+    var cat = $('admEditCat').value;
+    need(!!$('admEditTitleInput').value.trim(), 'Title', $('admEditTitleInput'));
+    need(!!cat, 'Category', $('admEditCatDD'));
+    if (!priv) {
+      need(!!$('admEditSubcat').value || !(SUBCATS_BY_CAT[cat] || []).length, 'Subcategory', $('admEditSubcatDD'));
+      need(parseFloat($('admEditPrice').value) > 0 || $('admLegalCanBeFree').checked && $('admEditPrice').value !== '', 'USD price', $('admEditPrice'));
+      if ($('admEditPlatform').value === 'Roblox') need(parseFloat($('admEditRobuxPrice').value) > 0 || ($('admLegalCanBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
+      if ($('admEditResell').checked) {
+        need(parseFloat($('admEditResellPrice').value) > 0, 'Resell licence price (USD)', $('admEditResellPrice'));
+        need(parseFloat($('admEditResellRobuxPrice').value) > 0, 'Resell licence price (Robux)', $('admEditResellRobuxPrice'));
+      }
+      need(!!$('admEditSubtext').value.trim(), 'Subtext', $('admEditSubtext'));
+      need(!!$('admEditLongDesc').value.trim(), 'Description', $('admEditLongDesc'));
+      need(!!$('admEditThumbUrl').value.trim(), 'Thumbnail image', $('admEditThumbDrop'));
+      var hasFile = !!pendingStoragePath || (!isCreate && !/no file uploaded/i.test(($('admEditFileNote') || {}).textContent || ''));
+      need(hasFile, 'Product file', $('admEditFileDrop'));
+    }
+    if (firstEl && firstEl.scrollIntoView) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return missing.length ? ('Missing: ' + missing.join(', ') + '.') : null;
+  }
+  var editFormForClear = $('admEditForm');
+  if (editFormForClear) editFormForClear.addEventListener('input', function (e) {
+    var m = e.target && e.target.closest && e.target.closest('.adm-invalid'); if (m) m.classList.remove('adm-invalid');
+  });
+
+  // "Auto-fill with AI": drafts title, subtext, description, category and
+  // subcategory from the thumbnail + file name + whatever is already typed.
+  // Only empty fields are filled, so it never overwrites the admin's own text.
+  var aiFillBtn = $('admEditAiFill');
+  if (aiFillBtn) aiFillBtn.addEventListener('click', function () {
+    var platform = $('admEditPlatform').value;
+    var cats = CATEGORIES_BY_PLATFORM[platform] || [];
+    var subs = {};
+    cats.forEach(function (c) { subs[c] = (SUBCATS_BY_CAT[c] || []).map(function (x) { return x[0]; }); });
+    var label = aiFillBtn.textContent;
+    aiFillBtn.disabled = true; aiFillBtn.textContent = 'Drafting…';
+    invokeAdminFn('admin-ai-autofill', {
+      platform: platform,
+      titleHint: $('admEditTitleInput').value.trim(),
+      fileName: $('admEditTechFileName').value || '',
+      thumbnailUrl: $('admEditThumbUrl').value.trim(),
+      priceUsd: parseFloat($('admEditPrice').value) || 0,
+      categories: cats,
+      subcats: subs
+    }).then(function (res) {
+      var fl = (res && res.fields) || {};
+      if (fl.title && !$('admEditTitleInput').value.trim()) $('admEditTitleInput').value = fl.title;
+      if (fl.subtext && !$('admEditSubtext').value.trim()) $('admEditSubtext').value = fl.subtext;
+      if (fl.description && !$('admEditLongDesc').value.trim()) $('admEditLongDesc').value = fl.description;
+      if (fl.category && !$('admEditCat').value) {
+        catDropdown.setValue(fl.category);
+        if (fl.subcategory) subcatDropdown.setValue(fl.subcategory, true);
+      } else if (fl.subcategory && $('admEditCat').value === fl.category && !$('admEditSubcat').value) {
+        subcatDropdown.setValue(fl.subcategory, true);
+      }
+      clearInvalidMarks();
+      admToast('Drafted. Check it over before saving.', true);
+    }).catch(function (err) {
+      admToast(err.message || 'AI autofill failed.', false);
+    }).then(function () { aiFillBtn.disabled = false; aiFillBtn.textContent = label; });
+  });
 
   var editForm = $('admEditForm');
   if (editForm) editForm.addEventListener('submit', function (e) {
@@ -4238,7 +4300,7 @@
 
     if (isCreate) {
       var title = $('admEditTitleInput').value.trim();
-      var createMissingErr = productCreateMissingFieldsError();
+      var createMissingErr = productMissingFieldsError(true);
       if (createMissingErr) { if (msg) msg.textContent = createMissingErr; admToast(createMissingErr, false); return; }
       var fields = Object.assign({ title: title, platform: platform }, collectEditFields());
       if (!fields.image) fields.image = '/banner.jpg';
@@ -4278,6 +4340,8 @@
     }
 
     var p = findProduct(id); if (!p) return;
+    var saveMissingErr = productMissingFieldsError(false);
+    if (saveMissingErr) { if (msg) msg.textContent = saveMissingErr; admToast(saveMissingErr, false); return; }
     var fields = Object.assign({ title: $('admEditTitleInput').value.trim() || p.title, platform: platform }, collectEditFields());
     if (pendingStoragePath) fields.storagePath = pendingStoragePath;
     if (saveBtn) saveBtn.disabled = true;

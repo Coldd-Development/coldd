@@ -99,7 +99,7 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
 
   const { data: products, error: prodErr } = await admin
     .from("products")
-    .select("id, slug, title, price_usd, is_active, weekly_deal_excluded, product_legal(min_sale_usd, disallow_sales, max_discount_pct)")
+    .select("id, slug, title, price_usd, is_active, created_at, weekly_deal_excluded, product_legal(min_sale_usd, disallow_sales, max_discount_pct)")
     .eq("is_active", true);
   if (prodErr) throw new Error(prodErr.message);
 
@@ -123,6 +123,9 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
 
   type Candidate = { id: string; slug: string; title: string; price: number; bestPct: number; bestScore: number; velocity: number };
   const candidates: Candidate[] = [];
+  // Eligible products with no recent sales. Used only to top the grid up when
+  // too few products have a sales signal (see the fallback below).
+  const fallbackPool: Array<{ id: string; slug: string; title: string; price: number; pct: number; created: string }> = [];
 
   type LegalBits = { min_sale_usd: number; disallow_sales: boolean; max_discount_pct: number };
   for (const p of (products ?? []) as unknown as Array<ProductRow & { product_legal: LegalBits | LegalBits[] | null }>) {
@@ -132,7 +135,6 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
     const price = Number(p.price_usd) || 0;
     if (price <= 0) continue;
     const velocity = velocityByProduct.get(p.id) || 0;
-    if (velocity <= 0) continue; // nothing sold recently - no revenue signal to discount against
 
     const minSaleUsd = Number(legalRaw?.min_sale_usd) || 0;
     let maxPct = MAX_DISCOUNT_PCT;
@@ -148,6 +150,12 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
     const legalMaxPct = Number(legalRaw?.max_discount_pct) || 0;
     if (legalMaxPct > 0) maxPct = Math.min(maxPct, Math.floor(legalMaxPct));
     if (maxPct < DISCOUNT_STEP_PCT) continue;
+    // Nothing sold recently: no revenue signal to optimise a discount against,
+    // so it is only eligible as a fallback filler at the mildest step.
+    if (velocity <= 0) {
+      fallbackPool.push({ id: p.id, slug: p.slug, title: p.title, price, pct: DISCOUNT_STEP_PCT, created: String((p as { created_at?: string }).created_at || "") });
+      continue;
+    }
 
     let bestPct = 0, bestScore = -1;
     for (let pct = DISCOUNT_STEP_PCT; pct <= maxPct; pct += DISCOUNT_STEP_PCT) {
@@ -160,6 +168,29 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
 
   candidates.sort((a, b) => b.bestScore - a.bestScore);
   const picks = candidates.slice(0, PICK_COUNT);
+
+  // Fallback: if fewer than PICK_COUNT products have recent sales, fill the
+  // remaining slots (so the homepage grid is never near-empty) from the rest
+  // of the eligible catalogue: most units sold all-time first, then newest.
+  // Filler products get only the mildest discount step, and the same price
+  // floors / per-product caps as above already applied.
+  if (picks.length < PICK_COUNT && fallbackPool.length) {
+    const { data: lifetime } = await admin
+      .from("order_items")
+      .select("product_id, qty, orders!inner(status)")
+      .eq("orders.status", "paid")
+      .neq("licence", "resell");
+    const soldAllTime = new Map<string, number>();
+    for (const row of lifetime ?? []) {
+      // deno-lint-ignore no-explicit-any
+      const r = row as any;
+      soldAllTime.set(r.product_id, (soldAllTime.get(r.product_id) || 0) + (Number(r.qty) || 0));
+    }
+    fallbackPool.sort((a, b) => (soldAllTime.get(b.id) || 0) - (soldAllTime.get(a.id) || 0) || b.created.localeCompare(a.created));
+    for (const f of fallbackPool.slice(0, PICK_COUNT - picks.length)) {
+      picks.push({ id: f.id, slug: f.slug, title: f.title, price: f.price, bestPct: f.pct, bestScore: 0, velocity: 0 });
+    }
+  }
 
   for (const pick of picks) {
     const discPrice = Math.round(pick.price * (1 - pick.bestPct / 100) * 100) / 100;
