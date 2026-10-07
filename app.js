@@ -6045,7 +6045,10 @@
         if (rbx) {
           // Robux checkout re-prices from robux_price and doesn't honour
           // the 10% cross-sell discount - show the plain Robux price.
-          priceHtml = 'R$ ' + Math.round(x.list * ROBUX_PER_USD_FALLBACK).toLocaleString('en-US');
+          // The product's own saved Robux price wins; the flat estimate is only
+          // the fallback, exactly as the cart total and the server price it.
+          var realRbx = catalogRobuxPrice(x.id, x.resell ? 'resell' : 'standard');
+          priceHtml = 'R$ ' + Math.round(realRbx != null ? realRbx : x.list * ROBUX_PER_USD_FALLBACK).toLocaleString('en-US');
         } else if (discounted) {
           priceHtml = '<span class="co-cross-was">' + fiatMoney(x.list) + '</span>' + fiatMoney(x.deal) +
             '<span class="co-cross-off">10% off</span>';
