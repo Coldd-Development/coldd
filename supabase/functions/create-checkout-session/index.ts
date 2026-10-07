@@ -55,8 +55,12 @@ const LOCAL_METHOD_CURRENCY: Record<string, string> = {
   google_pay: "usd",
   link: "usd",
   klarna: "usd",
-  afterpay_clearpay: "usd",
-  zip: "usd",
+  // Afterpay/Clearpay and Zip are region-locked to the Stripe account's own
+  // country: on this (Australian) account Stripe rejects them on a USD session
+  // ("payment_method_types must include at least one payment method supported
+  // by the default currency usd", ERR-7PWKH8), so they price in AUD.
+  afterpay_clearpay: "aud",
+  zip: "aud",
   mb_way: "eur",
   satispay: "eur",
   bancontact: "eur",
