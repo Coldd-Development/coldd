@@ -2275,6 +2275,11 @@
           // a product free in Robux while it still costs real money.
           return p && p.robuxPrice > 0 ? p.robuxPrice : null;
         }
+        // The resell licence's own saved Robux price (same rule as cardRobuxPrice).
+        function cardResellRobuxPrice(id) {
+          var p = (window.__CATALOG || []).filter(function (c) { return c.id === id; })[0];
+          return p && p.resellRobuxPrice > 0 ? p.resellRobuxPrice : null;
+        }
         function syncCardPricing(card) {
           var priceRow = card.querySelector('.p-price-row');
           if (!priceRow) return;
@@ -2286,10 +2291,12 @@
           card.setAttribute('data-lic-mode', showResell ? 'resell' : 'standard');
           if (showResell) {
             var resellUsd = Number(card.getAttribute('data-resell-price'));
-            // Resell licences aren't sold in Robux at all (matches product.html
-            // and the cart), so this stays USD even in Robux mode.
+            // Resell licences are buyable in Robux (cart, checkout and the server
+            // all price them): show the licence's saved Robux price, falling back
+            // to the flat estimate only when none is set.
+            var rbxResell = robuxMode ? cardResellRobuxPrice(card.getAttribute('data-id')) : null;
             var text = robuxMode
-              ? (window.__usd ? window.__usd(resellUsd) : ('$' + resellUsd))
+              ? (rbxResell != null ? ('R$ ' + Math.round(rbxResell).toLocaleString('en-US')) : (window.__robux ? window.__robux(resellUsd) : ('$' + resellUsd)))
               : (window.__money ? window.__money(resellUsd) : ('$' + resellUsd));
             // No "was" price for resell - it isn't a sale off a base price,
             // it's a different licence with its own price.
