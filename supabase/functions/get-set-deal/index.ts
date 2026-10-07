@@ -31,7 +31,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders(), "Content-Type": "application/json" } });
 }
 function humanize(s: string): string {
-  return String(s || "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return String(s || "").replace(/-/g, " ").replace(/\b\w+/g, (w) => /^(vfx|ui|scpf|npc|gui|fps|rpg|ugc|2d|3d)$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1));
 }
 
 Deno.serve(async (req: Request) => {
@@ -66,24 +66,28 @@ Deno.serve(async (req: Request) => {
       .not("subcat", "is", null);
 
     // deno-lint-ignore no-explicit-any
-    const bySub = new Map<string, any[]>();
+    const bySub = new Map<string, { sub: string; items: any[] }>();
     for (const p of prods ?? []) {
       if (!p.subcat) continue;
-      const key = `${p.platform}::${p.subcat}`;
-      if (!bySub.has(key)) bySub.set(key, []);
-      bySub.get(key)!.push(p);
+      // A product can belong to several sub-categories (comma-separated).
+      for (const sub of String(p.subcat).split(",").map((v: string) => v.trim()).filter(Boolean)) {
+        const key = `${p.platform}::${sub}`;
+        if (!bySub.has(key)) bySub.set(key, { sub, items: [] });
+        bySub.get(key)!.items.push(p);
+      }
     }
 
     // Best set = most already-owned, then most still-missing.
     // deno-lint-ignore no-explicit-any
     let best: { label: string; owned: number; missing: any[] } | null = null;
-    for (const [, items] of bySub) {
+    for (const [, entry] of bySub) {
+      const items = entry.items;
       if (items.length < 3) continue; // not really a "collection"
       const ownedN = items.filter((p) => ownedIds.has(p.id)).length;
       const missing = items.filter((p) => !ownedIds.has(p.id));
       if (ownedN < MIN_OWNED || !missing.length) continue;
       if (!best || ownedN > best.owned || (ownedN === best.owned && missing.length < best.missing.length)) {
-        best = { label: humanize(items[0].subcat), owned: ownedN, missing };
+        best = { label: humanize(entry.sub), owned: ownedN, missing };
       }
     }
     if (!best) return json({ ok: true, deal: null });

@@ -1500,6 +1500,7 @@
     document.querySelectorAll('.dash-nav a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-panel') === navTarget); });
     renderPanel(name);
     window.scrollTo(0, 0);
+    if (typeof autoGrowAll === 'function') setTimeout(autoGrowAll, 0);
     if (!opts.skipUrl) {
       var url = urlForPanel(name, opts.extra);
       if (location.pathname !== url) history.pushState({ panel: name, extra: opts.extra || null }, '', url);
@@ -3490,16 +3491,16 @@
   // Mirrors the sidebar subcategory filter tree on the shop page.
   var SUBCATS_BY_CAT = {
     'Finished Games & Templates': [['finished-games', 'Finished Games'], ['game-templates', 'Game Templates']],
-    'Maps': [['cities-towns', 'Cities & Towns'], ['houses-estates', 'Houses & Estates'], ['military-government', 'Military & Government'], ['nature-terrain', 'Nature & Terrain'], ['scpf', 'SCPF'], ['sci-fi', 'Sci-Fi'], ['airports-aviation', 'Airports & Aviation'], ['medieval', 'Medieval'], ['lobby-spawns', 'Lobby & Spawns'], ['cafes-retail', 'Cafes & Retail'], ['ugc-showcase-homestores', 'UGC Showcase & Homestores'], ['combat', 'Combat'], ['low-poly-simulator', 'Low Poly & Simulator']],
+    'Maps': [['cities-towns', 'Cities & Towns'], ['houses-estates', 'Houses & Estates'], ['military-government', 'Military & Government'], ['nature-terrain', 'Nature & Terrain'], ['scpf', 'SCPF'], ['sci-fi', 'Sci-Fi'], ['airports-aviation', 'Airports & Aviation'], ['medieval', 'Medieval'], ['lobby-spawns', 'Lobby & Spawns'], ['cafes-retail', 'Cafes & Retail'], ['ugc-showcase-homestores', 'UGC Showcase & Homestores'], ['combat', 'Combat'], ['low-poly', 'Low Poly'], ['simulator', 'Simulator'], ['stud-style', 'Stud-style']],
     'Scripts & UI': [['scripted-systems', 'Scripted Systems'], ['non-scripted-ui', 'Non-Scripted UI'], ['ui-packs', 'UI Packs'], ['roleplay', 'Roleplay'], ['military', 'Military'], ['combat', 'Combat'], ['economy', 'Economy']],
     'Graphics': [['military', 'Military'], ['scpf', 'SCPF'], ['logos', 'Logos']],
     'Buildings': [['filler', 'Filler'], ['furnished', 'Furnished'], ['roleplay', 'Roleplay'], ['building-packs', 'Building Packs'], ['military', 'Military'], ['houses-residential', 'Houses & Residential'], ['government', 'Government'], ['medieval', 'Medieval'], ['scpf', 'SCPF'], ['sci-fi', 'Sci-Fi'], ['stores-commercial', 'Stores & Commercial']],
-    'Assets': [['asset-packs', 'Asset Packs'], ['realistic', 'Realistic'], ['medieval', 'Medieval'], ['sci-fi', 'Sci-Fi'], ['low-poly', 'Low Poly'], ['aviation', 'Aviation'], ['scpf', 'SCPF'], ['furniture', 'Furniture'], ['nature', 'Nature']],
+    'Assets': [['asset-packs', 'Asset Packs'], ['realistic', 'Realistic'], ['medieval', 'Medieval'], ['sci-fi', 'Sci-Fi'], ['low-poly', 'Low Poly'], ['aviation', 'Aviation'], ['scpf', 'SCPF'], ['furniture', 'Furniture'], ['nature', 'Nature'], ['stud-style', 'Stud-style']],
     'Uniforms & Gear': [['2d-uniforms', '2D Uniforms'], ['3d-gear', '3D Gear'], ['military-government', 'Military & Government'], ['roleplay', 'Roleplay'], ['aviation', 'Aviation'], ['morphs', 'Morphs']],
     'Boats': [['military', 'Military'], ['civilian', 'Civilian'], ['commercial', 'Commercial']],
     'Weapons': [['military', 'Military'], ['medieval', 'Medieval'], ['scripted', 'Scripted'], ['firearms', 'Firearms'], ['melees', 'Melees']],
-    'Vehicles': [['scripted', 'Scripted'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services']],
-    'Animations & VFX': [['vfx', 'VFX'], ['animations', 'Animations'], ['vfx-packs', 'VFX Packs'], ['combat', 'Combat'], ['auras', 'Auras']]
+    'Vehicles': [['scripted', 'Scripted Vehicles'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services']],
+    'Animations & VFX': [['vfx', 'VFX'], ['animations', 'Animations'], ['vfx-packs', 'VFX Packs'], ['combat', 'VFX & Combat'], ['auras', 'VFX & Auras']]
   };
   var editContacts = [];
   var editProofFiles = [];
@@ -3514,8 +3515,8 @@
   // used as a Storage path prefix for organization - it doesn't need to
   // match the product's real slug, so a brand-new unsaved product gets a
   // throwaway draft identifier instead of blocking uploads until first save.
-  function uploadToStorage(kind, file) {
-    var slug = $('admEditId').value;
+  function uploadToStorage(kind, file, slugOverride) {
+    var slug = slugOverride || $('admEditId').value;
     if (!slug) {
       if (!draftSlug) draftSlug = 'draft-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
       slug = draftSlug;
@@ -3567,23 +3568,38 @@
   // has never had a real upload still reads as having a file. Say so plainly
   // rather than leaving the admin to guess.
   var PLACEHOLDER_PATH = '_shared/placeholder.zip';
+  // The product file shows as a card (type badge, name, Download and Remove)
+  // instead of a line of text. "removed" holds a pending removal per panel; it
+  // saves with the product, like a pending upload does.
+  var FILE_REMOVED = { edit: false, upd: false };
+  function fileExtOf(name) { var m = /\.([a-z0-9]{1,5})$/i.exec(String(name || '')); return m ? m[1].toLowerCase() : 'file'; }
+  function fileNoteMsg(el, text, warn) {
+    if (!el) return;
+    el.hidden = false;
+    el.innerHTML = '<div class="adm-filecard-main"><span class="' + (warn ? 'adm-note-warn' : 'adm-sub') + '">' + esc(text) + '</span></div>';
+  }
   function setFileNote(el, storagePath, pendingName) {
     if (!el) return;
-    el.removeAttribute('href');
+    var scope = el.id === 'admUpdFileNote' ? 'upd' : 'edit';
+    var name, status, canDownload = false;
     if (pendingName) {
-      el.textContent = 'Selected: ' + pendingName + ' (uploaded, saves with the product)';
-      el.classList.remove('adm-note-warn');
+      name = pendingName; status = 'Uploaded, saves with the product';
+    } else if (storagePath && storagePath !== PLACEHOLDER_PATH && !FILE_REMOVED[scope]) {
+      // Strip the 8-char storage prefix so this matches the filename the buyer
+      // actually receives (see _shared/download.ts downloadName).
+      name = storagePath.split('/').pop().replace(/^[0-9a-f]{8}-/i, '');
+      status = 'Attached'; canDownload = true;
+    } else {
+      el.hidden = true; el.innerHTML = '';
       return;
     }
-    if (!storagePath || storagePath === PLACEHOLDER_PATH) {
-      el.textContent = '';
-      el.classList.remove('adm-note-warn');
-      return;
-    }
-    // Strip the 8-char storage prefix so this matches the filename the buyer
-    // actually receives (see _shared/download.ts downloadName).
-    el.textContent = 'Attached: ' + storagePath.split('/').pop().replace(/^[0-9a-f]{8}-/i, '');
-    el.classList.remove('adm-note-warn');
+    el.hidden = false;
+    el.innerHTML = '<span class="adm-filecard-ic">' + esc(fileExtOf(name)) + '</span>' +
+      '<div class="adm-filecard-main"><strong>' + esc(name) + '</strong><span class="adm-sub">' + status + '</span></div>' +
+      '<div class="adm-filecard-acts">' +
+        (canDownload ? '<button type="button" class="adm-mp-done" data-fc="download" data-scope="' + scope + '">Download</button>' : '') +
+        '<button type="button" class="adm-mp-del" data-fc="remove" data-scope="' + scope + '" title="Remove file" aria-label="Remove file">' + ADM_ICON_TRASH + '</button>' +
+      '</div>';
   }
 
   /* ---- Reusable custom dropdown (replaces native <select> everywhere in admin) ----
@@ -3634,7 +3650,7 @@
       var text;
       if (empty) text = placeholder;
       else if (!multi) text = labelFor(current);
-      else if (current.length === 1) text = labelFor(current[0]);
+      else if (current.length <= 3) text = current.map(function (v) { return labelFor(v); }).join(', ');
       else text = current.length + ' selected';
       valEl.textContent = text;
       valEl.classList.toggle('placeholder', empty);
@@ -3715,13 +3731,16 @@
     { value: 'price-asc', label: 'Price: Low to High' }
   ], PROD_SORT);
 
-  var subcatDropdown = makeDropdown($('admEditSubcatDD'), { valueInput: $('admEditSubcat'), placeholder: 'None', searchable: true });
+  var subcatDropdown = makeDropdown($('admEditSubcatDD'), { valueInput: $('admEditSubcat'), placeholder: 'Select subcategories', searchable: true, multi: true });
   function populateSubcatSelect(cat, selected) {
     var subs = SUBCATS_BY_CAT[cat] || [];
     var opts = subs.map(function (s) { return { value: s[0], label: s[1] }; });
-    if (selected && opts.filter(function (o) { return o.value === selected; }).length === 0) opts = opts.concat([{ value: selected, label: selected }]);
-    opts = [{ value: '', label: 'None' }].concat(opts);
-    subcatDropdown.setOptions(opts, selected || '');
+    // A product can sit in several sub-categories: "selected" is a
+    // comma-separated list. Keep any stored value that is no longer in the list
+    // visible so saving doesn't silently drop it.
+    var sel = selected ? String(selected).split(',').map(function (v) { return v.trim(); }).filter(Boolean) : [];
+    sel.forEach(function (v) { if (!opts.some(function (o) { return o.value === v; })) opts.push({ value: v, label: v }); });
+    subcatDropdown.setOptions(opts, sel);
   }
   var catDropdown = makeDropdown($('admEditCatDD'), {
     valueInput: $('admEditCat'), placeholder: 'Select category', searchable: true,
@@ -3775,27 +3794,41 @@
     list.innerHTML = files.map(function (f, i) {
       var name = typeof f === 'string' ? f : (f.name || '');
       var path = typeof f === 'string' ? null : f.path;
-      var nameHtml = path
-        ? '<a href="#" class="adm-file-open" data-path="' + esc(path) + '">' + esc(name) + '</a>'
-        : '<span>' + esc(name) + '</span>';
-      return '<div class="adm-file-item">' + nameHtml + '<button type="button" class="adm-icon-btn ' + removeClass + '" data-i="' + i + '">' + ADM_ICON_TRASH + '</button></div>';
+      var ext = fileExtOf(name);
+      var kind = /^(mp4|webm|mov|m4v)$/.test(ext) ? 'video' : /^(png|jpe?g|gif|webp)$/.test(ext) ? 'image' : /^(mp3|wav|ogg|m4a)$/.test(ext) ? 'audio' : 'file';
+      var acts = '';
+      if (path) {
+        if (kind !== 'file') acts += '<button type="button" class="adm-mp-done" data-fl="view" data-kind="' + kind + '" data-path="' + esc(path) + '">' + (kind === 'image' ? 'View' : 'Play') + '</button>';
+        acts += '<button type="button" class="adm-mp-done" data-fl="download" data-path="' + esc(path) + '">Download</button>';
+      }
+      return '<div class="adm-file-item adm-file-card"><span class="adm-filecard-ic">' + esc(ext) + '</span>' +
+        '<span class="adm-file-name">' + esc(name) + (path ? '' : ' <em>(old entry, no file to open)</em>') + '</span>' + acts +
+        '<button type="button" class="adm-icon-btn ' + removeClass + '" data-i="' + i + '" title="Remove" aria-label="Remove">' + ADM_ICON_TRASH + '</button>' +
+        '<div class="adm-file-preview" hidden></div></div>';
     }).join('') || '<p class="adm-empty" style="padding:8px 0;">No files uploaded yet.</p>';
   }
   function renderProofList() { renderFileList('admLegalProofList', editProofFiles, 'adm-proof-remove'); }
   function renderDevProofList() { renderFileList('admLegalDevProofList', editDevProofFiles, 'adm-dev-proof-remove'); }
   document.addEventListener('click', function (e) {
-    var link = e.target.closest('.adm-file-open');
-    if (!link || !(link.closest('#admLegalProofList') || link.closest('#admLegalDevProofList'))) return;
-    e.preventDefault();
-    var path = link.getAttribute('data-path');
-    var prevText = link.textContent;
-    link.textContent = 'Opening…';
+    var b = e.target.closest('[data-fl]');
+    if (!b || !(b.closest('#admLegalProofList') || b.closest('#admLegalDevProofList'))) return;
+    var act = b.getAttribute('data-fl'), path = b.getAttribute('data-path'), kind = b.getAttribute('data-kind');
+    var prev = b.closest('.adm-file-item').querySelector('.adm-file-preview');
+    if (act === 'view' && prev && !prev.hidden) { prev.hidden = true; prev.innerHTML = ''; b.textContent = kind === 'image' ? 'View' : 'Play'; return; }
+    var label = b.textContent;
+    b.disabled = true; b.textContent = 'Opening…';
     invokeAdminFn('admin-get-download-url', { path: path }, 'Could not open file.').then(function (d) {
-      link.textContent = prevText;
-      window.open(d.url, '_blank', 'noopener');
+      b.disabled = false;
+      if (act === 'download') { b.textContent = label; window.open(d.url, '_blank', 'noopener'); return; }
+      b.textContent = 'Hide';
+      var u = esc(d.url);
+      prev.innerHTML = kind === 'video' ? '<video controls autoplay playsinline preload="metadata" src="' + u + '"></video>'
+        : kind === 'audio' ? '<audio controls autoplay src="' + u + '"></audio>'
+        : '<img src="' + u + '" alt="" />';
+      prev.hidden = false;
     }).catch(function (err) {
-      link.textContent = prevText;
-      alert(err.message || 'Could not open file.');
+      b.disabled = false; b.textContent = label;
+      admToast(err.message || 'Could not open file.', false);
     });
   });
   function renderGalleryList() {
@@ -3876,6 +3909,7 @@
     // display on the product page - so it happily said "Selected: kit.zip"
     // while storage_path was still the column default and buyers were
     // downloading the placeholder. Report the actual attached object.
+    FILE_REMOVED.edit = false;
     setFileNote(fileNote, p.storagePath);
 
     $('admEditThumbUrl').value = p.image || '';
@@ -3922,15 +3956,14 @@
     $('admEditTechFormat').value = dot >= 0 ? f.name.slice(dot).toLowerCase() : '';
     $('admEditTechSize').value = formatFileSize(f.size);
     $('admEditTechFileName').value = f.name;
-    fileNote.textContent = 'Uploading ' + f.name + '…';
-    fileNote.removeAttribute('href');
+    FILE_REMOVED.edit = false;
+    fileNoteMsg(fileNote, 'Uploading ' + f.name + '…');
     uploadToStorage('productFile', f).then(function (r) {
       pendingStoragePath = r.path;
       setFileNote(fileNote, null, f.name);
     }).catch(function (err) {
       pendingStoragePath = null;
-      fileNote.textContent = 'Upload failed: ' + (err.message || 'try again') + '.';
-      fileNote.classList.add('adm-note-warn');
+      fileNoteMsg(fileNote, 'Upload failed: ' + (err.message || 'try again') + '.', true);
     });
   });
 
@@ -4177,6 +4210,7 @@
 
     ['admEditTechFormat', 'admEditTechSize', 'admEditTechFileName'].forEach(function (id) { $(id).value = ''; });
     $('admEditFileInput').value = '';
+    FILE_REMOVED.edit = false;
     setFileNote($('admEditFileNote'), null);
 
     $('admEditThumbUrl').value = '';
@@ -4317,7 +4351,8 @@
       need($('admEditSubtext').value.length <= 100, 'Summary shortened to 100 characters or fewer', $('admEditSubtext'));
       need(!!$('admEditLongDesc').value.trim(), 'Description', $('admEditLongDesc'));
       need(!!$('admEditThumbUrl').value.trim(), 'Thumbnail image', $('admEditThumbDrop'));
-      var hasFile = !!pendingStoragePath || (!isCreate && !/no file uploaded/i.test(($('admEditFileNote') || {}).textContent || ''));
+      var fileCard = $('admEditFileNote');
+      var hasFile = !!(fileCard && !fileCard.hidden && fileCard.querySelector('.adm-filecard-ic'));
       need(hasFile, 'Product file', $('admEditFileDrop'));
     }
     if (firstEl && firstEl.scrollIntoView) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4527,10 +4562,7 @@
   function renderUpdMpChecks(p) {
     var box = $('admUpdMpChecks'); if (!box) return;
     box.innerHTML = '<span class="adm-mp-lead">Updated on</span>' + MARKETPLACES.map(function (m) {
-      var st = mpStatus(p.dbId, m.key);
-      return st === 'pending'
-        ? '<span class="adm-mp-check off"><span>' + esc(m.label) + '</span><em>not uploaded</em></span>'
-        : '<label class="adm-mp-check"><input type="checkbox" data-mp="' + m.key + '" /><span>' + esc(m.label) + '</span></label>';
+      return '<label class="adm-mp-check mk-' + m.key + '"><input type="checkbox" data-mp="' + m.key + '" />' + mpLogo(m.key) + '<span>' + esc(m.label) + '</span></label>';
     }).join('');
   }
 
@@ -4555,7 +4587,9 @@
     applyUpdSilentUI();
     updDescOriginal = p.longDesc || '';
     $('admUpdDescInput').value = updDescOriginal;
+    FILE_REMOVED.upd = false;
     setFileNote($('admUpdFileNote'), p.storagePath);
+    autoGrow($('admUpdDescInput'));
     $('admUpdMsg').textContent = '';
     $('admUpdResults').innerHTML = '';
     $('admUpdSearch').value = '';
@@ -4577,18 +4611,16 @@
   wireDropzone($('admUpdFileDrop'), $('admUpdFileInput'), function (files) {
     var f = files[0]; if (!f || !updSelectedId) return;
     var note = $('admUpdFileNote');
-    note.textContent = 'Uploading ' + f.name + '…';
-    note.removeAttribute('href');
-    note.classList.remove('adm-note-warn');
-    uploadToStorage('productFile', f).then(function (r) {
+    FILE_REMOVED.upd = false;
+    fileNoteMsg(note, 'Uploading ' + f.name + '…');
+    uploadToStorage('productFile', f, updSelectedId).then(function (r) {
       var dot = f.name.lastIndexOf('.');
       updPendingPath = r.path;
       updPendingTech = { format: dot >= 0 ? f.name.slice(dot).toLowerCase() : '', size: formatFileSize(f.size), fileName: f.name };
-      note.textContent = 'Ready: ' + f.name + '. It replaces the current file when you push.';
+      setFileNote(note, null, f.name);
     }).catch(function (err) {
       updPendingPath = null; updPendingTech = null;
-      note.textContent = 'Upload failed: ' + (err.message || 'try again') + '.';
-      note.classList.add('adm-note-warn');
+      fileNoteMsg(note, 'Upload failed: ' + (err.message || 'try again') + '.', true);
     });
   });
 
@@ -4630,10 +4662,13 @@
       logAudit((silent ? 'Silent file update' : 'Pushed update ' + $('admUpdVersion').value.trim()) + ' for "' + p.title + '"');
       // Every marketplace it is already live on either gets the tick (done) or
       // becomes an "Update on X" task.
+      // Ticked = it is up to date there (so it counts as live). Unticked on a
+      // marketplace it is already on = it now needs updating. Unticked where it
+      // was never uploaded stays "not uploaded".
       var rows = [];
       MARKETPLACES.forEach(function (m) {
-        if (mpStatus(dbId, m.key) === 'pending') return;
-        rows.push({ key: m.key, status: ticks[m.key] ? 'live' : 'needs_update' });
+        if (ticks[m.key]) rows.push({ key: m.key, status: 'live' });
+        else if (mpStatus(dbId, m.key) !== 'pending') rows.push({ key: m.key, status: 'needs_update' });
       });
       mpSaveListings(dbId, rows);
       return refreshProducts();
@@ -4645,12 +4680,76 @@
       $('admUpdChangelog').value = '';
       updPendingPath = null; updPendingTech = null;
       var fresh = findProduct(updSelectedId);
-      if (fresh) { updDescOriginal = fresh.longDesc || ''; setFileNote($('admUpdFileNote'), fresh.storagePath); renderUpdHistory(fresh); renderUpdMpChecks(fresh); }
+      FILE_REMOVED.upd = false;
+      if (fresh) { updDescOriginal = fresh.longDesc || ''; setFileNote($('admUpdFileNote'), fresh.storagePath); autoGrow($('admUpdDescInput')); renderUpdHistory(fresh); renderUpdMpChecks(fresh); }
     }).catch(function (err) {
       updSubmitBtn.disabled = false;
       if (msg) msg.textContent = err.message || 'Could not push update.';
       admToast(err.message || 'Could not push update', false);
     });
+  });
+
+  /* ---- description boxes: grow with their text, and a bullets button ---- */
+  function autoGrow(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = (ta.scrollHeight + 2) + 'px';
+  }
+  function autoGrowAll() { autoGrow($('admEditLongDesc')); autoGrow($('admUpdDescInput')); }
+  ['admEditLongDesc', 'admUpdDescInput'].forEach(function (id) {
+    var ta = $(id); if (ta) ta.addEventListener('input', function () { autoGrow(ta); });
+  });
+  window.addEventListener('resize', autoGrowAll);
+  // Bullets use the "- " marker, which is what the product page turns into a
+  // bullet list (same as the Aura VFX Asset Pack description).
+  function toggleBullets(ta) {
+    if (!ta) return;
+    var v = ta.value, s = ta.selectionStart, e = ta.selectionEnd;
+    var start = v.lastIndexOf('\n', s - 1) + 1;
+    var end = v.indexOf('\n', e); if (end < 0) end = v.length;
+    if (e > s && v.charAt(e - 1) === '\n') end = e - 1;
+    var lines = v.slice(start, end).split('\n');
+    var isBullet = /^\s*[-*•]\s+/;
+    var filled = lines.filter(function (l) { return l.trim(); });
+    var allBullets = filled.length > 0 && filled.every(function (l) { return isBullet.test(l); });
+    var out = lines.map(function (l) {
+      if (!l.trim()) return l;
+      if (allBullets) return l.replace(/^(\s*)[-*•]\s+/, '$1');
+      return isBullet.test(l) ? l.replace(/^(\s*)[*•]\s+/, '$1- ') : '- ' + l.trim();
+    }).join('\n');
+    ta.value = v.slice(0, start) + out + v.slice(end);
+    ta.focus();
+    ta.setSelectionRange(start, start + out.length);
+    autoGrow(ta);
+  }
+  var bulletsBtn = $('admEditBullets'); if (bulletsBtn) bulletsBtn.addEventListener('click', function () { toggleBullets($('admEditLongDesc')); });
+  var updBulletsBtn = $('admUpdBullets'); if (updBulletsBtn) updBulletsBtn.addEventListener('click', function () { toggleBullets($('admUpdDescInput')); });
+
+  /* ---- product file card: download / remove ---- */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-fc]'); if (!b) return;
+    var scope = b.getAttribute('data-scope');
+    var p = scope === 'upd' ? findProduct(updSelectedId) : findProduct($('admEditId').value);
+    if (b.getAttribute('data-fc') === 'download') {
+      if (!p) return;
+      var label = b.textContent; b.disabled = true; b.textContent = 'Opening…';
+      invokeAdminFn('admin-get-download-url', { productId: p.dbId }, 'Could not open the product file.').then(function (d) {
+        b.disabled = false; b.textContent = label; window.open(d.url, '_blank', 'noopener');
+      }).catch(function (err) { b.disabled = false; b.textContent = label; admToast(err.message || 'Could not open the file.', false); });
+      return;
+    }
+    // remove
+    if (scope === 'upd') {
+      if (updPendingPath) { updPendingPath = null; updPendingTech = null; FILE_REMOVED.upd = false; setFileNote($('admUpdFileNote'), p && p.storagePath); return; }
+      if (!window.confirm('Remove the product file? Customers cannot download until a new one is uploaded.')) return;
+      updPendingPath = PLACEHOLDER_PATH; updPendingTech = {}; FILE_REMOVED.upd = true;
+      setFileNote($('admUpdFileNote'), PLACEHOLDER_PATH); admToast('File removed. Saves when you push.', true);
+    } else {
+      if (pendingStoragePath && pendingStoragePath !== PLACEHOLDER_PATH) { pendingStoragePath = null; FILE_REMOVED.edit = false; setFileNote($('admEditFileNote'), p && p.storagePath); return; }
+      if (!window.confirm('Remove the product file? Customers cannot download until a new one is uploaded.')) return;
+      pendingStoragePath = PLACEHOLDER_PATH; FILE_REMOVED.edit = true;
+      setFileNote($('admEditFileNote'), PLACEHOLDER_PATH); admToast('File removed. Saves with the product.', true);
+    }
   });
 
   /* ================================================================

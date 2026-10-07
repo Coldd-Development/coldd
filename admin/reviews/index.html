@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261007m" />
+  <link rel="stylesheet" href="/styles.css?v=20261007n" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -506,10 +506,10 @@
               <div class="dash-card glass" id="admMpUploadCard">
                 <div class="adm-mp-checks" id="admMpUploadChecks">
                   <span class="adm-mp-lead">Uploaded on</span>
-                  <label class="adm-mp-check"><input type="checkbox" data-mp="builtbybit" /><span>BuiltByBit</span></label>
-                  <label class="adm-mp-check"><input type="checkbox" data-mp="clearlydev" /><span>ClearlyDev</span></label>
-                  <label class="adm-mp-check"><input type="checkbox" data-mp="parcel" /><span>Parcel</span></label>
-                  <label class="adm-mp-check"><input type="checkbox" data-mp="creatorstore" /><span>Creator Store</span></label>
+                  <label class="adm-mp-check mk-builtbybit"><input type="checkbox" data-mp="builtbybit" /><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" /><span>BuiltByBit</span></label>
+                  <label class="adm-mp-check mk-clearlydev"><input type="checkbox" data-mp="clearlydev" /><img class="adm-mp-logo" src="/mp-logos/clearlydev.png" alt="" width="22" height="22" /><span>ClearlyDev</span></label>
+                  <label class="adm-mp-check mk-parcel"><input type="checkbox" data-mp="parcel" /><img class="adm-mp-logo" src="/mp-logos/parcel.png" alt="" width="22" height="22" /><span>Parcel</span></label>
+                  <label class="adm-mp-check mk-creatorstore"><input type="checkbox" data-mp="creatorstore" /><img class="adm-mp-logo" src="/mp-logos/creatorstore.png" alt="" width="22" height="22" /><span>Creator Store</span></label>
                 </div>
               </div>
 
@@ -528,7 +528,7 @@
                     </div>
                     <input type="hidden" id="admEditCat" />
                   </label>
-                  <label class="adm-field"><span>Subcategory</span>
+                  <label class="adm-field"><span>Subcategories</span>
                     <div class="adm-dd" id="admEditSubcatDD">
                       <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                         <span class="adm-dd-val placeholder">None</span>
@@ -553,14 +553,11 @@
                 </div>
 
                 <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Summary</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="100" /></label>
-                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Description</span><textarea id="admEditLongDesc" class="adm-input adm-textarea" rows="4"></textarea></label>
+                <div class="adm-field adm-field-wide" style="margin-top:16px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admEditBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea id="admEditLongDesc" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></div>
 
-                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Private</span></label>
-                <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority</span></label>
-                <label class="adm-field" id="admEditWasPriceWrap" style="margin-top:20px;max-width:260px;">
-                  <span>Sale price (was)</span>
-                  <input type="number" min="0" step="0.01" id="admEditWasPrice" class="adm-input" placeholder="Leave blank for no sale" />
-                </label>
+                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Hide in catalog</span></label>
+                <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority placements</span></label>
+                <span id="admEditWasPriceWrap" hidden><input type="hidden" id="admEditWasPrice" /></span>
               </div>
 
               <div class="dash-card glass">
@@ -601,7 +598,7 @@
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop</p>
                   </div>
-                  <a class="adm-sub" id="admEditFileNote" target="_blank" rel="noopener" style="margin-top:8px;display:inline-block;">No file uploaded yet</a>
+                  <div class="adm-filecard" id="admEditFileNote" hidden></div>
                   <input type="hidden" id="admEditTechFileName" />
                 </div>
               </div>
@@ -700,10 +697,10 @@
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop</p>
                   </div>
-                  <a class="adm-sub" id="admUpdFileNote" target="_blank" rel="noopener" style="margin-top:8px;display:inline-block;"></a>
+                  <div class="adm-filecard" id="admUpdFileNote" hidden></div>
                 </div>
 
-                <label class="adm-field adm-field-wide" id="admUpdDescField" style="margin-top:18px;"><span>Description</span><textarea id="admUpdDescInput" class="adm-input adm-textarea adm-textarea-xl" rows="14"></textarea></label>
+                <div class="adm-field adm-field-wide" id="admUpdDescField" style="margin-top:18px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admUpdBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea id="admUpdDescInput" class="adm-input adm-textarea adm-autogrow" rows="6"></textarea></div>
 
                 <div class="adm-mp-checks" id="admUpdMpChecks" style="margin-top:20px;"></div>
 
@@ -1505,6 +1502,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20260926a"></script>
-  <script src="/catalog.js?v=20261007m" data-then="/app.js?v=20261007m,/reviews.js?v=20260729a,/admin.js?v=20261007m"></script>
+  <script src="/catalog.js?v=20261007n" data-then="/app.js?v=20261007n,/reviews.js?v=20260729a,/admin.js?v=20261007n"></script>
 </body>
 </html>

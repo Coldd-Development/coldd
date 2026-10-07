@@ -19,6 +19,9 @@ import { downloadName, signPrivateDownload } from "../_shared/download.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const SIGNED_URL_TTL_SECONDS = 120;
+// Proof-of-license/development files are played in the browser (video seeking
+// re-requests the file), so those links live longer than a one-shot download.
+const PREVIEW_URL_TTL_SECONDS = 900;
 
 function corsHeaders() {
   return {
@@ -71,7 +74,7 @@ Deno.serve(async (req: Request) => {
       if (!/^(cdn:)?[a-z0-9.\-]+\/legal\/[a-z0-9.\-]+$/.test(rawPath)) {
         return json({ ok: false, error: "Invalid file path." }, 400);
       }
-      const url = await signPrivateDownload(admin, rawPath, undefined, SIGNED_URL_TTL_SECONDS);
+      const url = await signPrivateDownload(admin, rawPath, undefined, PREVIEW_URL_TTL_SECONDS);
       if (!url) return json({ ok: false, error: "Could not generate link." }, 500);
       return json({ ok: true, url });
     }

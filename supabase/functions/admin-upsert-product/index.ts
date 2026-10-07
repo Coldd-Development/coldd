@@ -185,7 +185,9 @@ Deno.serve(async (req: Request) => {
       featured: !!body.featured,
       featured_order: Math.max(0, Number(body.featuredOrder) || 0),
       cat: body.cat != null ? String(body.cat) : null,
-      subcat: body.subcat != null ? String(body.subcat) : null,
+      subcat: body.subcat != null
+        ? (String(body.subcat).toLowerCase().split(",").map((v) => v.trim()).filter((v) => /^[a-z0-9-]+$/.test(v)).join(",") || null)
+        : null,
       description: body.desc != null ? String(body.desc) : "",
       long_description: body.longDesc != null ? String(body.longDesc) : "",
       image: body.image != null ? String(body.image) : null,

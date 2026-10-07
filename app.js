@@ -1645,6 +1645,22 @@
       });
     })();
 
+    // Shop filters: no inner scrollbar. The panel scrolls with the page until its
+    // bottom reaches the bottom of the window (or its top reaches the header,
+    // whichever is first), then stays put - the usual tall-sticky-sidebar behaviour.
+    (function () {
+      var side = document.querySelector('.shop-side');
+      if (!side) return;
+      function place() {
+        if (window.matchMedia('(max-width: 1040px)').matches) { side.style.top = ''; return; }
+        side.style.top = Math.min(96, window.innerHeight - side.offsetHeight - 24) + 'px';
+      }
+      place();
+      window.addEventListener('resize', place);
+      window.addEventListener('load', place);
+      if (window.ResizeObserver) new ResizeObserver(place).observe(side);
+    })();
+
     (function () {
       const shops = document.querySelectorAll('.shop');
       if (!shops.length) return;
@@ -1897,7 +1913,7 @@
           // matches data-cat rather than data-subcat.
           const okSub = !curSub ? true
                       : curCat === 'resell' ? p.getAttribute('data-cat') === curSub
-                      : p.getAttribute('data-subcat') === curSub;
+                      : (p.getAttribute('data-subcat') || '').split(',').indexOf(curSub) >= 0;
           const okSale = !onSale || p.hasAttribute('data-was') || p.getAttribute('data-sale-event') === 'yes';
           const okFree = !onFree || p.getAttribute('data-free') === 'yes';
           return okCat && okSub && okSale && okFree && (!query || title.indexOf(query) >= 0) && price >= lo && price <= hi;
@@ -3164,7 +3180,7 @@
           var cat = (window.__CATALOG || []).filter(function (x) { return x.id !== p.id && x.platform === p.platform && !isOwned(x.id); });
           function score(x) {
             var s = 0;
-            if (x.subcat && x.subcat === p.subcat) s += 4;
+            if (x.subcat && p.subcat && x.subcat.split(',').some(function (v) { return p.subcat.split(',').indexOf(v) >= 0; })) s += 4;
             if (x.cat === p.cat) s += 3;
             if (x.resell === p.resell) s += 1;
             var a = p.title.toLowerCase().split(/\s+/), b = x.title.toLowerCase();
@@ -3364,7 +3380,7 @@
           var crumb = '<a href="/">Home</a><span>›</span>' +
             '<a href="' + (p.page || '/shop') + '">' + esc(p.platform) + '</a><span>›</span>' +
             '<a href="' + (p.page || '/shop') + '?cat=' + catSlug + '">' + esc(p.cat) + '</a>';
-          if (p.subcat) crumb += '<span>›</span><span class="pd-crumb-cur">' + esc(humanize(p.subcat)) + '</span>';
+          if (p.subcat) { var firstSub = p.subcat.split(',')[0]; crumb += '<span>›</span><span class="pd-crumb-cur">' + esc(window.__subcatLabel ? window.__subcatLabel(p.cat, firstSub) : humanize(firstSub)) + '</span>'; }
           else crumb = crumb.replace('<a href="' + (p.page || '/shop') + '?cat=' + catSlug + '">' + esc(p.cat) + '</a>', '<span class="pd-crumb-cur">' + esc(p.cat) + '</span>');
           if (pdCrumb) pdCrumb.innerHTML = crumb;
 
@@ -3383,10 +3399,22 @@
               pdAdminBar.hidden = true;
             });
             var eid = encodeURIComponent(p.id);
-            var _ae = document.getElementById('pdAdminEdit');
+            var _dl = document.getElementById('pdAdminDownload');
             var _au = document.getElementById('pdAdminUpdate');
-            if (_ae) _ae.href = '/admin?product=' + eid + '&action=edit';
             if (_au) _au.href = '/admin?product=' + eid + '&action=update';
+            if (_dl) _dl.onclick = function () {
+              if (_dl.disabled) return;
+              _dl.disabled = true;
+              // Looks the product up by slug (admins can read every row), then
+              // asks the admin download function for a short-lived link.
+              window.coldSupabase.from('products').select('id').eq('slug', p.id).maybeSingle().then(function (r) {
+                if (!r.data) throw new Error('Product not found.');
+                return window.coldSupabase.functions.invoke('admin-get-download-url', { body: { productId: r.data.id } });
+              }).then(function (res) {
+                if (res.error || !res.data || !res.data.url) throw new Error((res.data && res.data.error) || 'No file has been uploaded for this product yet.');
+                window.open(res.data.url, '_blank', 'noopener');
+              }).catch(function (err) { alert(err.message || 'Could not download the file.'); }).then(function () { _dl.disabled = false; });
+            };
             // Show straight away for a known admin (cached), confirm live.
             if (window.coldAuth.checkIsAdmin.cached && window.coldAuth.checkIsAdmin.cached()) pdAdminBar.hidden = false;
             window.coldAuth.checkIsAdmin().then(function (info) {
