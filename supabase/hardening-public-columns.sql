@@ -59,7 +59,7 @@ $$;
 revoke all on function public.admin_product_storage_paths() from public, anon;
 grant execute on function public.admin_product_storage_paths() to authenticated;
 
-============================== PART 2 ==============================
+-- ============================== PART 2 ==============================
 -- (applied 2026-10-07, after the matching code was live)
 
 revoke select on public.products from public, anon, authenticated;
