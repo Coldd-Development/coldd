@@ -4741,7 +4741,7 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 .adm-mp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .adm-mp-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--hairline); }
 .adm-mp-tag { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; width: 142px; box-sizing: border-box; font-size: 12px; font-weight: 800; white-space: nowrap; letter-spacing: .02em; padding: 4px 12px 4px 5px; border-radius: 999px; color: var(--mk, var(--fg-2)); background: color-mix(in srgb, var(--mk, #888) 14%, transparent); border: 1px solid color-mix(in srgb, var(--mk, #888) 38%, transparent); }
-.adm-mp-logo { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--mk, #888); color: #0b0d12; font-style: normal; font-size: 10px; font-weight: 900; letter-spacing: 0; line-height: 1; }
+.adm-mp-logo { flex: 0 0 auto; display: block; width: 22px; height: 22px; object-fit: contain; border-radius: 5px; }
 .mk-builtbybit { --mk: #5b9bff; }
 .mk-clearlydev { --mk: #b08bff; }
 .mk-parcel { --mk: #ff9d5c; }
@@ -4764,5 +4764,8 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 .adm-textarea-xl { min-height: 280px; }
 
 .adm-mp-filter button { display: inline-flex; align-items: center; gap: 7px; }
-.adm-mp-filter button .adm-mp-logo { width: 18px; height: 18px; border-radius: 6px; font-size: 9px; }
+.adm-mp-filter button .adm-mp-logo { width: 18px; height: 18px; border-radius: 4px; }
 .adm-mp-filter button.active[class*="mk-"] { border-color: var(--mk); }
+
+.adm-mp-statlabel { display: inline-flex; align-items: center; gap: 8px; }
+.adm-mp-statlabel .adm-mp-logo { width: 20px; height: 20px; }

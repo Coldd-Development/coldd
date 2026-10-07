@@ -4666,9 +4666,9 @@
   var MP_LISTINGS = {};   // product db id -> { marketplace key -> status }
   var MP_TASKS = [];      // custom per-product tasks (open and done)
   var MP_FILTER = 'all';
-  // Brand mark shown beside each marketplace name (a coloured monogram tile;
-  // swap for the real logo image here if one is added to the repo).
-  function mpMono(key) { return { builtbybit: 'BB', clearlydev: 'CD', parcel: 'P', creatorstore: 'CS' }[key] || '?'; }
+  // Real marketplace logos (web-sized copies in /mp-logos; Creator Store uses
+  // the same Roblox mark as the homepage hero).
+  function mpLogo(key) { return '<img class="adm-mp-logo" src="/mp-logos/' + key + '.png" alt="" width="22" height="22" loading="lazy" />'; }
   function mpLabel(key) { var m = MARKETPLACES.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
   function mpStatus(dbId, key) { var l = MP_LISTINGS[dbId]; return (l && l[key]) || 'pending'; }
 
@@ -4752,11 +4752,11 @@
     var items = mpOpenItems();
     $('admMpStats').innerHTML = MARKETPLACES.map(function (m) {
       var n = items.filter(function (i) { return i.mk === m.key; }).length;
-      return statTile(m.label, n, n ? 'to do' : 'all caught up', '');
+      return '<div class="dash-stat glass"><span class="ds-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span><span class="ds-num">' + n + '</span><span class="ds-sub">' + (n ? 'to do' : 'all caught up') + '</span></div>';
     }).join('');
 
     $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MARKETPLACES).map(function (m) {
-      return '<button type="button" class="' + (m.key === 'all' ? '' : 'mk-' + m.key) + (MP_FILTER === m.key ? ' active' : '') + '" data-mp="' + m.key + '">' + (m.key === 'all' ? '' : '<i class="adm-mp-logo">' + mpMono(m.key) + '</i>') + esc(m.label) + '</button>';
+      return '<button type="button" class="' + (m.key === 'all' ? '' : 'mk-' + m.key) + (MP_FILTER === m.key ? ' active' : '') + '" data-mp="' + m.key + '">' + (m.key === 'all' ? '' : mpLogo(m.key)) + esc(m.label) + '</button>';
     }).join('');
 
     var shown = items.filter(function (i) { return MP_FILTER === 'all' || i.mk === MP_FILTER; });
@@ -4775,7 +4775,7 @@
           var attrs = ' data-pid="' + esc(p.dbId) + '" data-mk="' + r.mk + '" data-kind="' + r.kind + '"' + (r.taskId ? ' data-task="' + esc(r.taskId) + '"' : '');
           var what = r.kind === 'upload' ? 'Upload' : r.kind === 'update' ? 'Update' : esc(r.text);
           var btn = r.kind === 'upload' ? 'Mark uploaded' : r.kind === 'update' ? 'Mark updated' : 'Done';
-          return '<li class="adm-mp-item"><span class="adm-mp-tag mk-' + r.mk + '"><i class="adm-mp-logo">' + mpMono(r.mk) + '</i>' + esc(mpLabel(r.mk)) + '</span>' +
+          return '<li class="adm-mp-item"><span class="adm-mp-tag mk-' + r.mk + '">' + mpLogo(r.mk) + esc(mpLabel(r.mk)) + '</span>' +
             '<span class="adm-mp-what">' + what + '</span>' +
             '<button type="button" class="adm-mp-done" data-act="done"' + attrs + '>' + btn + '</button>' +
             (r.kind === 'task' ? '<button type="button" class="adm-mp-del" data-act="delete"' + attrs + ' title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') +
