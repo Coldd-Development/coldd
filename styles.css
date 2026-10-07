@@ -4802,3 +4802,6 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 /* Product page admin bar: the Download button is a <button>, match the link buttons */
 button.pd-admin-act { font: inherit; color: inherit; cursor: pointer; }
 button.pd-admin-act:disabled { opacity: .5; cursor: default; }
+
+/* Auto-height description boxes: .adm-textarea gives them flex: 1 1 100%, which inside the column .adm-field overrides the height the script sets */
+.adm-textarea.adm-autogrow { flex: 0 0 auto; }
