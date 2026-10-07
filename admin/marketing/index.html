@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261007e" />
+  <link rel="stylesheet" href="/styles.css?v=20261007j" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -190,25 +190,24 @@
                 <table class="dash-table"><thead><tr><th>Page</th><th>Views</th><th>Sessions</th></tr></thead>
                 <tbody id="admTopPagesBody"></tbody></table>
               </div>
+              <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admTopPagesMore" hidden>Show all pages</button>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Conversion funnel</h2><span class="adm-sub">How far sessions get, step by step.</span></div></div>
+              <div id="admFunnel"></div>
             </div>
 
             <div class="adm-two-col">
-              <div class="dash-card glass">
-                <div class="dash-card-head"><div><h2>Conversion funnel</h2><span class="adm-sub">Sessions through each step, over the selected range.</span></div></div>
-                <div id="admFunnel"></div>
-              </div>
               <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><div><h2>Top searches</h2><span class="adm-sub">What people look for in the site search.</span></div></div>
+                <div class="dash-card-head"><div><h2>Top searches</h2><span class="adm-sub">No results = searches that found nothing, i.e. products people want that we do not list.</span></div></div>
                 <table class="dash-table">
-                  <thead><tr><th>Query</th><th>Searches</th><th>Gaps</th></tr></thead>
+                  <thead><tr><th>Query</th><th>Searches</th><th title="Searches that returned no products">No results</th></tr></thead>
                   <tbody id="admSearchBody"></tbody>
                 </table>
               </div>
-            </div>
-
-            <div class="adm-two-col">
               <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><div><h2>How did you hear about us</h2><span class="adm-sub">One-question survey on the thank-you page, over the selected range.</span></div></div>
+                <div class="dash-card-head"><div><h2>How did you hear about us</h2><span class="adm-sub">One-question survey on the thank-you page.</span></div></div>
                 <table class="dash-table">
                   <thead><tr><th>Source</th><th>Answers</th><th>Share</th></tr></thead>
                   <tbody id="admHowHeardBody"></tbody>
@@ -216,22 +215,22 @@
               </div>
             </div>
 
-            <div class="adm-two-col">
-              <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><h2>Abandoned carts</h2><span class="adm-sub">Value at risk: <strong id="admAbandonedTotal"></strong></span></div>
-                <table class="dash-table">
-                  <thead><tr><th>Date</th><th>Item</th><th>Value</th><th>Email</th></tr></thead>
-                  <tbody id="admAbandonedBody"></tbody>
-                </table>
-              </div>
-              <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><h2>Coupon usage &amp; redemption</h2></div>
-                <div class="dash-stats adm-stats-3" id="admCouponTotals"></div>
-                <table class="dash-table">
-                  <thead><tr><th>Code</th><th>Status</th><th>Uses</th><th>Discount given</th><th>Revenue influenced</th></tr></thead>
-                  <tbody id="admCouponAnBody"></tbody>
-                </table>
-              </div>
+            <div class="dash-card glass dash-tablewrap">
+              <div class="dash-card-head"><h2>Abandoned carts</h2><span class="adm-sub">Value at risk: <strong id="admAbandonedTotal"></strong></span></div>
+              <table class="dash-table">
+                <thead><tr><th>Date</th><th>Item</th><th>Value</th><th>Customer</th><th>Recovery email</th></tr></thead>
+                <tbody id="admAbandonedBody"></tbody>
+              </table>
+              <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admAbandonedMore" hidden>Show all carts</button>
+            </div>
+
+            <div class="dash-card glass dash-tablewrap">
+              <div class="dash-card-head"><h2>Coupon usage &amp; redemption</h2></div>
+              <div class="dash-stats adm-stats-3" id="admCouponTotals"></div>
+              <table class="dash-table">
+                <thead><tr><th>Code</th><th>Status</th><th>Uses</th><th>Discount given</th><th>Revenue influenced</th></tr></thead>
+                <tbody id="admCouponAnBody"></tbody>
+              </table>
             </div>
           </section>
 
@@ -326,7 +325,9 @@
               <div id="admEmailConfigWarning"></div>
               <div class="dash-stats" id="admEmailStats"></div>
 
-              <div class="dash-card-head" style="margin-top:22px;"><div><h2>Subscriber list</h2><span class="adm-sub">Every account with an email address. A campaign send goes to everyone here except those marked Unsubscribed or Banned.</span></div></div>
+              <details class="adm-collapse" style="margin-top:22px;">
+                <summary class="dash-card-head"><div><h2>Subscriber list</h2><span class="adm-sub">Every account with an email address. Campaigns skip anyone Unsubscribed or Banned.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="adm-collapse-body">
               <div class="adm-form" style="flex-wrap:wrap;gap:8px;">
                 <input type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
                 <button class="btn btn-ghost adm-btn-sm" id="admEmailListCopyBtn" type="button">Copy sendable addresses</button>
@@ -338,6 +339,8 @@
                 </table>
               </div>
               <p class="adm-note" id="admEmailListNote" style="margin-top:8px;"></p>
+                </div>
+              </details>
 
               <div class="dash-card-head" style="margin-top:22px;"><div><h2>Templates</h2><span class="adm-sub">Reusable subject + body. Saved to the account, not this browser.</span></div></div>
               <div class="adm-form" id="admTemplateBar" style="flex-wrap:wrap;gap:8px;">
@@ -467,7 +470,7 @@
             </div>
             <div class="dash-card glass dash-tablewrap">
               <table class="dash-table adm-table-tight">
-                <thead><tr><th>Thumbnail</th><th>Product Name</th><th>Category</th><th>Status</th><th>Rating</th><th>Purchases</th><th></th></tr></thead>
+                <thead><tr><th>Thumbnail</th><th>Product Name</th><th>Category</th><th>Rating</th><th>Purchases</th><th></th></tr></thead>
                 <tbody id="admProdBody"></tbody>
               </table>
             </div>
@@ -1438,6 +1441,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20260926a"></script>
-  <script src="/catalog.js?v=20261007i" data-then="/app.js?v=20261007i,/reviews.js?v=20260729a,/admin.js?v=20261007i"></script>
+  <script src="/catalog.js?v=20261007j" data-then="/app.js?v=20261007j,/reviews.js?v=20260729a,/admin.js?v=20261007j"></script>
 </body>
 </html>

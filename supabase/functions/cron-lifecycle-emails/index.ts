@@ -144,7 +144,13 @@ async function runAbandonedCart(admin: any, configs: Map<string, Config>, supaba
     const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
     const html = renderAutomationEmail(step.body_md, extraBlocks, unsubscribeUrl);
     const result = await sendSingle(prof.email, step.subject, html, unsubscribeHeaders(unsubscribeUrl));
-    if (result.ok) sent++; else console.error("[cron-lifecycle-emails] abandoned-cart send failed:", result.error);
+    if (result.ok) {
+      sent++;
+      // Recorded only on a real send, so the admin's "Email sent" marker is
+      // accurate (a skipped or failed step advances abandoned_step_sent but
+      // never sets this).
+      updatePayload.abandoned_email_sent_at = new Date().toISOString();
+    } else console.error("[cron-lifecycle-emails] abandoned-cart send failed:", result.error);
     await admin.from("cart_snapshots").update(updatePayload).eq("session_id", cart.session_id);
   }
   return { sent, skipped };

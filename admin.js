@@ -639,21 +639,35 @@
   // sessions, pageviews} bucket per day client-side.
   var TRAFFIC = [];
   var TRAFFIC_PAGES = [];   // [{ path, views, sessions }] over the 120d pull, top first
+  var TOP_PAGES_OPEN = false, ABANDONED_OPEN = false;
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#admTopPagesMore, #admAbandonedMore') : null;
+    if (!t) return;
+    if (t.id === 'admTopPagesMore') TOP_PAGES_OPEN = !TOP_PAGES_OPEN; else ABANDONED_OPEN = !ABANDONED_OPEN;
+    renderAnalytics();
+  });
   var TRAFFIC_VISITORS = null; // { total, returning, rate } over the 120d pull
   var TRAFFIC_ROWS = [];    // [{ s: session_id, p: path, d: created_at }] - for the range-aware funnel
+  // Pages that are not storefront traffic: the admin panel itself, sign-in and
+  // OAuth callback plumbing, the maintenance gate. Dropped from every traffic
+  // figure so analytics describe real visitors, not staff and redirects.
+  var INTERNAL_PATH_RE = /^\/(admin|lock|callback|roblox-callback|tiktok-callback|youtube-callback|signin|signup|forgot|reset)(\/|\.html|$)/i;
+  function normPath(p) { p = String(p || '/').split('?')[0].split('#')[0]; if (p.length > 1) p = p.replace(/\/+$/, ''); return p || '/'; }
+  function isInternalPath(p) { return INTERNAL_PATH_RE.test(normPath(p)); }
   function refreshTraffic() {
     if (!window.coldSupabase) return Promise.resolve();
     var cutoff = daysAgo(119).toISOString();
     return window.coldSupabase.from('page_views').select('session_id, created_at, path, visitor_id').gte('created_at', cutoff).limit(50000).then(function (res) {
       if (res.error) { console.error('[admin] failed to load traffic:', res.error.message); return; }
-      TRAFFIC_ROWS = (res.data || []).map(function (r) { return { s: r.session_id, p: r.path || '', d: r.created_at }; });
+      var trafficData = (res.data || []).filter(function (r) { return !isInternalPath(r.path); });
+      TRAFFIC_ROWS = trafficData.map(function (r) { return { s: r.session_id, p: normPath(r.path), d: r.created_at }; });
       var byDay = {}, byPath = {}, visitorDays = {};
-      (res.data || []).forEach(function (row) {
+      trafficData.forEach(function (row) {
         var day = row.created_at.slice(0, 10);
         if (!byDay[day]) byDay[day] = { pageviews: 0, sessions: {} };
         byDay[day].pageviews++;
         byDay[day].sessions[row.session_id] = true;
-        var p = row.path || '/';
+        var p = normPath(row.path);
         if (!byPath[p]) byPath[p] = { path: p, views: 0, sessions: {} };
         byPath[p].views++;
         byPath[p].sessions[row.session_id] = true;
@@ -700,9 +714,9 @@
   function refreshLiveSessions() {
     if (!window.coldSupabase) return Promise.resolve();
     var cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    return window.coldSupabase.from('page_views').select('session_id').gte('created_at', cutoff).limit(20000).then(function (res) {
+    return window.coldSupabase.from('page_views').select('session_id, path').gte('created_at', cutoff).limit(20000).then(function (res) {
       if (res.error) { console.error('[admin] failed to load live sessions:', res.error.message); return; }
-      var set = {}; (res.data || []).forEach(function (r) { set[r.session_id] = true; });
+      var set = {}; (res.data || []).forEach(function (r) { if (!isInternalPath(r.path)) set[r.session_id] = true; });
       LIVE_SESSIONS = Object.keys(set).length;
       if (curPanel === 'home') renderHome();
       if (curPanel === 'analytics') renderAnalytics();
@@ -1064,22 +1078,54 @@
   /* ================================================================
      CHART HELPER (inline SVG, no external deps)
      ================================================================ */
+  // Round axis for the bar charts: about 4 steps on a 1/2/2.5/5 x 10^n scale, so
+  // the numbers down the left are real values you can read each bar against.
+  function niceScale(max) {
+    if (!(max > 0)) return { top: 1, ticks: [0, 0.25, 0.5, 0.75, 1] };
+    var raw = max / 4, pow = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), f = raw / pow;
+    var step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * pow;
+    var top = Math.ceil(max / step - 1e-9) * step, ticks = [];
+    for (var t = 0; t <= top + step / 2; t += step) ticks.push(+t.toFixed(10));
+    return { top: top, ticks: ticks };
+  }
+  function axisNum(v) {
+    var a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (a >= 1e4) return Math.round(v / 1e3) + 'k';
+    if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(+v.toFixed(2));
+  }
+  function axisUsd(v) { return '$' + axisNum(v); }
   function svgBars(data, opts) {
     opts = opts || {};
     var w = opts.width || 640, h = opts.height || 140;
-    var max = Math.max.apply(null, data.map(function (d) { return d.v; }).concat([1]));
+    var rawMax = Math.max.apply(null, data.map(function (d) { return d.v; }).concat([0]));
+    var sc = niceScale(rawMax);
+    var fmt = opts.fmt || axisNum;
     var n = data.length || 1;
     var gap = 2;
     var bw = Math.max(1, (w / n) - gap);
+    var grid = sc.ticks.map(function (t) {
+      var y = h - (t / sc.top) * h;
+      return '<line class="adm-chart-grid" x1="0" x2="' + w + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" vector-effect="non-scaling-stroke"></line>';
+    }).join('');
     var bars = data.map(function (d, i) {
-      var bh = Math.max(1.5, (d.v / max) * (h - 6));
+      var bh = Math.max(1.5, (d.v / sc.top) * h);
       var x = i * (w / n);
       var y = h - bh;
-      var op = 0.42 + 0.58 * (max ? d.v / max : 0);
+      var op = 0.42 + 0.58 * (rawMax ? d.v / rawMax : 0);
       var tipText = esc(d.label) + ': ' + esc(d.tip != null ? d.tip : d.v);
       return '<rect class="adm-chart-bar" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2" fill="' + (opts.color || 'var(--accent)') + '" opacity="' + op.toFixed(2) + '" data-tip="' + tipText + '"></rect>';
     }).join('');
-    return '<svg viewBox="0 0 ' + w + ' ' + h + '" class="adm-chart" preserveAspectRatio="none">' + bars + '</svg>';
+    var labels = sc.ticks.map(function (t) { return esc(fmt(t)); });
+    var axisW = Math.max.apply(null, labels.map(function (l) { return l.length; })) + 1;
+    var axis = sc.ticks.map(function (t, i) {
+      return '<span style="bottom:' + (t / sc.top * 100).toFixed(2) + '%">' + labels[i] + '</span>';
+    }).join('');
+    var xl = (data.length > 1 && data[0].label)
+      ? '<div class="adm-chart-x"><span>' + esc(data[0].label) + '</span><span>' + esc(data[data.length - 1].label) + '</span></div>' : '';
+    return '<div class="adm-chart-wrap"><div class="adm-chart-axis" style="height:' + h + 'px;min-width:' + axisW + 'ch">' + axis + '</div>' +
+      '<div class="adm-chart-main"><svg viewBox="0 0 ' + w + ' ' + h + '" class="adm-chart" style="height:' + h + 'px" preserveAspectRatio="none">' + grid + bars + '</svg>' + xl + '</div></div>';
   }
 
   // Donut / pie with a legend. segments: [{ label, value, color, display?,
@@ -1322,11 +1368,15 @@
     TRAFFIC_ROWS.forEach(function (r) {
       if (!r.s || new Date(r.d) < start) return;
       sess[r.s] = true;
-      if (r.p.indexOf('/product') === 0) prod[r.s] = true;
+      if (r.p === '/product' || r.p.indexOf('/product/') === 0) prod[r.s] = true;
       if (r.p === '/checkout') chk[r.s] = true;
     });
+    // A session that added to cart or began checkout is a visitor, even if its
+    // page view wasn't logged, so no later step can ever exceed "visited".
     CLIENT_EVENT_ROWS.forEach(function (e) {
-      if (e.type === 'add_to_cart' && e.s && new Date(e.d) >= start) cart[e.s] = true;
+      if (!e.s || new Date(e.d) < start) return;
+      if (e.type === 'add_to_cart') { cart[e.s] = true; sess[e.s] = true; }
+      if (e.type === 'checkout_started') { chk[e.s] = true; sess[e.s] = true; }
     });
     return {
       visitors: Object.keys(sess).length,
@@ -1379,16 +1429,32 @@
     // usage_count/limit come straight off the coupons table (incremented
     // server-side in create-checkout-session). discountGiven/revenue are
     // computed live from the real orders table's coupon_code/discount_usd.
+    // Every one-time WELCOME-xxxx code (one is minted per signup) is folded
+    // into a single "Welcome offer" line, otherwise the list is one row per
+    // subscriber.
+    function key(code) { return /^WELCOME-/i.test(String(code)) ? 'WELCOME' : code; }
     var byCode = {};
     completedInRange().forEach(function (o) {
       if (!o.couponCode) return;
-      byCode[o.couponCode] = byCode[o.couponCode] || { discountGiven: 0, revenue: 0 };
-      byCode[o.couponCode].discountGiven += o.discount;
-      byCode[o.couponCode].revenue += o.total;
+      var k = key(o.couponCode);
+      byCode[k] = byCode[k] || { discountGiven: 0, revenue: 0 };
+      byCode[k].discountGiven += o.discount;
+      byCode[k].revenue += o.total;
     });
-    return COUPONS.map(function (c) {
-      var s = byCode[c.code];
-      return { code: c.code, active: c.active, limit: c.limit, uses: c.usageCount, discountGiven: s ? s.discountGiven : 0, revenue: s ? s.revenue : 0 };
+    var rows = [], welcome = null;
+    COUPONS.forEach(function (c) {
+      if (key(c.code) === 'WELCOME') {
+        if (!welcome) { welcome = { code: 'WELCOME', label: 'Welcome offer', active: false, limit: 0, uses: 0, issued: 0 }; rows.push(welcome); }
+        welcome.issued++; welcome.uses += c.usageCount || 0; welcome.active = welcome.active || c.active;
+        return;
+      }
+      rows.push({ code: c.code, active: c.active, limit: c.limit, uses: c.usageCount });
+    });
+    return rows.map(function (r) {
+      var s = byCode[r.code];
+      r.discountGiven = s ? s.discountGiven : 0;
+      r.revenue = s ? s.revenue : 0;
+      return r;
     });
   }
 
@@ -3166,16 +3232,20 @@
     var prevVisits = win ? pageviewsInWindow(win.start, win.end) : 0;
 
     // Store performance only. Audience and channel numbers live in Marketing.
+    var anSessions = TRAFFIC.slice(Math.max(0, TRAFFIC.length - (RANGE_DAYS || 120))).reduce(function (sum, r) { return sum + r.sessions; }, 0);
+    var anAbandoned = ABANDONED.reduce(function (sum, a) { return sum + a.value; }, 0);
     $('admAnStats').innerHTML = [
       statTile('Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
       statTile('Robux revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
       statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
       statTile('Avg order value', usd(aov), null, ''),
       statTile('Conversion rate', pct(conv), null, ''),
-      statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits))
+      statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
+      statTile('Revenue per session', anSessions ? usd(curRev.usd / anSessions) : ' - ', anSessions.toLocaleString('en-US') + ' sessions', ''),
+      statTile('Abandoned carts', usd(anAbandoned), ABANDONED.length + ' cart' + (ABANDONED.length === 1 ? '' : 's') + ' at risk', '')
     ].join('');
 
-    $('admRevChart').innerHTML = svgBars(dailyRevenueSeries());
+    $('admRevChart').innerHTML = svgBars(dailyRevenueSeries(), { fmt: axisUsd });
     attachChartTooltip($('admRevChart'));
 
     if ($('admRevBreakdown')) {
@@ -3194,7 +3264,7 @@
             return { label: m.label, value: m.v, color: methodColor(m.label), display: esc(disp), plain: disp };
           }), { centerLabel: usd(methods.reduce(function (s, m) { return s + m.v; }, 0)), centerSub: 'total' });
       }
-      bd += '<div class="adm-mini-head">Average order value · daily</div>' + svgBars(aovDailySeries(), { height: 110, color: 'var(--price)' });
+      bd += '<div class="adm-mini-head">Average order value · daily</div>' + svgBars(aovDailySeries(), { height: 110, color: 'var(--price)', fmt: axisUsd });
       $('admRevBreakdown').innerHTML = bd;
     }
 
@@ -3233,38 +3303,46 @@
       '<div class="dash-stat glass"><span class="ds-label">Returning visitors</span><span class="ds-num">' + retLabel + '</span><span class="ds-sub">' + retSub + '</span></div>';
 
     if ($('admTopPagesBody')) {
-      $('admTopPagesBody').innerHTML = TRAFFIC_PAGES.slice(0, 12).map(function (p) {
-        return '<tr><td class="dt-mono">' + esc(p.path) + '</td><td>' + p.views.toLocaleString('en-US') + '</td><td>' + p.sessions.toLocaleString('en-US') + '</td></tr>';
+      var tpShow = TOP_PAGES_OPEN ? TRAFFIC_PAGES.slice(0, 50) : TRAFFIC_PAGES.slice(0, 5);
+      $('admTopPagesBody').innerHTML = tpShow.map(function (p) {
+        var label = p.path === '/' ? '/ <span class="adm-sub">Home page</span>' : esc(p.path);
+        return '<tr><td class="dt-mono">' + label + '</td><td>' + p.views.toLocaleString('en-US') + '</td><td>' + p.sessions.toLocaleString('en-US') + '</td></tr>';
       }).join('') || '<tr><td colspan="3" class="adm-empty">No traffic yet.</td></tr>';
+      var tpBtn = $('admTopPagesMore');
+      if (tpBtn) { tpBtn.hidden = TRAFFIC_PAGES.length <= 5; tpBtn.textContent = TOP_PAGES_OPEN ? 'Show fewer' : 'Show all ' + Math.min(TRAFFIC_PAGES.length, 50) + ' pages'; }
     }
 
     if ($('admFunnel')) {
       var fn = funnelCounts();
       var steps = [
-        { label: 'Visitors', v: fn.visitors },
-        { label: 'Viewed product', v: fn.product },
+        { label: 'Visited the site', v: fn.visitors },
+        { label: 'Viewed a product', v: fn.product },
         { label: 'Added to cart', v: fn.cart },
-        { label: 'Reached checkout', v: fn.checkout },
-        { label: 'Paid', v: fn.paid }
+        { label: 'Started checkout', v: fn.checkout },
+        { label: 'Paid (orders)', v: fn.paid }
       ];
-      var conv = [];
-      for (var fi = 1; fi < steps.length; fi++) {
-        var ffrom = steps[fi - 1].v, fto = steps[fi].v;
-        conv.push('<div class="adm-catrow"><span>' + esc(steps[fi - 1].label + ' → ' + steps[fi].label) + '</span><span>' + (ffrom ? pct(fto / ffrom * 100) : '–') + '</span></div>');
-      }
+      var fTop = Math.max.apply(null, steps.map(function (st) { return st.v; }).concat([1]));
+      var fRows = steps.map(function (st, i) {
+        var prev = i ? steps[i - 1].v : 0;
+        var note = i === 0 ? '' : (prev ? pct(st.v / prev * 100) + ' of previous step' : ' - ');
+        var w = st.v ? Math.max(1.5, st.v / fTop * 100) : 0;
+        return '<div class="adm-funnel-row"><div class="adm-funnel-label">' + esc(st.label) + '</div>' +
+          '<div class="adm-funnel-track"><i style="width:' + w.toFixed(1) + '%"></i></div>' +
+          '<div class="adm-funnel-num">' + st.v.toLocaleString('en-US') + '</div>' +
+          '<div class="adm-funnel-note">' + note + '</div></div>';
+      }).join('');
+      var fNote = 'Counted by session over the selected range; admin and sign-in pages are excluded. Paid is completed orders, which are not tied to a session, so it can run ahead of the step above.';
       $('admFunnel').innerHTML = statGrid([
-        statTile('Visitor → paid', steps[0].v ? pct(fn.paid / steps[0].v * 100) : '–', 'over selected range', ''),
-        statTile('Cart → checkout', fn.cart ? pct(fn.checkout / fn.cart * 100) : '–', null, ''),
-        statTile('Checkout → paid', fn.checkout ? pct(fn.paid / fn.checkout * 100) : '–', null, '')
-      ]) + svgBars(steps.map(function (s) { return { label: s.label, v: s.v, tip: s.v.toLocaleString('en-US') + ' · ' + s.label }; }), { height: 150 }) +
-        '<div class="adm-catlist">' + conv.join('') + '</div>';
-      attachChartTooltip($('admFunnel'));
+        statTile('Visitor to paid', steps[0].v ? pct(fn.paid / steps[0].v * 100) : ' - ', 'over selected range', ''),
+        statTile('Cart to checkout', fn.cart ? pct(fn.checkout / fn.cart * 100) : ' - ', null, ''),
+        statTile('Checkout to paid', fn.checkout ? pct(fn.paid / fn.checkout * 100) : ' - ', null, '')
+      ]) + '<div class="adm-funnel">' + fRows + '</div><p class="adm-note">' + fNote + '</p>';
     }
 
     if ($('admSearchBody')) {
       var ts = topSearches(15);
-      $('admSearchBody').innerHTML = ts.map(function (s) {
-        return '<tr><td>' + esc(s.q) + '</td><td>' + s.count + '</td><td>' + (s.noResults ? '<span class="dt-badge warn">' + s.noResults + ' no-result</span>' : '<span class="adm-sub"> - </span>') + '</td></tr>';
+      $('admSearchBody').innerHTML = ts.map(function (sq) {
+        return '<tr><td>' + esc(sq.q) + '</td><td>' + sq.count + '</td><td>' + (sq.noResults ? '<span class="dt-badge warn">' + sq.noResults + '</span>' : '<span class="adm-sub"> - </span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="3" class="adm-empty">No searches logged yet.</td></tr>';
     }
 
@@ -3275,10 +3353,17 @@
       }).join('') || '<tr><td colspan="3" class="adm-empty">No survey answers yet.</td></tr>';
     }
 
-    $('admAbandonedBody').innerHTML = ABANDONED.slice(0, 12).map(function (a) {
-      return '<tr><td>' + fmtDate(new Date(a.date)) + '</td><td>' + esc(a.title) + '</td><td>' + usd(a.value) + '</td><td>' + (a.email ? esc(a.email) : '<span class="adm-sub">unknown</span>') + '</td></tr>';
-    }).join('');
-    $('admAbandonedTotal').textContent = usd(ABANDONED.reduce(function (s, a) { return s + a.value; }, 0));
+    var abShow = ABANDONED_OPEN ? ABANDONED.slice(0, 50) : ABANDONED.slice(0, 5);
+    $('admAbandonedBody').innerHTML = abShow.map(function (a) {
+      var sent = a.recoveryEmailSentAt
+        ? '<span class="dt-badge ok">Email sent</span><div class="adm-sub">' + (a.abandonedStep != null ? 'Step ' + a.abandonedStep + ' · ' : '') + fmtDate(new Date(a.recoveryEmailSentAt)) + '</div>'
+        : (a.abandonedStep > 0 ? '<span class="dt-badge">Step ' + a.abandonedStep + ' handled</span><div class="adm-sub">sent before tracking</div>'
+          : (a.email ? '<span class="dt-badge warn">Not sent yet</span>' : '<span class="dt-badge">No email</span>'));
+      return '<tr><td>' + fmtDate(new Date(a.date)) + '</td><td>' + esc(a.title) + '</td><td>' + usd(a.value) + '</td><td>' + (a.email ? esc(a.email) : '<span class="adm-sub">unknown</span>') + '</td><td>' + sent + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="adm-empty">No abandoned carts.</td></tr>';
+    $('admAbandonedTotal').textContent = usd(ABANDONED.reduce(function (sum, a) { return sum + a.value; }, 0));
+    var abBtn = $('admAbandonedMore');
+    if (abBtn) { abBtn.hidden = ABANDONED.length <= 5; abBtn.textContent = ABANDONED_OPEN ? 'Show fewer' : 'Show all ' + Math.min(ABANDONED.length, 50) + ' carts'; }
 
     var cs = couponStats();
     if ($('admCouponTotals')) {
@@ -3290,7 +3375,9 @@
       ]);
     }
     $('admCouponAnBody').innerHTML = cs.map(function (c) {
-      return '<tr><td class="dt-mono">' + esc(c.code) + '</td><td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge err">Inactive</span>') + '</td><td>' + c.uses + (c.limit ? ' / ' + c.limit : '') + '</td><td>' + usd(c.discountGiven) + '</td><td>' + usd(c.revenue) + '</td></tr>';
+      var codeCell = c.label ? esc(c.label) + '<div class="adm-sub">' + c.issued + ' code' + (c.issued === 1 ? '' : 's') + ' issued · one per signup</div>' : esc(c.code);
+      var usesCell = c.issued ? c.uses + ' of ' + c.issued + ' used' : c.uses + (c.limit ? ' / ' + c.limit : '');
+      return '<tr><td class="dt-mono">' + codeCell + '</td><td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge err">Inactive</span>') + '</td><td>' + usesCell + '</td><td>' + usd(c.discountGiven) + '</td><td>' + usd(c.revenue) + '</td></tr>';
     }).join('');
 
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
@@ -3351,16 +3438,13 @@
         '<td><span class="dr-thumb" style="background-image:url(\'' + p.image + '\');width:52px;height:38px;display:inline-block;vertical-align:middle;border-radius:7px;"></span></td>' +
         '<td><a class="adm-prod-name" href="/product/' + esc(p.id) + '" target="_blank" rel="noopener">' + esc(p.title) + '</a></td>' +
         '<td><span class="adm-cat-tag">' + esc(p.cat || 'Uncategorized') + '</span></td>' +
-        '<td>' + (p.visible
-          ? '<button type="button" class="dt-badge ok adm-prod-toggle"' + (can('admin') ? '' : ' disabled') + '>Released</button>'
-          : '<button type="button" class="dt-badge warn adm-prod-toggle"' + (can('admin') ? '' : ' disabled') + '>Unreleased</button>') + '</td>' +
         '<td>' + rating + '<span class="adm-star">★</span></td>' +
         '<td>' + purchaseCount(p.id) + '</td>' +
         '<td class="adm-row-actions">' +
           '<button class="adm-icon-btn adm-prod-download" type="button" title="Download product file" aria-label="Download">' + ADM_ICON_DOWNLOAD + '</button>' +
           '<button class="adm-icon-btn adm-prod-edit" type="button" title="Edit product" aria-label="Edit">' + ADM_ICON_KEBAB + '</button>' +
         '</td></tr>';
-    }).join('') || '<tr><td colspan="7" class="adm-empty">No products match.</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="adm-empty">No products match.</td></tr>';
   }
   var prodBody = $('admProdBody');
   if (prodBody) prodBody.addEventListener('click', function (e) {

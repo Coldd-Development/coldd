@@ -4696,3 +4696,28 @@ html.auth-in .nav-notif[hidden] { display: block; }
 
 /* The corner "Claim discount now" tab sat on top of the cart's Checkout button; hide it while the cart is open. */
 body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
+
+
+/* Bar charts: real y-axis + gridlines */
+.adm-chart-wrap { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0 4px; }
+.adm-chart-axis { position: relative; flex: 0 0 auto; font-size: 11px; color: var(--fg-3); text-align: right; font-variant-numeric: tabular-nums; }
+.adm-chart-axis span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; white-space: nowrap; }
+.adm-chart-main { flex: 1; min-width: 0; }
+.adm-chart-grid { stroke: var(--hairline); stroke-width: 1; stroke-dasharray: 3 4; }
+.adm-chart-x { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--fg-3); }
+
+/* Conversion funnel */
+.adm-funnel { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.adm-funnel-row { display: grid; grid-template-columns: 150px 1fr 70px 190px; align-items: center; gap: 14px; font-size: 13px; }
+.adm-funnel-label { color: var(--fg-1); font-weight: 600; }
+.adm-funnel-track { height: 14px; border-radius: 7px; background: var(--ink-40, rgba(255,255,255,.06)); overflow: hidden; }
+.adm-funnel-track i { display: block; height: 100%; border-radius: 7px; background: var(--accent); }
+.adm-funnel-num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.adm-funnel-note { color: var(--fg-3); font-size: 12px; }
+@media (max-width: 760px) { .adm-funnel-row { grid-template-columns: 1fr 60px; } .adm-funnel-track { grid-column: 1 / -1; order: 3; } .adm-funnel-note { grid-column: 1 / -1; order: 4; } }
+
+/* Show-all toggles under capped tables */
+.adm-more-btn { margin-top: 12px; }
+
+/* New campaign: the audience / format tabs were centred (inherited margin:auto from .bt-switch) */
+.bt-switch.adm-campaign-audience, .bt-switch.adm-campaign-mode { margin-left: 0; margin-right: 0; max-width: none; justify-content: flex-start; }
