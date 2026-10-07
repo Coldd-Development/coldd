@@ -4666,6 +4666,9 @@
   var MP_LISTINGS = {};   // product db id -> { marketplace key -> status }
   var MP_TASKS = [];      // custom per-product tasks (open and done)
   var MP_FILTER = 'all';
+  // Brand mark shown beside each marketplace name (a coloured monogram tile;
+  // swap for the real logo image here if one is added to the repo).
+  function mpMono(key) { return { builtbybit: 'BB', clearlydev: 'CD', parcel: 'P', creatorstore: 'CS' }[key] || '?'; }
   function mpLabel(key) { var m = MARKETPLACES.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
   function mpStatus(dbId, key) { var l = MP_LISTINGS[dbId]; return (l && l[key]) || 'pending'; }
 
@@ -4753,7 +4756,7 @@
     }).join('');
 
     $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MARKETPLACES).map(function (m) {
-      return '<button type="button" data-mp="' + m.key + '"' + (MP_FILTER === m.key ? ' class="active"' : '') + '>' + esc(m.label) + '</button>';
+      return '<button type="button" class="' + (m.key === 'all' ? '' : 'mk-' + m.key) + (MP_FILTER === m.key ? ' active' : '') + '" data-mp="' + m.key + '">' + (m.key === 'all' ? '' : '<i class="adm-mp-logo">' + mpMono(m.key) + '</i>') + esc(m.label) + '</button>';
     }).join('');
 
     var shown = items.filter(function (i) { return MP_FILTER === 'all' || i.mk === MP_FILTER; });
@@ -4764,17 +4767,21 @@
     });
     order.sort(function (a, b) { return groups[a].product.title.localeCompare(groups[b].product.title); });
     $('admMpTasks').innerHTML = order.map(function (id) {
-      var g = groups[id];
-      return '<div class="adm-mp-group"><div class="adm-mp-prod"><span class="dr-thumb" style="width:44px;height:32px;border-radius:7px;flex:0 0 auto;background-image:url(\'' + g.product.image + '\')"></span>' +
-        '<span>' + esc(g.product.title) + '</span><span class="adm-sub">' + g.rows.length + ' to do</span></div>' +
-        g.rows.map(function (r) {
-          var attrs = ' data-pid="' + esc(r.product.dbId) + '" data-mk="' + r.mk + '" data-kind="' + r.kind + '"' + (r.taskId ? ' data-task="' + esc(r.taskId) + '"' : '');
-          return '<div class="adm-mp-row"><span class="dt-badge">' + esc(mpLabel(r.mk)) + '</span><span class="adm-mp-text">' + esc(r.text) + '</span>' +
-            '<button type="button" class="btn btn-ghost adm-btn-sm" data-act="done"' + attrs + '>' + (r.kind === 'upload' ? 'Mark uploaded' : r.kind === 'update' ? 'Mark updated' : 'Done') + '</button>' +
-            (r.kind === 'task' ? '<button type="button" class="adm-icon-btn" data-act="delete"' + attrs + ' title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') +
-            '</div>';
-        }).join('') + '</div>';
-    }).join('') || '<p class="adm-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
+      var g = groups[id], p = g.product;
+      return '<article class="adm-mp-card">' +
+        '<header class="adm-mp-card-head"><span class="adm-mp-thumb" style="background-image:url(\'' + p.image + '\')"></span>' +
+        '<div class="adm-mp-card-title"><strong>' + esc(p.title) + '</strong><span>' + g.rows.length + (g.rows.length === 1 ? ' task' : ' tasks') + '</span></div></header>' +
+        '<ul class="adm-mp-list">' + g.rows.map(function (r) {
+          var attrs = ' data-pid="' + esc(p.dbId) + '" data-mk="' + r.mk + '" data-kind="' + r.kind + '"' + (r.taskId ? ' data-task="' + esc(r.taskId) + '"' : '');
+          var what = r.kind === 'upload' ? 'Upload' : r.kind === 'update' ? 'Update' : esc(r.text);
+          var btn = r.kind === 'upload' ? 'Mark uploaded' : r.kind === 'update' ? 'Mark updated' : 'Done';
+          return '<li class="adm-mp-item"><span class="adm-mp-tag mk-' + r.mk + '"><i class="adm-mp-logo">' + mpMono(r.mk) + '</i>' + esc(mpLabel(r.mk)) + '</span>' +
+            '<span class="adm-mp-what">' + what + '</span>' +
+            '<button type="button" class="adm-mp-done" data-act="done"' + attrs + '>' + btn + '</button>' +
+            (r.kind === 'task' ? '<button type="button" class="adm-mp-del" data-act="delete"' + attrs + ' title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') +
+            '</li>';
+        }).join('') + '</ul></article>';
+    }).join('') || '<p class="adm-empty adm-mp-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
 
     $('admMpMatrix').innerHTML = prods.map(function (p) {
       return '<tr><td>' + esc(p.title) + (p.visible ? '' : ' <span class="adm-sub">Private</span>') + '</td>' + MARKETPLACES.map(function (m) {

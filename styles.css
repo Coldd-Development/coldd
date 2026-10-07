@@ -4729,11 +4729,30 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 .adm-mp-filter { display: flex; gap: 6px; flex-wrap: wrap; }
 .adm-mp-filter button { font: inherit; font-size: 12px; font-weight: 700; color: var(--fg-2); background: none; border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
 .adm-mp-filter button.active { color: var(--fg); border-color: var(--accent); background: var(--ink-40, rgba(255,255,255,.05)); }
-.adm-mp-group { padding: 14px 0; border-top: 1px solid var(--hairline); }
-.adm-mp-group:first-child { border-top: 0; padding-top: 0; }
-.adm-mp-prod { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-weight: 700; }
-.adm-mp-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; margin-top: 6px; border-radius: 10px; background: var(--ink-40, rgba(255,255,255,.04)); }
-.adm-mp-text { flex: 1; min-width: 0; }
+#admMpTasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+#admMpTasks > .adm-empty { grid-column: 1 / -1; }
+.adm-mp-card { display: flex; flex-direction: column; gap: 6px; padding: 18px; border: 1px solid var(--hairline); border-radius: 16px; background: rgba(255,255,255,.03); transition: border-color .15s ease, background .15s ease; }
+.adm-mp-card:hover { border-color: var(--hairline-strong, rgba(255,255,255,.18)); background: rgba(255,255,255,.045); }
+.adm-mp-card-head { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; }
+.adm-mp-thumb { flex: 0 0 auto; width: 72px; height: 50px; border-radius: 10px; border: 1px solid var(--hairline); background-size: cover; background-position: center; background-color: rgba(255,255,255,.05); }
+.adm-mp-card-title { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.adm-mp-card-title strong { font-size: 16px; line-height: 1.25; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-mp-card-title span { font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-mp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.adm-mp-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--hairline); }
+.adm-mp-tag { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; width: 142px; box-sizing: border-box; font-size: 12px; font-weight: 800; white-space: nowrap; letter-spacing: .02em; padding: 4px 12px 4px 5px; border-radius: 999px; color: var(--mk, var(--fg-2)); background: color-mix(in srgb, var(--mk, #888) 14%, transparent); border: 1px solid color-mix(in srgb, var(--mk, #888) 38%, transparent); }
+.adm-mp-logo { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--mk, #888); color: #0b0d12; font-style: normal; font-size: 10px; font-weight: 900; letter-spacing: 0; line-height: 1; }
+.mk-builtbybit { --mk: #5b9bff; }
+.mk-clearlydev { --mk: #b08bff; }
+.mk-parcel { --mk: #ff9d5c; }
+.mk-creatorstore { --mk: #43d39a; }
+.adm-mp-what { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--fg-1); overflow-wrap: anywhere; }
+.adm-mp-done { flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 700; color: var(--fg); padding: 7px 13px; border-radius: 999px; border: 1px solid var(--hairline-strong, rgba(255,255,255,.2)); background: rgba(255,255,255,.06); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.adm-mp-done:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.adm-mp-done:disabled { opacity: .5; cursor: default; }
+.adm-mp-del { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--fg-3); cursor: pointer; }
+.adm-mp-del:hover { color: #ff6b73; background: rgba(255,107,115,.1); }
+@media (max-width: 520px) { #admMpTasks { grid-template-columns: 1fr; } .adm-mp-item { flex-wrap: wrap; } .adm-mp-what { flex-basis: 100%; order: 3; } }
 .adm-mp-checks { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
 .adm-mp-checks[hidden], .adm-edit-grid[hidden], #admMpUploadCard[hidden] { display: none; }
 .adm-mp-lead { font-weight: 700; margin-right: 6px; }
@@ -4743,3 +4762,7 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 .adm-mp-check em { font-style: normal; color: var(--fg-3); font-size: 12px; font-weight: 500; }
 .adm-mp-chip { cursor: pointer; font-family: inherit; }
 .adm-textarea-xl { min-height: 280px; }
+
+.adm-mp-filter button { display: inline-flex; align-items: center; gap: 7px; }
+.adm-mp-filter button .adm-mp-logo { width: 18px; height: 18px; border-radius: 6px; font-size: 9px; }
+.adm-mp-filter button.active[class*="mk-"] { border-color: var(--mk); }
