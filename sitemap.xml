@@ -79,6 +79,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/aura-vfx-asset-pack</loc>
+    <lastmod>2026-10-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/frostline-survival-kit</loc>
     <lastmod>2026-07-27</lastmod>
     <changefreq>weekly</changefreq>
