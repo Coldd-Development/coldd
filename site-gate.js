@@ -203,7 +203,8 @@
   }
 
   function runMaintenanceCheck() {
-   window.coldSupabase.from('site_status').select('*').eq('id', true).maybeSingle().then(function (res) {
+   // Explicit columns: the tester allowlist is not publicly readable.
+   window.coldSupabase.from('site_status').select('id, mode, maintenance_message, maintenance_ends_at, updated_at').eq('id', true).maybeSingle().then(function (res) {
     if (res && res.error) { releaseGateHold(); return; } // fail open, don't touch the cached mode
     var status = res && res.data;
     if (!status || status.mode === 'open') { rememberMode('open'); releaseGateHold(); return; }
@@ -238,11 +239,16 @@
         // from the allowlist, or maintenance just came on), the stale
         // "tester access" banner has to go before the real overlay drops.
         if (!session) { dropBanner(); showMaintenanceOverlay(status); releaseGateHold(); return; }
-        var allow = Array.isArray(status.maintenance_allow_user_ids) ? status.maintenance_allow_user_ids : [];
-        if (allow.indexOf(session.user.id) !== -1) { grantBypassView(true); return; }
-        window.coldAuth.checkIsAdmin().then(function (info) {
-          if (!info.isAdmin) { dropBanner(); showMaintenanceOverlay(status); releaseGateHold(); return; }
-          grantBypassView(false);
+        // The allowlist itself is private; the database only says whether THIS
+        // account is on it. An error counts as "not a tester" (admin check next).
+        Promise.resolve(window.coldSupabase.rpc('is_maintenance_tester')).then(function (r) {
+          return !!(r && !r.error && r.data === true);
+        }, function () { return false; }).then(function (isTester) {
+          if (isTester) { grantBypassView(true); return; }
+          window.coldAuth.checkIsAdmin().then(function (info) {
+            if (!info.isAdmin) { dropBanner(); showMaintenanceOverlay(status); releaseGateHold(); return; }
+            grantBypassView(false);
+          });
         });
       }).catch(function () {
         // Session check itself failed - fail open per file header, but

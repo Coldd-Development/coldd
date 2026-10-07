@@ -552,10 +552,13 @@
   var dataThenAttr = (thisScript && thisScript.getAttribute('data-then')) || '';
   var needsContent = dataThenAttr.indexOf('blog.js') >= 0;
   var contentTypes = needsContent ? ['post', 'tutorial', 'release', 'sale_event'] : ['sale_event'];
+  var PRODUCT_PUBLIC_COLS = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at';
   var contentQuery = window.coldSupabase.from('content').select('*').in('type', contentTypes).eq('visible', true).order('created_at', { ascending: false }).limit(20000);
 
   Promise.all([
-    window.coldSupabase.from('products').select('*').eq('is_active', true).limit(20000),
+    // Explicit columns, not '*': products.storage_path (the internal download
+    // path) is not readable by the public API, so a '*' select would be refused.
+    window.coldSupabase.from('products').select(PRODUCT_PUBLIC_COLS).eq('is_active', true).limit(20000),
     window.coldSupabase
       .from('reviews')
       .select('id, stars, text, created_at, reply, reply_at, user_name, products!inner(slug)')

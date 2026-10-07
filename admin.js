@@ -980,8 +980,18 @@
   }
   function refreshProducts() {
     if (!window.coldSupabase) return Promise.resolve();
-    return window.coldSupabase.from('products').select('*, product_legal(*)').order('title').then(function (res) {
+    // storage_path (the internal download path) isn't readable through the public
+    // API, so '*' is out; admins get the paths from an admin-only RPC and merge them.
+    var cols = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at, product_legal(*)';
+    return Promise.all([
+      window.coldSupabase.from('products').select(cols).order('title'),
+      window.coldSupabase.rpc('admin_product_storage_paths')
+    ]).then(function (both) {
+      var res = both[0];
       if (res.error) { console.error('[admin] failed to load products:', res.error.message); return; }
+      var paths = {};
+      ((both[1] && !both[1].error && both[1].data) || []).forEach(function (r) { paths[r.id] = r.storage_path; });
+      (res.data || []).forEach(function (r) { r.storage_path = paths[r.id] || ''; });
       PRODUCTS_CACHE = (res.data || []).map(mapProductRow);
       renderAll();
     });
@@ -6454,8 +6464,14 @@
   }
   function refreshSiteStatus() {
     if (!window.coldSupabase) return Promise.resolve();
-    return window.coldSupabase.from('site_status').select('*').eq('id', true).maybeSingle().then(function (res) {
+    return Promise.all([
+      window.coldSupabase.from('site_status').select('id, mode, maintenance_message, maintenance_ends_at, updated_at').eq('id', true).maybeSingle(),
+      // The tester allowlist is not publicly readable; admins fetch it by RPC.
+      window.coldSupabase.rpc('admin_maintenance_allowlist')
+    ]).then(function (both) {
+      var res = both[0];
       var data = res && res.data;
+      if (data) data.maintenance_allow_user_ids = both[1] && !both[1].error && Array.isArray(both[1].data) ? both[1].data : [];
       siteMode = (data && data.mode) || 'open';
       applySiteModeUI(siteMode);
       if (data) {
