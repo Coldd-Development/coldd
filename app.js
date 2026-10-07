@@ -1743,6 +1743,18 @@
           Array.prototype.slice.call(grid.querySelectorAll('.product')).forEach(function (el) {
             existingByCardId[window.__coldRating.slugOf(el)] = el;
           });
+          // The static grid still contains every product that existed at build
+          // time. Once the live catalog has loaded, drop any card that is no
+          // longer in it (hidden/Private or deleted), so retired products stop
+          // showing in the shop. Skipped if the catalog fetch failed, so an
+          // outage keeps the static cards instead of emptying the shop.
+          if (window.__CATALOG_OK) {
+            var liveIds = {};
+            (window.__CATALOG || []).forEach(function (p) { liveIds[p.id] = true; });
+            Object.keys(existingByCardId).forEach(function (id) {
+              if (!liveIds[id]) { existingByCardId[id].remove(); delete existingByCardId[id]; }
+            });
+          }
           (window.__CATALOG || []).filter(function (p) { return p.platform === shopPlatform; }).forEach(function (p) {
             var existing = existingByCardId[p.id];
             if (existing) {

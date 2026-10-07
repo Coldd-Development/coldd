@@ -4239,43 +4239,6 @@
     var m = e.target && e.target.closest && e.target.closest('.adm-invalid'); if (m) m.classList.remove('adm-invalid');
   });
 
-  // "Auto-fill with AI": drafts title, subtext, description, category and
-  // subcategory from the thumbnail + file name + whatever is already typed.
-  // Only empty fields are filled, so it never overwrites the admin's own text.
-  var aiFillBtn = $('admEditAiFill');
-  if (aiFillBtn) aiFillBtn.addEventListener('click', function () {
-    var platform = $('admEditPlatform').value;
-    var cats = CATEGORIES_BY_PLATFORM[platform] || [];
-    var subs = {};
-    cats.forEach(function (c) { subs[c] = (SUBCATS_BY_CAT[c] || []).map(function (x) { return x[0]; }); });
-    var label = aiFillBtn.textContent;
-    aiFillBtn.disabled = true; aiFillBtn.textContent = 'Drafting…';
-    invokeAdminFn('admin-ai-autofill', {
-      platform: platform,
-      titleHint: $('admEditTitleInput').value.trim(),
-      fileName: $('admEditTechFileName').value || '',
-      thumbnailUrl: $('admEditThumbUrl').value.trim(),
-      priceUsd: parseFloat($('admEditPrice').value) || 0,
-      categories: cats,
-      subcats: subs
-    }).then(function (res) {
-      var fl = (res && res.fields) || {};
-      if (fl.title && !$('admEditTitleInput').value.trim()) $('admEditTitleInput').value = fl.title;
-      if (fl.subtext && !$('admEditSubtext').value.trim()) $('admEditSubtext').value = fl.subtext;
-      if (fl.description && !$('admEditLongDesc').value.trim()) $('admEditLongDesc').value = fl.description;
-      if (fl.category && !$('admEditCat').value) {
-        catDropdown.setValue(fl.category);
-        if (fl.subcategory) subcatDropdown.setValue(fl.subcategory, true);
-      } else if (fl.subcategory && $('admEditCat').value === fl.category && !$('admEditSubcat').value) {
-        subcatDropdown.setValue(fl.subcategory, true);
-      }
-      clearInvalidMarks();
-      admToast('Drafted. Check it over before saving.', true);
-    }).catch(function (err) {
-      admToast(err.message || 'AI autofill failed.', false);
-    }).then(function () { aiFillBtn.disabled = false; aiFillBtn.textContent = label; });
-  });
-
   var editForm = $('admEditForm');
   if (editForm) editForm.addEventListener('submit', function (e) {
     e.preventDefault();

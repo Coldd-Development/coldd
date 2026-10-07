@@ -558,6 +558,7 @@
       window.__BUNDLES = (bundleRes && !bundleRes.error && bundleRes.data) ? bundleRes.data : [];
       if (prodRes.error) { fail(prodRes.error); return; }
       window.__CATALOG = (prodRes.data || []).map(toCard);
+      window.__CATALOG_OK = true; // distinguishes a real (possibly empty) catalog from a failed fetch
       if (revRes.error) { console.error('[coldd] Failed to load reviews:', revRes.error); window.__REVIEWS = []; }
       else window.__REVIEWS = (revRes.data || []).map(toReview);
       if (contentRes.error) {

@@ -4693,4 +4693,3 @@ html.auth-in .nav-notif[hidden] { display: block; }
 /* Product form: a required field left empty on save */
 .adm-invalid { outline: 1.5px solid #e5484d; outline-offset: 5px; border-radius: 10px; }
 .adm-invalid > span:first-child { color: #ff8a8f; }
-.dash-card-head:has(#admEditAiFill) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
