@@ -51,7 +51,7 @@ async function fetchProduct(id) {
   if (!res.ok) return null;
   var rows = await res.json();
   var p = rows[0];
-  if (!p) return null;
+  if (!p) return false; // confirmed: no active product with this slug
   return {
     title: p.title + ' - coldd Development',
     description: clamp(p.description || (p.title + ', a ' + (p.cat || 'game') + ' asset for ' + (p.platform || 'Roblox') + ' from coldd.'), 300),
@@ -107,6 +107,17 @@ export default {
 
     try {
       var meta = await fetchProduct(id);
+      // Confirmed unknown slug: serve the site's own 404 page with a real 404
+      // status. (A lookup error, meta === null, still falls back below.)
+      if (meta === false && prodPath) {
+        var nf = await fetch(ORIGIN + '/404.html');
+        if (nf.ok) {
+          var nfHeaders = new Headers(nf.headers);
+          nfHeaders.set('x-robots-tag', 'noindex');
+          return new Response(await nf.text(), { status: 404, headers: nfHeaders });
+        }
+        return originResponse;
+      }
       if (!meta) return originResponse;
 
       var html = await originResponse.text();
