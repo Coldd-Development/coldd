@@ -969,6 +969,7 @@
         canBeFree: legalRaw.can_be_free, disallowSales: legalRaw.disallow_sales
       }),
       versions: row.versions || [],
+      siteVersion: row.last_released_version || row.version || '',
       storagePath: row.storage_path || '',
       visible: !!row.is_active,
       platform: row.platform,
@@ -1612,24 +1613,16 @@
       statTile('Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
       statTile('Robux revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
       statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
-      statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits))
+      bbbRevTile()
     ].join('');
 
-    var joins = discordJoinsInRange();
     var owed = referralsOwedInfo();
-    // "Total audience" replaces the old Discord-only member tile - it rolls
-    // up every connected channel (Discord + X + YouTube + TikTok) with its
-    // growth over the selected range. Falls back to the Discord number
-    // alone until the social stats have loaded.
-    var aud1 = totalAudience();
+    // Audience and Discord growth live in the Marketing tab; the home row
+    // shows marketplace orders and site traffic instead.
     $('admHomeStatsSecondary').innerHTML = [
       statTile('Live sessions', LIVE_SESSIONS, 'active in the last 5 min', ''),
-      aud1.channels.length
-        ? deltaTile('Total audience', num(aud1.total), aud1.delta, aud1.channels.length + ' channel' + (aud1.channels.length === 1 ? '' : 's'))
-        : statTile('Total audience', DISCORD_STATS.memberCount != null ? num(DISCORD_STATS.memberCount) : '–', 'loading channels…', ''),
-      statTile('Discord net',
-        joins == null ? '–' : (joins.joins > 0 ? '+' : '') + joins.joins.toLocaleString('en-US'),
-        joins == null ? 'Gathering history' : ('member count · ' + (joins.partial ? 'since ' + joins.sinceKey : (RANGE_DAYS ? 'selected range' : 'all time'))), ''),
+      bbbOrdersTile(),
+      statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
       statTile('Referrals owed', aud(owed.usdTotal), owed.count ? (owed.count + ' request' + (owed.count === 1 ? '' : 's') + ' pending') : 'Nothing pending', '', { panel: 'analytics', title: owed.names.length ? 'Requested by: ' + owed.names.join(', ') : '' })
     ].join('');
 
@@ -3253,6 +3246,8 @@
       statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
       statTile('Avg order value', usd(aov), null, ''),
       statTile('Conversion rate', pct(conv), null, ''),
+      bbbRevTile(),
+      bbbOrdersTile(),
       statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
       statTile('Revenue per session', anSessions ? usd(curRev.usd / anSessions) : ' - ', anSessions.toLocaleString('en-US') + ' sessions', ''),
       statTile('Abandoned carts', usd(anAbandoned), ABANDONED.length + ' cart' + (ABANDONED.length === 1 ? '' : 's') + ' at risk', '')
@@ -4849,12 +4844,225 @@
     }).filter(Boolean);
   }
 
+  /* ================================================================
+     BUILTBYBIT STATS
+     Filled by the admin-builtbybit-sync edge function into bbb_purchases,
+     bbb_reviews and bbb_resource_snapshots (supabase/builtbybit.sql); the panels
+     read those tables directly. configured: null = not known yet, false = no
+     BUILTBYBIT_API_TOKEN secret, true = connected.
+     ================================================================ */
+  var BBB = { configured: null, purchases: [], reviews: [], snaps: [], syncing: false, error: '', syncedAt: null };
+  var BBB_RANGE = lsGet('coldd_admin_bbb_range_v1', 30);
+  var BBB_SYNC_KEY = 'coldd_admin_bbb_sync_at_v1';
+
+  // Refunded / reversed purchases are not revenue.
+  function bbbCounts(p) { return !/refund|revers|cancel|charge|dispute|void|fail/.test(String(p.status || '').toLowerCase()); }
+  function bbbPurchasesIn(start, end) {
+    return BBB.purchases.filter(function (p) {
+      if (!bbbCounts(p)) return false;
+      var t = new Date(p.purchased_at);
+      return (!start || t >= start) && (!end || t < end);
+    });
+  }
+  function bbbSum(list) {
+    var usdTotal = 0, other = 0;
+    list.forEach(function (p) {
+      var cur = String(p.currency || 'USD').toUpperCase();
+      if (cur === 'USD') usdTotal += Number(p.price) || 0; else other += 1;
+    });
+    return { usd: usdTotal, orders: list.length, other: other };
+  }
+  // Totals for the dashboard / analytics range and the window before it.
+  function bbbRangeTotals() {
+    var now = new Date(Date.now() + 1000);
+    var cur = bbbSum(bbbPurchasesIn(RANGE_DAYS ? rangeStart() : null, now));
+    var prev = { usd: 0, orders: 0 };
+    if (RANGE_DAYS) { var w = prevRangeWindow(); prev = bbbSum(bbbPurchasesIn(w.start, w.end)); }
+    return { cur: cur, prev: prev };
+  }
+  function bbbOffline() { return BBB.configured === null ? 'loading…' : 'not connected'; }
+  function bbbRevTile() {
+    if (!BBB.configured) return statTile('BuiltByBit revenue', '–', bbbOffline(), '', { panel: 'marketplaces' });
+    var t = bbbRangeTotals();
+    return statTile('BuiltByBit revenue', aud(t.cur.usd), usd(t.cur.usd) + ' USD', pctDelta(t.cur.usd, t.prev.usd), { panel: 'marketplaces' });
+  }
+  function bbbOrdersTile() {
+    if (!BBB.configured) return statTile('BuiltByBit orders', '–', bbbOffline(), '', { panel: 'marketplaces' });
+    var t = bbbRangeTotals();
+    return statTile('BuiltByBit orders', num(t.cur.orders), null, pctDelta(t.cur.orders, t.prev.orders), { panel: 'marketplaces' });
+  }
+
+  function bbbRenderAll() {
+    if (curPanel === 'marketplaces') renderMarketplaces();
+    if (curPanel === 'home') renderHome();
+    if (curPanel === 'analytics') renderAnalytics();
+  }
+  function refreshBbbData() {
+    if (!window.coldSupabase) return Promise.resolve();
+    return Promise.all([
+      window.coldSupabase.from('bbb_purchases').select('purchase_id, resource_id, resource_title, price, currency, status, renewal, purchased_at').order('purchased_at', { ascending: false }).limit(20000),
+      window.coldSupabase.from('bbb_reviews').select('review_id, resource_id, resource_title, rating, message, response, reviewed_at').order('reviewed_at', { ascending: false }).limit(200),
+      window.coldSupabase.from('bbb_resource_snapshots').select('resource_id, snapshot_date, title, price, currency, downloads, purchases, reviews, rating, latest_version, synced_at').order('snapshot_date', { ascending: false }).limit(3000)
+    ]).then(function (r) {
+      if (r[0].error || r[1].error || r[2].error) { console.error('[admin] builtbybit tables:', (r[0].error || r[1].error || r[2].error).message); return; }
+      BBB.purchases = r[0].data || [];
+      BBB.reviews = r[1].data || [];
+      BBB.snaps = r[2].data || [];
+      if (BBB.configured !== false && (BBB.purchases.length || BBB.snaps.length)) BBB.configured = true;
+      bbbRenderAll();
+    });
+  }
+  // Pulls fresh data from BuiltByBit. Throttled to every 30 minutes unless forced.
+  function bbbSync(force) {
+    if (BBB.syncing) return Promise.resolve();
+    var last = Number(lsGet(BBB_SYNC_KEY, 0)) || 0;
+    if (!force && Date.now() - last < 30 * 60 * 1000) return Promise.resolve();
+    BBB.syncing = true; BBB.error = '';
+    if (curPanel === 'marketplaces') renderBbb();
+    return invokeAdminFn('admin-builtbybit-sync', { action: 'sync' }, 'Could not sync BuiltByBit.').then(function (d) {
+      BBB.configured = d.configured === false ? false : true;
+      if (d.configured !== false) { lsSet(BBB_SYNC_KEY, Date.now()); BBB.syncedAt = d.syncedAt || new Date().toISOString(); }
+      if (d.errors && d.errors.length) BBB.error = 'Some data could not be read: ' + d.errors[0];
+    }).catch(function (err) {
+      BBB.error = err.message || 'Could not sync BuiltByBit.';
+    }).then(function () {
+      BBB.syncing = false;
+      return refreshBbbData();
+    }).then(function () { if (curPanel === 'marketplaces') renderBbb(); });
+  }
+  function refreshBbb() { return refreshBbbData().then(function () { return bbbSync(false); }); }
+
+  function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+  function bbbVer(s) { return String(s || '').toLowerCase().replace(/^v/, '').trim(); }
+  function bbbStars(n) {
+    var r = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+    return '<span class="adm-bbb-stars" aria-label="' + r + ' of 5">' + '★★★★★'.slice(0, r) + '<i>' + '★★★★★'.slice(r) + '</i></span>';
+  }
+  function bbbDailySeries(days) {
+    var out = [], byDay = {};
+    bbbPurchasesIn(null, null).forEach(function (p) {
+      if (String(p.currency || 'USD').toUpperCase() !== 'USD') return;
+      var k = String(p.purchased_at).slice(0, 10);
+      byDay[k] = (byDay[k] || 0) + (Number(p.price) || 0);
+    });
+    var n = days;
+    if (!n) {
+      var first = BBB.purchases.length ? new Date(BBB.purchases[BBB.purchases.length - 1].purchased_at) : null;
+      n = first ? Math.min(365, Math.max(7, Math.ceil((Date.now() - first.getTime()) / 86400000) + 1)) : 30;
+    }
+    for (var i = n - 1; i >= 0; i--) {
+      var d = new Date(Date.now() - i * 86400000), k = d.toISOString().slice(0, 10);
+      var v = Math.round((byDay[k] || 0) * 100) / 100;
+      out.push({ label: k.slice(5), v: v, tip: usd(v) });
+    }
+    return out;
+  }
+
+  function renderBbb() {
+    var body = $('admBbbBody');
+    if (!body) return;
+    Array.prototype.forEach.call(document.querySelectorAll('#admBbbRange button'), function (b) { b.classList.toggle('active', +b.getAttribute('data-bbb-range') === BBB_RANGE); });
+    var sync = $('admBbbSync'); if (sync) { sync.disabled = BBB.syncing; sync.textContent = BBB.syncing ? 'Syncing…' : 'Sync now'; }
+    var sub = $('admBbbSub');
+    if (sub) sub.textContent = BBB.configured ? (BBB.syncedAt ? 'Last synced ' + new Date(BBB.syncedAt).toLocaleString() : 'Gross sales as reported by BuiltByBit') : '';
+
+    if (BBB.configured === false) {
+      body.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Create a <strong>Private</strong> token at builtbybit.com/account/api, then run <code>supabase secrets set BUILTBYBIT_API_TOKEN=your-token</code> and press Sync now.</p>' +
+        (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
+      return;
+    }
+    if (BBB.configured === null) { body.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
+
+    var start = BBB_RANGE ? daysAgoStart(BBB_RANGE) : null, now = new Date(Date.now() + 1000);
+    var list = bbbPurchasesIn(start, now), cur = bbbSum(list);
+    var prev = { usd: 0, orders: 0 };
+    if (BBB_RANGE) { prev = bbbSum(bbbPurchasesIn(daysAgoStart(BBB_RANGE * 2), daysAgoStart(BBB_RANGE))); }
+    function delta(c, p) { if (!BBB_RANGE) return ''; var s = RANGE_DAYS; RANGE_DAYS = BBB_RANGE; var h = pctDelta(c, p); RANGE_DAYS = s; return h; }
+
+    // best seller in range
+    var byRes = {};
+    list.forEach(function (p) {
+      var r = byRes[p.resource_id] = byRes[p.resource_id] || { id: p.resource_id, title: p.resource_title || p.resource_id, orders: 0, usd: 0 };
+      r.orders += 1; if (String(p.currency || 'USD').toUpperCase() === 'USD') r.usd += Number(p.price) || 0;
+    });
+    var best = Object.keys(byRes).map(function (k) { return byRes[k]; }).sort(function (a, b) { return b.usd - a.usd || b.orders - a.orders; })[0];
+
+    var tiles = statGrid([
+      statTile('Revenue', aud(cur.usd), usd(cur.usd) + ' USD', delta(cur.usd, prev.usd)),
+      statTile('Orders', num(cur.orders), cur.other ? cur.other + ' in another currency, not counted in revenue' : null, delta(cur.orders, prev.orders)),
+      statTile('Avg order value', cur.orders ? usd(cur.usd / cur.orders) : '–', null, ''),
+      statTile('Best seller', best ? esc(best.title) : '–', best ? best.orders + ' order' + (best.orders === 1 ? '' : 's') + ' · ' + usd(best.usd) : 'no sales in range', '')
+    ]);
+
+    // latest snapshot per listing, joined with that range's sales
+    var latest = {};
+    BBB.snaps.forEach(function (s) { if (!latest[s.resource_id]) latest[s.resource_id] = s; });
+    var prods = allProducts();
+    var rows = Object.keys(latest).map(function (id) {
+      var s = latest[id], sales = byRes[id] || { orders: 0, usd: 0 };
+      var site = prods.filter(function (p) { return bbbNorm(p.title) === bbbNorm(s.title); })[0] || null;
+      var health;
+      if (!site) health = '<span class="adm-sub">Not matched to a product</span>';
+      else if (!s.latest_version) health = '<span class="adm-sub">No version on BuiltByBit</span>';
+      else if (!site.siteVersion) health = '<span class="adm-sub">No site version set</span>';
+      else if (bbbVer(site.siteVersion) === bbbVer(s.latest_version)) health = '<span class="dt-badge ok">Up to date</span>';
+      else health = '<span class="dt-badge warn">Site v' + esc(bbbVer(site.siteVersion)) + ' vs BuiltByBit v' + esc(bbbVer(s.latest_version)) + '</span> ' +
+        '<button type="button" class="adm-mp-done" data-bbb-flag="' + esc(site.dbId) + '">Flag needs update</button>';
+      return { title: s.title || id, orders: sales.orders, usd: sales.usd, downloads: s.downloads, rating: s.rating, reviews: s.reviews, ver: s.latest_version, health: health };
+    }).sort(function (a, b) { return b.usd - a.usd || a.title.localeCompare(b.title); });
+
+    var table = '<div class="adm-mini-head">Listings</div><div class="dash-tablewrap"><table class="dash-table"><thead><tr><th>Listing</th><th>Orders</th><th>Revenue</th><th>Downloads</th><th>Rating</th><th>Version</th><th>Site status</th></tr></thead><tbody>' +
+      (rows.map(function (r) {
+        return '<tr><td>' + esc(r.title) + '</td><td>' + num(r.orders) + '</td><td>' + usd(r.usd) + '</td><td>' + (r.downloads == null ? '–' : num(r.downloads)) + '</td><td>' +
+          (r.rating == null ? '–' : bbbStars(r.rating) + ' <span class="adm-sub">' + Number(r.rating).toFixed(1) + (r.reviews != null ? ' (' + r.reviews + ')' : '') + '</span>') + '</td><td>' + (r.ver ? esc(r.ver) : '–') + '</td><td>' + r.health + '</td></tr>';
+      }).join('') || '<tr><td colspan="7" class="adm-empty">No listings found yet. Press Sync now.</td></tr>') + '</tbody></table></div>';
+
+    var chart = '<div class="adm-mini-head">Revenue per day</div>' + svgBars(bbbDailySeries(BBB_RANGE), { height: 120, fmt: axisUsd });
+
+    var revs = BBB.reviews.slice(0, 8).map(function (r) {
+      var reply = r.response
+        ? '<div class="adm-bbb-reply"><strong>Your reply</strong><p>' + esc(r.response) + '</p></div>'
+        : '<form class="adm-bbb-replyform" data-rid="' + esc(r.resource_id) + '" data-rv="' + esc(r.review_id) + '"><textarea class="adm-textarea" rows="2" maxlength="5000" placeholder="Reply to this review"></textarea><button type="submit" class="btn btn-primary adm-btn-sm">Send reply</button></form>';
+      return '<article class="adm-bbb-review"><header>' + bbbStars(r.rating) + '<strong>' + esc(r.resource_title || '') + '</strong><span class="adm-sub">' + (r.reviewed_at ? new Date(r.reviewed_at).toLocaleDateString() : '') + '</span></header>' +
+        (r.message ? '<p>' + esc(r.message) + '</p>' : '') + reply + '</article>';
+    }).join('');
+    var reviews = '<div class="adm-mini-head">Latest reviews</div>' + (revs || '<p class="adm-empty">No reviews yet.</p>');
+
+    body.innerHTML = tiles + chart + table + reviews + (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
+  }
+
+  document.addEventListener('click', function (e) {
+    var rb = e.target.closest('#admBbbRange button');
+    if (rb) { BBB_RANGE = +rb.getAttribute('data-bbb-range'); lsSet('coldd_admin_bbb_range_v1', BBB_RANGE); renderBbb(); return; }
+    if (e.target.closest('#admBbbSync')) { bbbSync(true); return; }
+    var fl = e.target.closest('[data-bbb-flag]');
+    if (fl) { fl.disabled = true; mpSaveListings(fl.getAttribute('data-bbb-flag'), [{ key: 'builtbybit', status: 'needs_update' }]).then(function () { admToast('Flagged for update on BuiltByBit', true); }); }
+  });
+  document.addEventListener('submit', function (e) {
+    var f = e.target.closest ? e.target.closest('.adm-bbb-replyform') : null;
+    if (!f) return;
+    e.preventDefault();
+    var ta = f.querySelector('textarea'), btn = f.querySelector('button'), msg = ta.value.trim();
+    if (msg.length < 2) { ta.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Sending…';
+    invokeAdminFn('admin-builtbybit-sync', { action: 'reply_review', resourceId: f.getAttribute('data-rid'), reviewId: f.getAttribute('data-rv'), message: msg }, 'Could not send the reply.').then(function () {
+      var rv = BBB.reviews.filter(function (r) { return String(r.review_id) === f.getAttribute('data-rv'); })[0];
+      if (rv) rv.response = msg;
+      admToast('Reply sent to BuiltByBit', true);
+      renderBbb();
+    }).catch(function (err) {
+      btn.disabled = false; btn.textContent = 'Send reply';
+      admToast(err.message || 'Could not send the reply', false);
+    });
+  });
+
   var mpProductDD = makeDropdown($('admMpProductDD'), { valueInput: $('admMpProduct'), placeholder: 'Product', searchable: true });
   var mpMarketDD = makeDropdown($('admMpMarketDD'), { valueInput: $('admMpMarket'), placeholder: 'Marketplace' });
   mpMarketDD.setOptions(MARKETPLACES.map(function (m) { return { value: m.key, label: m.label }; }), '');
 
   function renderMarketplaces() {
     if (!$('admMpTasks')) return;
+    renderBbb();
     var prods = allProducts();
     mpProductDD.setOptions(prods.map(function (p) { return { value: p.dbId, label: p.title }; }), $('admMpProduct').value || '');
 
@@ -7221,6 +7429,7 @@
   refreshClientEvents();
   refreshAbandoned();
   refreshMarketplaces();
+  refreshBbb();
   refreshStaff();
   refreshRobloxCookieHealth();
   refreshLiveSessions();

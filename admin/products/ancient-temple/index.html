@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261007t" />
+  <link rel="stylesheet" href="/styles.css?v=20261008a" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -717,6 +717,22 @@
           <section class="dash-panel" id="adm-panel-marketplaces" hidden>
             <div class="dash-head"><h1>Marketplaces</h1><p>What still needs doing on BuiltByBit, ClearlyDev, Parcel and Creator Store.</p></div>
             <div class="dash-stats adm-stats-4" id="admMpStats"></div>
+
+            <div class="dash-card glass" id="admBbbCard">
+              <div class="dash-card-head adm-bbb-head">
+                <div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit stats</h2><span class="adm-sub" id="admBbbSub"></span></div>
+                <div class="adm-bbb-tools">
+                  <div class="adm-mp-filter" id="admBbbRange" role="group" aria-label="BuiltByBit date range">
+                    <button type="button" data-bbb-range="7">7D</button>
+                    <button type="button" data-bbb-range="30">30D</button>
+                    <button type="button" data-bbb-range="90">90D</button>
+                    <button type="button" data-bbb-range="0">All</button>
+                  </div>
+                  <button type="button" class="btn btn-ghost adm-btn-sm" id="admBbbSync">Sync now</button>
+                </div>
+              </div>
+              <div id="admBbbBody"></div>
+            </div>
 
             <div class="dash-card glass">
               <div class="dash-card-head"><h2>Add a task</h2></div>
@@ -1501,7 +1517,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
-  <script src="/site-gate.js?v=20261007t"></script>
-  <script src="/catalog.js?v=20261007t" data-then="/app.js?v=20261007t,/reviews.js?v=20260729a,/admin.js?v=20261007t"></script>
+  <script src="/site-gate.js?v=20261008a"></script>
+  <script src="/catalog.js?v=20261008a" data-then="/app.js?v=20261008a,/reviews.js?v=20260729a,/admin.js?v=20261008a"></script>
 </body>
 </html>

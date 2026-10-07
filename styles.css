@@ -4805,3 +4805,19 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 
 /* Auto-height description boxes: .adm-textarea gives them flex: 1 1 100%, which inside the column .adm-field overrides the height the script sets */
 .adm-textarea.adm-autogrow { flex: 0 0 auto; }
+
+/* Marketplaces: BuiltByBit stats card */
+.adm-bbb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.adm-bbb-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+.adm-bbb-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adm-bbb-stars { color: var(--warn); letter-spacing: 1px; font-size: 13px; white-space: nowrap; }
+.adm-bbb-stars i { font-style: normal; opacity: .28; }
+.adm-bbb-review { border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+.adm-bbb-review header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adm-bbb-review p { margin: 8px 0 0; color: var(--fg-2); font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.adm-bbb-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--accent); }
+.adm-bbb-reply strong { font-size: 12px; color: var(--fg-3); }
+.adm-bbb-replyform { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; }
+.adm-bbb-replyform textarea { flex: 1; min-height: 44px; }
+.adm-edit-msg.err { color: var(--warn); }
+@media (max-width: 640px) { .adm-bbb-replyform { flex-direction: column; align-items: stretch; } }
