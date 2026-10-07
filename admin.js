@@ -3809,7 +3809,7 @@
     $('admLegalMinUsd').value = legal.minSaleUsd || 0;
     $('admLegalMinRobux').value = legal.minSaleRobux || 0;
     $('admLegalMaxDiscount').value = legal.maxDiscountPct || 0;
-    $('admLegalCanBeFree').checked = !!legal.canBeFree;
+    $('admLegalCannotBeFree').checked = !legal.canBeFree;
     $('admLegalDisallowSales').checked = !!legal.disallowSales;
 
     showPanel('product-edit', Object.assign({ extra: p.slug }, opts));
@@ -4106,7 +4106,7 @@
     $('admLegalMinUsd').value = 0;
     $('admLegalMinRobux').value = 0;
     $('admLegalMaxDiscount').value = 0;
-    $('admLegalCanBeFree').checked = false;
+    $('admLegalCannotBeFree').checked = false;
     $('admLegalDisallowSales').checked = false;
 
     showPanel('product-edit', Object.assign({ extra: 'new' }, opts));
@@ -4159,7 +4159,7 @@
         minSaleUsd: Math.max(0, parseFloat($('admLegalMinUsd').value) || 0),
         minSaleRobux: Math.max(0, parseFloat($('admLegalMinRobux').value) || 0),
         maxDiscountPct: Math.max(0, Math.min(100, parseFloat($('admLegalMaxDiscount').value) || 0)),
-        canBeFree: $('admLegalCanBeFree').checked,
+        canBeFree: !$('admLegalCannotBeFree').checked,
         disallowSales: $('admLegalDisallowSales').checked
       }
     };
@@ -4187,7 +4187,7 @@
     var minRbx = Math.max(0, parseFloat($('admLegalMinRobux').value) || 0);
     var maxPct = Math.max(0, Math.min(100, parseFloat($('admLegalMaxDiscount').value) || 0));
     var disallow = $('admLegalDisallowSales').checked;
-    var canFree = $('admLegalCanBeFree').checked;
+    var canFree = !$('admLegalCannotBeFree').checked;
     var errs = [];
     if (was && disallow) errs.push('this product is marked "do not discount"');
     if (minUsd > 0 && price > 0 && price < minUsd) errs.push('the USD price is below the $' + minUsd.toFixed(2) + ' minimum');
@@ -4219,13 +4219,14 @@
     need(!!cat, 'Category', $('admEditCatDD'));
     if (!priv) {
       need(!!$('admEditSubcat').value || !(SUBCATS_BY_CAT[cat] || []).length, 'Subcategory', $('admEditSubcatDD'));
-      need(parseFloat($('admEditPrice').value) > 0 || $('admLegalCanBeFree').checked && $('admEditPrice').value !== '', 'USD price', $('admEditPrice'));
-      if ($('admEditPlatform').value === 'Roblox') need(parseFloat($('admEditRobuxPrice').value) > 0 || ($('admLegalCanBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
+      need(parseFloat($('admEditPrice').value) > 0 || !$('admLegalCannotBeFree').checked && $('admEditPrice').value !== '', 'USD price', $('admEditPrice'));
+      if ($('admEditPlatform').value === 'Roblox') need(parseFloat($('admEditRobuxPrice').value) > 0 || (!$('admLegalCannotBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
       if ($('admEditResell').checked) {
         need(parseFloat($('admEditResellPrice').value) > 0, 'Resell licence price (USD)', $('admEditResellPrice'));
         need(parseFloat($('admEditResellRobuxPrice').value) > 0, 'Resell licence price (Robux)', $('admEditResellRobuxPrice'));
       }
-      need(!!$('admEditSubtext').value.trim(), 'Subtext', $('admEditSubtext'));
+      need(!!$('admEditSubtext').value.trim(), 'Summary', $('admEditSubtext'));
+      need($('admEditSubtext').value.length <= 100, 'Summary shortened to 100 characters or fewer', $('admEditSubtext'));
       need(!!$('admEditLongDesc').value.trim(), 'Description', $('admEditLongDesc'));
       need(!!$('admEditThumbUrl').value.trim(), 'Thumbnail image', $('admEditThumbDrop'));
       var hasFile = !!pendingStoragePath || (!isCreate && !/no file uploaded/i.test(($('admEditFileNote') || {}).textContent || ''));

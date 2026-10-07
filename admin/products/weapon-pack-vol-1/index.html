@@ -495,8 +495,7 @@
             <div class="dash-head">
               <a href="#" class="dt-link lnk-back" data-panel="products">Back to Products</a>
               <h1 id="admEditHeading">Edit product</h1>
-              <p>Update this product's details.</p>
-            </div>
+                          </div>
             <form id="admEditForm">
               <input type="hidden" id="admEditId" />
 
@@ -539,15 +538,14 @@
                   </label>
                 </div>
 
-                <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Subtext (shown on catalog cards)</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="140" /></label>
-                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Description (shown on the product page)</span><textarea id="admEditLongDesc" class="adm-input adm-textarea" rows="4"></textarea></label>
+                <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Summary</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="100" /></label>
+                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Description</span><textarea id="admEditLongDesc" class="adm-input adm-textarea" rows="4"></textarea></label>
 
-                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Private (hidden from the catalog; every product is shown otherwise)</span></label>
-                <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority (boost in the catalog's Recommended sort)</span></label>
+                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Private</span></label>
+                <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority</span></label>
                 <label class="adm-field" id="admEditWasPriceWrap" style="margin-top:20px;max-width:260px;">
                   <span>Sale price (was)</span>
                   <input type="number" min="0" step="0.01" id="admEditWasPrice" class="adm-input" placeholder="Leave blank for no sale" />
-                  <span class="adm-hint">Shown crossed out next to the real price. Set by the Sales &amp; Discounts weekly deals automation, or by hand here for a one-off manual sale.</span>
                 </label>
               </div>
 
@@ -561,7 +559,6 @@
                     <div class="adm-dropzone-empty" id="admEditThumbEmpty">
                       <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                       <p><strong>Click to upload</strong> or drag and drop</p>
-                      <p class="adm-dropzone-hint">PNG, JPG, GIF or WEBP</p>
                     </div>
                     <div class="adm-dropzone-preview" id="admEditThumbPreviewWrap" hidden>
                       <img id="admEditThumbPreview" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" />
@@ -577,10 +574,8 @@
                     <input type="file" id="admEditGalleryInput" accept="image/*" multiple hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop files</p>
-                    <p class="adm-dropzone-hint">PNG, JPG, GIF or WEBP - multiple allowed</p>
                   </div>
                   <div class="adm-gallery-grid" id="admEditGalleryList"></div>
-                  <p class="adm-note">Extra images shown in the product page gallery, in order.</p>
                 </div>
 
                 <label class="adm-field" style="margin-top:20px;max-width:420px;"><span>YouTube demo link</span><input type="url" id="admEditVideoUrl" class="adm-input" placeholder="https://youtube.com/watch?v=…" /></label>
@@ -591,10 +586,8 @@
                     <input type="file" id="admEditFileInput" hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop</p>
-                    <p class="adm-dropzone-hint">Any file type - this becomes the downloadable product file</p>
                   </div>
                   <a class="adm-sub" id="admEditFileNote" target="_blank" rel="noopener" style="margin-top:8px;display:inline-block;">No file uploaded yet</a>
-                  <p class="adm-note">Delivery is per-product via Supabase Storage - customers can't download until a file is uploaded here.</p>
                   <input type="hidden" id="admEditTechFileName" />
                 </div>
               </div>
@@ -607,9 +600,8 @@
 
               <div class="dash-card glass">
                 <div class="dash-card-head"><h2>Legal</h2><button type="button" class="btn btn-ghost adm-btn-sm" id="admLegalDownloadBtn" hidden><span class="btn-label">Download legal info (.docx)</span><span class="btn-spinner" hidden></span></button></div>
-                <p class="adm-sub">Licensing paperwork and sale restrictions for this product. The download bundles everything below - terms, contacts, cost, and file links - into one document for DMCA or other legal requests.</p>
 
-                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Terms of Service (internal)</span><textarea id="admLegalTos" class="adm-input adm-textarea" rows="4" placeholder="Restrictions the licenser has placed on coldd's use/sale of this product (internal reference only - not shown to customers)."></textarea></label>
+                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Terms of Service</span><textarea id="admLegalTos" class="adm-input adm-textarea" rows="4"></textarea></label>
 
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Proof of license</span>
@@ -617,10 +609,8 @@
                     <input type="file" id="admLegalProofInput" multiple hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop files</p>
-                    <p class="adm-dropzone-hint">Any file type - multiple allowed</p>
                   </div>
                   <div class="adm-file-list" id="admLegalProofList"></div>
-                  <p class="adm-note">Kept private - only visible to staff.</p>
                 </div>
 
                 <div class="adm-field" style="margin-top:20px;">
@@ -629,10 +619,8 @@
                     <input type="file" id="admLegalDevProofInput" multiple accept="video/*,.mp4,.mov,.webm,.mkv,.avi" hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop files</p>
-                    <p class="adm-dropzone-hint">MP4 and other video formats - multiple allowed</p>
                   </div>
                   <div class="adm-file-list" id="admLegalDevProofList"></div>
-                  <p class="adm-note">Screen recordings or clips showing the product being built. Kept private - only visible to staff.</p>
                 </div>
 
                 <div class="adm-field" style="margin-top:20px;">
@@ -641,29 +629,20 @@
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admLegalContactAdd" style="margin-top:10px;">+ Add contact</button>
                 </div>
 
+                <input type="hidden" id="admLegalCostAmount" value="0" />
+                <input type="hidden" id="admLegalCostCurrency" value="usd" />
                 <div class="adm-edit-grid" style="margin-top:20px;">
-                  <label class="adm-field"><span>License cost</span>
-                    <div style="display:flex;gap:8px;">
-                      <input type="number" min="0" step="0.01" id="admLegalCostAmount" class="adm-input" style="flex:1;min-width:0;" />
-                      <div class="adm-cost-toggle" id="admLegalCostCurrencyToggle">
-                        <button type="button" class="active" data-currency="usd">USD</button>
-                        <button type="button" data-currency="robux">Robux</button>
-                      </div>
-                    </div>
-                    <input type="hidden" id="admLegalCostCurrency" value="usd" />
-                  </label>
                   <label class="adm-field"><span>Date license was purchased</span><input type="date" id="admLegalPurchasedAt" class="adm-input" /></label>
+                  <label class="adm-field"><span>Maximum discount (%)</span><input type="number" min="0" max="100" step="1" id="admLegalMaxDiscount" class="adm-input" placeholder="0 = no cap" /></label>
                 </div>
 
                 <div class="adm-edit-grid" style="margin-top:20px;">
                   <label class="adm-field"><span>Minimum sale price (USD)</span><input type="number" min="0" step="0.01" id="admLegalMinUsd" class="adm-input" /></label>
                   <label class="adm-field"><span>Minimum sale price (Robux)</span><input type="number" min="0" step="1" id="admLegalMinRobux" class="adm-input" /></label>
-                  <label class="adm-field"><span>Maximum discount (%)</span><input type="number" min="0" max="100" step="1" id="admLegalMaxDiscount" class="adm-input" placeholder="0 = no cap" /></label>
                 </div>
-                <p class="adm-note" style="margin-top:6px;">No sale event, coupon, weekly deal, or automatic offer will ever take this product below the price floors, or more than the maximum discount percentage off its list price. Whichever limit is reached first applies.</p>
 
-                <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admLegalCanBeFree" /> <span>Can be given away for free (e.g. promos/giveaways)</span></label>
-                <label class="adm-field-check"><input type="checkbox" id="admLegalDisallowSales" /> <span>Disallow from all sales - no discount or sale event can apply, regardless</span></label>
+                <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admLegalCannotBeFree" /> <span>Cannot be given away for free</span></label>
+                <label class="adm-field-check"><input type="checkbox" id="admLegalDisallowSales" /> <span>Disallow from all sales</span></label>
               </div>
 
               <div class="adm-edit-actions">
@@ -1459,6 +1438,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20260926a"></script>
-  <script src="/catalog.js?v=20261007h" data-then="/app.js?v=20261007h,/reviews.js?v=20260729a,/admin.js?v=20261007h"></script>
+  <script src="/catalog.js?v=20261007i" data-then="/app.js?v=20261007i,/reviews.js?v=20260729a,/admin.js?v=20261007i"></script>
 </body>
 </html>
