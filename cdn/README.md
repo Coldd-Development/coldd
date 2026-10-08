@@ -61,7 +61,7 @@ Install `upload.php`, `download.php`, `cdn-lib.php`, `cdn-config.php` and the ke
 DNS record. The files stay on the Storage Box, so nothing is copied and no code or database changes.
 
 ## Notes and limits
-- Images: JPG/PNG/WebP/GIF/AVIF, content checked from the bytes, 10 MB (5 MB avatars). Private files: any type, up to 4 GB, uploaded in 4 MB retried chunks; the hosting account needs temporary disk space for one file at a time while it is assembled.
+- Images: JPG/PNG/WebP/GIF/AVIF, content checked from the bytes, 100 MB (5 MB avatars). Private files: any type, up to 4 GB, uploaded in 4 MB retried chunks; the hosting account needs temporary disk space for one file at a time while it is assembled.
 - Upload links last 5 minutes (1 hour for private files); download links 2 minutes (legal-doc links 7 days).
 - Needs PHP's curl built with SFTP (the `ping` response shows `"sftp":true`).
 - Not done: automatic WebP/AVIF re-encoding on upload.

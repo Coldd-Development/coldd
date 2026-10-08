@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
         ok: true,
         driver: "cdn",
         path: cdnPath,
-        uploadUrl: await cdnSignedUrl("upload", cdnPath, { maxBytes: 10 * 1024 * 1024 }),
+        uploadUrl: await cdnSignedUrl("upload", cdnPath, { maxBytes: 100 * 1024 * 1024 }),
         publicUrl: cdnPublicUrl(cdnPath),
       });
     }
