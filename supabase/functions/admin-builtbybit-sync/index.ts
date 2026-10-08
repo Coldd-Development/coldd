@@ -47,7 +47,7 @@ const PENDING_RECHECK_MS = 6 * 60 * 60 * 1000;
 // HOT_DAYS are re-read on every scheduled run, and everything that has ever sold gets a
 // full re-read once a day as a safety net.
 const HOT_DAYS = 14;
-const HOT_RECHECK_MS = 12 * 60 * 1000;
+const HOT_RECHECK_MS = 12 * 60 * 1000; // hot listings get a quick read (newest pages only) this often
 const FULL_RECHECK_MS = 24 * 60 * 60 * 1000;
 
 let DEADLINE = Infinity;
@@ -167,7 +167,7 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
 }
 
 // Walks ?page=N until a page comes back empty (or repeats), capped.
-async function listAll(token: string, path: string): Promise<Obj[]> {
+async function listAll(token: string, path: string, stop?: (rows: Obj[]) => boolean): Promise<Obj[]> {
   const out: Obj[] = [];
   const seen = new Set<string>();
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -180,6 +180,7 @@ async function listAll(token: string, path: string): Promise<Obj[]> {
     if (seen.has(sig)) break;
     seen.add(sig);
     out.push(...rows);
+    if (stop && stop(rows)) break;
   }
   return out;
 }
@@ -296,9 +297,10 @@ Deno.serve(async (req: Request) => {
     const { data: countRows } = await admin.rpc("bbb_detail_counts");
     const stored = new Map<string, Obj>();
     for (const c of (countRows ?? []) as Obj[]) stored.set(String(c.resource_id), c);
-    const { data: stateRows } = await admin.from("bbb_resource_state").select("resource_id, detail_at").limit(5000);
-    const state = new Map<string, string | null>();
-    for (const s of (stateRows ?? []) as Obj[]) state.set(String(s.resource_id), s.detail_at);
+    const { data: stateRows } = await admin.from("bbb_resource_state").select("resource_id, detail_at, full_at").limit(5000);
+    const state = new Map<string, string | null>(); // last read of any kind
+    const fullState = new Map<string, string | null>(); // last complete read of every purchase
+    for (const s of (stateRows ?? []) as Obj[]) { state.set(String(s.resource_id), s.detail_at); fullState.set(String(s.resource_id), s.full_at); }
 
     const nowMs = Date.now();
     const hotSince = new Date(nowMs - HOT_DAYS * 86400000).toISOString();
@@ -312,40 +314,71 @@ Deno.serve(async (req: Request) => {
         needR: (l.reviews ?? 0) > Number(st.reviews_n),
       };
     };
-    const queue = listings.filter((l) => {
-      const done = state.get(String(l.resource_id));
-      const age = done ? nowMs - new Date(done).getTime() : Infinity;
-      const g = lagOf(l);
-      if (g.missingP > 0 || g.needR) return age >= RECHECK_MS;
-      if (hot.has(String(l.resource_id))) return age >= HOT_RECHECK_MS;
-      if (g.pending) return age >= PENDING_RECHECK_MS;
-      const sold = (l.purchases ?? 0) > 0 || (stored.get(String(l.resource_id))?.purchases_n ?? 0) > 0;
-      return sold && age >= FULL_RECHECK_MS;
-    }).sort((a, b) => {
-      // Missing purchases first (biggest gap first), then recently active listings,
-      // then whatever was read longest ago.
-      const ga = lagOf(a), gb = lagOf(b);
-      const ha = hot.has(String(a.resource_id)) ? 1 : 0, hb = hot.has(String(b.resource_id)) ? 1 : 0;
-      return (gb.missingP - ga.missingP) || (hb - ha) ||
-        (new Date(state.get(String(a.resource_id)) ?? 0).getTime() - new Date(state.get(String(b.resource_id)) ?? 0).getTime());
-    });
+    const ageOf = (m: Map<string, string | null>, id: string) => {
+      const d = m.get(id);
+      return d ? nowMs - new Date(d).getTime() : Infinity;
+    };
+    // "full" re-reads every purchase of a listing; "quick" reads only the newest pages (see
+    // processListing) and is what keeps recently active listings fresh every run.
+    const modeOf = (l: Obj): "full" | "quick" | null => {
+      const id = String(l.resource_id), g = lagOf(l);
+      const detailAge = ageOf(state, id), fullAge = ageOf(fullState, id);
+      if (g.missingP > 0 || g.needR) return detailAge >= RECHECK_MS ? "full" : null;
+      if (g.pending && fullAge >= PENDING_RECHECK_MS) return "full";
+      const sold = (l.purchases ?? 0) > 0 || (stored.get(id)?.purchases_n ?? 0) > 0;
+      if (sold && fullAge >= FULL_RECHECK_MS) return "full";
+      if (hot.has(id) && detailAge >= HOT_RECHECK_MS) return "quick";
+      return null;
+    };
+    const queue = listings
+      .map((l) => ({ l, mode: modeOf(l) }))
+      .filter((x): x is { l: Obj; mode: "full" | "quick" } => x.mode !== null)
+      .sort((a, b) => {
+        // Missing purchases first (biggest gap first), then recently active listings,
+        // then whatever was read longest ago.
+        const ga = lagOf(a.l), gb = lagOf(b.l);
+        const ha = hot.has(String(a.l.resource_id)) ? 1 : 0, hb = hot.has(String(b.l.resource_id)) ? 1 : 0;
+        return (gb.missingP - ga.missingP) || (hb - ha) ||
+          (new Date(state.get(String(a.l.resource_id)) ?? 0).getTime() - new Date(state.get(String(b.l.resource_id)) ?? 0).getTime());
+      });
 
     let next = 0;
     let processed = 0;
-    async function processListing(l: Obj) {
+    async function processListing(l: Obj, mode: "full" | "quick") {
       const rid = String(l.resource_id);
       const title = l.title ?? `Resource ${rid}`;
       const st = stored.get(rid) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
       let note: string | null = null;
       let retryLater = false; // a rate limit / timeout: leave it at the front of the queue
+      let readPurchases = false;
 
       // Skip the purchases read when stale reviews are the only reason this listing is queued.
       const g = lagOf(l);
       const reviewsOnly = g.needR && g.missingP === 0 && !g.pending && !hot.has(rid);
       if (!reviewsOnly) {
         try {
-          const ps = await listAll(token!, `/resources/${rid}/purchases`);
+          let stop: ((rows: Obj[]) => boolean) | undefined;
+          if (mode === "quick") {
+            // Quick read: only valid when the API returns newest first (checked on page 1);
+            // stop at the first page whose purchases are all stored already. Otherwise this
+            // quietly falls back to reading every page.
+            const { data: have } = await admin.from("bbb_purchases").select("purchase_id").eq("resource_id", rid).limit(10000);
+            const known = new Set<string>((have ?? []).map((r: Obj) => String(r.purchase_id)));
+            let pageNo = 0, newestFirst = false;
+            const dateOf = (p: Obj) => Date.parse(toIso(pick(p, ["purchase_date", "date", "created_date", "creation_date", "purchased_at"])) ?? "");
+            stop = (rows) => {
+              pageNo++;
+              if (pageNo === 1) {
+                const ds = rows.map(dateOf).filter((n) => Number.isFinite(n));
+                newestFirst = ds.length > 1 && ds[0] >= ds[ds.length - 1];
+              }
+              if (!newestFirst) return false;
+              return rows.every((p) => known.has(`${rid}:${str(pick(p, ["purchase_id", "id"]))}`));
+            };
+          }
+          const ps = await listAll(token!, `/resources/${rid}/purchases`, stop);
           noteKeys("purchase", ps[0]);
+          readPurchases = true;
           const rows: Obj[] = [];
           for (const p of ps) {
             const pid = str(pick(p, ["purchase_id", "id"]));
@@ -361,6 +394,7 @@ Deno.serve(async (req: Request) => {
               status: str(pick(p, ["status"])),
               renewal: Boolean(pick(p, ["renewal", "is_renewal"])),
               purchased_at: at,
+              validation_date: toIso(pick(p, ["validation_date", "validated_date", "validated_at"])),
             });
           }
           for (let i = 0; i < rows.length; i += 500) {
@@ -408,13 +442,13 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      await admin.from("bbb_resource_state").upsert({ resource_id: rid, detail_at: retryLater ? null : new Date().toISOString(), note }, { onConflict: "resource_id" });
+      await admin.from("bbb_resource_state").upsert({ resource_id: rid, detail_at: retryLater ? null : new Date().toISOString(), full_at: (mode === "full" && readPurchases && !retryLater) ? new Date().toISOString() : (fullState.get(rid) ?? null), note }, { onConflict: "resource_id" });
       if (!retryLater) processed++;
     }
     async function worker() {
       while (next < queue.length && !overBudget()) {
-        const l = queue[next++];
-        try { await processListing(l); } catch (e) { if ((e as ApiFail).status !== 408) errors.push(String((e as Error).message)); }
+        const item = queue[next++];
+        try { await processListing(item.l, item.mode); } catch (e) { if ((e as ApiFail).status !== 408) errors.push(String((e as Error).message)); }
       }
     }
     await Promise.all(Array.from({ length: Math.min(POOL, queue.length) }, worker));

@@ -119,3 +119,9 @@ $$;
 revoke all on function public.bbb_detail_counts() from public, anon, authenticated;
 
 grant execute on function public.bbb_detail_counts() to service_role;
+
+-- Part 3: last COMPLETE read of every purchase (a quick read of the newest pages does not count).
+alter table public.bbb_resource_state add column if not exists full_at timestamptz;
+
+-- Part 4: when BuiltByBit validated the purchase (null while pending). BuiltByBit credits revenue on this date.
+alter table public.bbb_purchases add column if not exists validation_date timestamptz;
