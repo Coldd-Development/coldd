@@ -3288,6 +3288,7 @@
     $('admAnStats').innerHTML = [
       statTile('Site Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
       statTile('Site Robux Revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
+      robuxRevTile(),
       bbbRevTile(),
       statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
       statTile('Avg order value', usd(aov), null, ''),
@@ -3443,6 +3444,7 @@
       if ($('admAnRecentOrdersSub')) $('admAnRecentOrdersSub').textContent = anFeed.length + ' order' + (anFeed.length === 1 ? '' : 's') + ' in this range' + (anFeed.length > shownN ? ', showing the latest ' + shownN : '');
       $('admAnRecentOrders').innerHTML = anFeed.slice(0, 15).map(feedRowHtml).join('') || '<p class="adm-empty">No orders in this range.</p>';
     }
+    renderRobuxAnalytics();
     renderBbbAnalytics();
   }
 
@@ -5533,6 +5535,113 @@
       });
     }
   });
+
+  /* ================================================================
+     GROUP ROBUX REVENUE (Roblox group sale ledger)
+     Filled by the admin-robux-revenue edge function (pg_cron) into robux_sales; this panel only ever
+     reads aggregates from the admin_robux_stats RPC, never raw rows. Amounts are Robux the group
+     receives AFTER Roblox's 30% cut. Days are UTC.
+     ================================================================ */
+  var ROBUX = { stats: {}, state: null, loading: {} };
+  var ROBUX_TYPE_LABELS = { GamePass: 'Game passes', DeveloperProduct: 'Developer products', Asset: 'Assets', Unknown: 'Other' };
+  var ROBUX_COLORS = ['#f0883e', '#5b9cf0', '#4cc38a', '#e0b13a', '#a78bfa'];
+  var ROBUX_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function robuxStats(range) { return ROBUX.stats[String(range)] || null; }
+  // Loads (or, with force, silently refreshes) the aggregates for a date range.
+  function robuxLoad(range, force) {
+    var sb = window.coldSupabase, key = String(range);
+    if (!sb || ROBUX.loading[key] || (ROBUX.stats[key] && !force)) return Promise.resolve();
+    ROBUX.loading[key] = true;
+    return Promise.all([sb.rpc('admin_robux_stats', { p_days: range }), sb.from('robux_state').select('*').eq('id', true).maybeSingle()]).then(function (r) {
+      if (r[0].error) throw r[0].error;
+      ROBUX.stats[key] = r[0].data;
+      ROBUX.state = (r[1] && r[1].data) || ROBUX.state;
+      delete ROBUX.loading[key];
+      if (curPanel === 'analytics') renderAnalytics();
+    }).catch(function (e) {
+      delete ROBUX.loading[key];
+      if (!ROBUX.stats[key]) ROBUX.stats[key] = { error: true };
+      console.error('[admin] robux stats:', e && e.message);
+    });
+  }
+  setInterval(function () {
+    if (document.hidden || curPanel !== 'analytics') return;
+    robuxLoad(RANGE_DAYS, true);
+  }, 5 * 60 * 1000);
+
+  // The Analytics stat tile
+  function robuxRevTile() {
+    var d = robuxStats(RANGE_DAYS);
+    if (!d) { robuxLoad(RANGE_DAYS); return statTile('Group Robux Revenue', '–', 'loading…', ''); }
+    if (d.error) return statTile('Group Robux Revenue', '–', 'not available', '');
+    return statTile('Group Robux Revenue', robuxRaw(d.total), '≈ ' + usd((Number(d.total) || 0) * DEVEX_USD_PER_ROBUX) + ' USD', pctDelta(Number(d.total) || 0, Number(d.prev_total) || 0));
+  }
+  // One point per UTC day, zeros included, so quiet days show as dips instead of being skipped.
+  function robuxDailySeries(d, range) {
+    var by = {};
+    (d.daily || []).forEach(function (x) { by[x.d] = x; });
+    var end = utcMidnight(0), start;
+    if (range) start = utcMidnight(range);
+    else {
+      var f = d.first_sale ? new Date(d.first_sale) : utcMidnight(30);
+      start = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate()));
+    }
+    var out = [], guard = 0;
+    for (var t = new Date(start); t <= end && guard < 1500; t = new Date(t.getTime() + 86400000), guard++) {
+      var key = t.toISOString().slice(0, 10), x = by[key];
+      var v = x ? Number(x.robux) || 0 : 0, n = x ? Number(x.sales) || 0 : 0;
+      out.push({ label: fmtUtc(t), v: v, tip: robuxRaw(v) + ' · ' + n + (n === 1 ? ' sale' : ' sales') });
+    }
+    return out;
+  }
+  function renderRobuxAnalytics() {
+    var box = $('admRobux');
+    if (!box) return;
+    var range = RANGE_DAYS, d = robuxStats(range);
+    if (!d) { robuxLoad(range); box.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
+    if (d.error) { box.innerHTML = '<p class="adm-empty">Robux revenue is not available right now.</p>'; return; }
+    var total = Number(d.total) || 0, sales = Number(d.sales) || 0;
+    var tiles = statGrid([
+      statTile('Group Robux Revenue', robuxRaw(total), '≈ ' + usd(total * DEVEX_USD_PER_ROBUX) + ' USD', pctDelta(total, Number(d.prev_total) || 0)),
+      statTile('Robux sales', num(sales), null, pctDelta(sales, Number(d.prev_sales) || 0)),
+      statTile('Average sale', sales ? robuxRaw(total / sales) : '–', null, ''),
+      statTile('Pending', robuxRaw(d.pending), 'not cleared yet', ''),
+      statTile('Unique buyers', num(d.buyers), d.repeat_buyers ? num(d.repeat_buyers) + ' bought more than once' : null, '')
+    ]);
+    if (!sales) { box.innerHTML = tiles + '<p class="adm-empty">No Robux sales in this range.</p>'; return; }
+
+    var chart = '<div class="adm-mini-head">Robux revenue per day</div>' +
+      svgTrend([{ name: 'Robux revenue', color: 'var(--accent)', data: robuxDailySeries(d, range) }], { height: 150, fmt: axisNum });
+
+    var typeSegs = (d.types || []).map(function (t, i) {
+      return { label: ROBUX_TYPE_LABELS[t.type] || t.type, value: Number(t.robux) || 0, color: ROBUX_COLORS[i % ROBUX_COLORS.length], display: robuxRaw(t.robux), plain: robuxRaw(t.robux) + ' · ' + t.sales + ' sales' };
+    });
+    var types = '<div><div class="adm-mini-head">By item type</div>' + donutChart(typeSegs, { centerLabel: 'R$ ' + axisNum(total), centerSub: 'revenue' }) + '</div>';
+
+    var top = (d.top_items || []).map(function (it) {
+      return '<tr><td>' + esc(it.name) + '</td><td>' + esc(ROBUX_TYPE_LABELS[it.type] || it.type) + '</td><td>' + robuxRaw(it.robux) + '</td><td>' + num(it.sales) + '</td><td>' + (total ? Math.round((Number(it.robux) || 0) / total * 100) : 0) + '%</td></tr>';
+    }).join('');
+    var items = '<div><div class="adm-mini-head">Top items</div><div class="dash-tablewrap"><table class="dash-table"><thead><tr><th>Item</th><th>Type</th><th>Robux</th><th>Sales</th><th>Share</th></tr></thead><tbody>' + top + '</tbody></table></div></div>';
+
+    var byDow = {};
+    (d.weekday || []).forEach(function (x) { byDow[x.dow] = x; });
+    var dowData = ROBUX_DOW.map(function (name, i) {
+      var x = byDow[i], v = x ? Number(x.robux) || 0 : 0, n = x ? Number(x.sales) || 0 : 0;
+      return { label: name, v: v, tip: robuxRaw(v) + ' · ' + n + ' sales' };
+    });
+    var dow = '<div><div class="adm-mini-head">Busiest weekdays</div>' + svgBars(dowData, { height: 120, fmt: axisNum }) +
+      '<div class="bbb-legend" style="justify-content:space-between;margin-top:4px">' + ROBUX_DOW.map(function (n) { return '<span>' + n + '</span>'; }).join('') + '</div></div>';
+
+    var bestRows = (d.best_days || []).map(function (b) {
+      return '<tr><td>' + esc(fmtUtc(new Date(b.d + 'T00:00:00Z'))) + '</td><td>' + robuxRaw(b.robux) + '</td><td>' + num(b.sales) + '</td></tr>';
+    }).join('');
+    var best = '<div><div class="adm-mini-head">Best days</div><div class="dash-tablewrap"><table class="dash-table"><thead><tr><th>Day</th><th>Robux</th><th>Sales</th></tr></thead><tbody>' + bestRows + '</tbody></table></div></div>';
+
+    var warn = (ROBUX.state && ROBUX.state.last_error) ? '<div class="adm-edit-msg err">Last Robux sync: ' + esc(ROBUX.state.last_error) + '</div>' : '';
+    box.innerHTML = tiles + chart + '<div class="adm-two-col" style="margin-top:14px">' + types + items + '</div>' +
+      '<div class="adm-two-col" style="margin-top:14px">' + dow + best + '</div>' + warn;
+  }
 
   var mpProductDD = makeDropdown($('admMpProductDD'), { valueInput: $('admMpProduct'), placeholder: 'Product', searchable: true });
   var mpMarketDD = makeDropdown($('admMpMarketDD'), { valueInput: $('admMpMarket'), placeholder: 'Marketplace' });
