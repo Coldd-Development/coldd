@@ -4607,17 +4607,23 @@
     if (!can('admin')) return;
     var id = $('admEditId').value;
     var p = findProduct(id); if (!p) return;
-    if (!(await dialogConfirm('Remove “' + p.title + '” from the storefront? You can restore it later by editing the product and setting Released back on.', { title: 'Remove product', acceptLabel: 'Remove product' }))) return;
+    if (!(await dialogConfirm('Permanently delete “' + p.title + '”? This cannot be undone. Its legal info, reviews and wishlist entries are deleted with it. (A product that has been purchased cannot be erased, because that would break order history, so it is hidden from the storefront instead.)', { title: 'Delete product', acceptLabel: 'Delete permanently' }))) return;
     editDeleteBtn.disabled = true;
-    callDeleteProduct(p.dbId).then(function () {
-      logAudit('Removed product "' + p.title + '"');
+    var deleteResult = null;
+    callDeleteProduct(p.dbId).then(function (d) {
+      deleteResult = d || {};
+      logAudit(deleteResult.mode === 'hidden' ? 'Hid product "' + p.title + '" (it has orders, so it was kept)' : 'Permanently deleted product "' + p.title + '"');
       return refreshProducts();
     }).then(function () {
       showPanel('products');
-      admToast('Product removed', true);
+      if (deleteResult && deleteResult.mode === 'hidden') {
+        admToast('Hidden, not deleted: ' + p.title + ' has ' + deleteResult.orders + ' order' + (deleteResult.orders === 1 ? '' : 's') + ', so it is kept for order history', false);
+      } else {
+        admToast('Product permanently deleted', true);
+      }
     }).catch(function (err) {
       editDeleteBtn.disabled = false;
-      admToast(err.message || 'Could not remove product', false);
+      admToast(err.message || 'Could not delete product', false);
     });
   });
   var legalDownloadBtn = $('admLegalDownloadBtn');
