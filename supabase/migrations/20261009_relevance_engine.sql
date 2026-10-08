@@ -21,11 +21,14 @@
 -- max_discount_pct cap, and no discount at all when disallow_sales is set (same rules as before).
 
 drop function if exists public.get_checkout_cross_sell(text[], integer);
+drop function if exists public.get_checkout_cross_sell(text[], integer, jsonb);
+drop function if exists public.get_checkout_cross_sell(text[], integer, jsonb, uuid);
 
 create function public.get_checkout_cross_sell(
   p_slugs text[],
   p_limit integer default 3,
-  p_interest jsonb default '{}'::jsonb
+  p_interest jsonb default '{}'::jsonb,
+  p_user_id uuid default null
 )
 returns table (
   product_slug   text,
@@ -63,7 +66,8 @@ as $$
   owned as (
     select distinct oi.product_id
     from order_items oi join orders o on o.id = oi.order_id and o.status = 'paid'
-    where auth.uid() is not null and o.user_id = auth.uid()
+    where (case when auth.role() = 'service_role' then coalesce(p_user_id, auth.uid()) else auth.uid() end) is not null
+      and o.user_id = (case when auth.role() = 'service_role' then coalesce(p_user_id, auth.uid()) else auth.uid() end)
   ),
   signals as (select * from public.catalog_demand_signals()),
   revrank as (select * from public.catalog_revenue_rank()),
@@ -135,5 +139,5 @@ as $$
   limit greatest(1, coalesce(p_limit, 3));
 $$;
 
-grant execute on function public.get_checkout_cross_sell(text[], integer, jsonb) to anon, authenticated;
+grant execute on function public.get_checkout_cross_sell(text[], integer, jsonb, uuid) to anon, authenticated;
 notify pgrst, 'reload schema';
