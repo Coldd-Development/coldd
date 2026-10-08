@@ -4854,3 +4854,14 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 .bbb-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .bbb-legend i.bbb-rev { background: #4ea1f3; }
 .bbb-legend i.bbb-ord { background: #f5a524; }
+
+/* BuiltByBit vs website split, payment methods, funnel table */
+.bbb-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 6px; }
+.bbb-split-title { font-size: 12px; color: var(--fg-2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.bbb-pay { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 18px; align-items: start; margin-top: 6px; }
+@media (max-width: 760px) { .bbb-pay { grid-template-columns: 1fr; } }
+.bbb-funnel th, .bbb-funnel td { white-space: nowrap; text-align: right; }
+.bbb-funnel th:first-child, .bbb-funnel td:first-child { text-align: left; white-space: normal; min-width: 160px; }
+.bbb-funnel .bbb-th-bbb { color: #f0883e; text-align: center; border-bottom: 2px solid #f0883e55; }
+.bbb-funnel .bbb-th-site { color: #5b9cf0; text-align: center; border-bottom: 2px solid #5b9cf055; }
+.bbb-funnel-total td { border-top: 1px solid var(--hairline); background: rgba(255,255,255,.03); }
