@@ -99,7 +99,6 @@ async function revertAuto(admin: ReturnType<typeof createClient>, ids?: string[]
 // expected revenue per visitor. No made-up elasticity; with no data yet it
 // explores evenly, and it converges as results come in.
 // ---------------------------------------------------------------------------
-const STOPWORDS = new Set(["the", "and", "pack", "kit", "set", "bundle", "asset", "assets", "system", "template", "roblox", "for", "with", "v2", "v1", "map", "combat"]);
 const BBB_HALF_LIFE_DAYS = 30;
 const BBB_LOOKBACK_DAYS = 120;
 const VIEW_LOOKBACK_DAYS = 14;
@@ -111,8 +110,20 @@ const PRIOR_CONV_BETA = 24; // ~4% starting guess; real data swamps it
 function normTitle(t: string) {
   return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
-function tokens(t: string) {
-  return new Set(String(t || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOPWORDS.has(w)));
+// Filler words are detected from the data, not listed by hand: a word is "common" when it appears in
+// more than 10% of a large reference corpus (product title+description plus BuiltByBit title+summary).
+function words(t: string) {
+  return String(t || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+}
+function commonWords(docs: string[]): Set<string> {
+  const df = new Map<string, number>();
+  for (const d of docs) for (const w of new Set(words(d))) df.set(w, (df.get(w) || 0) + 1);
+  const out = new Set<string>();
+  if (docs.length >= 50) for (const [w, n] of df) if (n > 0.1 * docs.length) out.add(w);
+  return out;
+}
+function tokens(t: string, common: Set<string>) {
+  return new Set(words(t).filter((w) => !common.has(w)));
 }
 
 // Standard normal + gamma + beta samplers (Marsaglia-Tsang) for Thompson sampling.
@@ -190,7 +201,7 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
 
   const { data: products, error: prodErr } = await admin
     .from("products")
-    .select("id, slug, title, cat, subcat, price_usd, was_price, weekly_deal_auto, created_at, weekly_deal_excluded, product_legal(min_sale_usd, disallow_sales, max_discount_pct)")
+    .select("id, slug, title, description, cat, subcat, price_usd, was_price, weekly_deal_auto, created_at, weekly_deal_excluded, product_legal(min_sale_usd, disallow_sales, max_discount_pct)")
     .eq("is_active", true);
   if (prodErr) throw new Error(prodErr.message);
 
@@ -227,8 +238,14 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
     const ageDays = Math.max(0, (now - new Date(r.created_at).getTime()) / 86400000);
     weightByRes.set(String(r.resource_id), (weightByRes.get(String(r.resource_id)) || 0) + Math.pow(0.5, ageDays / BBB_HALF_LIFE_DAYS));
   }
+  const { data: bbbText } = await admin.from("bbb2_resources").select("title, summary");
+  const corpus: string[] = [
+    ...((products ?? []) as Array<{ title: string; description?: string }>).map((p) => `${p.title || ""} ${p.description || ""}`),
+    ...((bbbText ?? []) as Array<{ title: string; summary: string | null }>).map((r) => `${r.title || ""} ${r.summary || ""}`),
+  ];
+  const common = commonWords(corpus);
   const bbbList = (bbbRes ?? []).map((r: { resource_id: string; title: string }) => ({
-    key: normTitle(r.title), toks: tokens(r.title), w: weightByRes.get(String(r.resource_id)) || 0,
+    key: normTitle(r.title), toks: tokens(r.title, common), w: weightByRes.get(String(r.resource_id)) || 0,
   })).filter((r) => r.w > 0);
 
   // --- last weeks' deals (rotation) and learned results per depth ---
@@ -263,7 +280,7 @@ async function runAlgorithm(admin: ReturnType<typeof createClient>, actorName: s
     if (legalMax > 0) maxPct = Math.min(maxPct, Math.floor(legalMax));
     if (!arms.length || maxPct < Math.min(...arms)) continue;
 
-    const key = normTitle(p.title), toks = tokens(p.title);
+    const key = normTitle(p.title), toks = tokens(p.title, common);
     let direct = 0, theme = 0;
     for (const r of bbbList) {
       if (r.key === key) { direct += r.w; continue; }
