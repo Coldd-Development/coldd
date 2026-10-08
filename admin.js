@@ -3542,7 +3542,7 @@
   // used as a Storage path prefix for organization - it doesn't need to
   // match the product's real slug, so a brand-new unsaved product gets a
   // throwaway draft identifier instead of blocking uploads until first save.
-  function uploadToStorage(kind, file, slugOverride) {
+  function uploadToStorageRaw(kind, file, slugOverride) {
     var slug = slugOverride || $('admEditId').value;
     if (!slug) {
       if (!draftSlug) draftSlug = 'draft-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
@@ -3593,6 +3593,19 @@
         if (upRes.error) throw new Error(upRes.error.message || 'Upload failed.');
         return { path: d.path, publicUrl: d.publicUrl };
       });
+    });
+  }
+
+  // Every upload reports back with the same corner toast as "Product created":
+  // green and auto-dismissing on success, red and sticky (click to dismiss) on failure.
+  function uploadToStorage(kind, file, slugOverride) {
+    return uploadToStorageRaw(kind, file, slugOverride).then(function (r) {
+      admToast('Uploaded ' + file.name, true);
+      return r;
+    }, function (err) {
+      admToast(file.name + ' failed to upload: ' + ((err && err.message) || 'try again'), false);
+      if (err && typeof err === 'object') err.toasted = true;
+      throw err;
     });
   }
 
@@ -3881,14 +3894,14 @@
     uploadToStorage('thumbnail', file).then(function (r) {
       $('admEditThumbUrl').value = r.publicUrl;
       updateThumbPreview();
-    }).catch(function (err) { alert(err.message || 'Could not upload thumbnail.'); });
+    }).catch(function () { /* admToast already reported it */ });
   }
   function addGalleryFiles(files) {
     Array.prototype.forEach.call(files, function (f) {
       uploadToStorage('gallery', f).then(function (r) {
         editGallery.push(r.publicUrl);
         renderGalleryList();
-      }).catch(function (err) { alert(err.message || 'Could not upload image.'); });
+      }).catch(function () { /* admToast already reported it */ });
     });
   }
   function renderContactList() {
@@ -4050,7 +4063,7 @@
         return invokeAdminFn('admin-unreleased-files', { action: 'create', storagePath: r.path, displayName: f.name, sizeBytes: f.size });
       }).then(function () {
         return loadUnreleasedFiles();
-      }).catch(function (err) { alert(err.message || 'Upload failed.'); });
+      }).catch(function (err) { if (!(err && err.toasted)) admToast((err && err.message) || 'Upload failed.', false); });
     });
   });
   var unreleasedList = $('admUnreleasedList');
@@ -4184,7 +4197,6 @@
         var idx = list.indexOf(row);
         if (idx !== -1) list.splice(idx, 1);
         rerender();
-        alert(err.message || 'Could not upload file.');
       });
     });
   }
