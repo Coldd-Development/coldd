@@ -622,6 +622,28 @@
               <div class="dash-card glass">
                 <div class="dash-card-head"><h2>Legal</h2><button type="button" class="btn btn-ghost adm-btn-sm" id="admLegalDownloadBtn" hidden><span class="btn-label">Download legal info (.docx)</span><span class="btn-spinner" hidden></span></button></div>
 
+                <div class="adm-field" style="margin-top:16px;">
+                  <span>License type</span>
+                  <div class="adm-dd" id="admLegalLicenseTypeDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val placeholder">Select license type</span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="License type" hidden></div>
+                  </div>
+                  <input type="hidden" id="admLegalLicenseType" />
+                  <small class="adm-sub" id="admLegalLicenseTypeHelp"></small>
+                </div>
+
+                <div id="admLegalRevShare" hidden>
+                  <div class="adm-edit-grid" style="margin-top:16px;">
+                    <label class="adm-field"><span>Revenue share owed to the owner (%)</span><input type="number" min="0" max="100" step="0.01" id="admLegalRevSharePct" class="adm-input" placeholder="e.g. 20" /></label>
+                    <label class="adm-field"><span>Payment platform</span><input type="text" id="admLegalRevSharePlatform" class="adm-input" maxlength="60" placeholder="e.g. PayPal" /></label>
+                    <label class="adm-field adm-field-wide"><span>Payment link</span><input type="text" id="admLegalRevShareLink" class="adm-input" maxlength="300" placeholder="Their payment link or address" /></label>
+                  </div>
+                  <small class="adm-sub">The person being paid is the licenser listed under Licenser contact details below. Nothing is paid automatically yet; this is recorded so a payout tracker can use it later.</small>
+                </div>
+
                 <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Terms of Service</span><textarea id="admLegalTos" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></label>
 
                 <div class="adm-field" style="margin-top:20px;">
@@ -1525,6 +1547,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009e" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
+  <script src="/catalog.js?v=20261009f" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
 </body>
 </html>

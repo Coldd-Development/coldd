@@ -152,6 +152,12 @@ Deno.serve(async (req: Request) => {
             new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: legal?.tos || "No terms of sale text on file." })] }),
 
             heading("How coldd acquired the right to sell this"),
+            field("License type", ({ ownership: "Ownership", resell_plus: "Resell+ (sell, and sell resell licenses)", resell_rights: "Resell Rights (sell only)", revenue_share: "Revenue Share" } as Record<string, string>)[legal?.license_type] || " - "),
+            ...(legal?.license_type === "revenue_share" ? [
+              field("Revenue share owed to the owner", legal?.revenue_share_pct != null ? `${legal.revenue_share_pct}% of sales` : " - "),
+              field("Payment platform", legal?.revenue_share_payment_platform || " - "),
+              field("Payment link", legal?.revenue_share_payment_link || " - "),
+            ] : []),
             field("Cost", legal?.license_cost != null ? `${legal.license_cost} ${(legal?.license_cost_currency || "usd").toUpperCase()}` : " - "),
             field("Purchased on", legal?.license_purchased_at || " - "),
             field("Can be offered for free", legal?.can_be_free ? "Yes" : "No"),

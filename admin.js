@@ -915,7 +915,7 @@
      server-side) - never written directly from here.
      ================================================================ */
   function defaultLegal() {
-    return { tos: '', proofFiles: [], devProofFiles: [], contacts: [], licenseCost: 0, licenseCostCurrency: 'usd', licensePurchasedAt: '', minSaleUsd: 0, minSaleRobux: 0, maxDiscountPct: 0, canBeFree: false, disallowSales: false };
+    return { tos: '', licenseType: '', revenueSharePct: '', revenueSharePaymentPlatform: '', revenueSharePaymentLink: '', proofFiles: [], devProofFiles: [], contacts: [], licenseCost: 0, licenseCostCurrency: 'usd', licensePurchasedAt: '', minSaleUsd: 0, minSaleRobux: 0, maxDiscountPct: 0, canBeFree: false, disallowSales: false };
   }
   function toYouTubeEmbed(url) {
     url = (url || '').trim();
@@ -962,7 +962,12 @@
       weeklyDealExcluded: !!row.weekly_deal_excluded,
       tech: Object.assign(defaultTech(), row.tech || {}),
       legal: Object.assign(defaultLegal(), {
-        tos: legalRaw.tos, proofFiles: legalRaw.proof_files, devProofFiles: legalRaw.dev_proof_files,
+        tos: legalRaw.tos,
+        licenseType: legalRaw.license_type || '',
+        revenueSharePct: legalRaw.revenue_share_pct != null ? Number(legalRaw.revenue_share_pct) : '',
+        revenueSharePaymentPlatform: legalRaw.revenue_share_payment_platform || '',
+        revenueSharePaymentLink: legalRaw.revenue_share_payment_link || '',
+        proofFiles: legalRaw.proof_files, devProofFiles: legalRaw.dev_proof_files,
         contacts: legalRaw.contacts, licenseCost: legalRaw.license_cost, licenseCostCurrency: legalRaw.license_cost_currency,
         licensePurchasedAt: legalRaw.license_purchased_at, minSaleUsd: legalRaw.min_sale_usd, minSaleRobux: legalRaw.min_sale_robux,
         maxDiscountPct: legalRaw.max_discount_pct,
@@ -3962,6 +3967,35 @@
     }).join('');
   }
 
+  // License type (Legal card). Revenue Share reveals the percentage owed to the owner and where to pay them.
+  var LICENSE_TYPES = [
+    { value: '', label: 'Not set' },
+    { value: 'ownership', label: 'Ownership' },
+    { value: 'resell_plus', label: 'Resell+' },
+    { value: 'resell_rights', label: 'Resell Rights' },
+    { value: 'revenue_share', label: 'Revenue Share' }
+  ];
+  var LICENSE_HELP = {
+    ownership: 'We own this product outright.',
+    resell_plus: 'We can sell this as normal and also sell resell licenses to others.',
+    resell_rights: 'We can sell this, but we cannot sell resell licenses to others.',
+    revenue_share: 'We sell this and owe the owner a percentage of every sale.'
+  };
+  function updateLicenseTypeUi() {
+    var v = $('admLegalLicenseType').value;
+    $('admLegalLicenseTypeHelp').textContent = LICENSE_HELP[v] || '';
+    $('admLegalRevShare').hidden = v !== 'revenue_share';
+  }
+  var licenseTypeDropdown = makeDropdown($('admLegalLicenseTypeDD'), { valueInput: $('admLegalLicenseType'), placeholder: 'Select license type', onChange: updateLicenseTypeUi });
+  licenseTypeDropdown.setOptions(LICENSE_TYPES, '');
+  function setLicenseTypeFields(legal) {
+    licenseTypeDropdown.setValue(legal.licenseType || '', true);
+    $('admLegalRevSharePct').value = legal.revenueSharePct !== '' && legal.revenueSharePct != null ? legal.revenueSharePct : '';
+    $('admLegalRevSharePlatform').value = legal.revenueSharePaymentPlatform || '';
+    $('admLegalRevShareLink').value = legal.revenueSharePaymentLink || '';
+    updateLicenseTypeUi();
+  }
+
   function openProductEdit(id, opts) {
     var p = findProduct(id); if (!p) return;
     pendingStoragePath = null;
@@ -4026,6 +4060,7 @@
     $('admLegalMaxDiscount').value = legal.maxDiscountPct || 0;
     $('admLegalCannotBeFree').checked = !legal.canBeFree;
     $('admLegalDisallowSales').checked = !!legal.disallowSales;
+    setLicenseTypeFields(legal);
 
     showPanel('product-edit', Object.assign({ extra: p.slug }, opts));
   }
@@ -4318,6 +4353,7 @@
     renderContactList(); renderProofList(); renderDevProofList();
     $('admLegalCostAmount').value = 0;
     setCostCurrency('usd');
+    setLicenseTypeFields({});
     $('admLegalPurchasedAt').value = '';
     $('admLegalMinUsd').value = 0;
     $('admLegalMinRobux').value = 0;
@@ -4366,6 +4402,10 @@
       },
       legal: {
         tos: $('admLegalTos').value.trim(),
+        licenseType: $('admLegalLicenseType').value,
+        revenueSharePct: $('admLegalLicenseType').value === 'revenue_share' ? (parseFloat($('admLegalRevSharePct').value) || 0) : null,
+        revenueSharePaymentPlatform: $('admLegalLicenseType').value === 'revenue_share' ? $('admLegalRevSharePlatform').value.trim() : '',
+        revenueSharePaymentLink: $('admLegalLicenseType').value === 'revenue_share' ? $('admLegalRevShareLink').value.trim() : '',
         proofFiles: editProofFiles.slice(),
         devProofFiles: editDevProofFiles.slice(),
         contacts: editContacts.filter(function (c) { return c.label || c.value; }),
@@ -4433,6 +4473,10 @@
     var cat = $('admEditCat').value;
     need(!!$('admEditTitleInput').value.trim(), 'Title', $('admEditTitleInput'));
     need(!!cat, 'Category', $('admEditCatDD'));
+    if ($('admLegalLicenseType').value === 'revenue_share') {
+      var revPct = parseFloat($('admLegalRevSharePct').value);
+      need(revPct > 0 && revPct <= 100, 'Revenue share percentage (1 to 100)', $('admLegalRevSharePct'));
+    }
     if (!priv) {
       need(!!$('admEditSubcat').value || !(SUBCATS_BY_CAT[cat] || []).length, 'Subcategory', $('admEditSubcatDD'));
       need(parseFloat($('admEditPrice').value) > 0 || !$('admLegalCannotBeFree').checked && $('admEditPrice').value !== '', 'USD price', $('admEditPrice'));
