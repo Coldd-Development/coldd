@@ -4878,3 +4878,6 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 .co-rb-name small { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
 .co-rb-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 .co-rb-actions .btn { width: 100%; }
+
+.co-rb-items { display: flex; flex-direction: column; gap: 10px; margin: 0 0 18px; max-height: 40vh; overflow-y: auto; }
+.co-rb-items .co-rb-item { margin: 0; }

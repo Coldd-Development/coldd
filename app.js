@@ -6675,23 +6675,29 @@
       // Mixed cart + Robux selected: say which item can't be bought with Robux and
       // let the buyer either pick another method or drop the USD-only items.
       function showRobuxBlockedModal(offs) {
-        var first = offs[0];
-        var more = offs.length > 1 ? ' and ' + (offs.length - 1) + ' more item' + (offs.length > 2 ? 's' : '') : '';
+        var multi = offs.length > 1;
         var canDrop = offs.length < cart.length;
         var overlay = document.createElement('div');
         overlay.className = 'confirm-overlay';
+        var rows = offs.map(function (o, idx) {
+          var isRes = o.licence === 'resell' || o.id.indexOf('--resell') !== -1;
+          return '<div class="co-rb-item"><span class="co-rb-thumb" data-i="' + idx + '"></span>' +
+            '<div class="co-rb-name">' + esc(o.title) + (isRes ? '<small>Resell licence</small>' : '') + '</div></div>';
+        }).join('');
         overlay.innerHTML =
           '<div class="confirm-modal mkt-popup-modal co-robux-block" role="dialog" aria-modal="true">' +
-          '<div class="co-rb-item"><span class="co-rb-thumb"></span>' +
-          '<div class="co-rb-name">' + esc(first.title) + (first.licence === 'resell' || first.id.indexOf('--resell') !== -1 ? '<small>Resell licence</small>' : '') + (more ? '<small>' + more + '</small>' : '') + '</div></div>' +
-          '<h3 class="mkt-popup-title">' + esc(first.title) + more + (offs.length > 1 ? ' cannot' : ' cannot') + ' be purchased with Robux</h3>' +
-          '<p class="mkt-popup-sub">Please pay with a different payment method' + (canDrop ? ', or continue with Robux without ' + (offs.length > 1 ? 'those items' : 'this item') + '.' : '.') + '</p>' +
+          '<div class="co-rb-items">' + rows + '</div>' +
+          '<h3 class="mkt-popup-title">' + (multi ? 'These products cannot be purchased with Robux' : esc(offs[0].title) + ' cannot be purchased with Robux') + '</h3>' +
+          '<p class="mkt-popup-sub">Please pay with a different payment method' + (canDrop ? ', or continue with Robux without ' + (multi ? 'these items' : 'this item') + '.' : '.') + '</p>' +
           '<div class="co-rb-actions">' +
           '<button type="button" class="btn btn-primary" id="coRbOther">Use a different payment method</button>' +
-          (canDrop ? '<button type="button" class="btn btn-tinted" id="coRbDrop">Continue without ' + esc(first.title) + (more ? ' ' + more.trim() : '') + '</button>' : '') +
+          (canDrop ? '<button type="button" class="btn btn-tinted" id="coRbDrop">Continue without ' + (multi ? 'these products' : esc(offs[0].title)) + '</button>' : '') +
           '</div></div>';
         document.body.appendChild(overlay);
-        overlay.querySelector('.co-rb-thumb').style.backgroundImage = 'url("' + String(first.image || '') + '")';
+        offs.forEach(function (o, idx) {
+          var t = overlay.querySelector('.co-rb-thumb[data-i="' + idx + '"]');
+          if (t) t.style.backgroundImage = 'url("' + String(o.image || '') + '")';
+        });
         function close() { overlay.remove(); document.removeEventListener('keydown', onKey); }
         function onKey(e) { if (e.key === 'Escape') close(); }
         document.addEventListener('keydown', onKey);
