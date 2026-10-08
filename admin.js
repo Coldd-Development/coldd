@@ -3977,6 +3977,7 @@
 
     var legal = p.legal || defaultLegal();
     $('admLegalTos').value = legal.tos || '';
+    autoGrow($('admLegalTos'));
     editContacts = (legal.contacts || []).map(function (c) { return Object.assign({}, c); });
     editProofFiles = (legal.proofFiles || []).map(function (f) { return typeof f === 'string' ? { name: f, url: null } : f; });
     editDevProofFiles = (legal.devProofFiles || []).map(function (f) { return typeof f === 'string' ? { name: f, url: null } : f; });
@@ -4276,6 +4277,7 @@
     $('admEditVideoUrl').value = '';
 
     $('admLegalTos').value = '';
+    autoGrow($('admLegalTos'));
     editContacts = []; editProofFiles = []; editDevProofFiles = [];
     renderContactList(); renderProofList(); renderDevProofList();
     $('admLegalCostAmount').value = 0;
@@ -4749,10 +4751,13 @@
   function autoGrow(ta) {
     if (!ta) return;
     ta.style.height = 'auto';
-    ta.style.height = (ta.scrollHeight + 2) + 'px';
+    // Inside a closed section the box has no layout (scrollHeight 0): leave it at its normal
+    // height and let the section opening re-run this.
+    if (ta.scrollHeight > 0) ta.style.height = (ta.scrollHeight + 2) + 'px';
   }
-  function autoGrowAll() { autoGrow($('admEditLongDesc')); autoGrow($('admUpdDescInput')); }
-  ['admEditLongDesc', 'admUpdDescInput'].forEach(function (id) {
+  function autoGrowAll() { autoGrow($('admEditLongDesc')); autoGrow($('admUpdDescInput')); autoGrow($('admLegalTos')); }
+  document.addEventListener('toggle', autoGrowAll, true);
+  ['admEditLongDesc', 'admUpdDescInput', 'admLegalTos'].forEach(function (id) {
     var ta = $(id); if (ta) ta.addEventListener('input', function () { autoGrow(ta); });
   });
   window.addEventListener('resize', autoGrowAll);
