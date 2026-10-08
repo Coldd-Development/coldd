@@ -256,6 +256,12 @@
     window.__robux = function (usd) { return 'R$ ' + Math.round((Number(usd) || 0) * ROBUX_PER_USD).toLocaleString('en-US'); };
     window.__fiat = function (usd) { return fmtFiat(usd, byCode[fiatCode] || byCode.USD); };
     window.__money = function (usd) { return mode === 'robux' ? window.__robux(usd) : fmtFiat(usd, byCode[fiatCode] || byCode.USD); };
+    // True when the admin turned Robux pricing off for this product (id may carry --resell/--bundle/--crosssell).
+    window.__robuxOff = function (id) {
+      var base = String(id || '').replace(/--(resell|bundle|crosssell)$/, '');
+      var p = (window.__CATALOG || []).filter(function (c) { return c.id === base; })[0];
+      return !!(p && p.robuxDisabled);
+    };
     // A genuinely free product reads "Free", never "$0" / "R$ 0". Product
     // list, detail and cart-line prices use this; order subtotals, savings
     // amounts and settled receipts keep showing the actual number.

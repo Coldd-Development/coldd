@@ -2311,7 +2311,7 @@
             var baseText = baseUsd <= 0
               ? 'Free'
               : (rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : ((robuxOff2 && window.__fiat) ? window.__fiat(baseUsd) : (window.__money ? window.__money(baseUsd) : ('$' + baseUsd))));
-            priceRow.innerHTML = (was ? '<span class="p-was">' + (window.__money ? window.__money(Number(was)) : ('$' + was)) + '</span>' : '') + '<span class="p-price" data-usd="' + baseUsd + '">' + baseText + '</span>';
+            priceRow.innerHTML = (was ? '<span class="p-was">' + ((robuxOff2 && window.__fiat) ? window.__fiat(Number(was)) : (window.__money ? window.__money(Number(was)) : ('$' + was))) + '</span>' : '') + '<span class="p-price" data-usd="' + baseUsd + '">' + baseText + '</span>';
           }
         }
         function refilter(resetPage) {
@@ -2627,6 +2627,7 @@
           var rbx = catalogRobuxPrice(item.id, item.licence);
           if (rbx != null) return 'R$ ' + Math.round(rbx).toLocaleString('en-US');
         }
+        if (window.__robuxOff && window.__robuxOff(item.id) && window.__fiat) return window.__fiat(item.price);
         return money(item.price);
       }
       function subtotalMoney() {
@@ -3177,7 +3178,7 @@
         function relatedCard(p) {
           var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
           var rbx = robuxMode ? catalogRobuxPrice(p.id) : null;
-          var priceText = rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum));
+          var priceText = rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : ((p.robuxDisabled && window.__fiat) ? window.__fiat(p.priceNum) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum)));
           return '<article class="product" data-id="' + esc(p.id) + '" data-resell="' + (p.resell ? 'yes' : 'no') + '" data-catlabel="' + esc(p.cat) + '" data-price="' + p.priceNum + '">' +
             '<div class="p-thumb" style="background-image:url(\'' + p.image + '\')"></div>' +
             '<div class="p-body"><h3 class="p-name">' + esc(p.title) + '</h3>' +
@@ -3658,7 +3659,7 @@
             if (!priceEl) return;
             var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
             var rbx = robuxMode ? catalogRobuxPrice(p.id) : null;
-            priceEl.textContent = rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum));
+            priceEl.textContent = rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : ((p.robuxDisabled && window.__fiat) ? window.__fiat(p.priceNum) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum)));
           });
         }
         window.addEventListener('currencychange', function () { if (cur) refreshPrice(); syncRelatedPricing(); });
@@ -4040,7 +4041,7 @@
       function wishPriceText(p) {
         var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
         var rbx = robuxMode && p.robuxPrice > 0 ? p.robuxPrice : null;
-        return rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum));
+        return rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : ((p.robuxDisabled && window.__fiat) ? window.__fiat(p.priceNum) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum)));
       }
       // Card-grid layout, matching Licenses (.dash-prod/.dp-thumb/.dp-body)
       // rather than the old compact row list - a wishlist entry is a product
@@ -4112,7 +4113,7 @@
           if (inDeal) {
             var pct = allDealItemsWished ? (bundle.itemPct + bundle.bundlePct) : bundle.itemPct;
             var discounted = Math.round(p.priceNum * (1 - pct / 100) * 100) / 100;
-            priceHtml = '<span class="dp-was">' + wishPriceText(p) + '</span>' + (window.__money ? window.__money(discounted) : ('$' + discounted));
+            priceHtml = '<span class="dp-was">' + wishPriceText(p) + '</span>' + ((p.robuxDisabled && window.__fiat) ? window.__fiat(discounted) : (window.__money ? window.__money(discounted) : ('$' + discounted)));
           }
           return '<div class="dash-prod' + (inDeal ? ' dp-in-deal' : '') + '" data-id="' + esc(p.id) + '">' +
             '<div class="dp-thumb" style="background-image:url(\'' + p.image + '\')">' +
@@ -5708,7 +5709,7 @@
         return p.robuxPrice > 0 ? p.robuxPrice : null;
       }
       function lineMoney(item) {
-        if (robuxView()) {
+        if (robuxView() && !(window.__robuxOff && window.__robuxOff(item.id))) {
           var rbx = catalogRobuxPrice(item.id, item.licence);
           if (rbx != null) return 'R$ ' + Math.round(rbx * item.qty).toLocaleString('en-US');
         }
@@ -5731,7 +5732,7 @@
         return total;
       }
       function subtotalMoney() {
-        if (robuxView()) {
+        if (robuxView() && !(window.__robuxOff && window.__robuxOff(item.id))) {
           var rbxTotal = robuxSubtotalRaw();
           if (rbxTotal != null) return 'R$ ' + Math.round(rbxTotal).toLocaleString('en-US');
         }
