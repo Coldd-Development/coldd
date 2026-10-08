@@ -68,6 +68,22 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const kind = ["gallery", "productFile", "unreleasedFile", "legalDoc"].includes(body.kind) ? body.kind : "thumbnail";
     const filename = safeName(String(body.filename || "file"));
+
+    // File types each upload area accepts. admin.js checks the same lists before uploading;
+    // this is the server-side backstop. unreleasedFile (staging area) takes anything.
+    const ALLOWED: Record<string, string[]> = {
+      thumbnail: ["gif", "png", "jpg", "jpeg", "zip", "mp4"],
+      gallery: ["gif", "png", "jpg", "jpeg", "zip", "mp4"],
+      productFile: ["zip", "rbxm", "rbxl"],
+      legalDoc: ["zip", "mp4", "png", "jpg", "jpeg"],
+    };
+    const allowed = ALLOWED[kind];
+    if (allowed) {
+      const ext = (filename.match(/\.([a-z0-9]+)$/) || [])[1] || "";
+      if (!allowed.includes(ext)) {
+        return json({ ok: false, error: `That file type is not accepted here. Accepted: ${allowed.filter((e) => e !== "jpg").map((e) => "." + e).join(", ")}.` }, 400);
+      }
+    }
     const unique = crypto.randomUUID().slice(0, 8);
 
     // legalDoc shares productFile's private bucket - proof-of-license/

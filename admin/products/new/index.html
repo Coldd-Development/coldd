@@ -566,7 +566,7 @@
                 <div class="adm-field">
                   <span>Thumbnail image</span>
                   <div class="adm-dropzone" id="admEditThumbDrop">
-                    <input type="file" id="admEditThumbInput" accept="image/*" hidden />
+                    <input type="file" id="admEditThumbInput" accept=".gif,.png,.jpg,.jpeg,.zip,.mp4" hidden />
                     <div class="adm-dropzone-empty" id="admEditThumbEmpty">
                       <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                       <p><strong>Click to upload</strong> or drag and drop</p>
@@ -582,7 +582,7 @@
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Gallery images</span>
                   <div class="adm-dropzone adm-dropzone-sm" id="admEditGalleryDrop">
-                    <input type="file" id="admEditGalleryInput" accept="image/*" multiple hidden />
+                    <input type="file" id="admEditGalleryInput" accept=".gif,.png,.jpg,.jpeg,.zip,.mp4" multiple hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop files</p>
                   </div>
@@ -594,7 +594,7 @@
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Product file</span>
                   <div class="adm-dropzone" id="admEditFileDrop">
-                    <input type="file" id="admEditFileInput" hidden />
+                    <input type="file" id="admEditFileInput" accept=".zip,.rbxm,.rbxl" hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop</p>
                   </div>
@@ -617,7 +617,7 @@
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Proof of license</span>
                   <div class="adm-dropzone adm-dropzone-sm" id="admLegalProofDrop">
-                    <input type="file" id="admLegalProofInput" multiple hidden />
+                    <input type="file" id="admLegalProofInput" multiple accept=".zip,.mp4,.png,.jpg,.jpeg" hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop files</p>
                   </div>
@@ -627,7 +627,7 @@
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Proof of development</span>
                   <div class="adm-dropzone adm-dropzone-sm" id="admLegalDevProofDrop">
-                    <input type="file" id="admLegalDevProofInput" multiple accept="video/*,image/*,.mp4,.mov,.webm,.mkv,.avi,.png,.jpg,.jpeg,.gif,.webp" hidden />
+                    <input type="file" id="admLegalDevProofInput" multiple accept=".zip,.mp4,.png,.jpg,.jpeg" hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop files</p>
                   </div>
@@ -693,7 +693,7 @@
                 <div class="adm-field" style="margin-top:18px;">
                   <span>File</span>
                   <div class="adm-dropzone" id="admUpdFileDrop">
-                    <input type="file" id="admUpdFileInput" hidden />
+                    <input type="file" id="admUpdFileInput" accept=".zip,.rbxm,.rbxl" hidden />
                     <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                     <p><strong>Click to upload</strong> or drag and drop</p>
                   </div>
@@ -1507,6 +1507,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261008d" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008i"></script>
+  <script src="/catalog.js?v=20261008d" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
 </body>
 </html>

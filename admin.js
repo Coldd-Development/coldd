@@ -3542,7 +3542,27 @@
   // used as a Storage path prefix for organization - it doesn't need to
   // match the product's real slug, so a brand-new unsaved product gets a
   // throwaway draft identifier instead of blocking uploads until first save.
+  // Which file types each upload area accepts (extension, lower case). The same lists are
+  // enforced server-side in admin-get-upload-url; kinds not listed here (staged unreleased
+  // files) take anything.
+  var UPLOAD_ALLOWED = {
+    thumbnail: ['gif', 'png', 'jpg', 'jpeg', 'zip', 'mp4'],
+    gallery: ['gif', 'png', 'jpg', 'jpeg', 'zip', 'mp4'],
+    productFile: ['zip', 'rbxm', 'rbxl'],
+    legalDoc: ['zip', 'mp4', 'png', 'jpg', 'jpeg']
+  };
+  function uploadAllowedMsg(kind, file) {
+    var list = UPLOAD_ALLOWED[kind];
+    if (!list) return null;
+    var m = /\.([a-z0-9]+)$/i.exec(file.name || '');
+    var ext = m ? m[1].toLowerCase() : '';
+    if (list.indexOf(ext) >= 0) return null;
+    var shown = list.filter(function (e) { return e !== 'jpg'; }).map(function (e) { return '.' + e; });
+    return file.name + ' is not an accepted file type. Accepted: ' + shown.join(', ') + '.';
+  }
   function uploadToStorageRaw(kind, file, slugOverride) {
+    var typeMsg = uploadAllowedMsg(kind, file);
+    if (typeMsg) return Promise.reject(new Error(typeMsg));
     var slug = slugOverride || $('admEditId').value;
     if (!slug) {
       if (!draftSlug) draftSlug = 'draft-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);

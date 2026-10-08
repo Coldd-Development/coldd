@@ -31,6 +31,9 @@ $useBox = box_enabled();
 const IMG_EXT = [
     'jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'],
     'webp' => ['image/webp'], 'gif' => ['image/gif'], 'avif' => ['image/avif'],
+    // Thumbnail / gallery uploads may also be a zip or an mp4 (which kinds may use them is
+    // enforced in admin-get-upload-url). Content is still checked from the bytes.
+    'zip' => ['application/zip', 'application/x-zip-compressed'], 'mp4' => ['video/mp4'],
 ];
 const BOX_DOWN = 'Storage is temporarily unavailable. Please try again in a minute.';
 
