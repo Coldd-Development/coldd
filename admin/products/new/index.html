@@ -1078,21 +1078,21 @@
                 <div class="adm-edit-msg" id="admFeaturedMsg"></div>
               </div>
               <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head">
-                  <div><h2>This week's deals</h2><span class="adm-sub">Picked automatically every Monday by a revenue-maximizing algorithm - never above <span id="admWeeklyMaxPctLabel">40</span>% off, never below a product's minimum sale price. See "How this works" below.</span></div>
-                  <div style="display:flex;gap:8px;">
-                    <button class="btn btn-ghost adm-btn-sm" id="admWeeklyDealsRunNow" type="button"><span class="btn-label">Run now</span><span class="btn-spinner" hidden></span></button>
+                <div class="adm-wd-head">
+                  <div class="adm-wd-title"><h2>This week's deals</h2><p class="adm-sub">Picked automatically every Monday by a revenue-maximizing algorithm. Never above <span id="admWeeklyMaxPctLabel">40</span>% off and never below a product's minimum sale price. See "How this works" below.</p></div>
+                  <div class="adm-wd-actions">
+                    <button class="btn btn-tinted adm-btn-sm" id="admWeeklyDealsRunNow" type="button"><span class="btn-label">Run now</span><span class="btn-spinner" hidden></span></button>
                     <button class="btn btn-ghost adm-btn-sm" id="admWeeklyDealsRevertAll" type="button">Revert all</button>
                   </div>
                 </div>
-                <div class="adm-form">
-                  <label class="adm-field" style="max-width:160px;"><span>Max discount (%)</span><input type="number" min="1" max="90" step="1" id="admWeeklyMaxPct" class="adm-input" /></label>
-                  <label class="adm-field" style="max-width:160px;"><span>Discount step (%)</span><input type="number" min="1" max="90" step="1" id="admWeeklyStepPct" class="adm-input" /></label>
-                  <button class="btn btn-ghost adm-btn-sm" id="admWeeklySettingsSave" type="button"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
+                <div class="adm-wd-settings">
+                  <label class="adm-wd-set"><span>Max discount</span><span class="adm-wd-inp"><input type="number" min="1" max="90" step="1" id="admWeeklyMaxPct" class="adm-input" /><em>%</em></span></label>
+                  <label class="adm-wd-set"><span>Discount step</span><span class="adm-wd-inp"><input type="number" min="1" max="90" step="1" id="admWeeklyStepPct" class="adm-input" /><em>%</em></span></label>
+                  <button class="btn btn-primary adm-btn-sm" id="admWeeklySettingsSave" type="button"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
+                  <div class="adm-edit-msg adm-wd-msg" id="admWeeklyDealsMsg"></div>
                 </div>
-                <div class="adm-edit-msg" id="admWeeklyDealsMsg"></div>
-                <table class="dash-table">
-                  <thead><tr><th>Title</th><th>Was</th><th>Now</th><th>Off</th><th>Source</th><th>Actions</th></tr></thead>
+                <table class="dash-table adm-wd-table">
+                  <thead><tr><th>Product</th><th>Was</th><th>Now</th><th>Off</th><th>Source</th><th></th></tr></thead>
                   <tbody id="admWeeklyDealsBody"></tbody>
                 </table>
               </div>
@@ -1554,6 +1554,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009t" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
+  <script src="/catalog.js?v=20261009u" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
 </body>
 </html>

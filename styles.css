@@ -4881,3 +4881,25 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 
 .co-rb-items { display: flex; flex-direction: column; gap: 10px; margin: 0 0 18px; max-height: 40vh; overflow-y: auto; }
 .co-rb-items .co-rb-item { margin: 0; }
+
+/* Admin: This week's deals */
+.adm-wd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.adm-wd-title h2 { margin: 0 0 6px; }
+.adm-wd-title .adm-sub { display: block; max-width: 640px; line-height: 1.55; margin: 0; }
+.adm-wd-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.adm-wd-settings { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; padding: 14px 16px; margin-bottom: 8px; background: var(--bg-2); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
+.adm-wd-set { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-wd-inp { position: relative; display: block; width: 120px; }
+.adm-wd-inp .adm-input { width: 100%; padding-right: 30px; }
+.adm-wd-inp em { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 13px; color: var(--fg-3); pointer-events: none; }
+.adm-wd-msg { margin: 0 0 0 auto; align-self: center; }
+.adm-wd-table th:nth-child(n+2):nth-child(-n+4), .adm-wd-table td:nth-child(n+2):nth-child(-n+4) { white-space: nowrap; }
+.adm-wd-prod { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.adm-wd-thumb { flex: 0 0 38px; width: 38px; height: 38px; border-radius: var(--r-ctl); background: #0f1014 center / cover no-repeat; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+.adm-wd-name { font-weight: 600; color: var(--fg); }
+.adm-wd-was { color: var(--fg-3); text-decoration: line-through; }
+.adm-wd-now { font-weight: 700; color: var(--price); }
+.adm-wd-off { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--ok-tint); color: var(--price); }
+.adm-wd-src { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--fg-2); background: rgba(255,255,255,0.06); }
+.adm-wd-src.manual { color: var(--fg-3); }
+@media (max-width: 720px) { .adm-wd-head { flex-direction: column; } .adm-wd-msg { margin-left: 0; flex-basis: 100%; } }

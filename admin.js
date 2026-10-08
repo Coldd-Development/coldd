@@ -6808,9 +6808,12 @@
 
     var deals = products.filter(function (p) { return p.weeklyDeal; });
     $('admWeeklyDealsBody').innerHTML = deals.length ? deals.map(function (p) {
-      return '<tr data-id="' + esc(p.id) + '"><td>' + esc(p.title) + '</td><td>' + usd(p.wasPrice) + '</td><td>' + usd(p.price) + '</td>' +
-        '<td>-' + (p.weeklyDealPct != null ? p.weeklyDealPct : Math.round((1 - p.price / p.wasPrice) * 100)) + '%</td>' +
-        '<td>' + (p.weeklyDealAuto ? 'Algorithm' : 'Manual') + '</td>' +
+      var pct = p.weeklyDealPct != null ? p.weeklyDealPct : Math.round((1 - p.price / p.wasPrice) * 100);
+      var thumb = p.image ? '<span class="adm-wd-thumb" style="background-image:url(&quot;' + esc(p.image) + '&quot;)"></span>' : '<span class="adm-wd-thumb"></span>';
+      return '<tr data-id="' + esc(p.id) + '"><td><div class="adm-wd-prod">' + thumb + '<span class="adm-wd-name">' + esc(p.title) + '</span></div></td>' +
+        '<td class="adm-wd-was">' + usd(p.wasPrice) + '</td><td class="adm-wd-now">' + usd(p.price) + '</td>' +
+        '<td><span class="adm-wd-off">-' + pct + '%</span></td>' +
+        '<td><span class="adm-wd-src' + (p.weeklyDealAuto ? '' : ' manual') + '">' + (p.weeklyDealAuto ? 'Algorithm' : 'Manual') + '</span></td>' +
         '<td class="adm-row-actions">' +
           (p.weeklyDealAuto ? '<button class="btn btn-ghost adm-btn-sm adm-weekly-revert" type="button" data-id="' + esc(p.id) + '">Revert</button>' : '') +
           '<button class="btn btn-ghost adm-btn-sm adm-weekly-exclude" type="button" data-id="' + esc(p.id) + '">Exclude</button>' +
