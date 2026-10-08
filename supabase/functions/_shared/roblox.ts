@@ -239,7 +239,7 @@ export async function priceRobuxItems(
   const slugs = Array.from(new Set(items.map((i) => String(i.slug || ""))));
   const { data: products, error } = await admin
     .from("products")
-    .select("id, slug, title, price_usd, robux_price, platform, resell_available, resell_robux_price, product_legal(min_sale_robux, disallow_sales, max_discount_pct, can_be_free)")
+    .select("id, slug, title, price_usd, robux_price, robux_disabled, platform, resell_available, resell_robux_price, product_legal(min_sale_robux, disallow_sales, max_discount_pct, can_be_free)")
     .in("slug", slugs)
     .eq("is_active", true);
   if (error) return { ok: false, error: "Could not load products." };
@@ -253,6 +253,9 @@ export async function priceRobuxItems(
     const isResell = raw.licence === "resell";
     const product = bySlug.get(slug);
     if (!product) return { ok: false, error: `"${slug}" is no longer available.` };
+    if (product.robux_disabled) {
+      return { ok: false, error: `${product.title} cannot be bought with Robux.` };
+    }
     if (product.platform !== "Roblox") {
       return { ok: false, error: `${product.title} isn't available for Robux checkout yet.` };
     }

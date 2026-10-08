@@ -2268,6 +2268,7 @@
         // this is that same lookup against the same window.__CATALOG global).
         // Without it the shop grid quoted one Robux number while the cart
         // quoted a different, real one for the identical product.
+        function cardRobuxOff(id) { var p = (window.__CATALOG || []).filter(function (c) { return c.id === id; })[0]; return !!(p && p.robuxDisabled); }
         function cardRobuxPrice(id) {
           var p = (window.__CATALOG || []).filter(function (c) { return c.id === id; })[0];
           // > 0: a stored robux_price of 0 is bad data, not a real R$0
@@ -2294,20 +2295,22 @@
             // Resell licences are buyable in Robux (cart, checkout and the server
             // all price them): show the licence's saved Robux price, falling back
             // to the flat estimate only when none is set.
-            var rbxResell = robuxMode ? cardResellRobuxPrice(card.getAttribute('data-id')) : null;
-            var text = robuxMode
+            var robuxOff = cardRobuxOff(card.getAttribute('data-id'));
+            var rbxResell = robuxMode && !robuxOff ? cardResellRobuxPrice(card.getAttribute('data-id')) : null;
+            var text = robuxMode && !robuxOff
               ? (rbxResell != null ? ('R$ ' + Math.round(rbxResell).toLocaleString('en-US')) : (window.__robux ? window.__robux(resellUsd) : ('$' + resellUsd)))
-              : (window.__money ? window.__money(resellUsd) : ('$' + resellUsd));
+              : ((robuxOff && window.__fiat) ? window.__fiat(resellUsd) : (window.__money ? window.__money(resellUsd) : ('$' + resellUsd)));
             // No "was" price for resell - it isn't a sale off a base price,
             // it's a different licence with its own price.
             priceRow.innerHTML = '<span class="p-price" data-usd="' + resellUsd + '">' + text + '</span>';
           } else {
             var was = card.getAttribute('data-was');
             var baseUsd = Number(card.getAttribute('data-price'));
-            var rbx = robuxMode ? cardRobuxPrice(card.getAttribute('data-id')) : null;
+            var robuxOff2 = cardRobuxOff(card.getAttribute('data-id'));
+            var rbx = robuxMode && !robuxOff2 ? cardRobuxPrice(card.getAttribute('data-id')) : null;
             var baseText = baseUsd <= 0
               ? 'Free'
-              : (rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : (window.__money ? window.__money(baseUsd) : ('$' + baseUsd)));
+              : (rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : ((robuxOff2 && window.__fiat) ? window.__fiat(baseUsd) : (window.__money ? window.__money(baseUsd) : ('$' + baseUsd))));
             priceRow.innerHTML = (was ? '<span class="p-was">' + (window.__money ? window.__money(Number(was)) : ('$' + was)) + '</span>' : '') + '<span class="p-price" data-usd="' + baseUsd + '">' + baseText + '</span>';
           }
         }
@@ -3134,8 +3137,8 @@
           // Resell licences are sold in Robux now too - use resell_robux_price
           // when the admin set one, else flat-convert the resell USD price.
           var rbxOverride = isResell ? (cur.resellRobuxPrice > 0 ? cur.resellRobuxPrice : 0) : (cur.robuxPrice > 0 ? cur.robuxPrice : 0);
-          if (pdPriceRbx) { pdPriceRbx.textContent = rbxOverride > 0 ? robuxRaw(rbxOverride) : robux(base); pdPriceRbx.hidden = isFree; }
-          if (pdPriceNote) pdPriceNote.hidden = isFree;
+          if (pdPriceRbx) { pdPriceRbx.textContent = rbxOverride > 0 ? robuxRaw(rbxOverride) : robux(base); pdPriceRbx.hidden = isFree || !!cur.robuxDisabled; }
+          if (pdPriceNote) pdPriceNote.hidden = isFree || !!cur.robuxDisabled;
           if (pdSale) pdSale.hidden = !(cur.was > cur.priceNum);
           // Live sale event (order-level, applied at checkout like an
           // automatic coupon): standard licence only, and not stacked on a
@@ -3149,12 +3152,12 @@
           var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
           licPriceEls.forEach(function (el) {
             var isResellOpt = el.getAttribute('data-licprice') === 'resell';
-            if (robuxMode) {
+            if (robuxMode && !cur.robuxDisabled) {
               var ov = isResellOpt ? (cur.resellRobuxPrice > 0 ? cur.resellRobuxPrice : 0) : (cur.robuxPrice > 0 ? cur.robuxPrice : 0);
               if (ov > 0) { el.textContent = robuxRaw(ov); return; }
             }
             var pp = isResellOpt ? resellUsd : cur.priceNum;
-            el.textContent = window.__money ? window.__money(pp) : fiat(pp);
+            el.textContent = cur.robuxDisabled ? fiat(pp) : (window.__money ? window.__money(pp) : fiat(pp));
           });
           if (pdReferEarn) pdReferEarn.textContent = 'earn ' + fiat(Math.round(cur.priceNum * 0.2 * 100) / 100);
         }
@@ -3380,6 +3383,7 @@
           cur = { id: p.id, title: p.title, image: p.image, tag: p.cat, priceNum: p.priceNum, was: p.was || 0,
                   price: p.priceNum, licence: 'standard', resell: p.resell, platform: p.platform,
                   robuxPrice: p.robuxPrice != null ? p.robuxPrice : null,
+                  robuxDisabled: !!p.robuxDisabled,
                   resellPrice: p.resellPrice != null ? p.resellPrice : null,
                   resellRobuxPrice: p.resellRobuxPrice != null ? p.resellRobuxPrice : null };
 
@@ -6666,6 +6670,8 @@
             return;
           }
           var robuxItems = cartToItems();
+          var offItem = cart.filter(function (i) { var base = i.id.replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, ''); var cp = (window.__CATALOG || []).filter(function (c) { return c.id === (i.crossSellSlug || base); })[0]; return cp && cp.robuxDisabled; })[0];
+          if (offItem) { if (msg) { msg.className = 'co-msg err show'; msg.textContent = 'One or more items in your cart cannot be bought with Robux. Please pay with another method.'; } return; }
           if (!robuxItems.length) {
             var nicode = logRobuxFail('Robux checkout started with no Robux-eligible items in cart', { phase: 'start_no_items' });
             if (msg) { msg.className = 'co-msg err show'; msg.innerHTML = withSupportLine('Your cart has nothing that can be bought with Robux.') + refSuffix({ errCode: nicode }); }

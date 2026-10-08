@@ -952,6 +952,7 @@
       resellPrice: row.resell_price_usd != null ? Number(row.resell_price_usd) : null,
       resellRobuxPrice: row.resell_robux_price != null ? Number(row.resell_robux_price) : null,
       robuxPrice: row.robux_price != null ? Number(row.robux_price) : null,
+      robuxDisabled: !!row.robux_disabled,
       wasPrice: row.was_price != null ? Number(row.was_price) : null,
       priority: !!row.priority,
       featured: !!row.featured,
@@ -988,7 +989,7 @@
     if (!window.coldSupabase) return Promise.resolve();
     // storage_path (the internal download path) isn't readable through the public
     // API, so '*' is out; admins get the paths from an admin-only RPC and merge them.
-    var cols = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at, product_legal(*)';
+    var cols = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, robux_disabled, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at, product_legal(*)';
     return Promise.all([
       window.coldSupabase.from('products').select(cols).order('title'),
       window.coldSupabase.rpc('admin_product_storage_paths')
@@ -1026,6 +1027,7 @@
       resellPrice: p.resellPrice,
       resellRobuxPrice: p.resellRobuxPrice,
       robuxPrice: p.robuxPrice,
+      robuxDisabled: p.robuxDisabled,
       wasPrice: p.wasPrice,
       priority: p.priority,
       featured: p.featured,
@@ -4038,7 +4040,7 @@
     $('admEditResellPrice').value = p.resellPrice != null ? p.resellPrice : '';
     $('admEditResellRobuxPrice').value = p.resellRobuxPrice != null ? p.resellRobuxPrice : '';
     resellRobuxPriceManuallySet = p.resellRobuxPrice != null;
-    $('admEditNoRobux').checked = p.robuxPrice == null;
+    $('admEditNoRobux').checked = !!p.robuxDisabled;
     applyNoRobux();
     $('admEditResellPriceWrap').hidden = !p.resell;
     $('admEditResellRobuxPriceWrap').hidden = !p.resell;
@@ -4403,6 +4405,7 @@
       // 0 that then quotes the product as free everywhere Robux pricing
       // is shown. The old Math.max(0, ...) clamp let exactly that happen
       // silently on any negative or unparseable entry.
+      robuxDisabled: noRobuxOn(),
       robuxPrice: (function () {
         var v = parseFloat($('admEditRobuxPrice').value);
         return !noRobuxOn() && Number.isFinite(v) && v > 0 ? v : null;

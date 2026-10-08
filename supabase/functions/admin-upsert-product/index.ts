@@ -219,8 +219,9 @@ Deno.serve(async (req: Request) => {
       video: body.video != null ? String(body.video) : null,
       resell_available: !!body.resell,
       resell_price_usd: body.resell && body.resellPrice != null ? Number(body.resellPrice) : null,
-      resell_robux_price: body.resell && body.resellRobuxPrice != null ? Number(body.resellRobuxPrice) : null,
-      robux_price: body.robuxPrice != null ? Number(body.robuxPrice) : null,
+      resell_robux_price: !body.robuxDisabled && body.resell && body.resellRobuxPrice != null ? Number(body.resellRobuxPrice) : null,
+      robux_disabled: !!body.robuxDisabled,
+      robux_price: !body.robuxDisabled && body.robuxPrice != null ? Number(body.robuxPrice) : null,
       is_active: !!body.visible,
       tech: body.tech && typeof body.tech === "object" ? body.tech : {},
     };
