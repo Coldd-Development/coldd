@@ -3286,12 +3286,12 @@
     var anSessions = TRAFFIC.slice(Math.max(0, TRAFFIC.length - (RANGE_DAYS || 120))).reduce(function (sum, r) { return sum + r.sessions; }, 0);
     var anAbandoned = ABANDONED.reduce(function (sum, a) { return sum + a.value; }, 0);
     $('admAnStats').innerHTML = [
-      statTile('Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
-      statTile('Robux revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
+      statTile('Site Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
+      statTile('Site Robux Revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
+      bbbRevTile(),
       statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
       statTile('Avg order value', usd(aov), null, ''),
       statTile('Conversion rate', pct(conv), null, ''),
-      bbbRevTile(),
       bbbOrdersTile(),
       statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
       statTile('Revenue per session', anSessions ? usd(curRev.usd / anSessions) : ' - ', anSessions.toLocaleString('en-US') + ' sessions', ''),
@@ -5099,7 +5099,7 @@
   function bbbRevTile() {
     if (!BBB.configured) return statTile('BuiltByBit revenue', '–', bbbOffline(), '', { panel: 'marketplaces' });
     var t = bbbRangeTotals();
-    return statTile('BuiltByBit revenue', aud(t.cur.usd), usd(t.cur.usd) + ' USD · net ' + usd(t.cur.net), pctDelta(t.cur.usd, t.prev.usd), { panel: 'marketplaces' });
+    return statTile('BuiltByBit revenue', aud(t.cur.usd), usd(t.cur.usd) + ' USD', pctDelta(t.cur.usd, t.prev.usd), { panel: 'marketplaces' });
   }
   function bbbOrdersTile() {
     if (!BBB.configured) return statTile('BuiltByBit orders', '–', bbbOffline(), '', { panel: 'marketplaces' });
@@ -5344,8 +5344,7 @@
     ];
     return '<div class="adm-mini-head">BuiltByBit vs website</div><div class="bbb-split">' +
       '<div><div class="bbb-split-title">Revenue</div>' + donutChart(revSeg, { centerLabel: usd(cur.usd + site.revenue), centerSub: 'total' }) + '</div>' +
-      '<div><div class="bbb-split-title">Orders</div>' + donutChart(ordSeg, { centerLabel: num(cur.orders + site.orders), centerSub: 'total' }) + '</div></div>' +
-      (site.orders ? '' : '<p class="adm-sub" style="margin:6px 0 0">The website has no completed orders in this range yet, so everything is BuiltByBit for now.</p>');
+      '<div><div class="bbb-split-title">Orders</div>' + donutChart(ordSeg, { centerLabel: num(cur.orders + site.orders), centerSub: 'total' }) + '</div></div>';
   }
   function bbbMethodName(g) {
     var s = String(g || '').toLowerCase();
@@ -5405,8 +5404,7 @@
       cells(all, 'page_views', 'cart_adds', 'wishlist_adds', 'purchases') + cells(siteTot, 'views', 'cart_adds', 'wishlist', 'purchases') + '</tr>';
     var head = '<thead><tr><th rowspan="2">Product</th><th colspan="5" class="bbb-th-bbb">BuiltByBit</th><th colspan="5" class="bbb-th-site">Website</th></tr><tr>' +
       '<th>Views</th><th>Carts</th><th>Wishlist</th><th>Sales</th><th>Conv.</th><th>Views</th><th>Carts</th><th>Wishlist</th><th>Sales</th><th>Conv.</th></tr></thead>';
-    return '<div class="adm-mini-head">Funnel per product</div><div class="dash-tablewrap"><table class="dash-table bbb-funnel">' + head + '<tbody>' + totalRow + body + '</tbody></table></div>' +
-      '<p class="adm-sub" style="margin:6px 0 0">Conv. = sales / views. BuiltByBit numbers come from its analytics API, the website from its own page views, cart adds, wishlists and orders. Website cart adds only count from when tracking started.</p>';
+    return '<div class="adm-mini-head">Funnel per product</div><div class="dash-tablewrap"><table class="dash-table bbb-funnel">' + head + '<tbody>' + totalRow + body + '</tbody></table></div>';
   }
 
   // ---- Listing checks: price, description and listing errors, for every on-site product that
@@ -5473,7 +5471,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('#admBbbRange button'), function (b) { b.classList.toggle('active', +b.getAttribute('data-bbb-range') === BBB_RANGE); });
     var sync = $('admBbbSync'); if (sync) { sync.disabled = BBB.syncing; sync.textContent = BBB.syncing ? 'Syncing…' : 'Sync now'; }
     var sub = $('admBbbSub');
-    if (sub) sub.textContent = !BBB.configured ? '' : BBB.syncing ? 'Syncing…' : (BBB.syncedAt ? 'Last synced ' + new Date(BBB.syncedAt).toLocaleString() + ' · updates itself every 15 minutes · revenue is what buyers paid' : 'Sales as reported by BuiltByBit, in USD');
+    if (sub) sub.textContent = '';
 
     if (BBB.configured === false) {
       body.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Create a <strong>Private</strong> token at builtbybit.com/account/api, then run <code>supabase secrets set BUILTBYBIT_API_TOKEN=your-token</code> and press Sync now.</p>' +
@@ -5488,12 +5486,12 @@
     if (BBB_RANGE) prev = bbbSum(bbbPurchasesIn(utcStart(BBB_RANGE * 2 + 1), start));
     function delta(c, p) { if (!BBB_RANGE) return ''; var s = RANGE_DAYS; RANGE_DAYS = BBB_RANGE; var h = pctDelta(c, p); RANGE_DAYS = s; return h; }
     var tiles = statGrid([
-      statTile('Revenue', aud(cur.usd), usd(cur.usd) + ' USD paid by buyers', delta(cur.usd, prev.usd)),
-      statTile('Net after fees', aud(cur.net), usd(cur.net) + ' USD after BuiltByBit\'s fee', ''),
+      statTile('Revenue', aud(cur.usd), usd(cur.usd) + ' USD', delta(cur.usd, prev.usd)),
+      statTile('Net after fees', aud(cur.net), usd(cur.net) + ' USD', ''),
       statTile('Orders', num(cur.orders), cur.other ? cur.other + ' in another currency, not counted in revenue' : null, delta(cur.orders, prev.orders)),
       statTile('Avg order value', cur.orders ? usd(cur.usd / cur.orders) : '–', null, '')
     ]);
-    body.innerHTML = tiles + '<p class="adm-sub" style="margin:10px 0 0">The sales chart, BuiltByBit vs website split, payment methods, per-product funnel and listing checks are in <a href="#" data-panel="analytics">Analytics</a>.</p>' +
+    body.innerHTML = tiles +
       (BBB.state && BBB.state.last_error ? '<div class="adm-edit-msg err">Last sync: ' + esc(BBB.state.last_error) + '</div>' : '') +
       (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
   }
@@ -5507,7 +5505,7 @@
     if (!site) bbbSiteLoad(range).then(function () { if (curPanel === 'analytics') renderBbbAnalytics(); });
     var now = new Date(Date.now() + 1000), list = bbbPurchasesIn(utcStart(range), now), cur = bbbSum(list);
     var sub = $('admBbbAnalyticsSub');
-    if (sub) sub.textContent = 'Follows the date range above. Revenue is what buyers paid; days are UTC, like BuiltByBit.';
+    if (sub) sub.textContent = '';
     box.innerHTML = bbbChart(range) + bbbSplitHtml(cur, site) + bbbPaymentsHtml(list, site) + bbbFunnelHtml(range, site) + bbbIssuesHtml();
   }
 
