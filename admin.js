@@ -6124,7 +6124,13 @@
   resellerStatusDropdown.setOptions([{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }], 'active');
 
   var admResellerContactType = 'email';
-  function admResellerApplyContact(t) {
+  // Each contact method keeps its own text while the editor is open, so flipping
+  // Email <-> Discord swaps the field instead of leaving the other method's value in it.
+  var admResellerContactValues = { email: '', discord: '' };
+  function admResellerApplyContact(t, keepValue) {
+    var prevType = admResellerContactType;
+    var cur = $('admResellerContact');
+    if (cur && !keepValue) admResellerContactValues[prevType] = cur.value;
     admResellerContactType = t === 'discord' ? 'discord' : 'email';
     var sw = $('admResellerContactSwitch'); if (!sw) return;
     sw.querySelectorAll('.bt-opt').forEach(function (o) {
@@ -6132,7 +6138,11 @@
       o.classList.toggle('active', on); o.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     var inp = $('admResellerContact');
-    if (inp) { inp.type = admResellerContactType === 'email' ? 'email' : 'text'; inp.placeholder = admResellerContactType === 'email' ? 'you@example.com' : 'Their Discord username or server invite'; }
+    if (inp) {
+      inp.type = admResellerContactType === 'email' ? 'email' : 'text';
+      inp.placeholder = admResellerContactType === 'email' ? 'you@example.com' : 'Their Discord username or server invite';
+      if (!keepValue && prevType !== admResellerContactType) inp.value = admResellerContactValues[admResellerContactType] || '';
+    }
   }
   (function () {
     var sw = $('admResellerContactSwitch');
@@ -6172,7 +6182,8 @@
     resellerStatusDropdown.setValue((r && r.status) || 'active', true);
     $('admResellerName').value = (r && r.displayName) || '';
     $('admResellerNotes').value = (r && r.sellingNotes) || '';
-    admResellerApplyContact((r && r.contactType) || 'email');
+    admResellerContactValues = { email: '', discord: '' };
+    admResellerApplyContact((r && r.contactType) || 'email', true);
     var prefillEmail = (r && !r.onboarded && r.accountEmail && !/\.coldd\.internal$/i.test(r.accountEmail)) ? r.accountEmail : '';
     $('admResellerContact').value = (r && r.contactValue) || prefillEmail || '';
     $('admResellerLocations').innerHTML = '';

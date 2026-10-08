@@ -4923,3 +4923,5 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 .adm-mp-donelog li:first-child { border-top: 0; }
 .adm-mp-donelog .adm-mp-what { flex: 1; min-width: 0; }
 .adm-mp-by { flex: 0 0 auto; font-size: 12px; color: var(--fg-3); }
+
+.bt-switch.adm-rs-contact-switch { margin: 2px 0 10px; }
