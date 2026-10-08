@@ -3584,7 +3584,7 @@
     thumbnail: ['gif', 'png', 'jpg', 'jpeg', 'zip', 'mp4'],
     gallery: ['gif', 'png', 'jpg', 'jpeg', 'zip', 'mp4'],
     productFile: ['zip', 'rbxm', 'rbxl'],
-    legalDoc: ['zip', 'mp4', 'png', 'jpg', 'jpeg']
+    legalDoc: ['zip', 'mp4', 'png', 'jpg', 'jpeg', 'pdf']
   };
   function uploadAllowedMsg(kind, file) {
     var list = UPLOAD_ALLOWED[kind];

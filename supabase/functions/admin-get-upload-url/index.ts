@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
       thumbnail: ["gif", "png", "jpg", "jpeg", "zip", "mp4"],
       gallery: ["gif", "png", "jpg", "jpeg", "zip", "mp4"],
       productFile: ["zip", "rbxm", "rbxl"],
-      legalDoc: ["zip", "mp4", "png", "jpg", "jpeg"],
+      legalDoc: ["zip", "mp4", "png", "jpg", "jpeg", "pdf"],
     };
     const allowed = ALLOWED[kind];
     if (allowed) {
