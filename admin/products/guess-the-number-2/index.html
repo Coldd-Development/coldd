@@ -1106,9 +1106,9 @@
               <details class="adm-collapse" style="margin-top:20px;">
                 <summary class="dash-card-head"><h2>How this works</h2><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
                 <div class="adm-collapse-body">
-                  <p class="adm-note">Every Monday at 00:00 UTC, a scheduled job scores every active, sellable product (skipping anything marked "Disallow from all sales" or individually excluded below) using its real sales over the last 30 days: <code>units sold ÷ 30</code>. Products with zero recent sales aren't picked - there's no revenue signal to size a discount against.</p>
-                  <p class="adm-note" style="margin-top:10px;">For each eligible product, it tries every discount from 5% up to the lower of 40% or whatever your product's minimum sale price allows, and keeps whichever discount maximizes <code>discounted price &times; recent sales rate &times; (1 + discount % &times; 1.5)</code> - a deliberately mild assumption that a deeper discount converts better, so a big discount can still lose to a smaller one if the smaller one keeps more revenue per sale. The 4 highest-scoring products across the whole catalog get picked.</p>
-                  <p class="adm-note" style="margin-top:10px;">It writes the discount using the same "Was price" field the product editor already uses for a manual sale, so it never conflicts with a sale you set by hand - it only ever touches products it discounted itself, and always restores the exact original price on revert or before recomputing.</p>
+                  <p class="adm-note"><strong>Which products.</strong> Every Monday at 00:00 UTC each eligible product gets a demand score blended from real signals: BuiltByBit sales of the same listing and of similar listings (recent sales count more), product page views on this site over the last 14 days, and paid units on this site over the last 30 days. The weights re-balance over whichever signals have data, so site sales take over as they build up. The runaway best seller is held back (it sells without help), anything discounted in the last two weeks is rotated out, and no more than two products come from one category. Products marked "Disallow from all sales" or excluded below are skipped.</p>
+                  <p class="adm-note" style="margin-top:10px;"><strong>How deep.</strong> Each deal is logged. The next run records the views and sales it earned, and the algorithm learns which discount depth earns the most revenue per visitor: it samples each depth's conversion rate from your own results and picks the depth with the best expected revenue (price after discount x conversion). With no results yet it tries the depths evenly, and it settles on the winner as data comes in. Depths come from the Max discount and Discount step above and never go past a product's minimum sale price or its own max discount.</p>
+                  <p class="adm-note" style="margin-top:10px;">It writes the discount using the same "Was price" field the product editor already uses for a manual sale, so it never conflicts with a sale you set by hand. It only ever touches products it discounted itself, and always restores the exact original price on revert or at the next run.</p>
                 </div>
               </details>
             </div>
@@ -1554,6 +1554,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009u" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
+  <script src="/catalog.js?v=20261009v" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
 </body>
 </html>
