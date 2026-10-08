@@ -3876,7 +3876,14 @@
   // way, autofill backs off and leaves their number alone from then on.
   var robuxPriceManuallySet = false;
   var resellRobuxPriceManuallySet = false;
+  function noRobuxOn() { var b = $('admEditNoRobux'); return !!(b && b.checked); }
+  function applyNoRobux() {
+    var off = noRobuxOn();
+    ['admEditRobuxPrice', 'admEditResellRobuxPrice'].forEach(function (id) { var el = $(id); if (!el) return; el.disabled = off; if (off) el.value = ''; });
+    if (!off) { robuxPriceManuallySet = false; resellRobuxPriceManuallySet = false; updateDevexAutofill(); }
+  }
   function updateDevexAutofill() {
+    if (noRobuxOn()) return;
     var platform = ($('admEditPlatform') || {}).value;
     if (platform !== 'Roblox') return;
     var usdPrice = parseFloat($('admEditPrice').value) || 0;
@@ -4031,6 +4038,8 @@
     $('admEditResellPrice').value = p.resellPrice != null ? p.resellPrice : '';
     $('admEditResellRobuxPrice').value = p.resellRobuxPrice != null ? p.resellRobuxPrice : '';
     resellRobuxPriceManuallySet = p.resellRobuxPrice != null;
+    $('admEditNoRobux').checked = p.robuxPrice == null;
+    applyNoRobux();
     $('admEditResellPriceWrap').hidden = !p.resell;
     $('admEditResellRobuxPriceWrap').hidden = !p.resell;
     $('admEditPrivate').checked = !p.visible;
@@ -4253,6 +4262,7 @@
 
   var editPriceInput = $('admEditPrice');
   if (editPriceInput) editPriceInput.addEventListener('input', updateDevexAutofill);
+  if ($('admEditNoRobux')) $('admEditNoRobux').addEventListener('change', applyNoRobux);
   var editRobuxPriceInput = $('admEditRobuxPrice');
   if (editRobuxPriceInput) editRobuxPriceInput.addEventListener('input', function () { robuxPriceManuallySet = true; });
   var editResellPriceInput = $('admEditResellPrice');
@@ -4329,6 +4339,7 @@
     $('admEditPrice').value = 0;
     $('admEditRobuxPrice').value = '';
     robuxPriceManuallySet = false;
+    if ($('admEditNoRobux')) { $('admEditNoRobux').checked = false; $('admEditRobuxPrice').disabled = false; $('admEditResellRobuxPrice').disabled = false; }
     $('admEditWasPrice').value = '';
     // A brand-new product can't be on sale yet - the field only makes sense
     // once it exists, so it's hidden until the first save.
@@ -4394,7 +4405,7 @@
       // silently on any negative or unparseable entry.
       robuxPrice: (function () {
         var v = parseFloat($('admEditRobuxPrice').value);
-        return Number.isFinite(v) && v > 0 ? v : null;
+        return !noRobuxOn() && Number.isFinite(v) && v > 0 ? v : null;
       })(),
       wasPrice: (function () {
         var v = parseFloat($('admEditWasPrice').value);
@@ -4407,7 +4418,7 @@
       longDesc: $('admEditLongDesc').value.trim(),
       resell: $('admEditResell').checked,
       resellPrice: $('admEditResell').checked && $('admEditResellPrice').value !== '' ? Math.max(0, parseFloat($('admEditResellPrice').value) || 0) : null,
-      resellRobuxPrice: $('admEditResell').checked && $('admEditResellRobuxPrice').value !== '' ? Math.max(0, Math.round(parseFloat($('admEditResellRobuxPrice').value) || 0)) : null,
+      resellRobuxPrice: !noRobuxOn() && $('admEditResell').checked && $('admEditResellRobuxPrice').value !== '' ? Math.max(0, Math.round(parseFloat($('admEditResellRobuxPrice').value) || 0)) : null,
       visible: !$('admEditPrivate').checked,
       image: $('admEditThumbUrl').value.trim(),
       gallery: editGallery.slice(),
@@ -4497,10 +4508,10 @@
     if (!priv) {
       need(!!$('admEditSubcat').value || !(SUBCATS_BY_CAT[cat] || []).length, 'Subcategory', $('admEditSubcatDD'));
       need(parseFloat($('admEditPrice').value) > 0 || !$('admLegalCannotBeFree').checked && $('admEditPrice').value !== '', 'USD price', $('admEditPrice'));
-      if ($('admEditPlatform').value === 'Roblox') need(parseFloat($('admEditRobuxPrice').value) > 0 || (!$('admLegalCannotBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
+      if ($('admEditPlatform').value === 'Roblox' && !noRobuxOn()) need(parseFloat($('admEditRobuxPrice').value) > 0 || (!$('admLegalCannotBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
       if ($('admEditResell').checked) {
         need(parseFloat($('admEditResellPrice').value) > 0, 'Resell licence price (USD)', $('admEditResellPrice'));
-        need(parseFloat($('admEditResellRobuxPrice').value) > 0, 'Resell licence price (Robux)', $('admEditResellRobuxPrice'));
+        if (!noRobuxOn()) need(parseFloat($('admEditResellRobuxPrice').value) > 0, 'Resell licence price (Robux)', $('admEditResellRobuxPrice'));
       }
       need(!!$('admEditSubtext').value.trim(), 'Summary', $('admEditSubtext'));
       need($('admEditSubtext').value.length <= 100, 'Summary shortened to 100 characters or fewer', $('admEditSubtext'));
