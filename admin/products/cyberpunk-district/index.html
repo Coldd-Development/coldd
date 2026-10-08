@@ -554,6 +554,7 @@
                     <input type="number" min="0" step="1" id="admEditRobuxPrice" class="adm-input" />
                   </label>
                   <label class="adm-field-check adm-field-wide" style="margin-top:0;"><input type="checkbox" id="admEditResell" /> <span>Resell licence available</span></label>
+                  <small class="adm-sub adm-field-wide" id="admEditResellBar" hidden>Not available: this product's license type is Resell Rights, which doesn't allow us to sell resell licenses. Add Resell+ in the Legal section to allow them.</small>
                   <label class="adm-field" id="admEditResellPriceWrap" hidden>
                     <span>Resell licence price (USD)</span><input type="number" min="0" step="0.01" id="admEditResellPrice" class="adm-input" />
                   </label>
@@ -623,13 +624,13 @@
                 <div class="dash-card-head"><h2>Legal</h2><button type="button" class="btn btn-ghost adm-btn-sm" id="admLegalDownloadBtn" hidden><span class="btn-label">Download legal info (.docx)</span><span class="btn-spinner" hidden></span></button></div>
 
                 <div class="adm-field" style="margin-top:16px;">
-                  <span>License type</span>
+                  <span>License types <span class="adm-sub">(pick all that apply)</span></span>
                   <div class="adm-dd" id="admLegalLicenseTypeDD">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
-                      <span class="adm-dd-val placeholder">Select license type</span>
+                      <span class="adm-dd-val placeholder">Select license types</span>
                       <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
-                    <div class="adm-dd-menu" role="listbox" aria-label="License type" hidden></div>
+                    <div class="adm-dd-menu" role="listbox" aria-label="License types" hidden></div>
                   </div>
                   <input type="hidden" id="admLegalLicenseType" />
                   <small class="adm-sub" id="admLegalLicenseTypeHelp"></small>
@@ -1547,6 +1548,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009f" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
+  <script src="/catalog.js?v=20261009g" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
 </body>
 </html>

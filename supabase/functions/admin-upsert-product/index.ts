@@ -85,7 +85,7 @@ const LICENSE_TYPES = ["ownership", "resell_plus", "resell_rights", "revenue_sha
 
 type LegalPayload = {
   tos?: string;
-  licenseType?: string;
+  licenseTypes?: string[];
   revenueSharePct?: number | null;
   revenueSharePaymentPlatform?: string;
   revenueSharePaymentLink?: string;
@@ -135,11 +135,18 @@ Deno.serve(async (req: Request) => {
     // share fields are only kept while the type is revenue_share, so a product that switches
     // to another type never leaves stale payout data behind for the future tracker to read.
     const legalIn: LegalPayload = body.legal && typeof body.legal === "object" ? body.legal : {};
-    const licenseType = LICENSE_TYPES.includes(String(legalIn.licenseType)) ? String(legalIn.licenseType) : null;
-    const isRevShare = licenseType === "revenue_share";
+    const licenseTypes = Array.isArray(legalIn.licenseTypes)
+      ? [...new Set(legalIn.licenseTypes.map(String).filter((t) => LICENSE_TYPES.includes(t)))]
+      : [];
+    const isRevShare = licenseTypes.includes("revenue_share");
     const revSharePct = isRevShare ? Math.round(Math.min(100, Math.max(0, Number(legalIn.revenueSharePct) || 0)) * 100) / 100 : null;
     if (isRevShare && !(revSharePct && revSharePct > 0)) {
       return json({ ok: false, error: "Enter the revenue share percentage (more than 0, up to 100)." }, 400);
+    }
+    // The bar: Resell Rights without Resell+ means we may not sell resell licences (the database
+    // refuses it too: products_resell_guard).
+    if (body.resell && licenseTypes.includes("resell_rights") && !licenseTypes.includes("resell_plus")) {
+      return json({ ok: false, error: "Resell licences can't be sold on a Resell Rights product. Turn them off, or add Resell+ to the license types." }, 400);
     }
 
     const platform = body.platform === "Minecraft" ? "Minecraft" : "Roblox";
@@ -274,7 +281,7 @@ Deno.serve(async (req: Request) => {
     const legalFields = {
       product_id: productId,
       tos: legal.tos != null ? String(legal.tos) : "",
-      license_type: licenseType,
+      license_types: licenseTypes,
       revenue_share_pct: revSharePct,
       revenue_share_payment_platform: isRevShare ? String(legal.revenueSharePaymentPlatform || "").trim().slice(0, 60) || null : null,
       revenue_share_payment_link: isRevShare ? String(legal.revenueSharePaymentLink || "").trim().slice(0, 300) || null : null,
