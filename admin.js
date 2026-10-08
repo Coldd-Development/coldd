@@ -3548,6 +3548,11 @@
       if (!draftSlug) draftSlug = 'draft-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
       slug = draftSlug;
     }
+    // Public images are capped at 10 MB by the upload server (admin-get-upload-url).
+    // Say so up front, with the file's real size, instead of the server's bare "File is too large."
+    if ((kind === 'thumbnail' || kind === 'gallery') && file.size > 10 * 1024 * 1024) {
+      return Promise.reject(new Error(file.name + ' is ' + formatFileSize(file.size) + ', over the 10 MB image limit. Compress or resize it and try again.'));
+    }
     return invokeAdminFn('admin-get-upload-url', { kind: kind, productSlug: slug, filename: file.name }, 'Could not prepare upload.').then(function (d) {
       // driver:'cdn' = signed POST to cdn.coldd.dev/upload.php (Ultimate Hosting);
       // no driver = Supabase Storage, used until the CDN secrets are set.
@@ -3829,7 +3834,7 @@
         acts += '<button type="button" class="adm-mp-done" data-fl="download" data-path="' + esc(path) + '">Download</button>';
       }
       return '<div class="adm-file-item adm-file-card"><span class="adm-filecard-ic">' + esc(ext) + '</span>' +
-        '<span class="adm-file-name">' + esc(name) + (path ? '' : ' <em>(old entry, no file to open)</em>') + '</span>' + acts +
+        '<span class="adm-file-name">' + esc(name) + (path ? '' : ' <em>(saved before uploads were stored, the file is gone. Remove it and re-upload)</em>') + '</span>' + acts +
         '<button type="button" class="adm-icon-btn ' + removeClass + '" data-i="' + i + '" title="Remove" aria-label="Remove">' + ADM_ICON_TRASH + '</button>' +
         '<div class="adm-file-preview" hidden></div></div>';
     }).join('') || '<p class="adm-empty" style="padding:8px 0;">No files uploaded yet.</p>';
