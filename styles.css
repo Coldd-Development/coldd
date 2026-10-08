@@ -4928,10 +4928,13 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 
 .bt-switch.adm-rs-contact-switch { margin: 2px 0 10px; }
 
-/* Footer "Our Assets": one link per category, laid out in two columns so it does not tower over the others */
-.foot-col:has(> a[href="/shop?cat=game-templates"]) { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); column-gap: 28px; align-content: start; }
-.foot-col:has(> a[href="/shop?cat=game-templates"]) > h3 { grid-column: 1 / -1; }
-@media (max-width: 560px) { .foot-col:has(> a[href="/shop?cat=game-templates"]) { grid-template-columns: 1fr 1fr; column-gap: 16px; } }
+/* Footer "Our Assets": one link per category. The column gets extra width and two sub-columns on desktop, one column on small screens. */
+@media (min-width: 981px) { .foot-grid { grid-template-columns: 1.3fr 1.2fr 2.3fr 0.9fr 1.1fr 1.2fr; } }
+.foot-col:has(> a[href="/shop?cat=game-templates"]) a { white-space: nowrap; }
+@media (min-width: 981px) {
+  .foot-col:has(> a[href="/shop?cat=game-templates"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; align-content: start; }
+  .foot-col:has(> a[href="/shop?cat=game-templates"]) > h3 { grid-column: 1 / -1; }
+}
 
 /* Admin: user profile licences + account tools */
 .adm-ud-lic-order { display: flex; align-items: center; gap: 14px; padding: 10px 12px; margin-top: 8px; background: var(--bg-2); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
