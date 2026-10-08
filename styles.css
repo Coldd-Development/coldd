@@ -4903,3 +4903,11 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 .adm-wd-src { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--fg-2); background: rgba(255,255,255,0.06); }
 .adm-wd-src.manual { color: var(--fg-3); }
 @media (max-width: 720px) { .adm-wd-head { flex-direction: column; } .adm-wd-msg { margin-left: 0; flex-basis: 100%; } }
+
+/* Plain links inside admin tables and panels (gamepass IDs, order links, ...) fell back to the
+   browser's dark blue, which is unreadable on the dark background. Light red matches the site. */
+.dash-table a:not(.btn), .dash-panel a:not([class]), .adm-note a { color: #ff8f88; text-decoration: underline; text-underline-offset: 2px; }
+.dash-table a:not(.btn):visited, .dash-panel a:not([class]):visited, .adm-note a:visited { color: #ff8f88; }
+@media (hover: hover) and (pointer: fine) { .dash-table a:not(.btn):hover, .dash-panel a:not([class]):hover, .adm-note a:hover { color: #ffb8b3; } }
+html[data-theme="light"] .dash-table a:not(.btn), html[data-theme="light"] .dash-panel a:not([class]), html[data-theme="light"] .adm-note a,
+html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light"] .dash-panel a:not([class]):visited { color: #c0302a; }
