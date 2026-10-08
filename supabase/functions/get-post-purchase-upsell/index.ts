@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
     const boughtSlugs: string[] = (order.order_items || []).map((i: any) => i.product_slug).filter(Boolean);
     if (!boughtSlugs.length) return json({ ok: true, items: [] });
 
-    const { data: candidateRows } = await admin.rpc("get_checkout_cross_sell", { p_slugs: boughtSlugs, p_limit: LIMIT });
+    const { data: candidateRows } = await admin.rpc("get_checkout_cross_sell", { p_slugs: boughtSlugs, p_limit: LIMIT, p_user_id: order.user_id ?? null });
     // deno-lint-ignore no-explicit-any
     const candidateSlugs: string[] = (candidateRows || []).map((r: any) => r.product_slug);
     if (!candidateSlugs.length) return json({ ok: true, items: [] });

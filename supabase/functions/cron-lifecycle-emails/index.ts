@@ -74,6 +74,7 @@ Deno.serve(async (req: Request) => {
       reviewIncentive: await runReviewIncentive(admin, configs.get("review_incentive"), supabaseUrl),
       repeatBuyer: await runRepeatBuyer(admin, configs.get("repeat_buyer"), supabaseUrl),
       winback: await runWinback(admin, configs.get("winback"), supabaseUrl),
+      newForYou: await runNewForYou(admin, configs.get("new_for_you"), supabaseUrl),
     };
 
     return json({ ok: true, ...results });
@@ -185,7 +186,12 @@ async function runPostPurchaseReview(admin: any, config: Config | undefined, sup
     if (!lineItems.length) { skipped++; await admin.from("orders").update({ review_email_sent_at: new Date().toISOString() }).eq("id", order.id); continue; }
 
     const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const html = renderAutomationEmail(config.body_md, [itemsTableHtml(lineItems)], unsubscribeUrl);
+    const reviewBlocks = [itemsTableHtml(lineItems)];
+    if (prof.hasMarketingOptIn) {
+      const picks = await pickedForYouBlock(admin, order.user_id, (items || []).map((i: { product_slug: string }) => i.product_slug).filter(Boolean));
+      if (picks) reviewBlocks.push(picks);
+    }
+    const html = renderAutomationEmail(config.body_md, reviewBlocks, unsubscribeUrl);
     const result = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsubscribeUrl));
     if (result.ok) sent++; else console.error("[cron-lifecycle-emails] review-request send failed:", result.error);
     await admin.from("orders").update({ review_email_sent_at: new Date().toISOString() }).eq("id", order.id);
@@ -353,6 +359,35 @@ function couponBlockHtml(code: string, pct: number): string {
   return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:22px;"><tr><td style="background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:16px 18px;text-align:center;">
 <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#7a7a7a;">${pct}% off your next order</p>
 <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:700;letter-spacing:3px;color:#ff3344;">${code}</p></td></tr></table>`;
+}
+
+// Slugs of everything this user has paid for - the context the relevance engine matches against.
+// deno-lint-ignore no-explicit-any
+async function boughtSlugs(admin: any, userId: string): Promise<string[]> {
+  const { data } = await admin.from("order_items").select("product_slug, orders!inner(status, user_id)")
+    .eq("orders.status", "paid").eq("orders.user_id", userId);
+  // deno-lint-ignore no-explicit-any
+  return Array.from(new Set((data || []).map((r: any) => r.product_slug).filter(Boolean)));
+}
+
+// "Picked for you": the shared relevance engine (style/genre tags first, then category, demand,
+// quality, price fit), excluding anything the user already owns. Empty string when there is nothing.
+// deno-lint-ignore no-explicit-any
+async function pickedForYouBlock(admin: any, userId: string, contextSlugs: string[], limit = 3): Promise<string> {
+  if (!contextSlugs.length) return "";
+  const { data: recs } = await admin.rpc("get_checkout_cross_sell", { p_slugs: contextSlugs, p_limit: limit, p_user_id: userId });
+  // deno-lint-ignore no-explicit-any
+  const slugs: string[] = (recs || []).map((r: any) => r.product_slug);
+  if (!slugs.length) return "";
+  const { data: prods } = await admin.from("products").select("slug, title").in("slug", slugs);
+  const titleBySlug = new Map((prods || []).map((p: { slug: string; title: string }) => [p.slug, p.title]));
+  const items = slugs.filter((sl) => titleBySlug.has(sl)).map((sl) => ({
+    title: String(titleBySlug.get(sl)),
+    linkUrl: `${SITE_URL}/product/${sl}`,
+    linkLabel: "View",
+  }));
+  if (!items.length) return "";
+  return `<p style="margin:18px 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#ffffff;">Picked for you, based on what you've bought</p>` + itemsTableHtml(items);
 }
 
 // 1. SIGNUP NUDGE - signed up, never bought, delay_hours ago. Plain, opt-out.
@@ -545,6 +580,41 @@ async function runRepeatBuyer(admin: any, config: Config | undefined, supabaseUr
 // 7. WIN-BACK - last paid order older than delay_hours, escalating coupon by
 // how long they've been gone. Mints a coupon -> requires marketing consent.
 // deno-lint-ignore no-explicit-any
+// NEW FOR YOU - a product added in the last 7 days is emailed to past buyers whose own purchase
+// history ranks it in their top matches in the relevance engine (so someone who bought stud-style
+// maps hears about a new stud-style map, and nobody gets emails about things they won't care about).
+// One email per user per product, max one new-for-you email per user per run, opt-in only.
+// deno-lint-ignore no-explicit-any
+async function runNewForYou(admin: any, config: Config | undefined, supabaseUrl: string) {
+  if (!config || !config.enabled) return { sent: 0, skipped: 0 };
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: fresh } = await admin.from("products").select("slug, title").eq("is_active", true).gte("created_at", since);
+  if (!fresh?.length) return { sent: 0, skipped: 0 };
+  const freshBySlug = new Map(fresh.map((p: { slug: string; title: string }) => [p.slug, p.title]));
+  const { data: buyers } = await admin.from("orders").select("user_id").eq("status", "paid").not("user_id", "is", null).limit(MAX_PER_AUTOMATION * 8);
+  const userIds = Array.from(new Set((buyers || []).map((b: { user_id: string }) => b.user_id)));
+  let sent = 0, skipped = 0;
+  for (const userId of userIds as string[]) {
+    if (sent >= MAX_PER_AUTOMATION) break;
+    const prof = await eligibleProfile(admin, userId);
+    if (!prof || !prof.hasMarketingOptIn) { skipped++; continue; }
+    const ctx = await boughtSlugs(admin, userId);
+    if (!ctx.length) continue;
+    const { data: recs } = await admin.rpc("get_checkout_cross_sell", { p_slugs: ctx, p_limit: 5, p_user_id: userId });
+    // deno-lint-ignore no-explicit-any
+    const hit = (recs || []).map((r: any) => r.product_slug).find((sl: string) => freshBySlug.has(sl));
+    if (!hit) continue;
+    if (await dedupeSeen(admin, "new_for_you", `${userId}:${hit}`)) continue;
+    const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
+    const title = String(freshBySlug.get(hit));
+    const html = renderAutomationEmail(config.body_md, [itemsTableHtml([{ title, linkUrl: `${SITE_URL}/product/${hit}`, linkLabel: "View" }]), ctaButtonHtml(`${SITE_URL}/product/${hit}`, "Take a look")], unsub);
+    const r = await sendSingle(prof.email, config.subject.replace("{product}", title), html, unsubscribeHeaders(unsub));
+    if (r.ok) sent++; else skipped++;
+    await dedupeMark(admin, "new_for_you", `${userId}:${hit}`);
+  }
+  return { sent, skipped };
+}
+
 async function runWinback(admin: any, config: Config | undefined, supabaseUrl: string) {
   if (!config || !config.enabled) return { sent: 0, skipped: 0 };
   const cutoff = new Date(Date.now() - config.delay_hours * 3_600_000).toISOString();
@@ -565,7 +635,11 @@ async function runWinback(admin: any, config: Config | undefined, supabaseUrl: s
     const code = await mintCoupon(admin, "BACK", pct, 30);
     if (!code) { skipped++; continue; }
     const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const html = renderAutomationEmail(config.body_md, [couponBlockHtml(code, pct), ctaButtonHtml(`${SITE_URL}/shop`, "See what's new")], unsub);
+    const winBlocks = [couponBlockHtml(code, pct)];
+    const winPicks = await pickedForYouBlock(admin, userId, await boughtSlugs(admin, userId));
+    if (winPicks) winBlocks.push(winPicks);
+    winBlocks.push(ctaButtonHtml(`${SITE_URL}/shop`, "See what's new"));
+    const html = renderAutomationEmail(config.body_md, winBlocks, unsub);
     const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
     if (r.ok) sent++; else skipped++;
     await dedupeMark(admin, "winback", userId);
