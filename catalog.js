@@ -153,7 +153,44 @@
   // { id, price }) / ('checkout_started') / ('search', { q, results }).
   // Same consent gate and same session/visitor ids as the pageview beacon;
   // fire-and-forget, never throws into the caller.
+  // Session interest: which categories and words this visitor has looked at, searched or added
+  // to their cart in THIS tab session (sessionStorage, nothing leaves the browser). The ranking
+  // and checkout suggestions read it to put what they care about first.
+  var INTEREST_KEY = 'coldd_interest';
+  var INTEREST_STOP = { the: 1, and: 1, pack: 1, kit: 1, set: 1, bundle: 1, asset: 1, assets: 1, system: 1, template: 1, roblox: 1, for: 1, with: 1, map: 1, combat: 1, vfx: 0 };
+  function interestRead() {
+    try { var o = JSON.parse(sessionStorage.getItem(INTEREST_KEY) || 'null'); if (o && o.cats && o.terms) return o; } catch (e) {}
+    return { cats: {}, terms: {} };
+  }
+  function interestTokens(text) {
+    return String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && !INTEREST_STOP[w]; });
+  }
+  window.__interest = {
+    // weight: view 1, search 1, wishlist 2, add to cart 3
+    record: function (cat, title, weight) {
+      try {
+        var o = interestRead(), w = weight || 1;
+        if (cat) o.cats[cat] = (o.cats[cat] || 0) + w;
+        interestTokens(title).forEach(function (t) { o.terms[t] = (o.terms[t] || 0) + w; });
+        sessionStorage.setItem(INTEREST_KEY, JSON.stringify(o));
+      } catch (e) {}
+    },
+    get: function () { return interestRead(); },
+    forProduct: function (id) {
+      var p = (window.__CATALOG || []).filter(function (c) { return c.id === id; })[0];
+      return p ? { cat: p.cat, title: p.title } : null;
+    }
+  };
+
   window.coldTrack = function (type, meta) {
+    try {
+      // Feed the session-interest store (independent of analytics consent: it never leaves the tab).
+      try {
+        if (type === 'add_to_cart' && meta && meta.id) { var ip = window.__interest.forProduct(String(meta.id).replace(/--resell$/, '')); if (ip) window.__interest.record(ip.cat, ip.title, 3); }
+        else if (type === 'search' && meta && meta.q) window.__interest.record(null, meta.q, 1);
+        else if (type === 'product_view' && meta && meta.id) { var iv = window.__interest.forProduct(meta.id); if (iv) window.__interest.record(iv.cat, iv.title, 1); }
+      } catch (e) {}
+    } catch (e) {}
     try {
       if (!window.coldConsent || !window.coldConsent.allows('analytics')) return;
       var sid = null, vid = null;

@@ -2138,7 +2138,28 @@
           // that actually offer that upsell path at all.
           var resellBoost = el.getAttribute('data-resell') === 'yes' ? 8 : 0;
 
-          return priorityBoost + social + saleBoost + recencyBoost + priceWeight + interestBoost + genreBoost + revenueBoost + resellBoost;
+          // BuiltByBit sales of this listing and of similar ones, plus on-site views: real demand
+          // signals that work before this site has its own sales history.
+          var demandBoost = 0;
+          if (catalogDemand) {
+            var dm = catalogDemand[el.getAttribute('data-id')];
+            if (dm) demandBoost = dm.bbb * 30 + dm.views * 12;
+          }
+
+          // This visitor's own browsing in this tab session (works for anonymous visitors):
+          // categories they've opened and words from products they viewed, searched or added.
+          var sessionBoost = 0;
+          if (window.__interest) {
+            var si = window.__interest.get();
+            var catKey = el.getAttribute('data-catlabel') || '';
+            var catMax = 0; for (var ck in si.cats) { if (si.cats[ck] > catMax) catMax = si.cats[ck]; }
+            if (catMax > 0 && si.cats[catKey]) sessionBoost += 28 * (si.cats[catKey] / catMax);
+            var nm = (el.querySelector('.p-name') ? el.querySelector('.p-name').textContent : '').toLowerCase().split(/[^a-z0-9]+/);
+            var hit = 0; nm.forEach(function (w) { if (si.terms[w]) hit += Math.min(si.terms[w], 4); });
+            sessionBoost += Math.min(22, hit * 5);
+          }
+
+          return priorityBoost + social + saleBoost + recencyBoost + priceWeight + interestBoost + genreBoost + revenueBoost + resellBoost + demandBoost + sessionBoost;
         }
         // Each of these four ranking signals is its own round trip. A
         // previous fix stopped them from reordering the grid AFTER it was
@@ -2155,7 +2176,8 @@
         // - until every signal has either resolved or hit the safety
         // timeout below, so there is only ever one render, with final data,
         // and nothing to visibly transition from.
-        var pendingRankingSignals = { cats: true, catTerms: true, userTerms: true, revenue: true };
+        var pendingRankingSignals = { cats: true, catTerms: true, userTerms: true, revenue: true, demand: true };
+        var catalogDemand = null; // slug -> { bbb, views }, 0..1 ranks from catalog_demand_signals()
         var gridRevealed = false;
         function signalSettled(key) {
           delete pendingRankingSignals[key];
@@ -2210,12 +2232,34 @@
           }).catch(function () {}).then(function () { signalSettled('revenue'); });
         }
         loadCatalogRevenue();
+        function loadCatalogDemand() {
+          if (!window.coldSupabase) { signalSettled('demand'); return; }
+          window.coldSupabase.rpc('catalog_demand_signals', {}).then(function (r) {
+            var rows = r.data || [];
+            if (!rows.length) return;
+            var map = {};
+            rows.forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0 }; });
+            catalogDemand = map;
+          }).catch(function () {}).then(function () { signalSettled('demand'); });
+        }
+        loadCatalogDemand();
         function sortMatches(arr) {
           const mode = sortMode || 'recommended';
           if (mode === 'recommended') {
             const withScore = arr.map(function (p, i) { return { p: p, i: i, s: conversionScore(p) }; });
             withScore.sort(function (a, b) { return (b.s - a.s) || (a.i - b.i); });
-            return withScore.map(function (m) { return m.p; });
+            var ordered = withScore.map(function (m) { return m.p; });
+            // Exploration slot: one product nobody has looked at yet is pulled into position 4 so a
+            // new or overlooked product can earn views and sales data instead of staying buried.
+            if (ordered.length > 10 && catalogDemand) {
+              var pool = ordered.slice(8).filter(function (el) { var d = catalogDemand[el.getAttribute('data-id')]; return !d || d.views === 0; });
+              if (pool.length) {
+                var pick = pool[Math.floor(Math.random() * pool.length)];
+                ordered.splice(ordered.indexOf(pick), 1);
+                ordered.splice(3, 0, pick);
+              }
+            }
+            return ordered;
           }
           if (mode === 'newest' || mode === 'oldest') {
             const withDate = arr.map(function (p, i) { return { p: p, i: i, t: Date.parse(p.getAttribute('data-created')) || 0 }; });
@@ -3381,6 +3425,7 @@
           } catch (_e) {}
           var ups = updatesFor(p);
           var version = ups.length ? ups[0].version : 'v1.0';
+          if (window.__interest) window.__interest.record(p.cat, p.title, 1);
           cur = { id: p.id, title: p.title, image: p.image, tag: p.cat, priceNum: p.priceNum, was: p.was || 0,
                   price: p.priceNum, licence: 'standard', resell: p.resell, platform: p.platform,
                   robuxPrice: p.robuxPrice != null ? p.robuxPrice : null,
@@ -6098,7 +6143,7 @@
         var key = slugs.slice().sort().join(',') + (allResell ? '|resell' : '');
         if (key === crossSellCartKey) { paintCrossSell(); return; }
         crossSellCartKey = key;
-        window.coldSupabase.rpc('get_checkout_cross_sell', { p_slugs: slugs, p_limit: 4 }).then(function (res) {
+        window.coldSupabase.rpc('get_checkout_cross_sell', { p_slugs: slugs, p_limit: 4, p_interest: (window.__interest ? window.__interest.get() : {}) }).then(function (res) {
           if (key !== crossSellCartKey) return; // cart changed again before this resolved
           var cat = window.__CATALOG || [];
           var cartIds = {}; cart.forEach(function (i) { cartIds[i.id.replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, '')] = true; });
