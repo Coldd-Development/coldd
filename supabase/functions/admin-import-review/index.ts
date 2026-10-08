@@ -8,7 +8,9 @@
 // (status='approved'), no moderation queue, since an admin is vetting it
 // by hand already.
 //
-// Body: { slug, stars, text, reviewerName, platform }
+// Body: { slug?, stars, text, reviewerName, platform, byline? }
+// An empty slug files a GENERAL review (product_id null): it appears on /reviews but never
+// counts toward any product's rating. byline is the "Role or company" line under the name.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -58,14 +60,20 @@ Deno.serve(async (req: Request) => {
     const text = String(body.text || "").trim().slice(0, 2000);
     const reviewerName = String(body.reviewerName || "").trim().slice(0, 80) || "Anonymous";
     const platform = String(body.platform || "Other").trim().slice(0, 40) || "Other";
-    if (!slug || !stars || !text) return json({ ok: false, error: "Missing product, rating, or review text." }, 400);
+    const byline = String(body.byline || "").trim().slice(0, 80) || null;
+    if (!stars || !text) return json({ ok: false, error: "Missing rating or review text." }, 400);
 
-    const { data: product, error: prodErr } = await admin.from("products").select("id").eq("slug", slug).single();
-    if (prodErr || !product) return json({ ok: false, error: "Product not found." }, 404);
+    let productId: string | null = null;
+    if (slug) {
+      const { data: product, error: prodErr } = await admin.from("products").select("id").eq("slug", slug).single();
+      if (prodErr || !product) return json({ ok: false, error: "Product not found." }, 404);
+      productId = product.id;
+    }
 
     const { error: insErr } = await admin.from("reviews").insert({
-      product_id: product.id,
+      product_id: productId,
       user_id: null,
+      byline,
       stars,
       text,
       user_name: reviewerName,

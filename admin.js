@@ -598,8 +598,8 @@
       id: row.id,
       dbId: row.id,
       productId: row.products ? row.products.slug : null,
-      productTitle: row.products ? row.products.title : 'Unknown product',
-      user: profile ? (profile.username || profile.email || 'user') : 'user',
+      productTitle: row.products ? row.products.title : null, // null = general review
+      user: profile ? (profile.username || profile.email || 'user') : (row.user_name || 'user'),
       stars: row.stars,
       text: row.text,
       date: row.created_at,
@@ -5506,7 +5506,7 @@
       var stars = '';
       for (var i = 0; i < 5; i++) stars += '<span class="pd-star ' + (i < r.stars ? 'on' : '') + '">' + (i < r.stars ? '★' : '☆') + '</span>';
       return '<div class="dash-card glass adm-review" data-id="' + r.id + '">' +
-        '<div class="adm-review-head"><strong>' + esc(r.user) + '</strong><span class="adm-sub">on ' + esc(r.productTitle) + '</span><span class="adm-sub">' + fmtDate(new Date(r.date)) + '</span>' +
+        '<div class="adm-review-head"><strong>' + esc(r.user) + '</strong><span class="adm-sub">' + (r.productTitle ? 'on ' + esc(r.productTitle) : 'General review (not tied to a product)') + '</span><span class="adm-sub">' + fmtDate(new Date(r.date)) + '</span>' +
           (!r.adminReviewedAt ? statusBadge('pending') : statusBadge(r.status === 'hidden' ? 'refunded' : 'completed')) + '</div>' +
         '<div class="pd-rev-stars">' + stars + '</div>' +
         '<p class="adm-review-text">' + esc(r.text) + '</p>' +
@@ -5518,7 +5518,7 @@
         '<div class="adm-row-actions">' +
           (r.status !== 'hidden' ? '<button class="btn btn-ghost adm-btn-sm adm-rev-hide" type="button">Hide</button>' : '') +
           '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>' +
-          '<button class="btn btn-ghost adm-btn-sm adm-rev-goto" type="button">Go to product</button>' +
+          (r.productId ? '<button class="btn btn-ghost adm-btn-sm adm-rev-goto" type="button">Go to product</button>' : '') +
         '</div></div>';
     }).join('') || '<p class="adm-empty">Nothing here.</p>';
 
@@ -5596,16 +5596,19 @@
     e.preventDefault();
     var msgEl = $('admImportReviewMsg');
     var slug = importReviewSlugInput.value;
-    if (!slug) { if (msgEl) { msgEl.className = 'co-msg err show'; msgEl.textContent = 'Pick a product from the search results.'; } return; }
+    // Leaving the product box empty files it as a general review; typing something that was
+    // never picked from the results is almost certainly a mistake, so that still errors.
+    if (!slug && importReviewSearch.value.trim()) { if (msgEl) { msgEl.className = 'co-msg err show'; msgEl.textContent = 'Pick a product from the search results, or clear the box for a general review.'; } return; }
     var body = {
       slug: slug,
+      byline: ($('admImportReviewByline') || { value: '' }).value.trim(),
       stars: $('admImportReviewStars').value,
       reviewerName: $('admImportReviewName').value.trim(),
       platform: $('admImportReviewPlatform').value,
       text: $('admImportReviewText').value.trim()
     };
     invokeAdminFn('admin-import-review', body, 'Could not import review.').then(function () {
-      logAudit('Imported a ' + body.platform + ' review for "' + importReviewSearch.value + '"');
+      logAudit('Imported a ' + body.platform + ' review ' + (slug ? 'for "' + importReviewSearch.value + '"' : '(general, no product)'));
       importReviewForm.reset(); importReviewSlugInput.value = '';
       importReviewStarsDropdown.setValue('5'); importReviewPlatformDropdown.setValue('BuiltByBit');
       if (msgEl) { msgEl.className = 'co-msg show'; msgEl.textContent = 'Review imported and published.'; }

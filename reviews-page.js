@@ -75,10 +75,15 @@
     grid.innerHTML = reviews.map(function (r) {
       var initial = (r.user || '?').trim().charAt(0).toUpperCase() || '?';
       var product = catalogById[r.productId];
+      // A general review has no product: show who wrote it (role / company) instead.
+      var sub = r.byline || (product ? product.title : '');
+      var avatar = r.avatar
+        ? '<img class="ra" src="' + esc(r.avatar) + '" alt="" width="38" height="38" />'
+        : '<span class="ra">' + esc(initial) + '</span>';
       return '<article class="glass review reveal">' +
         '<div class="stars" aria-label="' + (r.stars || 0) + ' out of 5">' + starsHtml(r.stars || 0) + '</div>' +
         '<p>"' + esc(r.text) + '"</p>' +
-        '<div class="review-by"><span class="ra">' + esc(initial) + '</span><span class="rn">' + esc(r.user) + (product ? '<small>' + esc(product.title) + '</small>' : '') + '</span></div>' +
+        '<div class="review-by">' + avatar + '<span class="rn">' + esc(r.user) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span></div>' +
         '</article>';
     }).join('');
     // app.js's scroll-reveal observer already ran by the time this fires

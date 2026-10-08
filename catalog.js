@@ -446,8 +446,10 @@
   function toReview(row) {
     return {
       id: row.id,
-      productId: row.products ? row.products.slug : null,
+      productId: row.products ? row.products.slug : null, // null = a general review, not tied to any product
       user: row.user_name || 'user',
+      byline: row.byline || null,
+      avatar: row.avatar_url || null,
       stars: row.stars,
       text: row.text,
       date: row.created_at,
@@ -561,7 +563,7 @@
     window.coldSupabase.from('products').select(PRODUCT_PUBLIC_COLS).eq('is_active', true).limit(20000),
     window.coldSupabase
       .from('reviews')
-      .select('id, stars, text, created_at, reply, reply_at, user_name, products!inner(slug)')
+      .select('id, stars, text, created_at, reply, reply_at, user_name, byline, avatar_url, products(slug)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
       .limit(20000),

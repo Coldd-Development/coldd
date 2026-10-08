@@ -858,7 +858,7 @@
               <p class="adm-note">For reviews left on other platforms (BuiltByBit, Discord, etc.) that you want shown on the product page - published immediately, no moderation queue.</p>
               <form class="adm-form" id="admImportReviewForm" style="flex-wrap:wrap;position:relative;">
                 <div style="position:relative;flex:1;min-width:220px;">
-                  <input type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Search product…" autocomplete="off" style="width:100%;box-sizing:border-box;" />
+                  <input type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
                   <div id="admImportReviewProductResults" class="adm-dd-menu" style="position:absolute;top:100%;left:0;right:0;z-index:20;" hidden></div>
                 </div>
                 <input type="hidden" id="admImportReviewProductSlug" />
@@ -870,6 +870,7 @@
                 </div>
                 <input type="hidden" id="admImportReviewStars" value="5" />
                 <input type="text" id="admImportReviewName" class="adm-input adm-input-sm" placeholder="Reviewer name" required />
+                <input type="text" id="admImportReviewByline" class="adm-input adm-input-sm" placeholder="Role or company (optional)" maxlength="80" />
                 <div class="adm-dd adm-dd-inline" id="admImportReviewPlatformDD">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
                     <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1491,6 +1492,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261008f" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
+  <script src="/catalog.js?v=20261008g" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
 </body>
 </html>
