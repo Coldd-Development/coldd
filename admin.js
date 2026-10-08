@@ -3561,7 +3561,7 @@
     'Uniforms & Gear': [['2d-uniforms', '2D Uniforms'], ['3d-gear', '3D Gear'], ['military-government', 'Military & Government'], ['roleplay', 'Roleplay'], ['aviation', 'Aviation'], ['morphs', 'Morphs']],
     'Boats': [['military', 'Military'], ['civilian', 'Civilian'], ['commercial', 'Commercial']],
     'Weapons': [['military', 'Military'], ['medieval', 'Medieval'], ['scripted', 'Scripted'], ['firearms', 'Firearms'], ['melees', 'Melees']],
-    'Vehicles': [['scripted', 'Scripted Vehicles'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services']],
+    'Vehicles': [['scripted', 'Scripted Vehicles'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services'], ['sci-fi', 'Sci-Fi']],
     'Animations & VFX': [['vfx', 'VFX'], ['animations', 'Animations'], ['vfx-packs', 'VFX Packs'], ['combat', 'Combat VFX'], ['auras', 'Aura VFX'], ['rng-vfx', 'RNG VFX'], ['anime-vfx', 'Anime VFX'], ['animation-packs', 'Animation Packs'], ['combat-animations', 'Combat Animations']]
   };
   var editContacts = [];
