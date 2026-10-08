@@ -589,15 +589,25 @@
         return !!(res.data === true);
       });
     },
+    // Reset by emailed code. The password-reset-code function emails the code and, on verify,
+    // sets the new password; the buyer is then signed in with it. (The old path used Supabase's
+    // built-in recovery email, whose dashboard template sent a link while this UI asks for a code.)
     sendPasswordReset: function (email) {
-      return client.auth.resetPasswordForEmail(email);
+      return client.functions.invoke('password-reset-code', { body: { action: 'send', email: email } }).then(function (res) {
+        if (res.error) {
+          var status = res.error.context && res.error.context.status;
+          if (status === 429) return {}; // a code was just sent, keep going to the code screen
+          throw res.error;
+        }
+        return res;
+      });
     },
     verifyRecoveryOtp: function (email, code, newPassword) {
-      return client.auth.verifyOtp({ email: email, token: code, type: 'recovery' }).then(function (res) {
-        if (res.error) return res;
-        return client.auth.updateUser({ password: newPassword }).then(function (upRes) {
-          if (upRes.error || !res.data || !res.data.user) return upRes;
-          return upsertBasicProfile(res.data.user).then(function () { return upRes; });
+      return client.functions.invoke('password-reset-code', { body: { action: 'verify', email: email, code: code, newPassword: newPassword } }).then(function (res) {
+        if (res.error) return { error: res.error };
+        return client.auth.signInWithPassword({ email: email, password: newPassword }).then(function (inRes) {
+          if (inRes.error || !inRes.data || !inRes.data.user) return inRes;
+          return upsertBasicProfile(inRes.data.user).then(function () { return inRes; });
         });
       });
     },
