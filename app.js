@@ -6993,11 +6993,27 @@
               });
               var allAdded = addedCount === resellSlugs.length;
               var n = resellSlugs.length;
+              // Items in the cart that cannot take a resell licence at all (and are not one already). When some
+              // exist, the offer must say exactly which products it covers, never "these products".
+              var ineligible = cart.filter(function (x) { return !(x.licence === 'resell' || resellSlugs.indexOf(x.id) >= 0); }).length;
+              var names = resellSlugs.map(function (slug) {
+                var p = cat.filter(function (x) { return x.id === slug; })[0];
+                var t = p ? p.title : slug;
+                return t.length > 30 ? t.slice(0, 28) + '…' : t;
+              });
+              var heading, detail;
+              if (!ineligible) {
+                heading = n === 1 ? 'Want to sell this product?' : 'Want to sell these products?';
+                detail = 'Add a resell licence to ' + (n === 1 ? 'this item' : ('all ' + n + ' items'));
+              } else {
+                heading = 'Want to sell ' + (n <= 2 ? names.join(' or ') : (names[0] + ' and ' + (n - 1) + ' more')) + '?';
+                detail = 'Add a resell licence to ' + (n === 1 ? 'this item only' : ('these ' + n + ' items only')) +
+                  ' (' + (ineligible === 1 ? 'the other item in your cart doesn’t' : ('the other ' + ineligible + ' items in your cart don’t')) + ' offer one)';
+              }
               resellEl.className = 'co-offer-resell' + (allAdded ? ' added' : '');
               resellEl.innerHTML =
-                '<div class="cor-copy"><b>Want to sell these products?</b>' +
-                '<span>Add a resell licence to ' + (n === 1 ? 'this item' : ('all ' + n + ' eligible items')) +
-                ' · +' + fmtMoney(deltaTotal) + '</span></div>' +
+                '<div class="cor-copy"><b>' + esc(heading) + '</b>' +
+                '<span>' + esc(detail) + ' · +' + fmtMoney(deltaTotal) + '</span></div>' +
                 '<button class="btn btn-tinted co-offer-resell-btn' + (allAdded ? ' is-added' : '') + '" type="button">' +
                 (allAdded
                   ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Added'
