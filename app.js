@@ -2704,6 +2704,25 @@
       // alone covers the remaining gap to the next tier - turns "spend $12
       // more" into a specific, one-click thing to add instead of homework
       // the shopper has to go do themselves.
+      var tierRelCache = { sig: '', list: null, pending: false };
+      function tierRelevance() {
+        var slugs = cart.map(function (i) { return i.id.replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, ''); }).sort();
+        var sig = slugs.join(',');
+        if (!sig) return null;
+        if (tierRelCache.sig === sig && tierRelCache.list) return tierRelCache.list;
+        if (!tierRelCache.pending && window.coldSupabase) {
+          tierRelCache.pending = true;
+          window.coldSupabase.rpc('get_checkout_cross_sell', { p_slugs: slugs, p_limit: 25, p_interest: (window.__interest ? window.__interest.get() : {}) })
+            .then(function (r) {
+              tierRelCache.sig = sig;
+              tierRelCache.list = (r.data || []).map(function (x) { return x.product_slug; });
+            }).catch(function () { tierRelCache.sig = sig; tierRelCache.list = []; }).then(function () {
+              tierRelCache.pending = false;
+              if (tierRelCache.sig === sig && typeof renderTierProgress === 'function') renderTierProgress();
+            });
+        }
+        return tierRelCache.sig === sig ? tierRelCache.list : null;
+      }
       function cheapestGapCloser(remaining, useRobux) {
         var cat = window.__CATALOG || [];
         var cartIds = {};
@@ -2718,9 +2737,22 @@
           var rbx = catalogRobuxPrice(p.id);
           return rbx != null ? rbx : Math.round(p.priceNum * ROBUX_PER_USD_FALLBACK);
         }
-        var candidates = cat.filter(function (p) { return !cartIds[p.id] && priceOf(p) >= remaining; });
+        var candidates = cat.filter(function (p) { return !cartIds[p.id] && priceOf(p) >= remaining && !(p.robuxDisabled && useRobux); });
         candidates.sort(function (a, b) { return priceOf(a) - priceOf(b); });
         var pick = candidates[0] || null;
+        // Personalized: prefer the product the relevance engine ranks highest for this cart
+        // (style/genre match first) over the merely cheapest, as long as it does not cost much
+        // more than the gap needs. The ranking is fetched once per cart and cached.
+        var rel = tierRelevance();
+        if (rel && candidates.length) {
+          var cap = Math.max(remaining * 2.5, remaining + 15);
+          var best = null, bestIdx = 1e9;
+          candidates.forEach(function (p) {
+            var idx = rel.indexOf(p.id);
+            if (idx >= 0 && idx < bestIdx && priceOf(p) <= cap) { best = p; bestIdx = idx; }
+          });
+          if (best) pick = best;
+        }
         if (pick) pick = Object.assign({}, pick, { gapPrice: priceOf(pick) });
         return pick;
       }
