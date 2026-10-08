@@ -4832,3 +4832,25 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 .adm-bbb-issue-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
 .adm-bbb-issue { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 10px; }
 .adm-bbb-issue-text { flex: 1; min-width: 180px; font-size: 14px; }
+
+
+/* BuiltByBit sales performance chart (revenue + purchases, two lines with points) */
+.bbb-chart-head { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 4px; }
+.bbb-chart-unit { font-size: 12px; color: var(--fg-2); border: 1px solid var(--hairline); padding: 3px 10px; border-radius: 999px; }
+.bbb-chart-wrap { padding: 4px 0; }
+.bbb-chart { width: 100%; height: auto; display: block; overflow: visible; }
+.bbb-ax { font-size: 11px; fill: var(--fg-3); font-variant-numeric: tabular-nums; }
+.bbb-ax-n { fill: #f5a524; opacity: .85; }
+.bbb-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.bbb-line.bbb-rev { stroke: #4ea1f3; }
+.bbb-line.bbb-ord { stroke: #f5a524; }
+.bbb-dot.bbb-rev, .bbb-hover-dot.bbb-rev { fill: #4ea1f3; }
+.bbb-dot.bbb-ord, .bbb-hover-dot.bbb-ord { fill: #f5a524; }
+.bbb-hover-line { stroke: var(--fg-3); stroke-width: 1; opacity: 0; pointer-events: none; }
+.bbb-hover-dot { opacity: 0; pointer-events: none; stroke: var(--bg, #0b0f17); stroke-width: 2; }
+.bbb-hit:hover .bbb-hover-line, .bbb-hit:hover .bbb-hover-dot { opacity: 1; }
+.bbb-legend { display: flex; gap: 18px; justify-content: center; margin-top: 6px; font-size: 12px; color: var(--fg-2); }
+.bbb-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bbb-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.bbb-legend i.bbb-rev { background: #4ea1f3; }
+.bbb-legend i.bbb-ord { background: #f5a524; }

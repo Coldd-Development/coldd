@@ -42,16 +42,27 @@ const RECHECK_MS = 20 * 60 * 1000; // a listing is not re-read more often than t
 // A listing whose only reason to be re-read is that it holds pending purchases (the
 // stored count already matches BuiltByBit's) is checked far less often.
 const PENDING_RECHECK_MS = 6 * 60 * 60 * 1000;
+// BuiltByBit's own per-listing purchase counter lags (it ignores pending sales), so a new
+// sale cannot be spotted from the counter alone. Instead: listings that sold in the last
+// HOT_DAYS are re-read on every scheduled run, and everything that has ever sold gets a
+// full re-read once a day as a safety net.
+const HOT_DAYS = 14;
+const HOT_RECHECK_MS = 12 * 60 * 1000;
+const FULL_RECHECK_MS = 24 * 60 * 60 * 1000;
 
 let DEADLINE = Infinity;
 // Shared by every worker: once one request is told to slow down, all of them wait.
 let COOLDOWN_UNTIL = 0;
+// Requests are also spaced out, so even without a 429 we stay at ~2 per second
+// (about 120 a minute) however many workers are running.
+const MIN_GAP_MS = 500;
+let NEXT_SLOT = 0;
 function overBudget() { return Date.now() > DEADLINE; }
 
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 }
@@ -110,6 +121,12 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
     if (pause > 0) {
       if (Date.now() + pause > DEADLINE) throw new ApiFail(408, "Ran out of time.");
       await new Promise((r) => setTimeout(r, pause));
+    }
+    const slotWait = Math.max(0, NEXT_SLOT - Date.now());
+    NEXT_SLOT = Math.max(Date.now(), NEXT_SLOT) + MIN_GAP_MS;
+    if (slotWait > 0) {
+      if (Date.now() + slotWait > DEADLINE) throw new ApiFail(408, "Ran out of time.");
+      await new Promise((r) => setTimeout(r, slotWait));
     }
     const t0 = Date.now();
     let res: Response;
@@ -176,20 +193,27 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData?.user) return json({ ok: false, error: "Please sign in." }, 401);
-
     const admin = createClient(supabaseUrl, serviceKey);
-    const { data: profile, error: profileErr } = await admin
-      .from("profiles").select("is_admin").eq("id", userData.user.id).single();
-    if (profileErr || !profile?.is_admin) return json({ ok: false, error: "Admin access required." }, 403);
+    const body = await req.json().catch(() => ({}));
+    const action = String(body.action || "sync");
+
+    // The scheduled sync (pg_cron, every 15 minutes) authenticates with the shared
+    // x-cron-secret. It can only ever run a sync, never reply to a review.
+    const cronSecret = Deno.env.get("CRON_SECRET") || "";
+    const isCron = cronSecret.length > 0 && req.headers.get("x-cron-secret") === cronSecret;
+    if (isCron && action !== "sync") return json({ ok: false, error: "Not permitted." }, 403);
+
+    if (!isCron) {
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: userData, error: userErr } = await userClient.auth.getUser();
+      if (userErr || !userData?.user) return json({ ok: false, error: "Please sign in." }, 401);
+      const { data: profile, error: profileErr } = await admin
+        .from("profiles").select("is_admin").eq("id", userData.user.id).single();
+      if (profileErr || !profile?.is_admin) return json({ ok: false, error: "Admin access required." }, 403);
+    }
 
     const token = Deno.env.get("BUILTBYBIT_API_TOKEN");
     if (!token) return json({ ok: true, configured: false });
-
-    const body = await req.json().catch(() => ({}));
-    const action = String(body.action || "sync");
 
     // ---- reply to a review --------------------------------------------------
     if (action === "reply_review") {
@@ -277,6 +301,9 @@ Deno.serve(async (req: Request) => {
     for (const s of (stateRows ?? []) as Obj[]) state.set(String(s.resource_id), s.detail_at);
 
     const nowMs = Date.now();
+    const hotSince = new Date(nowMs - HOT_DAYS * 86400000).toISOString();
+    const { data: hotRows } = await admin.from("bbb_purchases").select("resource_id").gte("purchased_at", hotSince).limit(20000);
+    const hot = new Set<string>((hotRows ?? []).map((r: Obj) => String(r.resource_id)));
     const lagOf = (l: Obj) => {
       const st = stored.get(String(l.resource_id)) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
       return {
@@ -290,11 +317,17 @@ Deno.serve(async (req: Request) => {
       const age = done ? nowMs - new Date(done).getTime() : Infinity;
       const g = lagOf(l);
       if (g.missingP > 0 || g.needR) return age >= RECHECK_MS;
-      return g.pending && age >= PENDING_RECHECK_MS;
+      if (hot.has(String(l.resource_id))) return age >= HOT_RECHECK_MS;
+      if (g.pending) return age >= PENDING_RECHECK_MS;
+      const sold = (l.purchases ?? 0) > 0 || (stored.get(String(l.resource_id))?.purchases_n ?? 0) > 0;
+      return sold && age >= FULL_RECHECK_MS;
     }).sort((a, b) => {
-      // Listings that are missing purchases come first, biggest gap first.
+      // Missing purchases first (biggest gap first), then recently active listings,
+      // then whatever was read longest ago.
       const ga = lagOf(a), gb = lagOf(b);
-      return (gb.missingP - ga.missingP) || ((b.purchases ?? 0) - (a.purchases ?? 0));
+      const ha = hot.has(String(a.resource_id)) ? 1 : 0, hb = hot.has(String(b.resource_id)) ? 1 : 0;
+      return (gb.missingP - ga.missingP) || (hb - ha) ||
+        (new Date(state.get(String(a.resource_id)) ?? 0).getTime() - new Date(state.get(String(b.resource_id)) ?? 0).getTime());
     });
 
     let next = 0;
@@ -306,7 +339,10 @@ Deno.serve(async (req: Request) => {
       let note: string | null = null;
       let retryLater = false; // a rate limit / timeout: leave it at the front of the queue
 
-      if ((l.purchases ?? 0) > Number(st.purchases_n) || Number(st.pending_n) > 0) {
+      // Skip the purchases read when stale reviews are the only reason this listing is queued.
+      const g = lagOf(l);
+      const reviewsOnly = g.needR && g.missingP === 0 && !g.pending && !hot.has(rid);
+      if (!reviewsOnly) {
         try {
           const ps = await listAll(token!, `/resources/${rid}/purchases`);
           noteKeys("purchase", ps[0]);

@@ -5007,7 +5007,7 @@
     return Promise.all([
       bbbPaged(function () { return sb.from('bbb_purchases').select('purchase_id, resource_id, resource_title, price, currency, status, renewal, purchased_at').order('purchased_at', { ascending: false }).order('purchase_id'); }),
       sb.from('bbb_reviews').select('review_id, resource_id, resource_title, rating, message, response, reviewed_at').order('reviewed_at', { ascending: false }).limit(200),
-      bbbPaged(function () { return sb.from('bbb_resource_snapshots').select('resource_id, snapshot_date, title, price, currency, downloads, purchases, reviews, rating, latest_version, category').order('snapshot_date', { ascending: false }).order('resource_id'); }),
+      bbbPaged(function () { return sb.from('bbb_resource_snapshots').select('resource_id, snapshot_date, title, price, currency, downloads, purchases, reviews, rating, latest_version, category, synced_at').order('snapshot_date', { ascending: false }).order('resource_id'); }),
       sb.from('bbb_issue_dismissals').select('issue_key')
     ]).then(function (r) {
       if (r[1].error) throw r[1].error;
@@ -5016,6 +5016,7 @@
       // Keep only the newest day's listing rows.
       var snaps = r[2], newest = snaps.length ? snaps[0].snapshot_date : null;
       BBB.snaps = snaps.filter(function (s) { return s.snapshot_date === newest; });
+      BBB.snaps.forEach(function (s) { if (s.synced_at && (!BBB.syncedAt || s.synced_at > BBB.syncedAt)) BBB.syncedAt = s.synced_at; });
       BBB.dismissed = {};
       ((r[3] && r[3].data) || []).forEach(function (d) { BBB.dismissed[d.issue_key] = true; });
       if (BBB.configured !== false && (BBB.purchases.length || BBB.snaps.length)) BBB.configured = true;
@@ -5056,7 +5057,14 @@
       return refreshBbbData();
     }).then(function () { if (curPanel === 'marketplaces') renderBbb(); });
   }
-  function refreshBbb() { return refreshBbbData().then(function () { return bbbSync(false); }); }
+  // The server syncs BuiltByBit on its own every 15 minutes (pg_cron -> admin-builtbybit-sync),
+  // spaced to stay inside BuiltByBit's rate limits. The browser only re-reads our tables; a
+  // forced sync is still available from the Sync now button.
+  function refreshBbb() { return refreshBbbData(); }
+  setInterval(function () {
+    if (document.hidden || (curPanel !== 'marketplaces' && curPanel !== 'home' && curPanel !== 'analytics')) return;
+    refreshBbbData();
+  }, 5 * 60 * 1000);
 
   function bbbStars(n) {
     var r = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
@@ -5113,6 +5121,103 @@
     }).join('') + '</div>';
     return '<div class="adm-chart-wrap"><div class="adm-chart-axis" style="height:' + h + 'px;min-width:' + axisW + 'ch">' + axis + '</div>' +
       '<div class="adm-chart-main"><svg viewBox="0 0 ' + w + ' ' + h + '" class="adm-chart" style="height:' + h + 'px" preserveAspectRatio="none">' + grid + paths + hover + '</svg>' + xl + '</div></div>' + legend;
+  }
+  // Sales performance chart in the style of BuiltByBit's own dashboard: total revenue (left
+  // axis, USD) and total purchases (right axis) as two lines with a point per bucket.
+  // The timeframe buttons (7D / 30D / 90D / All) drive it; the bucket size follows the
+  // timeframe so the lines stay readable: daily up to 120 days, weekly up to ~13 months,
+  // monthly beyond that.
+  function bbbDayIndex(date, todayStart) {
+    var d = new Date(date); d.setHours(0, 0, 0, 0);
+    return Math.round((todayStart.getTime() - d.getTime()) / 86400000);
+  }
+  function bbbBuckets(range) {
+    var list = bbbPurchasesIn(null, null);
+    var todayStart = daysAgoStart(1);
+    var oldest = 0;
+    list.forEach(function (p) { var i = bbbDayIndex(p.purchased_at, todayStart); if (i > oldest) oldest = i; });
+    var days = Math.min(range || (oldest + 1), 1500);
+    var unit = days <= 120 ? 'day' : days <= 400 ? 'week' : 'month';
+    var buckets = [], key;
+    if (unit === 'day') {
+      for (var i = days - 1; i >= 0; i--) { var d = daysAgo(i); buckets.push({ at: d, rev: 0, n: 0, idx: i }); }
+      key = function (di) { return di; };
+    } else if (unit === 'week') {
+      var nw = Math.ceil(days / 7);
+      for (var k = nw - 1; k >= 0; k--) buckets.push({ at: daysAgo(k * 7 + 6), end: daysAgo(k * 7), rev: 0, n: 0, idx: k });
+      key = function (di) { return Math.floor(di / 7); };
+    } else {
+      var first = daysAgo(Math.min(oldest, days - 1)), cur = new Date(first.getFullYear(), first.getMonth(), 1), stop = new Date();
+      while (cur <= stop) { buckets.push({ at: new Date(cur), month: cur.getFullYear() * 12 + cur.getMonth(), rev: 0, n: 0 }); cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1); }
+    }
+    var byIdx = {};
+    buckets.forEach(function (b) { byIdx[unit === 'month' ? b.month : b.idx] = b; });
+    list.forEach(function (p) {
+      var t = new Date(p.purchased_at), di = bbbDayIndex(t, todayStart);
+      if (range && di >= days) return;
+      var b = byIdx[unit === 'month' ? t.getFullYear() * 12 + t.getMonth() : key(di)];
+      if (!b) return;
+      b.n += 1;
+      if (bbbIsUsd(p)) b.rev += Number(p.price) || 0;
+    });
+    buckets.forEach(function (b) { b.rev = Math.round(b.rev * 100) / 100; });
+    return { unit: unit, buckets: buckets };
+  }
+  // Whole-number axis for the purchases count (never 0.25-style steps).
+  function bbbCountScale(max) {
+    var m = Math.max(4, Math.ceil(max)), step = Math.ceil(m / 4), top = step * 4, ticks = [];
+    for (var t = 0; t <= top; t += step) ticks.push(t);
+    return { top: top, ticks: ticks };
+  }
+  function bbbChart(range) {
+    var res = bbbBuckets(range), bk = res.buckets, n = bk.length;
+    var unitLabel = res.unit === 'day' ? 'Daily' : res.unit === 'week' ? 'Weekly' : 'Monthly';
+    function lbl(b) {
+      if (res.unit === 'month') return b.at.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      return b.at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    function tipDate(b) {
+      if (res.unit === 'week') return fmtDate(b.at) + ' to ' + fmtDate(b.end);
+      if (res.unit === 'month') return b.at.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      return fmtDate(b.at);
+    }
+    var head = '<div class="bbb-chart-head"><span class="adm-mini-head" style="margin:0">Sales performance</span><span class="bbb-chart-unit">' + unitLabel + '</span></div>';
+    if (n < 1) return head + '<p class="adm-empty">No sales in this timeframe.</p>';
+    var W = 760, H = 270, L = 50, R = 40, T = 14, B = 30, iw = W - L - R, ih = H - T - B;
+    var maxRev = 0, maxN = 0;
+    bk.forEach(function (b) { if (b.rev > maxRev) maxRev = b.rev; if (b.n > maxN) maxN = b.n; });
+    var sr = niceScale(maxRev), sn = bbbCountScale(maxN);
+    function X(i) { return L + (n === 1 ? iw / 2 : (i / (n - 1)) * iw); }
+    function YR(v) { return T + ih - (v / sr.top) * ih; }
+    function YN(v) { return T + ih - (v / sn.top) * ih; }
+    var grid = sr.ticks.map(function (t) {
+      return '<line class="adm-chart-grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + YR(t).toFixed(1) + '" y2="' + YR(t).toFixed(1) + '"></line>' +
+        '<text class="bbb-ax" x="' + (L - 8) + '" y="' + (YR(t) + 3.5).toFixed(1) + '" text-anchor="end">' + esc(axisUsd(t)) + '</text>';
+    }).join('');
+    var rightAx = sn.ticks.map(function (t) {
+      return '<text class="bbb-ax bbb-ax-n" x="' + (W - R + 8) + '" y="' + (YN(t) + 3.5).toFixed(1) + '" text-anchor="start">' + t + '</text>';
+    }).join('');
+    var every = Math.max(1, Math.ceil(n / 8)), xl = '';
+    for (var i = 0; i < n; i += every) xl += '<text class="bbb-ax" x="' + X(i).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(lbl(bk[i])) + '</text>';
+    function path(f) { return bk.map(function (b, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + f(b).toFixed(1); }).join(''); }
+    var dots = n <= 62 ? 3.2 : 0;
+    var revPts = '', ordPts = '';
+    if (dots) bk.forEach(function (b, i) {
+      revPts += '<circle class="bbb-dot bbb-rev" cx="' + X(i).toFixed(1) + '" cy="' + YR(b.rev).toFixed(1) + '" r="' + dots + '"></circle>';
+      ordPts += '<circle class="bbb-dot bbb-ord" cx="' + X(i).toFixed(1) + '" cy="' + YN(b.n).toFixed(1) + '" r="' + dots + '"></circle>';
+    });
+    var colW = n === 1 ? iw : iw / (n - 1);
+    var hits = bk.map(function (b, i) {
+      return '<g class="bbb-hit"><rect x="' + (X(i) - colW / 2).toFixed(1) + '" y="' + T + '" width="' + colW.toFixed(1) + '" height="' + ih + '" fill="transparent"><title>' + esc(tipDate(b)) + ' · ' + esc(usd(b.rev)) + ' revenue · ' + b.n + (b.n === 1 ? ' purchase' : ' purchases') + '</title></rect>' +
+        '<line class="bbb-hover-line" x1="' + X(i).toFixed(1) + '" x2="' + X(i).toFixed(1) + '" y1="' + T + '" y2="' + (T + ih) + '"></line>' +
+        '<circle class="bbb-hover-dot bbb-rev" cx="' + X(i).toFixed(1) + '" cy="' + YR(b.rev).toFixed(1) + '" r="4.5"></circle>' +
+        '<circle class="bbb-hover-dot bbb-ord" cx="' + X(i).toFixed(1) + '" cy="' + YN(b.n).toFixed(1) + '" r="4.5"></circle></g>';
+    }).join('');
+    var svg = '<svg class="bbb-chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Sales performance chart">' + grid + rightAx + xl +
+      '<path class="bbb-line bbb-rev" d="' + path(function (b) { return YR(b.rev); }) + '"></path>' +
+      '<path class="bbb-line bbb-ord" d="' + path(function (b) { return YN(b.n); }) + '"></path>' + revPts + ordPts + hits + '</svg>';
+    var legend = '<div class="bbb-legend"><span><i class="bbb-rev"></i>Total revenue</span><span><i class="bbb-ord"></i>Total purchases</span></div>';
+    return head + '<div class="bbb-chart-wrap">' + svg + '</div>' + legend;
   }
   // Daily BuiltByBit revenue for the last n days (local days, like the site series).
   function bbbDailySeries(days) {
@@ -5175,7 +5280,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('#admBbbRange button'), function (b) { b.classList.toggle('active', +b.getAttribute('data-bbb-range') === BBB_RANGE); });
     var sync = $('admBbbSync'); if (sync) { sync.disabled = BBB.syncing; sync.textContent = BBB.syncing ? 'Syncing…' : 'Sync now'; }
     var sub = $('admBbbSub');
-    if (sub) sub.textContent = !BBB.configured ? '' : BBB.syncing ? (BBB.progress || 'Syncing…') : (BBB.syncedAt ? 'Last synced ' + new Date(BBB.syncedAt).toLocaleString() : 'Sales as reported by BuiltByBit, in USD');
+    if (sub) sub.textContent = !BBB.configured ? '' : BBB.syncing ? (BBB.progress || 'Syncing…') : (BBB.syncedAt ? 'Last synced ' + new Date(BBB.syncedAt).toLocaleString() + ' · updates itself every 15 minutes' : 'Sales as reported by BuiltByBit, in USD');
 
     if (BBB.configured === false) {
       body.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Create a <strong>Private</strong> token at builtbybit.com/account/api, then run <code>supabase secrets set BUILTBYBIT_API_TOKEN=your-token</code> and press Sync now.</p>' +
@@ -5193,12 +5298,10 @@
     var tiles = statGrid([
       statTile('Revenue', aud(cur.usd), usd(cur.usd) + ' USD', delta(cur.usd, prev.usd)),
       statTile('Orders', num(cur.orders), cur.other ? cur.other + ' in another currency, not counted in revenue' : null, delta(cur.orders, prev.orders)),
-      statTile('Avg order value', cur.orders ? usd(cur.usd / cur.orders) : '–', null, ''),
-      statTile('Pending validation', usd(cur.pending), 'included in revenue until BuiltByBit confirms it', '')
+      statTile('Avg order value', cur.orders ? usd(cur.usd / cur.orders) : '–', null, '')
     ]);
 
-    var chart = '<div class="adm-mini-head">Revenue trend</div>' +
-      svgTrend([{ name: 'BuiltByBit', color: 'var(--accent)', data: bbbDailySeries(BBB_RANGE) }], { height: 150, fmt: axisUsd });
+    var chart = bbbChart(BBB_RANGE);
 
     // potential issues (expandable), each with a dismiss icon
     var issues = bbbIssues(), shown = issues.filter(function (i) { return !BBB.dismissed[i.key]; });
@@ -5216,16 +5319,8 @@
       '<div class="adm-collapse-body">' + (list ? '<ul class="adm-bbb-issue-list">' + list + '</ul>' : '<p class="adm-empty">Nothing to fix. Every on-site product matches its BuiltByBit listing.</p>') +
       (hidden ? '<button type="button" class="btn btn-ghost adm-btn-sm" data-bbb-restore="1">Show dismissed</button>' : '') + '</div></details>';
 
-    var revs = BBB.reviews.slice(0, 8).map(function (r) {
-      var reply = r.response
-        ? '<div class="adm-bbb-reply"><strong>Your reply</strong><p>' + esc(r.response) + '</p></div>'
-        : '<form class="adm-bbb-replyform" data-rid="' + esc(r.resource_id) + '" data-rv="' + esc(r.review_id) + '"><textarea class="adm-textarea" rows="2" maxlength="5000" placeholder="Reply to this review"></textarea><button type="submit" class="btn btn-primary adm-btn-sm">Send reply</button></form>';
-      return '<article class="adm-bbb-review"><header>' + bbbStars(r.rating) + '<strong>' + esc(r.resource_title || '') + '</strong><span class="adm-sub">' + (r.reviewed_at ? new Date(r.reviewed_at).toLocaleDateString() : '') + '</span></header>' +
-        (r.message ? '<p>' + esc(r.message) + '</p>' : '') + reply + '</article>';
-    }).join('');
-    var reviews = '<div class="adm-mini-head">Latest reviews</div>' + (revs || '<p class="adm-empty">No reviews yet.</p>');
 
-    body.innerHTML = tiles + chart + issuesHtml + reviews + (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
+    body.innerHTML = tiles + chart + issuesHtml + (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
   }
 
   document.addEventListener('click', function (e) {
@@ -5314,7 +5409,8 @@
         }).join('') + '</ul></article>';
     }).join('') || '<p class="adm-empty adm-mp-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
 
-    $('admMpMatrix').innerHTML = prods.map(function (p) {
+    var mxBody = $('admMpMatrix');
+    if (mxBody) mxBody.innerHTML = prods.map(function (p) {
       return '<tr><td>' + esc(p.title) + (p.visible ? '' : ' <span class="adm-sub">Private</span>') + '</td>' + MARKETPLACES.map(function (m) {
         var st = mpStatus(p.dbId, m.key);
         var cls = st === 'live' ? 'ok' : st === 'needs_update' ? 'warn' : '';
