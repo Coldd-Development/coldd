@@ -672,3 +672,45 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+/* Big transitions (into the admin panel or the dashboard from elsewhere) fade the page into a blur with a
+   spinner for a beat before navigating, instead of an instant jump. Skipped for reduced-motion users. */
+(function () {
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var veil = null;
+  function build() {
+    if (veil) return veil;
+    veil = document.createElement('div');
+    veil.className = 'cold-veil';
+    veil.setAttribute('aria-hidden', 'true');
+    veil.innerHTML = '<span class="cold-veil-spin"></span>';
+    document.body.appendChild(veil);
+    return veil;
+  }
+  window.__coldVeil = {
+    // Fade in over 0.5s, hold, then run go(). hold defaults to about a second.
+    run: function (go, holdMs) {
+      if (reduce) { go(); return; }
+      var v = build();
+      void v.offsetWidth;
+      v.classList.add('on');
+      setTimeout(go, 500 + (holdMs == null ? 900 : holdMs));
+    },
+    hide: function () { if (veil) veil.classList.remove('on'); }
+  };
+  var BIG = /^\/(admin|dashboard)(\/|$)/;
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+    var u;
+    try { u = new URL(a.href, location.href); } catch (x) { return; }
+    if (u.origin !== location.origin) return;
+    var there = BIG.exec(u.pathname), here = BIG.exec(location.pathname);
+    if (!there || (here && here[1] === there[1])) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.__coldVeil.run(function () { location.href = u.href; });
+  }, true);
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) window.__coldVeil.hide(); });
+})();
