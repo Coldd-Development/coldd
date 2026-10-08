@@ -259,6 +259,9 @@ export async function priceRobuxItems(
     if (product.platform !== "Roblox") {
       return { ok: false, error: `${product.title} isn't available for Robux checkout yet.` };
     }
+    if (isResell) {
+      return { ok: false, error: `Resell licences can't be bought with Robux (${product.title}).` };
+    }
     if (isResell && !product.resell_available) {
       return { ok: false, error: `${product.title} doesn't offer a resell licence.` };
     }

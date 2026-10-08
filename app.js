@@ -2295,7 +2295,7 @@
             // Resell licences are buyable in Robux (cart, checkout and the server
             // all price them): show the licence's saved Robux price, falling back
             // to the flat estimate only when none is set.
-            var robuxOff = cardRobuxOff(card.getAttribute('data-id'));
+            var robuxOff = true; // resell licences are USD only
             var rbxResell = robuxMode && !robuxOff ? cardResellRobuxPrice(card.getAttribute('data-id')) : null;
             var text = robuxMode && !robuxOff
               ? (rbxResell != null ? ('R$ ' + Math.round(rbxResell).toLocaleString('en-US')) : (window.__robux ? window.__robux(resellUsd) : ('$' + resellUsd)))
@@ -3138,8 +3138,8 @@
           // Resell licences are sold in Robux now too - use resell_robux_price
           // when the admin set one, else flat-convert the resell USD price.
           var rbxOverride = isResell ? (cur.resellRobuxPrice > 0 ? cur.resellRobuxPrice : 0) : (cur.robuxPrice > 0 ? cur.robuxPrice : 0);
-          if (pdPriceRbx) { pdPriceRbx.textContent = rbxOverride > 0 ? robuxRaw(rbxOverride) : robux(base); pdPriceRbx.hidden = isFree || !!cur.robuxDisabled; }
-          if (pdPriceNote) pdPriceNote.hidden = isFree || !!cur.robuxDisabled;
+          if (pdPriceRbx) { pdPriceRbx.textContent = rbxOverride > 0 ? robuxRaw(rbxOverride) : robux(base); pdPriceRbx.hidden = isFree || isResell || !!cur.robuxDisabled; }
+          if (pdPriceNote) pdPriceNote.hidden = isFree || isResell || !!cur.robuxDisabled;
           if (pdSale) pdSale.hidden = !(cur.was > cur.priceNum);
           // Live sale event (order-level, applied at checkout like an
           // automatic coupon): standard licence only, and not stacked on a
@@ -3153,12 +3153,12 @@
           var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
           licPriceEls.forEach(function (el) {
             var isResellOpt = el.getAttribute('data-licprice') === 'resell';
-            if (robuxMode && !cur.robuxDisabled) {
-              var ov = isResellOpt ? (cur.resellRobuxPrice > 0 ? cur.resellRobuxPrice : 0) : (cur.robuxPrice > 0 ? cur.robuxPrice : 0);
+            if (robuxMode && !cur.robuxDisabled && !isResellOpt) {
+              var ov = cur.robuxPrice > 0 ? cur.robuxPrice : 0;
               if (ov > 0) { el.textContent = robuxRaw(ov); return; }
             }
             var pp = isResellOpt ? resellUsd : cur.priceNum;
-            el.textContent = cur.robuxDisabled ? fiat(pp) : (window.__money ? window.__money(pp) : fiat(pp));
+            el.textContent = (cur.robuxDisabled || isResellOpt) ? fiat(pp) : (window.__money ? window.__money(pp) : fiat(pp));
           });
           if (pdReferEarn) pdReferEarn.textContent = 'earn ' + fiat(Math.round(cur.priceNum * 0.2 * 100) / 100);
         }
@@ -6670,7 +6670,7 @@
       // pass and opens the instructions modal instead of redirecting.
       // Cart lines whose product has Robux pricing switched off in admin.
       function robuxOffItems() {
-        return cart.filter(function (i) { return window.__robuxOff && window.__robuxOff(i.crossSellSlug || i.id); });
+        return cart.filter(function (i) { return i.licence === 'resell' || i.id.indexOf('--resell') !== -1 || (window.__robuxOff && window.__robuxOff(i.crossSellSlug || i.id)); });
       }
       // Mixed cart + Robux selected: say which item can't be bought with Robux and
       // let the buyer either pick another method or drop the USD-only items.
@@ -6683,7 +6683,7 @@
         overlay.innerHTML =
           '<div class="confirm-modal mkt-popup-modal co-robux-block" role="dialog" aria-modal="true">' +
           '<div class="co-rb-item"><span class="co-rb-thumb"></span>' +
-          '<div class="co-rb-name">' + esc(first.title) + (more ? '<small>' + more + '</small>' : '') + '</div></div>' +
+          '<div class="co-rb-name">' + esc(first.title) + (first.licence === 'resell' || first.id.indexOf('--resell') !== -1 ? '<small>Resell licence</small>' : '') + (more ? '<small>' + more + '</small>' : '') + '</div></div>' +
           '<h3 class="mkt-popup-title">' + esc(first.title) + more + (offs.length > 1 ? ' cannot' : ' cannot') + ' be purchased with Robux</h3>' +
           '<p class="mkt-popup-sub">Please pay with a different payment method' + (canDrop ? ', or continue with Robux without ' + (offs.length > 1 ? 'those items' : 'this item') + '.' : '.') + '</p>' +
           '<div class="co-rb-actions">' +

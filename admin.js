@@ -4421,7 +4421,7 @@
       longDesc: $('admEditLongDesc').value.trim(),
       resell: $('admEditResell').checked,
       resellPrice: $('admEditResell').checked && $('admEditResellPrice').value !== '' ? Math.max(0, parseFloat($('admEditResellPrice').value) || 0) : null,
-      resellRobuxPrice: !noRobuxOn() && $('admEditResell').checked && $('admEditResellRobuxPrice').value !== '' ? Math.max(0, Math.round(parseFloat($('admEditResellRobuxPrice').value) || 0)) : null,
+      resellRobuxPrice: null, // resell licences are USD only
       visible: !$('admEditPrivate').checked,
       image: $('admEditThumbUrl').value.trim(),
       gallery: editGallery.slice(),
@@ -4514,7 +4514,6 @@
       if ($('admEditPlatform').value === 'Roblox' && !noRobuxOn()) need(parseFloat($('admEditRobuxPrice').value) > 0 || (!$('admLegalCannotBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
       if ($('admEditResell').checked) {
         need(parseFloat($('admEditResellPrice').value) > 0, 'Resell licence price (USD)', $('admEditResellPrice'));
-        if (!noRobuxOn()) need(parseFloat($('admEditResellRobuxPrice').value) > 0, 'Resell licence price (Robux)', $('admEditResellRobuxPrice'));
       }
       need(!!$('admEditSubtext').value.trim(), 'Summary', $('admEditSubtext'));
       need($('admEditSubtext').value.length <= 100, 'Summary shortened to 100 characters or fewer', $('admEditSubtext'));
