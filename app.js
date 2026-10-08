@@ -44,7 +44,7 @@
             '<h3 id="coldDialogTitle" class="pay-title"></h3>' +
             '<p id="coldDialogMessage" class="pay-sub"></p>' +
             '<label id="coldDialogInputWrap" class="adm-field" hidden><span id="coldDialogInputLabel"></span><input id="coldDialogInput" class="adm-input" type="text" autocomplete="off" /></label>' +
-            '<div class="confirm-actions"><button class="btn btn-primary" type="button" id="coldDialogAccept"></button><button class="btn btn-ghost" type="button" id="coldDialogCancel">Cancel</button></div>' +
+            '<div class="confirm-actions"><button class="btn btn-tinted" type="button" id="coldDialogCancel">Cancel</button><button class="btn btn-primary" type="button" id="coldDialogAccept"></button></div>' +
           '</section>';
         document.body.appendChild(overlay);
         titleEl = overlay.querySelector('#coldDialogTitle');
@@ -3869,9 +3869,9 @@
         overlay.className = 'confirm-overlay';
         overlay.hidden = true;
         overlay.innerHTML =
-          '<div class="confirm-modal"><p>Sign out of coldd?</p><div class="confirm-actions">' +
+          '<div class="confirm-modal" role="dialog" aria-modal="true"><h3 class="confirm-title">Sign out of coldd?</h3><p>You will need to sign in again to download or manage your products.</p><div class="confirm-actions">' +
+          '<button class="btn btn-tinted" type="button" id="navSignoutCancel">Cancel</button>' +
           '<button class="btn btn-primary" type="button" id="navSignoutConfirm">Sign out</button>' +
-          '<button class="btn" type="button" id="navSignoutCancel">Cancel</button>' +
           '</div></div>';
         document.body.appendChild(overlay);
         overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.hidden = true; });

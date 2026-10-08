@@ -4243,12 +4243,14 @@ body.auth-page .backdrop, body.auth-page .scrim { position: fixed; inset: 0; hei
   backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
   display: none; align-items: center; justify-content: center; padding: 24px; }
 .confirm-overlay:not([hidden]) { display: flex; animation: ovIn .2s var(--ease); }
-.confirm-modal { width: 380px; max-width: 96vw; background: var(--bg-3); border: 1px solid var(--hairline);
-  border-radius: var(--r-sm); padding: 30px; text-align: center; box-shadow: var(--e-3);
+.confirm-modal { width: 400px; max-width: 96vw; background: var(--bg-3); border: 1px solid var(--hairline);
+  border-radius: var(--r-sm); padding: 28px; text-align: left; box-shadow: var(--e-3);
   animation: pmIn .3s var(--ease); }
-.confirm-modal p { margin: 0 0 22px; font-size: 15px; font-weight: 600; color: var(--fg); }
-.confirm-actions { display: flex; gap: 10px; }
-.confirm-actions .btn { flex: 1; justify-content: center; }
+.confirm-modal .confirm-title, .confirm-modal .pay-title { margin: 0 0 8px; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; color: var(--fg); }
+.confirm-modal p { margin: 0 0 24px; font-size: 14px; font-weight: 500; line-height: 1.55; color: var(--fg-2); }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.confirm-actions .btn { flex: 1 1 0; justify-content: center; min-height: 44px; }
+@media (min-width: 520px) { .confirm-actions .btn { flex: 0 0 auto; min-width: 128px; } }
 
 /* Site-wide marketing-signup popup - same overlay/modal shell as the
    sign-out confirm structurally, but this is a promo moment (the one
