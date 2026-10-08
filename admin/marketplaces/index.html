@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009x062100" />
+  <link rel="stylesheet" href="/styles.css?v=20261009x062301" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -792,7 +792,7 @@
                   <div class="adm-dd-menu" role="listbox" aria-label="Marketplace" hidden></div>
                 </div>
                 <input type="hidden" id="admMpMarket" />
-                <input type="text" id="admMpTaskTitle" class="adm-input" placeholder="Update price" maxlength="200" autocomplete="off" />
+                <input type="text" id="admMpTaskTitle" class="adm-input" placeholder="Enter task..." maxlength="200" autocomplete="off" />
                 <button class="btn btn-primary adm-btn-sm" type="submit">Add task</button>
               </form>
               <div class="adm-edit-msg" id="admMpMsg"></div>
@@ -801,6 +801,11 @@
             <div class="dash-card glass">
               <div class="dash-card-head"><h2>To do</h2><div class="adm-mp-filter" id="admMpFilter" role="group" aria-label="Marketplace filter"></div></div>
               <div id="admMpTasks"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Recently completed</h2></div>
+              <div id="admMpDoneLog"></div>
             </div>
 
           </section>
@@ -1554,6 +1559,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
+  <script src="/catalog.js?v=20261009x062301" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
 </body>
 </html>

@@ -4939,20 +4939,22 @@
     { key: 'parcel', label: 'Parcel' },
     { key: 'creatorstore', label: 'Creator Store' }
   ];
+  // Places a custom to-do can be set for: the marketplaces plus our own site.
+  var MP_TASK_TARGETS = MARKETPLACES.concat([{ key: 'site', label: 'Site' }]);
   var MP_LISTINGS = {};   // product db id -> { marketplace key -> status }
   var MP_TASKS = [];      // custom per-product tasks (open and done)
   var MP_FILTER = 'all';
   // Real marketplace logos (web-sized copies in /mp-logos; Creator Store uses
   // the same Roblox mark as the homepage hero).
-  function mpLogo(key) { return '<img class="adm-mp-logo" src="/mp-logos/' + key + '.png" alt="" width="22" height="22" loading="lazy" />'; }
-  function mpLabel(key) { var m = MARKETPLACES.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
+  function mpLogo(key) { if (key === 'site') return '<svg class="adm-mp-logo" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>'; return '<img class="adm-mp-logo" src="/mp-logos/' + key + '.png" alt="" width="22" height="22" loading="lazy" />'; }
+  function mpLabel(key) { var m = MP_TASK_TARGETS.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
   function mpStatus(dbId, key) { var l = MP_LISTINGS[dbId]; return (l && l[key]) || 'pending'; }
 
   function refreshMarketplaces() {
     if (!window.coldSupabase) return Promise.resolve();
     return Promise.all([
       window.coldSupabase.from('marketplace_listings').select('product_id, marketplace, status').limit(5000),
-      window.coldSupabase.from('marketplace_tasks').select('id, product_id, marketplace, title, done, created_at').order('created_at', { ascending: false }).limit(5000)
+      window.coldSupabase.from('marketplace_tasks').select('id, product_id, marketplace, title, done, created_at, done_at, done_by_name').order('created_at', { ascending: false }).limit(5000)
     ]).then(function (r) {
       if (r[0].error || r[1].error) { console.error('[admin] marketplaces:', (r[0].error || r[1].error).message); return; }
       MP_LISTINGS = {};
@@ -5010,7 +5012,7 @@
   }
   function mpTodoLines() {
     var items = mpOpenItems();
-    return MARKETPLACES.map(function (m) {
+    return MP_TASK_TARGETS.map(function (m) {
       var n = items.filter(function (i) { return i.mk === m.key; }).length;
       return n ? { text: n + ' thing' + (n === 1 ? '' : 's') + ' to do on ' + m.label, panel: 'marketplaces', badge: 'warn' } : null;
     }).filter(Boolean);
@@ -5658,7 +5660,7 @@
 
   var mpProductDD = makeDropdown($('admMpProductDD'), { valueInput: $('admMpProduct'), placeholder: 'Product', searchable: true });
   var mpMarketDD = makeDropdown($('admMpMarketDD'), { valueInput: $('admMpMarket'), placeholder: 'Marketplace' });
-  mpMarketDD.setOptions(MARKETPLACES.map(function (m) { return { value: m.key, label: m.label }; }), '');
+  mpMarketDD.setOptions(MP_TASK_TARGETS.map(function (m) { return { value: m.key, label: m.label }; }), '');
 
   function renderMarketplaces() {
     if (!$('admMpTasks')) return;
@@ -5667,12 +5669,12 @@
     mpProductDD.setOptions(prods.map(function (p) { return { value: p.dbId, label: p.title }; }), $('admMpProduct').value || '');
 
     var items = mpOpenItems();
-    $('admMpStats').innerHTML = MARKETPLACES.map(function (m) {
+    $('admMpStats').innerHTML = MP_TASK_TARGETS.map(function (m) {
       var n = items.filter(function (i) { return i.mk === m.key; }).length;
       return '<div class="dash-stat glass"><span class="ds-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span><span class="ds-num">' + n + '</span><span class="ds-sub">' + (n ? 'to do' : 'all caught up') + '</span></div>';
     }).join('');
 
-    $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MARKETPLACES).map(function (m) {
+    $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MP_TASK_TARGETS).map(function (m) {
       return '<button type="button" class="' + (m.key === 'all' ? '' : 'mk-' + m.key) + (MP_FILTER === m.key ? ' active' : '') + '" data-mp="' + m.key + '">' + (m.key === 'all' ? '' : mpLogo(m.key)) + esc(m.label) + '</button>';
     }).join('');
 
@@ -5700,6 +5702,20 @@
         }).join('') + '</ul></article>';
     }).join('') || '<p class="adm-empty adm-mp-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
 
+    var logBox = $('admMpDoneLog');
+    if (logBox) {
+      var doneRows = MP_TASKS.filter(function (t) { return t.done && t.done_at; })
+        .sort(function (a, b) { return String(b.done_at).localeCompare(String(a.done_at)); }).slice(0, 15);
+      var prodsById = {};
+      prods.forEach(function (p) { prodsById[p.dbId] = p; });
+      logBox.innerHTML = doneRows.length ? '<ul class="adm-mp-donelog">' + doneRows.map(function (t) {
+        var p = prodsById[t.product_id];
+        return '<li><span class="adm-mp-tag mk-' + esc(t.marketplace) + '">' + mpLogo(t.marketplace) + esc(mpLabel(t.marketplace)) + '</span>' +
+          '<span class="adm-mp-what">' + esc(t.title) + (p ? ' <span class="adm-sub">' + esc(p.title) + '</span>' : '') + '</span>' +
+          '<span class="adm-mp-by">' + esc(t.done_by_name || 'Unknown') + ' · ' + esc(new Date(t.done_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) + '</span></li>';
+      }).join('') + '</ul>' : '<p class="adm-empty">No completed tasks yet.</p>';
+    }
+
     var mxBody = $('admMpMatrix');
     if (mxBody) mxBody.innerHTML = prods.map(function (p) {
       return '<tr><td>' + esc(p.title) + (p.visible ? '' : ' <span class="adm-sub">Private</span>') + '</td>' + MARKETPLACES.map(function (m) {
@@ -5717,20 +5733,31 @@
     var pid = btn.getAttribute('data-pid'), mk = btn.getAttribute('data-mk'), kind = btn.getAttribute('data-kind'), taskId = btn.getAttribute('data-task');
     var p = allProducts().filter(function (x) { return x.dbId === pid; })[0];
     var title = p ? p.title : 'a product';
+    var isDelete = btn.getAttribute('data-act') === 'delete';
+    var what = kind === 'upload' ? 'upload to ' + mpLabel(mk) : kind === 'update' ? 'update on ' + mpLabel(mk) : (btn.closest('.adm-mp-item').querySelector('.adm-mp-what') || {}).textContent;
+    var question = isDelete
+      ? 'Delete the task "' + what + '" for ' + title + '?'
+      : 'Mark "' + what + '" for ' + title + ' as done? It will be logged under your name.';
     btn.disabled = true;
-    var op;
-    if (btn.getAttribute('data-act') === 'delete') {
-      op = window.coldSupabase.from('marketplace_tasks').delete().eq('id', taskId);
-    } else if (kind === 'task') {
-      op = window.coldSupabase.from('marketplace_tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', taskId);
-    } else {
-      op = mpSaveListings(pid, [{ key: mk, status: 'live' }]);
-    }
-    Promise.resolve(op).then(function (res) {
+    dialogConfirm(question, { title: isDelete ? 'Delete task' : 'Complete task', acceptLabel: isDelete ? 'Delete' : 'Mark done' }).then(function (ok) {
+      if (!ok) { btn.disabled = false; return; }
+      var op;
+      if (isDelete) {
+        op = window.coldSupabase.from('marketplace_tasks').delete().eq('id', taskId);
+      } else if (kind === 'task') {
+        op = window.coldSupabase.from('marketplace_tasks').update({ done: true, done_at: new Date().toISOString(), done_by: ADMIN.id, done_by_name: currentRole().name }).eq('id', taskId);
+      } else {
+        op = mpSaveListings(pid, [{ key: mk, status: 'live' }]);
+      }
+      return finishMpAction(op);
+    });
+    function finishMpAction(op) {
+    return Promise.resolve(op).then(function (res) {
       if (res && res.error) { admToast('Could not update the task', false); btn.disabled = false; return; }
       logAudit('Marketplaces: ' + (btn.getAttribute('data-act') === 'delete' ? 'deleted a task' : 'marked "' + (kind === 'upload' ? 'upload' : kind === 'update' ? 'update' : 'task') + '" done') + ' on ' + mpLabel(mk) + ' for "' + title + '"');
       return refreshMarketplaces();
     });
+    }
   });
 
   var mpFilterBox = $('admMpFilter');
