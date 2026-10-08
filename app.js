@@ -5732,7 +5732,7 @@
         return total;
       }
       function subtotalMoney() {
-        if (robuxView() && !(window.__robuxOff && window.__robuxOff(item.id))) {
+        if (robuxView()) {
           var rbxTotal = robuxSubtotalRaw();
           if (rbxTotal != null) return 'R$ ' + Math.round(rbxTotal).toLocaleString('en-US');
         }
