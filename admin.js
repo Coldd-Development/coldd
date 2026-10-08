@@ -525,6 +525,7 @@
       cat: product ? product.cat : null,
       platform: product ? product.platform : null,
       licence: first.licence || 'standard',
+      items: items.map(function (it) { return { slug: it.product_slug, title: it.title, licence: it.licence || 'standard' }; }),
       qty: items.reduce(function (s, it) { return s + (it.qty || 1); }, 0),
       unitPrice: Number(first.unit_price_usd) || 0,
       subtotal: Number(row.subtotal_usd) || 0,
@@ -6442,7 +6443,10 @@
   }
   function renderUsers() {
     var q = (($('admUserSearch') || {}).value || '').trim().toLowerCase();
-    var rows = USERS.filter(function (u) { return !q || u.name.toLowerCase().indexOf(q) >= 0 || u.email.toLowerCase().indexOf(q) >= 0; });
+    var rows = USERS.filter(function (u) {
+      if (!q) return true;
+      return [u.name, u.email, u.discordId, u.robloxId, u.referralCode, u.id].some(function (v) { return v && String(v).toLowerCase().indexOf(q) >= 0; });
+    });
     $('admUsersBody').innerHTML = rows.map(function (u) {
       return '<tr data-id="' + u.id + '"><td>' + esc(u.name) + (u.isAdmin ? ' <span class="adm-sub">· admin</span>' : '') + '</td><td>' + esc(u.email) + '</td><td>' + fmtDate(new Date(u.joined)) + '</td><td>' + userOrderCount(u.id) + '</td><td>' + usd(userSpend(u.id)) + '</td>' +
         '<td>' + (u.status === 'active' ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge err">Banned' + (u.banReason ? ' - ' + esc(u.banReason) : '') + '</span>') + '</td>' +
@@ -6569,8 +6573,93 @@
       }
     }
 
+    renderUserLicences(u, userOrders);
+    renderUserTools(u);
     userDetailOverlay.hidden = false;
   }
+
+  // Licences this person holds right now: every item on a paid order, with a Revoke button (admin or owner).
+  // Revoking is per order, the same action the Orders panel already has (the order becomes "revoked").
+  function renderUserLicences(u, userOrders) {
+    var box = $('admUdLicences'); if (!box) return;
+    var paid = userOrders.filter(function (o) { return o.status === 'completed'; });
+    if (!paid.length) { box.innerHTML = '<p class="adm-empty">No active licences.</p>'; return; }
+    box.innerHTML = paid.map(function (o) {
+      var items = (o.items && o.items.length ? o.items : [{ title: o.title, licence: o.licence }]);
+      return '<div class="adm-ud-lic-order">' +
+        '<div class="adm-ud-lic-items">' + items.map(function (it) {
+          return '<div class="adm-ud-lic-item"><span>' + esc(it.title || 'Item') + '</span><span class="adm-sub">' + (it.licence === 'resell' ? 'Resell licence' : 'Standard licence') + '</span></div>';
+        }).join('') + '</div>' +
+        '<span class="adm-sub">' + fmtDate(new Date(o.date)) + '</span>' +
+        (can('admin') ? '<button type="button" class="btn btn-ghost adm-btn-sm adm-ud-revoke" data-order="' + esc(o.id) + '">Revoke</button>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  // Edit-account tools: admin and owner only (the server re-checks the role and protects staff accounts).
+  var userToolsTarget = null;
+  function userToolsMsg(text, ok) { var el = $('admUdToolsMsg'); if (el) { el.textContent = text || ''; el.classList.toggle('err', !!text && !ok); } }
+  function renderUserTools(u) {
+    userToolsTarget = u;
+    var sec = $('admUdToolsSection'); if (!sec) return;
+    sec.hidden = !can('admin');
+    if ($('admUdUsername')) $('admUdUsername').value = u.name || '';
+    if ($('admUdPassword')) $('admUdPassword').value = '';
+    userToolsMsg('');
+  }
+  (function () {
+    var lic = $('admUdLicences');
+    if (lic) lic.addEventListener('click', function (e) {
+      var btn = e.target.closest('.adm-ud-revoke'); if (!btn || !can('admin') || !userToolsTarget) return;
+      var orderId = btn.getAttribute('data-order');
+      dialogConfirm('Revoke this licence? ' + userToolsTarget.name + ' will lose access to the files on this order and be notified.', { title: 'Revoke licence', acceptLabel: 'Revoke' }).then(function (ok) {
+        if (!ok) return;
+        btn.disabled = true;
+        callManageOrder(orderId, 'revoke', 'Licence revoked by staff').then(function () {
+          logAudit('Revoked the licence on order ' + String(orderId).slice(0, 8) + ' for ' + userToolsTarget.name);
+          admToast('Licence revoked', true);
+          return refreshOrders();
+        }).then(function () { openUserDetailModal(userToolsTarget); }).catch(function (err) { btn.disabled = false; admToast((err && err.message) || 'Could not revoke the licence', false); });
+      });
+    });
+    function call(body, okText) {
+      if (!userToolsTarget || !can('admin')) return Promise.resolve();
+      userToolsMsg('Saving…', true);
+      body.userId = userToolsTarget.id;
+      return invokeAdminFn('admin-manage-user', body, 'Could not update the account.').then(function () {
+        userToolsMsg(okText, true); admToast(okText, true); return refreshUsers();
+      }).catch(function (err) { userToolsMsg((err && err.message) || 'Could not update the account.', false); });
+    }
+    var saveName = $('admUdSaveUsername');
+    if (saveName) saveName.addEventListener('click', function () {
+      var v = ($('admUdUsername').value || '').trim();
+      call({ action: 'updateProfile', username: v }, 'Username updated').then(function () { if (userToolsTarget) userToolsTarget.name = v || userToolsTarget.name; });
+    });
+    var setPw = $('admUdSetPassword');
+    if (setPw) setPw.addEventListener('click', function () {
+      var pw = $('admUdPassword').value;
+      if (!userToolsTarget) return;
+      if (pw.length < 8) { userToolsMsg('Use at least 8 characters.', false); return; }
+      dialogConfirm('Set a new password for ' + userToolsTarget.name + '? Their old password stops working immediately.', { title: 'Set password', acceptLabel: 'Set password' }).then(function (ok) {
+        if (!ok) return;
+        call({ action: 'setPassword', password: pw }, 'Password updated').then(function () { $('admUdPassword').value = ''; });
+      });
+    });
+    var clearAv = $('admUdClearAvatar');
+    if (clearAv) clearAv.addEventListener('click', function () {
+      if (!userToolsTarget) return;
+      dialogConfirm('Remove ' + userToolsTarget.name + '\'s profile picture?', { title: 'Remove picture', acceptLabel: 'Remove' }).then(function (ok) {
+        if (ok) call({ action: 'updateProfile', clearAvatar: true }, 'Profile picture removed');
+      });
+    });
+    var addRes = $('admUdAddReseller');
+    if (addRes) addRes.addEventListener('click', function () {
+      if (!userToolsTarget) return;
+      var u = userToolsTarget;
+      if (userDetailOverlay) userDetailOverlay.hidden = true;
+      openResellerEditor({ id: '', orderItemId: '', userId: u.id, onboarded: false, accountEmail: u.email, accountName: u.name });
+    });
+  })();
 
   // Replaces the stacked native confirm()+prompt() pair this used to be -
   // a plain browser prompt for a "type REMOVE to confirm" step reads as

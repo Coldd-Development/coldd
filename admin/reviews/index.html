@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009x062733" />
+  <link rel="stylesheet" href="/styles.css?v=20261009x064107" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -278,8 +278,8 @@
               <div class="dash-card-head"><div><h2>Campaigns</h2><span class="adm-sub">Trackable links for partners, sponsors, and anywhere else you're promoting coldd.</span></div></div>
               <form class="adm-form" id="admCampaignCreateForm" style="flex-wrap:wrap;">
                 <input type="text" id="admCampaignCode" class="adm-input adm-input-sm" placeholder="Code, e.g. partner" required maxlength="60" />
-                <input maxlength="64" type="text" id="admCampaignLabel" class="adm-input" placeholder="Label, e.g. Partner program" required style="flex:1;min-width:180px;" />
-                <input maxlength="64" type="text" id="admCampaignDestination" class="adm-input adm-input-sm" placeholder="Page (default /)" style="min-width:140px;" />
+                <input maxlength="120" type="text" id="admCampaignLabel" class="adm-input" placeholder="Label, e.g. Partner program" required style="flex:1;min-width:180px;" />
+                <input maxlength="300" type="text" id="admCampaignDestination" class="adm-input adm-input-sm" placeholder="Page (default /)" style="min-width:140px;" />
                 <button class="btn btn-primary adm-btn-sm" type="submit">+ Add campaign</button>
               </form>
               <p class="adm-note" style="margin-top:6px;">Page is where the link should send people, e.g. <code>/</code>, <code>/shop</code>, or <code>/product/all-brawl-full-game</code>. Leave blank for the homepage.</p>
@@ -345,7 +345,7 @@
                 <summary class="dash-card-head"><div><h2>Subscriber list</h2><span class="adm-sub">Every account with an email address. Campaigns skip anyone Unsubscribed or Banned.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
                 <div class="adm-collapse-body">
               <div class="adm-form" style="flex-wrap:wrap;gap:8px;">
-                <input maxlength="120" type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
+                <input maxlength="200" type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
                 <button class="btn btn-ghost adm-btn-sm" id="admEmailListCopyBtn" type="button">Copy sendable addresses</button>
               </div>
               <div class="dash-tablewrap" style="margin-top:12px;">
@@ -383,7 +383,7 @@
                   </div>
                   <p class="adm-note" id="admCampaignAudienceHint" style="margin:0 0 4px;">Goes to opted-in subscribers only.</p>
                 </div>
-                <label class="adm-field"><span>Subject</span><input maxlength="64" type="text" id="admCampaignSubject" class="adm-input" placeholder="What's new at coldd" required /></label>
+                <label class="adm-field"><span>Subject</span><input maxlength="200" type="text" id="admCampaignSubject" class="adm-input" placeholder="What's new at coldd" required /></label>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
                   <div class="bt-switch adm-campaign-mode" style="margin-bottom:0;" role="tablist" aria-label="Body format">
                     <button class="bt-opt active" type="button" data-mode="simple" role="tab" aria-selected="true">Simple text</button>
@@ -471,7 +471,7 @@
           <section class="dash-panel" id="adm-panel-products" hidden>
             <div class="dash-head"><h1>Product management</h1><p>Edit pricing and visibility, or add admin-only listings.</p></div>
             <div class="adm-toolbar">
-              <input maxlength="120" type="text" id="admProdSearch" class="adm-input" placeholder="Search by product name…" />
+              <input maxlength="200" type="text" id="admProdSearch" class="adm-input" placeholder="Search by product name…" />
               <div class="adm-dd adm-dd-inline" id="admProdSortDD">
                 <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                   <span class="adm-dd-val"></span>
@@ -711,7 +711,7 @@
             <div class="dash-card glass">
               <div class="adm-field" id="admUpdSearchField">
                 <span>Select product</span>
-                <input maxlength="120" type="text" id="admUpdSearch" class="adm-input" placeholder="Search by product name…" autocomplete="off" />
+                <input maxlength="200" type="text" id="admUpdSearch" class="adm-input" placeholder="Search by product name…" autocomplete="off" />
                 <div class="adm-upd-results" id="admUpdResults"></div>
               </div>
 
@@ -812,7 +812,7 @@
 
           <section class="dash-panel" id="adm-panel-orders" hidden>
             <div class="dash-head"><h1>Order management</h1><p>Every order from the storefront and BuiltByBit, newest first.</p></div>
-            <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="120" type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
+            <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
             <div class="dash-filter-row">
               <label class="dash-filter-field"><span>Status</span>
                 <div class="adm-dd adm-dd-inline" id="admOrderStatusFilterDD">
@@ -844,7 +844,7 @@
           <section class="dash-panel" id="adm-panel-resellers" hidden>
             <div class="dash-head"><h1>Resellers</h1><p>Every resell licence sold, whether or not the seller has filled in their info yet. Rows still waiting on seller info are listed first.</p></div>
             <div class="adm-toolbar">
-              <input maxlength="120" type="text" id="admResellerSearch" class="adm-input" placeholder="Search by email, name, or product…" />
+              <input maxlength="200" type="text" id="admResellerSearch" class="adm-input" placeholder="Search by email, name, or product…" />
               <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenResellerCreate">+ Add reseller</button>
               <span class="adm-sub" id="admResellerCount"></span>
             </div>
@@ -925,7 +925,7 @@
               <p class="adm-note">For reviews left on other platforms (BuiltByBit, Discord, etc.) that you want shown on the product page - published immediately, no moderation queue.</p>
               <form class="adm-form" id="admImportReviewForm" style="flex-wrap:wrap;position:relative;">
                 <div style="position:relative;flex:1;min-width:220px;">
-                  <input maxlength="120" type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
+                  <input maxlength="200" type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
                   <div id="admImportReviewProductResults" class="adm-dd-menu" style="position:absolute;top:100%;left:0;right:0;z-index:20;" hidden></div>
                 </div>
                 <input type="hidden" id="admImportReviewProductSlug" />
@@ -1129,7 +1129,7 @@
 
             <div id="admContentPostsView">
               <div class="adm-toolbar">
-                <input maxlength="120" type="text" id="admPostSearch" class="adm-input" placeholder="Search posts…" />
+                <input maxlength="200" type="text" id="admPostSearch" class="adm-input" placeholder="Search posts…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table adm-table-tight">
@@ -1164,7 +1164,7 @@
 
             <div id="admContentTutorialsView" hidden>
               <div class="adm-toolbar">
-                <input maxlength="120" type="text" id="admTutSearch" class="adm-input" placeholder="Search tutorials…" />
+                <input maxlength="200" type="text" id="admTutSearch" class="adm-input" placeholder="Search tutorials…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table adm-table-tight">
@@ -1214,7 +1214,7 @@
             <div id="admContentReleasesView" hidden>
               <p class="adm-note">New releases are created automatically whenever a product is added or its price/version changes - add one by hand here for anything else worth announcing (studio news, etc).</p>
               <div class="adm-toolbar">
-                <input maxlength="120" type="text" id="admRelSearch" class="adm-input" placeholder="Search releases…" />
+                <input maxlength="200" type="text" id="admRelSearch" class="adm-input" placeholder="Search releases…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table adm-table-tight">
@@ -1363,7 +1363,7 @@
 
             <div id="admSiteMgmtUsersView" hidden>
               <div class="adm-toolbar">
-                <input maxlength="32" type="text" id="admUserSearch" class="adm-input" placeholder="Search name or email…" />
+                <input maxlength="200" type="text" id="admUserSearch" class="adm-input" placeholder="Search username, email, Discord or Roblox ID…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table">
@@ -1404,7 +1404,7 @@
               <div class="adm-audit-warn" id="admAuditWarn" hidden></div>
 
               <div class="adm-toolbar">
-                <input maxlength="120" type="text" id="admAuditSearch" class="adm-input" placeholder="Search actions, error codes, functions…" />
+                <input maxlength="200" type="text" id="admAuditSearch" class="adm-input" placeholder="Search actions, error codes, functions…" />
                 <div class="adm-dd adm-dd-inline" id="admAuditTypeDD">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                     <span class="adm-dd-val"></span>
@@ -1536,6 +1536,22 @@
         <span class="adm-err-detail-label">Cart activity</span>
         <div id="admUdCartActivity"></div>
       </div>
+      <div class="adm-ud-section">
+        <span class="adm-err-detail-label">Licences owned</span>
+        <div id="admUdLicences"></div>
+      </div>
+      <div class="adm-ud-section" id="admUdToolsSection" hidden>
+        <span class="adm-err-detail-label">Account tools</span>
+        <div class="adm-ud-tools">
+          <label class="adm-field"><span>Username</span><div class="adm-ud-inline"><input maxlength="32" id="admUdUsername" class="adm-input" type="text" autocomplete="off" /><button type="button" class="btn btn-tinted adm-btn-sm" id="admUdSaveUsername">Save</button></div></label>
+          <label class="adm-field"><span>New password</span><div class="adm-ud-inline"><input maxlength="72" id="admUdPassword" class="adm-input" type="text" autocomplete="off" placeholder="8 to 72 characters" /><button type="button" class="btn btn-tinted adm-btn-sm" id="admUdSetPassword">Set password</button></div></label>
+          <div class="adm-ud-btnrow">
+            <button type="button" class="btn btn-ghost adm-btn-sm" id="admUdClearAvatar">Remove profile picture</button>
+            <button type="button" class="btn btn-ghost adm-btn-sm" id="admUdAddReseller">Add as reseller</button>
+          </div>
+          <div class="adm-edit-msg" id="admUdToolsMsg"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1559,6 +1575,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x063659" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
+  <script src="/catalog.js?v=20261009x064107" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
 </body>
 </html>

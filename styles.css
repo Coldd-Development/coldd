@@ -4932,3 +4932,12 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 .foot-col:has(> a[href="/shop?cat=game-templates"]) { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); column-gap: 28px; align-content: start; }
 .foot-col:has(> a[href="/shop?cat=game-templates"]) > h3 { grid-column: 1 / -1; }
 @media (max-width: 560px) { .foot-col:has(> a[href="/shop?cat=game-templates"]) { grid-template-columns: 1fr 1fr; column-gap: 16px; } }
+
+/* Admin: user profile licences + account tools */
+.adm-ud-lic-order { display: flex; align-items: center; gap: 14px; padding: 10px 12px; margin-top: 8px; background: var(--bg-2); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
+.adm-ud-lic-items { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.adm-ud-lic-item { display: flex; align-items: baseline; gap: 10px; font-weight: 600; }
+.adm-ud-tools { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+.adm-ud-inline { display: flex; gap: 10px; align-items: stretch; }
+.adm-ud-inline .adm-input { flex: 1; min-width: 0; }
+.adm-ud-btnrow { display: flex; flex-wrap: wrap; gap: 10px; }
