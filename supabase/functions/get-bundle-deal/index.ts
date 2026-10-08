@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json().catch(() => ({}));
-    const token = String(body.token || "");
+    const token = String(body.token || "").slice(0, 200);
     if (!token) return json({ ok: false, error: "Missing token." }, 400);
 
     const { data: row } = await admin

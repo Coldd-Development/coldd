@@ -41,7 +41,7 @@
           </span>
           <span class="nav-search-wrap">
             <button class="nav-search" id="searchBtn" type="button" aria-label="Search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
-            <input class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
+            <input maxlength="120" class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
           </span>
         </nav>
         <div class="nav-cta">
@@ -278,8 +278,8 @@
               <div class="dash-card-head"><div><h2>Campaigns</h2><span class="adm-sub">Trackable links for partners, sponsors, and anywhere else you're promoting coldd.</span></div></div>
               <form class="adm-form" id="admCampaignCreateForm" style="flex-wrap:wrap;">
                 <input type="text" id="admCampaignCode" class="adm-input adm-input-sm" placeholder="Code, e.g. partner" required maxlength="60" />
-                <input type="text" id="admCampaignLabel" class="adm-input" placeholder="Label, e.g. Partner program" required style="flex:1;min-width:180px;" />
-                <input type="text" id="admCampaignDestination" class="adm-input adm-input-sm" placeholder="Page (default /)" style="min-width:140px;" />
+                <input maxlength="64" type="text" id="admCampaignLabel" class="adm-input" placeholder="Label, e.g. Partner program" required style="flex:1;min-width:180px;" />
+                <input maxlength="64" type="text" id="admCampaignDestination" class="adm-input adm-input-sm" placeholder="Page (default /)" style="min-width:140px;" />
                 <button class="btn btn-primary adm-btn-sm" type="submit">+ Add campaign</button>
               </form>
               <p class="adm-note" style="margin-top:6px;">Page is where the link should send people, e.g. <code>/</code>, <code>/shop</code>, or <code>/product/all-brawl-full-game</code>. Leave blank for the homepage.</p>
@@ -345,7 +345,7 @@
                 <summary class="dash-card-head"><div><h2>Subscriber list</h2><span class="adm-sub">Every account with an email address. Campaigns skip anyone Unsubscribed or Banned.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
                 <div class="adm-collapse-body">
               <div class="adm-form" style="flex-wrap:wrap;gap:8px;">
-                <input type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
+                <input maxlength="120" type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
                 <button class="btn btn-ghost adm-btn-sm" id="admEmailListCopyBtn" type="button">Copy sendable addresses</button>
               </div>
               <div class="dash-tablewrap" style="margin-top:12px;">
@@ -383,7 +383,7 @@
                   </div>
                   <p class="adm-note" id="admCampaignAudienceHint" style="margin:0 0 4px;">Goes to opted-in subscribers only.</p>
                 </div>
-                <label class="adm-field"><span>Subject</span><input type="text" id="admCampaignSubject" class="adm-input" placeholder="What's new at coldd" required /></label>
+                <label class="adm-field"><span>Subject</span><input maxlength="64" type="text" id="admCampaignSubject" class="adm-input" placeholder="What's new at coldd" required /></label>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
                   <div class="bt-switch adm-campaign-mode" style="margin-bottom:0;" role="tablist" aria-label="Body format">
                     <button class="bt-opt active" type="button" data-mode="simple" role="tab" aria-selected="true">Simple text</button>
@@ -391,13 +391,13 @@
                   </div>
                   <button class="btn btn-ghost adm-btn-sm" id="admCampaignPreviewBtn" type="button" aria-expanded="false">Preview</button>
                 </div>
-                <label class="adm-field"><span id="admCampaignBodyLabel">Body</span><textarea id="admCampaignBody" class="adm-input adm-textarea" rows="8" placeholder="Write your email. Blank lines start a new paragraph, **text** for bold." required></textarea></label>
+                <label class="adm-field"><span id="admCampaignBodyLabel">Body</span><textarea maxlength="20000" id="admCampaignBody" class="adm-input adm-textarea" rows="8" placeholder="Write your email. Blank lines start a new paragraph, **text** for bold." required></textarea></label>
                 <div class="adm-campaign-preview" id="admCampaignPreviewWrap" hidden>
                   <div class="adm-campaign-preview-head">Preview - how this renders in an inbox</div>
                   <iframe class="adm-campaign-preview-frame" id="admCampaignPreviewFrame" title="Email preview" sandbox=""></iframe>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                  <input type="email" id="admCampaignTestEmail" class="adm-input" placeholder="test@example.com" style="max-width:220px;" />
+                  <input maxlength="254" type="email" id="admCampaignTestEmail" class="adm-input" placeholder="test@example.com" style="max-width:220px;" />
                   <button class="btn btn-ghost adm-btn-sm" id="admCampaignTestBtn" type="button">Send test</button>
                   <span style="flex:1;"></span>
                   <button class="btn btn-primary adm-btn-sm" id="admCampaignSendBtn" type="submit"><span class="btn-label">Send to opted-in subscribers</span><span class="btn-spinner" hidden></span></button>
@@ -437,7 +437,7 @@
                 <p class="adm-note" id="admBroadcastKindHint" style="margin:0;">Goes to every account in the audience.</p>
                 <label class="adm-field"><span>Title</span><input type="text" id="admBroadcastTitle" class="adm-input" placeholder="Store-wide sale is live" maxlength="120" required /></label>
                 <label class="adm-field"><span>Message (optional)</span><textarea id="admBroadcastBody" class="adm-input adm-textarea" rows="3" maxlength="400" placeholder="Up to 40% off everything until Sunday."></textarea></label>
-                <label class="adm-field"><span>Link (optional)</span><input type="text" id="admBroadcastUrl" class="adm-input" placeholder="/shop?sort=deals" /></label>
+                <label class="adm-field"><span>Link (optional)</span><input maxlength="200" type="text" id="admBroadcastUrl" class="adm-input" placeholder="/shop?sort=deals" /></label>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <span style="flex:1;"></span>
                   <button class="btn btn-primary adm-btn-sm" id="admBroadcastSendBtn" type="submit"><span class="btn-label">Send broadcast</span><span class="btn-spinner" hidden></span></button>
@@ -459,7 +459,7 @@
               <p class="adm-note" id="admBroadcastConfirmWarn" style="margin:0 0 14px;"></p>
               <p class="adm-note" style="margin:0 0 6px;">Type this code to confirm:</p>
               <p class="dt-mono" id="admBroadcastConfirmCode" style="font-size:16px;letter-spacing:2px;margin:0 0 8px;" oncontextmenu="return false"></p>
-              <input type="text" id="admBroadcastConfirmInput" class="adm-input" autocomplete="off" placeholder="Type the code" style="margin-bottom:12px;" />
+              <input maxlength="200" type="text" id="admBroadcastConfirmInput" class="adm-input" autocomplete="off" placeholder="Type the code" style="margin-bottom:12px;" />
               <div style="display:flex;gap:8px;">
                 <button class="btn btn-primary adm-btn-sm" id="admBroadcastConfirmGo" type="button" disabled><span class="btn-label">Send now</span><span class="btn-spinner" hidden></span></button>
                 <button class="btn btn-ghost adm-btn-sm" id="admBroadcastConfirmCancel" type="button">Cancel</button>
@@ -471,7 +471,7 @@
           <section class="dash-panel" id="adm-panel-products" hidden>
             <div class="dash-head"><h1>Product management</h1><p>Edit pricing and visibility, or add admin-only listings.</p></div>
             <div class="adm-toolbar">
-              <input type="text" id="admProdSearch" class="adm-input" placeholder="Search by product name…" />
+              <input maxlength="120" type="text" id="admProdSearch" class="adm-input" placeholder="Search by product name…" />
               <div class="adm-dd adm-dd-inline" id="admProdSortDD">
                 <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                   <span class="adm-dd-val"></span>
@@ -532,7 +532,7 @@
                 <div class="dash-card-head"><h2>Details</h2></div>
                 <input type="hidden" id="admEditPlatform" value="Roblox" />
                 <div class="adm-edit-grid">
-                  <label class="adm-field adm-field-wide"><span>Title</span><input type="text" id="admEditTitleInput" class="adm-input" required /></label>
+                  <label class="adm-field adm-field-wide"><span>Title</span><input maxlength="120" type="text" id="admEditTitleInput" class="adm-input" required /></label>
                   <label class="adm-field"><span>Category</span>
                     <div class="adm-dd" id="admEditCatDD">
                       <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -570,7 +570,7 @@
                 </div>
 
                 <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Summary</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="100" /></label>
-                <div class="adm-field adm-field-wide" style="margin-top:16px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admEditBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea id="admEditLongDesc" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></div>
+                <div class="adm-field adm-field-wide" style="margin-top:16px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admEditBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea maxlength="20000" id="admEditLongDesc" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></div>
 
                 <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Hide in catalog</span></label>
                 <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority placements</span></label>
@@ -606,7 +606,7 @@
                   <div class="adm-gallery-grid" id="admEditGalleryList"></div>
                 </div>
 
-                <label class="adm-field" style="margin-top:20px;max-width:420px;"><span>YouTube demo link</span><input type="url" id="admEditVideoUrl" class="adm-input" placeholder="https://youtube.com/watch?v=…" /></label>
+                <label class="adm-field" style="margin-top:20px;max-width:420px;"><span>YouTube demo link</span><input maxlength="2048" type="url" id="admEditVideoUrl" class="adm-input" placeholder="https://youtube.com/watch?v=…" /></label>
 
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Product file</span>
@@ -623,8 +623,8 @@
               <!-- Format/size are read automatically off the uploaded file (see
                    admEditTechFormat/admEditTechSize below) - no separate card to
                    look at or fill in, just the hidden fields the save payload reads. -->
-              <input type="text" id="admEditTechFormat" hidden />
-              <input type="text" id="admEditTechSize" hidden />
+              <input maxlength="200" type="text" id="admEditTechFormat" hidden />
+              <input maxlength="200" type="text" id="admEditTechSize" hidden />
 
               <div class="dash-card glass">
                 <div class="dash-card-head"><h2>Legal</h2><button type="button" class="btn btn-ghost adm-btn-sm" id="admLegalDownloadBtn" hidden><span class="btn-label">Download legal info (.docx)</span><span class="btn-spinner" hidden></span></button></div>
@@ -651,7 +651,7 @@
                   <small class="adm-sub">The person being paid is the licenser listed under Licenser contact details below. Nothing is paid automatically yet; this is recorded so a payout tracker can use it later.</small>
                 </div>
 
-                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Terms of Service</span><textarea id="admLegalTos" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></label>
+                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Terms of Service</span><textarea maxlength="20000" id="admLegalTos" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></label>
 
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Proof of license</span>
@@ -711,7 +711,7 @@
             <div class="dash-card glass">
               <div class="adm-field" id="admUpdSearchField">
                 <span>Select product</span>
-                <input type="text" id="admUpdSearch" class="adm-input" placeholder="Search by product name…" autocomplete="off" />
+                <input maxlength="120" type="text" id="admUpdSearch" class="adm-input" placeholder="Search by product name…" autocomplete="off" />
                 <div class="adm-upd-results" id="admUpdResults"></div>
               </div>
 
@@ -725,8 +725,8 @@
                 <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admUpdSilent" /> <span>Silent update (file only)</span></label>
 
                 <div class="adm-edit-grid" id="admUpdVersionGrid" style="margin-top:18px;">
-                  <label class="adm-field"><span>Version number</span><input type="text" id="admUpdVersion" class="adm-input" placeholder="v1.1" /></label>
-                  <label class="adm-field adm-field-wide"><span>Changelog</span><textarea id="admUpdChangelog" class="adm-input adm-textarea" rows="4" placeholder="What changed in this version?"></textarea></label>
+                  <label class="adm-field"><span>Version number</span><input maxlength="200" type="text" id="admUpdVersion" class="adm-input" placeholder="v1.1" /></label>
+                  <label class="adm-field adm-field-wide"><span>Changelog</span><textarea maxlength="20000" id="admUpdChangelog" class="adm-input adm-textarea" rows="4" placeholder="What changed in this version?"></textarea></label>
                 </div>
 
                 <div class="adm-field" style="margin-top:18px;">
@@ -739,7 +739,7 @@
                   <div class="adm-filecard" id="admUpdFileNote" hidden></div>
                 </div>
 
-                <div class="adm-field adm-field-wide" id="admUpdDescField" style="margin-top:18px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admUpdBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea id="admUpdDescInput" class="adm-input adm-textarea adm-autogrow" rows="6"></textarea></div>
+                <div class="adm-field adm-field-wide" id="admUpdDescField" style="margin-top:18px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admUpdBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea maxlength="20000" id="admUpdDescInput" class="adm-input adm-textarea adm-autogrow" rows="6"></textarea></div>
 
                 <div class="adm-mp-checks" id="admUpdMpChecks" style="margin-top:20px;"></div>
 
@@ -812,7 +812,7 @@
 
           <section class="dash-panel" id="adm-panel-orders" hidden>
             <div class="dash-head"><h1>Order management</h1><p>Every order from the storefront and BuiltByBit, newest first.</p></div>
-            <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
+            <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="120" type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
             <div class="dash-filter-row">
               <label class="dash-filter-field"><span>Status</span>
                 <div class="adm-dd adm-dd-inline" id="admOrderStatusFilterDD">
@@ -844,7 +844,7 @@
           <section class="dash-panel" id="adm-panel-resellers" hidden>
             <div class="dash-head"><h1>Resellers</h1><p>Every resell licence sold, whether or not the seller has filled in their info yet. Rows still waiting on seller info are listed first.</p></div>
             <div class="adm-toolbar">
-              <input type="text" id="admResellerSearch" class="adm-input" placeholder="Search by email, name, or product…" />
+              <input maxlength="120" type="text" id="admResellerSearch" class="adm-input" placeholder="Search by email, name, or product…" />
               <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenResellerCreate">+ Add reseller</button>
               <span class="adm-sub" id="admResellerCount"></span>
             </div>
@@ -863,7 +863,7 @@
               <input type="hidden" id="admResellerId" />
               <div class="dash-card glass">
                 <div class="adm-edit-grid">
-                  <label class="adm-field"><span>Display name (optional)</span><input type="text" id="admResellerName" class="adm-input" /></label>
+                  <label class="adm-field"><span>Display name (optional)</span><input maxlength="120" type="text" id="admResellerName" class="adm-input" /></label>
                   <label class="adm-field"><span>Product</span>
                     <div class="adm-dd" id="admResellerProductDD">
                       <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -890,14 +890,14 @@
                       <button class="bt-opt active" type="button" data-ctype="email" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>Email</button>
                       <button class="bt-opt" type="button" data-ctype="discord" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>Discord</button>
                     </div>
-                    <input type="text" id="admResellerContact" class="rs-input" placeholder="you@example.com" autocomplete="off" />
+                    <input maxlength="200" type="text" id="admResellerContact" class="rs-input" placeholder="you@example.com" autocomplete="off" />
                   </div>
                   <div class="adm-field adm-field-wide rs-field" style="margin:0;">
                     <span>Where they sell</span>
                     <div id="admResellerLocations"></div>
                     <button type="button" class="btn btn-tinted rs-add-loc" id="admResellerAddLoc">+ Add another location</button>
                   </div>
-                  <label class="adm-field adm-field-wide"><span>Notes</span><textarea id="admResellerNotes" class="adm-input adm-textarea" rows="3"></textarea></label>
+                  <label class="adm-field adm-field-wide"><span>Notes</span><textarea maxlength="20000" id="admResellerNotes" class="adm-input adm-textarea" rows="3"></textarea></label>
                 </div>
                 <div class="adm-edit-actions">
                   <button class="btn btn-primary" type="submit" id="admResellerSaveBtn"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
@@ -925,7 +925,7 @@
               <p class="adm-note">For reviews left on other platforms (BuiltByBit, Discord, etc.) that you want shown on the product page - published immediately, no moderation queue.</p>
               <form class="adm-form" id="admImportReviewForm" style="flex-wrap:wrap;position:relative;">
                 <div style="position:relative;flex:1;min-width:220px;">
-                  <input type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
+                  <input maxlength="120" type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
                   <div id="admImportReviewProductResults" class="adm-dd-menu" style="position:absolute;top:100%;left:0;right:0;z-index:20;" hidden></div>
                 </div>
                 <input type="hidden" id="admImportReviewProductSlug" />
@@ -936,7 +936,7 @@
                   <div class="adm-dd-menu" role="listbox" aria-label="Stars" hidden></div>
                 </div>
                 <input type="hidden" id="admImportReviewStars" value="5" />
-                <input type="text" id="admImportReviewName" class="adm-input adm-input-sm" placeholder="Reviewer name" required />
+                <input maxlength="120" type="text" id="admImportReviewName" class="adm-input adm-input-sm" placeholder="Reviewer name" required />
                 <input type="text" id="admImportReviewByline" class="adm-input adm-input-sm" placeholder="Role or company (optional)" maxlength="80" />
                 <div class="adm-dd adm-dd-inline" id="admImportReviewPlatformDD">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
@@ -945,7 +945,7 @@
                   <div class="adm-dd-menu" role="listbox" aria-label="Review platform" hidden></div>
                 </div>
                 <input type="hidden" id="admImportReviewPlatform" value="BuiltByBit" />
-                <textarea id="admImportReviewText" class="adm-input adm-textarea" rows="3" placeholder="Review text" required></textarea>
+                <textarea maxlength="20000" id="admImportReviewText" class="adm-input adm-textarea" rows="3" placeholder="Review text" required></textarea>
                 <button class="btn btn-primary adm-btn-sm" type="submit">Import review</button>
               </form>
               <div class="co-msg" id="admImportReviewMsg"></div>
@@ -973,8 +973,8 @@
                 <div class="dash-card-head"><h2 id="admEventFormTitle">Create sale event</h2></div>
                 <form class="adm-form" id="admEventForm" style="flex-wrap:wrap;">
                   <input type="hidden" id="admEventEditId" />
-                  <input type="text" id="admEventTitle" class="adm-input" placeholder="Internal title" required />
-                  <input type="text" id="admEventMessage" class="adm-input" placeholder="Banner message shown to customers" required style="flex:1;min-width:260px;" />
+                  <input maxlength="120" type="text" id="admEventTitle" class="adm-input" placeholder="Internal title" required />
+                  <input maxlength="200" type="text" id="admEventMessage" class="adm-input" placeholder="Banner message shown to customers" required style="flex:1;min-width:260px;" />
                   <input type="number" id="admEventPercent" class="adm-input adm-input-sm" placeholder="% off" min="1" max="90" required />
                   <div class="adm-dd" id="admEventScopeDD" style="max-width:220px;">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -1003,7 +1003,7 @@
                 <div class="dash-card-head"><h2 id="admCouponFormTitle">Create discount code</h2></div>
                 <form class="adm-form" id="admAddCouponForm" style="flex-wrap:wrap;">
                   <input type="hidden" id="admCouponEditId" />
-                  <input type="text" id="admNewCouponCode" class="adm-input adm-input-sm" placeholder="CODE" required />
+                  <input maxlength="64" type="text" id="admNewCouponCode" class="adm-input adm-input-sm" placeholder="CODE" required />
                   <div class="adm-dd" id="admNewCouponTypeDD" style="max-width:130px;">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                       <span class="adm-dd-val"></span>
@@ -1041,11 +1041,11 @@
                 <div class="dash-card-head"><h2 id="admBundleFormTitle">New curated bundle</h2></div>
                 <form class="adm-form" id="admBundleForm" style="flex-wrap:wrap;">
                   <input type="hidden" id="admBundleToken" />
-                  <input type="text" id="admBundleTitle" class="adm-input" placeholder="Title" required style="min-width:200px;" />
-                  <input type="text" id="admBundleSlug" class="adm-input adm-input-sm" placeholder="slug" required />
-                  <input type="text" id="admBundleImage" class="adm-input adm-input-sm" placeholder="Image, e.g. banner.jpg (optional)" />
+                  <input maxlength="120" type="text" id="admBundleTitle" class="adm-input" placeholder="Title" required style="min-width:200px;" />
+                  <input maxlength="120" type="text" id="admBundleSlug" class="adm-input adm-input-sm" placeholder="slug" required />
+                  <input maxlength="200" type="text" id="admBundleImage" class="adm-input adm-input-sm" placeholder="Image, e.g. banner.jpg (optional)" />
                   <input type="number" id="admBundleDiscount" class="adm-input adm-input-sm" placeholder="Discount %" min="1" max="90" required style="max-width:110px;" />
-                  <input type="text" id="admBundleProducts" class="adm-input adm-field-wide" placeholder="Product slugs, comma-separated (min 2)" required style="flex:1;min-width:280px;" />
+                  <input maxlength="200" type="text" id="admBundleProducts" class="adm-input adm-field-wide" placeholder="Product slugs, comma-separated (min 2)" required style="flex:1;min-width:280px;" />
                   <label class="adm-check"><input type="checkbox" id="admBundleActive" checked /> Active</label>
                   <button class="btn btn-primary adm-btn-sm" type="submit" id="admBundleSubmitBtn">Save bundle</button>
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admBundleCancelBtn" hidden>Cancel edit</button>
@@ -1129,7 +1129,7 @@
 
             <div id="admContentPostsView">
               <div class="adm-toolbar">
-                <input type="text" id="admPostSearch" class="adm-input" placeholder="Search posts…" />
+                <input maxlength="120" type="text" id="admPostSearch" class="adm-input" placeholder="Search posts…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table adm-table-tight">
@@ -1141,7 +1141,7 @@
                 <div class="dash-card-head"><h2 id="admPostFormTitle">Add post</h2></div>
                 <form class="adm-form" id="admAddPostForm">
                   <input type="hidden" id="admPostEditId" value="" />
-                  <input type="text" id="admNewPostTitle" class="adm-input" placeholder="Title" required />
+                  <input maxlength="120" type="text" id="admNewPostTitle" class="adm-input" placeholder="Title" required />
                   <div class="adm-dd adm-dd-inline" id="admNewPostCategoryDD">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
                       <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1149,12 +1149,12 @@
                     <div class="adm-dd-menu" role="listbox" aria-label="Category" hidden></div>
                   </div>
                   <input type="hidden" id="admNewPostCategory" value="Devlog" />
-                  <input type="text" id="admNewPostAuthor" class="adm-input adm-input-sm" placeholder="Author" required />
+                  <input maxlength="200" type="text" id="admNewPostAuthor" class="adm-input adm-input-sm" placeholder="Author" required />
                   <input type="date" id="admNewPostDate" class="adm-input adm-input-sm" required />
                   <input type="number" id="admNewPostRead" class="adm-input adm-input-sm" placeholder="Read mins (auto)" min="1" step="1" readonly title="Computed automatically from the body length" />
-                  <input type="text" id="admNewPostCover" class="adm-input adm-input-sm" placeholder="Cover image, e.g. banner.jpg" />
-                  <input type="text" id="admNewPostDek" class="adm-input adm-textarea" placeholder="One-line summary (dek)" required />
-                  <textarea id="admNewPostBody" class="adm-input adm-textarea" rows="6" placeholder="Body - blank line for new paragraph, ## Heading, - list item, **bold**" required></textarea>
+                  <input maxlength="200" type="text" id="admNewPostCover" class="adm-input adm-input-sm" placeholder="Cover image, e.g. banner.jpg" />
+                  <input maxlength="200" type="text" id="admNewPostDek" class="adm-input adm-textarea" placeholder="One-line summary (dek)" required />
+                  <textarea maxlength="20000" id="admNewPostBody" class="adm-input adm-textarea" rows="6" placeholder="Body - blank line for new paragraph, ## Heading, - list item, **bold**" required></textarea>
                   <label class="adm-check"><input type="checkbox" id="admNewPostPublished" checked /> Published</label>
                   <button class="btn btn-primary adm-btn-sm" type="submit" id="admPostFormSubmit">Add post</button>
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admPostFormCancel" hidden>Cancel edit</button>
@@ -1164,7 +1164,7 @@
 
             <div id="admContentTutorialsView" hidden>
               <div class="adm-toolbar">
-                <input type="text" id="admTutSearch" class="adm-input" placeholder="Search tutorials…" />
+                <input maxlength="120" type="text" id="admTutSearch" class="adm-input" placeholder="Search tutorials…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table adm-table-tight">
@@ -1176,7 +1176,7 @@
                 <div class="dash-card-head"><h2 id="admTutFormTitle">Add tutorial</h2></div>
                 <form class="adm-form" id="admAddTutForm">
                   <input type="hidden" id="admTutEditId" value="" />
-                  <input type="text" id="admNewTutTitle" class="adm-input" placeholder="Title" required />
+                  <input maxlength="120" type="text" id="admNewTutTitle" class="adm-input" placeholder="Title" required />
                   <div class="adm-dd adm-dd-inline" id="admNewTutTrackDD">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
                       <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1200,10 +1200,10 @@
                   <input type="hidden" id="admNewTutPlatform" value="Roblox" />
                   <input type="number" id="admNewTutOrder" class="adm-input adm-input-sm" placeholder="Order" min="1" step="1" required />
                   <input type="number" id="admNewTutMins" class="adm-input adm-input-sm" placeholder="Est. mins (auto)" min="1" step="1" readonly title="Computed automatically from the body length" />
-                  <input type="text" id="admNewTutCover" class="adm-input adm-input-sm" placeholder="Cover image, e.g. scripts.jpg" />
-                  <input type="url" id="admNewTutVideo" class="adm-input adm-input-sm" placeholder="YouTube URL (optional)" />
-                  <input type="text" id="admNewTutSummary" class="adm-input adm-textarea" placeholder="One-line summary" required />
-                  <textarea id="admNewTutBody" class="adm-input adm-textarea" rows="6" placeholder="Body - blank line for new paragraph, ## Heading, - list item, **bold**" required></textarea>
+                  <input maxlength="200" type="text" id="admNewTutCover" class="adm-input adm-input-sm" placeholder="Cover image, e.g. scripts.jpg" />
+                  <input maxlength="2048" type="url" id="admNewTutVideo" class="adm-input adm-input-sm" placeholder="YouTube URL (optional)" />
+                  <input maxlength="200" type="text" id="admNewTutSummary" class="adm-input adm-textarea" placeholder="One-line summary" required />
+                  <textarea maxlength="20000" id="admNewTutBody" class="adm-input adm-textarea" rows="6" placeholder="Body - blank line for new paragraph, ## Heading, - list item, **bold**" required></textarea>
                   <label class="adm-check"><input type="checkbox" id="admNewTutPublished" checked /> Published</label>
                   <button class="btn btn-primary adm-btn-sm" type="submit" id="admTutFormSubmit">Add tutorial</button>
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admTutFormCancel" hidden>Cancel edit</button>
@@ -1214,7 +1214,7 @@
             <div id="admContentReleasesView" hidden>
               <p class="adm-note">New releases are created automatically whenever a product is added or its price/version changes - add one by hand here for anything else worth announcing (studio news, etc).</p>
               <div class="adm-toolbar">
-                <input type="text" id="admRelSearch" class="adm-input" placeholder="Search releases…" />
+                <input maxlength="120" type="text" id="admRelSearch" class="adm-input" placeholder="Search releases…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table adm-table-tight">
@@ -1226,7 +1226,7 @@
                 <div class="dash-card-head"><h2 id="admRelFormTitle">Add release</h2></div>
                 <form class="adm-form" id="admAddRelForm">
                   <input type="hidden" id="admRelEditId" value="" />
-                  <input type="text" id="admNewRelVersion" class="adm-input adm-input-sm" placeholder="Version, e.g. v2.6.0 (optional)" />
+                  <input maxlength="200" type="text" id="admNewRelVersion" class="adm-input adm-input-sm" placeholder="Version, e.g. v2.6.0 (optional)" />
                   <div class="adm-dd adm-dd-inline" id="admNewRelKindDD">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
                       <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1234,10 +1234,10 @@
                     <div class="adm-dd-menu" role="listbox" aria-label="Kind" hidden></div>
                   </div>
                   <input type="hidden" id="admNewRelKind" value="Feature" />
-                  <input type="text" id="admNewRelTitle" class="adm-input" placeholder="Title" required />
+                  <input maxlength="120" type="text" id="admNewRelTitle" class="adm-input" placeholder="Title" required />
                   <input type="date" id="admNewRelDate" class="adm-input adm-input-sm" required />
-                  <input type="text" id="admNewRelAffects" class="adm-input adm-input-sm" placeholder="Affects (product ids, comma-separated)" />
-                  <textarea id="admNewRelSummary" class="adm-input adm-textarea" rows="3" placeholder="Summary" required></textarea>
+                  <input maxlength="200" type="text" id="admNewRelAffects" class="adm-input adm-input-sm" placeholder="Affects (product ids, comma-separated)" />
+                  <textarea maxlength="20000" id="admNewRelSummary" class="adm-input adm-textarea" rows="3" placeholder="Summary" required></textarea>
                   <label class="adm-check"><input type="checkbox" id="admNewRelPublished" checked /> Published</label>
                   <button class="btn btn-primary adm-btn-sm" type="submit" id="admRelFormSubmit">Add release</button>
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admRelFormCancel" hidden>Cancel edit</button>
@@ -1269,7 +1269,7 @@
                 </div>
                 <p class="adm-hint" id="admSiteModeHint">Open: the storefront, checkout, and dashboard all work normally for every visitor.</p>
                 <div id="admSiteMaintFields" hidden style="margin-top:14px;padding-top:16px;border-top:1px solid var(--hairline);">
-                  <label class="adm-field"><span>Maintenance message</span><input type="text" id="admSiteMaintMsg" class="adm-input" placeholder="We'll be back soon." /></label>
+                  <label class="adm-field"><span>Maintenance message</span><input maxlength="200" type="text" id="admSiteMaintMsg" class="adm-input" placeholder="We'll be back soon." /></label>
                   <label class="adm-field" style="margin-top:10px;max-width:260px;"><span>Ends at (optional)</span><input type="datetime-local" id="admSiteMaintEnds" class="adm-input" /></label>
                   <p class="adm-hint" style="margin-top:8px;">Shown on the maintenance page if set - purely informational, the site doesn't reopen on its own when this time passes.</p>
                   <div class="adm-field" style="margin-top:14px;">
@@ -1325,8 +1325,8 @@
                 <p class="adm-hint">Create an empty experience in Roblox Studio first, add it to your Open Cloud API key's <code>game-passes</code> permission list at <a href="https://create.roblox.com/dashboard/credentials" target="_blank" rel="noopener">create.roblox.com/dashboard/credentials</a>, then register its Universe ID here.</p>
                 <form class="adm-form" id="admRobloxContainerForm" style="flex-wrap:wrap;">
                   <input type="hidden" id="admRobloxContainerEditId" />
-                  <input type="text" id="admRobloxContainerUniverseId" class="adm-input" placeholder="Universe ID" required />
-                  <input type="text" id="admRobloxContainerLabel" class="adm-input" placeholder="Label (optional)" style="flex:1;min-width:200px;" />
+                  <input maxlength="200" type="text" id="admRobloxContainerUniverseId" class="adm-input" placeholder="Universe ID" required />
+                  <input maxlength="120" type="text" id="admRobloxContainerLabel" class="adm-input" placeholder="Label (optional)" style="flex:1;min-width:200px;" />
                   <button class="btn btn-primary adm-btn-sm" type="submit" id="admRobloxContainerSubmitBtn">Add container</button>
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admRobloxContainerCancelBtn" hidden>Cancel edit</button>
                 </form>
@@ -1346,7 +1346,7 @@
                 <div class="dash-card-head"><h2>Grant staff access</h2></div>
                 <p class="adm-note">The account must have signed in to coldd at least once already.</p>
                 <form class="adm-form" id="admAddStaffForm">
-                  <input type="email" id="admNewStaffEmail" class="adm-input" placeholder="Email" required />
+                  <input maxlength="254" type="email" id="admNewStaffEmail" class="adm-input" placeholder="Email" required />
                   <div class="adm-dd adm-dd-inline" id="admNewStaffRoleDD">
                     <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                       <span class="adm-dd-val"></span>
@@ -1363,7 +1363,7 @@
 
             <div id="admSiteMgmtUsersView" hidden>
               <div class="adm-toolbar">
-                <input type="text" id="admUserSearch" class="adm-input" placeholder="Search name or email…" />
+                <input maxlength="32" type="text" id="admUserSearch" class="adm-input" placeholder="Search name or email…" />
               </div>
               <div class="dash-card glass dash-tablewrap">
                 <table class="dash-table">
@@ -1404,7 +1404,7 @@
               <div class="adm-audit-warn" id="admAuditWarn" hidden></div>
 
               <div class="adm-toolbar">
-                <input type="text" id="admAuditSearch" class="adm-input" placeholder="Search actions, error codes, functions…" />
+                <input maxlength="120" type="text" id="admAuditSearch" class="adm-input" placeholder="Search actions, error codes, functions…" />
                 <div class="adm-dd adm-dd-inline" id="admAuditTypeDD">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                     <span class="adm-dd-val"></span>
@@ -1476,7 +1476,7 @@
       <p class="adm-campaign-confirm-warn" id="admCampaignConfirmWarn" hidden></p>
       <p class="adm-note" style="margin:18px 0 8px;">Type the code below to confirm - it can't be pasted, you have to type it out.</p>
       <div class="dt-mono adm-campaign-confirm-code" id="admCampaignConfirmCode" style="user-select:none;">- - - -</div>
-      <input type="text" id="admCampaignConfirmInput" class="adm-input" placeholder="Type the code" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:10px;" />
+      <input maxlength="64" type="text" id="admCampaignConfirmInput" class="adm-input" placeholder="Type the code" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:10px;" />
       <div style="display:flex;gap:10px;margin-top:16px;">
         <button class="btn btn-primary" id="admCampaignConfirmGo" type="button" disabled>Send now</button>
         <button class="btn btn-ghost" id="admCampaignConfirmCancel" type="button">Cancel</button>
@@ -1546,7 +1546,7 @@
       <p class="pay-sub" id="admRemoveAcctSub"></p>
       <label class="adm-field">
         <span>Type REMOVE to confirm</span>
-        <input class="adm-input" id="admRemoveAcctInput" type="text" autocomplete="off" placeholder="REMOVE" />
+        <input maxlength="200" class="adm-input" id="admRemoveAcctInput" type="text" autocomplete="off" placeholder="REMOVE" />
       </label>
       <span class="auth-err" id="admRemoveAcctMsg"></span>
       <div class="adm-edit-actions" style="margin-top:18px;">
@@ -1559,6 +1559,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x062733" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
+  <script src="/catalog.js?v=20261009x063659" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
 </body>
 </html>

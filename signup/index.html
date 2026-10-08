@@ -60,18 +60,18 @@
       <form class="auth-form" id="form-signup" novalidate>
         <div class="auth-field" data-for="username">
           <label for="su-username">Username</label>
-          <input id="su-username" name="username" type="text" autocomplete="username" placeholder="yourname" />
+          <input maxlength="32" id="su-username" name="username" type="text" autocomplete="username" placeholder="yourname" />
           <span class="auth-err"></span>
         </div>
         <div class="auth-field" data-for="email">
           <label for="su-email">Email</label>
-          <input id="su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
+          <input maxlength="254" id="su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
           <span class="auth-err"></span>
         </div>
         <div class="auth-field" data-for="password">
           <label for="su-pass">Password</label>
           <div class="auth-input-wrap">
-            <input id="su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
+            <input maxlength="128" id="su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
             <button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
           <div class="pw-strength" id="pwStrength">
@@ -89,7 +89,7 @@
         <div class="auth-field" data-for="confirm">
           <label for="su-conf">Confirm password</label>
           <div class="auth-input-wrap">
-            <input id="su-conf" name="confirm" type="password" autocomplete="new-password" placeholder="••••••••" />
+            <input maxlength="128" id="su-conf" name="confirm" type="password" autocomplete="new-password" placeholder="••••••••" />
             <button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
           <span class="auth-err"></span>

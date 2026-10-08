@@ -61,7 +61,7 @@
         </span>
         <span class="nav-search-wrap">
           <button class="nav-search" id="searchBtn" type="button" aria-label="Search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
-          <input class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
+          <input maxlength="120" class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
         </span>
       </nav>
       <div class="nav-cta">
@@ -174,7 +174,7 @@
       </section>
       <section class="dash-panel" id="panel-purchases" hidden>
         <div class="dash-head"><h1>Purchase history</h1><p>Every order on your account.</p></div>
-        <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="dashPurchSearch" placeholder="Search by product or order number…" aria-label="Search purchase history" /></div>
+        <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="120" type="text" id="dashPurchSearch" placeholder="Search by product or order number…" aria-label="Search purchase history" /></div>
         <div class="dash-filter-row">
           <label class="dash-filter-field"><span>From</span><input type="date" id="dashPurchFrom" data-cdate data-placeholder="Any date" /></label>
           <label class="dash-filter-field"><span>To</span><input type="date" id="dashPurchTo" data-cdate data-placeholder="Any date" /></label>
@@ -196,7 +196,7 @@
       </section>
       <section class="dash-panel" id="panel-owned" hidden>
         <div class="dash-head"><h1>Licenses</h1><p>Everything you have access to.</p></div>
-        <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="dashOwnedSearch" placeholder="Search your licenses…" aria-label="Search your licenses" /></div>
+        <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="120" type="text" id="dashOwnedSearch" placeholder="Search your licenses…" aria-label="Search your licenses" /></div>
         <div class="dash-grid" id="dashOwnedGrid"><p class="dash-empty-note">Loading…</p></div>
       </section>
       <section class="dash-panel" id="panel-wishlist" hidden>
@@ -214,7 +214,7 @@
         </div>
         <div class="dash-card glass">
           <div class="dash-card-head"><h2>Your product links</h2></div>
-          <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="refProdSearch" placeholder="Search products…" aria-label="Search products" /></div>
+          <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="120" type="text" id="refProdSearch" placeholder="Search products…" aria-label="Search products" /></div>
           <div class="dash-filter-row" style="margin-bottom:0;">
             <label class="dash-filter-field"><span>Category</span>
               <select id="refProdCat" data-csel>
@@ -279,7 +279,7 @@
               </div>
             </div>
             <form class="auth-form" id="acctForm" novalidate style="max-width:420px;margin-top:20px;">
-              <div class="auth-field" data-for="name"><label for="ac-name">Display name</label><input id="ac-name" name="name" type="text" value="" /><span class="auth-err"></span></div>
+              <div class="auth-field" data-for="name"><label for="ac-name">Display name</label><input maxlength="120" id="ac-name" name="name" type="text" value="" /><span class="auth-err"></span></div>
               <button class="btn btn-primary auth-submit" type="submit" style="width:auto;align-self:flex-start;"><span class="btn-label">Save changes</span><span class="btn-spinner" hidden></span></button>
               <div class="auth-msg"></div>
             </form>
@@ -290,13 +290,13 @@
             <form class="auth-form" id="claimForm" hidden style="margin:4px 0 10px;padding:14px 16px;border:1px solid var(--hairline);border-radius:12px;background:rgba(255,255,255,0.02);max-width:440px;">
               <p class="auth-hint" style="margin:0 0 12px;">Add an email and password so you can sign in without Roblox and recover your account if you lose access.</p>
               <div id="claimStep1">
-                <div class="auth-field" data-for="email"><label for="claim-email">Email</label><input id="claim-email" name="email" type="email" autocomplete="email" /><span class="auth-err"></span></div>
+                <div class="auth-field" data-for="email"><label for="claim-email">Email</label><input maxlength="254" id="claim-email" name="email" type="email" autocomplete="email" /><span class="auth-err"></span></div>
                 <button class="btn btn-primary" type="button" id="claimSendBtn" style="width:auto;align-self:flex-start;"><span class="btn-label">Send code</span><span class="btn-spinner" hidden></span></button>
               </div>
               <div id="claimStep2" hidden>
                 <p class="auth-hint" style="margin:0 0 10px;">Enter the code we sent to <strong id="claimEmailEcho"></strong> and choose a password.</p>
-                <div class="auth-field" data-for="code"><label for="claim-code">Verification code</label><input id="claim-code" name="code" type="text" autocomplete="one-time-code" /><span class="auth-err"></span></div>
-                <div class="auth-field" data-for="password"><label for="claim-password">Password</label><input id="claim-password" name="password" type="password" autocomplete="new-password" /><span class="auth-err"></span></div>
+                <div class="auth-field" data-for="code"><label for="claim-code">Verification code</label><input maxlength="200" id="claim-code" name="code" type="text" autocomplete="one-time-code" /><span class="auth-err"></span></div>
+                <div class="auth-field" data-for="password"><label for="claim-password">Password</label><input maxlength="128" id="claim-password" name="password" type="password" autocomplete="new-password" /><span class="auth-err"></span></div>
                 <label class="auth-check" style="margin:2px 0 4px;"><input type="checkbox" id="claim-marketing" /> <span>Email me deals and drops (optional).</span></label>
                 <div style="display:flex;gap:10px;">
                   <button class="btn btn-primary" type="button" id="claimVerifyBtn" style="width:auto;"><span class="btn-label">Finish setup</span><span class="btn-spinner" hidden></span></button>
@@ -327,13 +327,13 @@
               <div class="dash-card-head"><h2>Email</h2></div>
               <p class="auth-hint" id="secEmailCurrent" style="margin:0 0 14px;"></p>
               <form class="auth-form" id="secEmailStep1" novalidate style="max-width:420px;">
-                <div class="auth-field" data-for="email"><label for="sec-email">New email</label><input id="sec-email" name="email" type="email" /><span class="auth-err"></span></div>
+                <div class="auth-field" data-for="email"><label for="sec-email">New email</label><input maxlength="254" id="sec-email" name="email" type="email" /><span class="auth-err"></span></div>
                 <button class="btn btn-primary" type="submit" style="width:auto;align-self:flex-start;"><span class="btn-label">Send verification code</span><span class="btn-spinner" hidden></span></button>
                 <div class="auth-msg"></div>
               </form>
               <form class="auth-form" id="secEmailStep2" novalidate style="max-width:420px;" hidden>
                 <p class="auth-hint" style="margin:0 0 4px;">We sent a code to your current email - enter it below to confirm it's you before we move the change forward.</p>
-                <div class="auth-field" data-for="code"><label for="sec-email-code">Verification code</label><input id="sec-email-code" name="code" type="text" autocomplete="one-time-code" /><span class="auth-err"></span></div>
+                <div class="auth-field" data-for="code"><label for="sec-email-code">Verification code</label><input maxlength="200" id="sec-email-code" name="code" type="text" autocomplete="one-time-code" /><span class="auth-err"></span></div>
                 <div style="display:flex;gap:10px;">
                   <button class="btn btn-primary" type="submit" style="width:auto;"><span class="btn-label">Verify &amp; update email</span><span class="btn-spinner" hidden></span></button>
                   <button class="btn btn-ghost" id="secEmailCancel" type="button">Cancel</button>
@@ -358,7 +358,7 @@
               <div class="danger-confirm" id="delConfirm" hidden>
                 <p>Are you sure? Type the code below to confirm - it can't be copy-pasted, you have to type it out.</p>
                 <p class="danger-code" id="delCode" oncontextmenu="return false"></p>
-                <div class="danger-row"><input id="delInput" type="text" placeholder="Type the code" aria-label="Confirmation code to delete your account" autocomplete="off" /><button class="btn danger-btn" id="delFinal" type="button"><span class="btn-label">Confirm delete</span><span class="btn-spinner" hidden></span></button><button class="btn btn-ghost" id="delCancel" type="button">Cancel</button></div>
+                <div class="danger-row"><input maxlength="200" id="delInput" type="text" placeholder="Type the code" aria-label="Confirmation code to delete your account" autocomplete="off" /><button class="btn danger-btn" id="delFinal" type="button"><span class="btn-label">Confirm delete</span><span class="btn-spinner" hidden></span></button><button class="btn btn-ghost" id="delCancel" type="button">Cancel</button></div>
                 <p class="auth-err" id="delErr"></p>
               </div>
             </div>
@@ -400,7 +400,7 @@
                   <button class="bt-opt active" type="button" data-ctype="email" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>Email</button>
                   <button class="bt-opt" type="button" data-ctype="discord" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>Discord</button>
                 </div>
-                <input id="acSellerContact" type="text" class="rs-input" autocomplete="off" placeholder="you@example.com" />
+                <input maxlength="200" id="acSellerContact" type="text" class="rs-input" autocomplete="off" placeholder="you@example.com" />
               </div>
               <div class="rs-field">
                 <label>Where you sell these <span class="rs-req-tag">Required</span></label>
@@ -409,7 +409,7 @@
               </div>
               <div class="rs-field">
                 <label for="acSellerNotes">Anything else we should know? <span class="rs-opt">(optional)</span></label>
-                <textarea id="acSellerNotes" placeholder="Your store name, other names you or your store go by or anything else you think we should know"></textarea>
+                <textarea maxlength="5000" id="acSellerNotes" placeholder="Your store name, other names you or your store go by or anything else you think we should know"></textarea>
               </div>
               <p class="rs-msg" id="acSellerMsg"></p>
               <button class="btn btn-primary rs-submit" type="submit" id="acSellerSave" style="width:auto;"><span class="btn-label">Save seller profile</span></button>
@@ -427,10 +427,10 @@
       <h3 style="margin:0 0 16px;font-size:17px;">Change password</h3>
       <form class="auth-form" id="pwChangeForm" novalidate>
         <div class="auth-field" data-for="current"><label for="pw-current">Current password</label>
-          <div class="auth-input-wrap"><input id="pw-current" name="current" type="password" autocomplete="current-password" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+          <div class="auth-input-wrap"><input maxlength="128" id="pw-current" name="current" type="password" autocomplete="current-password" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
           <span class="auth-err"></span></div>
         <div class="auth-field" data-for="new"><label for="pw-new">New password</label>
-          <div class="auth-input-wrap"><input id="pw-new" name="new" type="password" autocomplete="new-password" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+          <div class="auth-input-wrap"><input maxlength="128" id="pw-new" name="new" type="password" autocomplete="new-password" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
           <div class="pw-strength" id="pwModalStrength">
             <div class="pw-strength-bar"><div class="pw-strength-fill" id="pwModalFill"></div></div>
             <ul class="pw-checklist" id="pwModalChecklist">
@@ -443,7 +443,7 @@
           </div>
           <span class="auth-err"></span></div>
         <div class="auth-field" data-for="confirm"><label for="pw-confirm">Confirm new password</label>
-          <div class="auth-input-wrap"><input id="pw-confirm" name="confirm" type="password" autocomplete="new-password" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+          <div class="auth-input-wrap"><input maxlength="128" id="pw-confirm" name="confirm" type="password" autocomplete="new-password" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><svg class="eye-on" style="display:none" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
           <span class="auth-err"></span></div>
         <button class="btn btn-primary" type="submit" style="width:100%;"><span class="btn-label">Update password</span><span class="btn-spinner" hidden></span></button>
         <button class="btn btn-ghost" id="pwModalCancel" type="button" style="width:100%;">Cancel</button>
@@ -523,7 +523,7 @@
     <button type="button" class="cur-opt" id="curFiat" aria-haspopup="listbox" aria-expanded="false">USD <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
     <button type="button" class="cur-opt cur-opt-robux" id="curRobux"><svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor"><g transform="translate(0,-20)"><path d="M15.6,25.1c0.9,0.5,1.4,1.5,1.4,2.5v4.8c0,1-0.5,2-1.4,2.5l-4.1,2.4c-0.9,0.5-2,0.5-2.9,0l-4.1-2.4c-1-0.5-1.5-1.5-1.5-2.5v-4.8c0-1,0.6-2,1.4-2.5l4.1-2.4c0.9-0.5,2-0.5,2.9,0L15.6,25.1z M9,23.6L5,26c-0.6,0.3-1,1-1,1.6v4.7C4,33,4.4,33.7,5,34l4,2.4c0.6,0.3,1.3,0.3,1.9,0L15,34c0.6-0.3,1-1,1-1.7v-4.7c0-0.6-0.4-1.3-1-1.6l-4-2.4C10.4,23.3,9.6,23.3,9,23.6L9,23.6z M11,24.8l3,1.7c0.6,0.4,1,1.1,1,1.8v3.3c0,0.8-0.4,1.4-1,1.8l-3,1.8c-0.6,0.4-1.4,0.4-2.1,0L6,33.5c-0.6-0.4-1-1.1-1-1.8v-3.4c0-0.7,0.4-1.4,1-1.8l3-1.7C9.6,24.5,10.4,24.5,11,24.8L11,24.8z M8,32h4v-4H8V32z"/></g></svg> Robux</button>
     <div class="cur-menu" id="curMenu" hidden role="listbox" aria-label="Choose currency">
-      <input class="cur-search" id="curSearch" type="text" placeholder="Search currency…" aria-label="Search currency" />
+      <input maxlength="120" class="cur-search" id="curSearch" type="text" placeholder="Search currency…" aria-label="Search currency" />
       <div class="cur-list" id="curList"></div>
     </div>
   </div>
@@ -569,9 +569,9 @@
         <div class="auth-divider"><span>or sign in with email</span></div>
         <form class="auth-form" id="form-signin" novalidate>
           <div class="auth-field" data-for="email"><label for="m-si-email">Email</label>
-            <input id="m-si-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
+            <input maxlength="254" id="m-si-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
           <div class="auth-field" data-for="password"><label for="m-si-pass">Password</label>
-            <div class="auth-input-wrap"><input id="m-si-pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
+            <div class="auth-input-wrap"><input maxlength="128" id="m-si-pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
           <div class="auth-row"><a href="#" data-auth-view="forgot">Forgot password?</a></div>
           <button class="btn btn-primary auth-submit" type="submit">Sign in</button>
           <div class="auth-msg"></div>
@@ -590,11 +590,11 @@
         <div class="auth-divider"><span>or sign up with email</span></div>
         <form class="auth-form" id="form-signup" novalidate>
           <div class="auth-field" data-for="email"><label for="m-su-email">Email</label>
-            <input id="m-su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
+            <input maxlength="254" id="m-su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
           <div class="auth-field" data-for="password"><label for="m-su-pass">Password</label>
-            <div class="auth-input-wrap"><input id="m-su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
+            <div class="auth-input-wrap"><input maxlength="128" id="m-su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
           <div class="auth-field" data-for="confirm"><label for="m-su-conf">Confirm password</label>
-            <div class="auth-input-wrap"><input id="m-su-conf" name="confirm" type="password" autocomplete="new-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
+            <div class="auth-input-wrap"><input maxlength="128" id="m-su-conf" name="confirm" type="password" autocomplete="new-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
           <label class="auth-check"><input type="checkbox" name="tos" /> <span>I agree to the <a href="/terms-of-service">Terms of Service</a> and <a href="/privacy-policy">Privacy Policy</a>.</span></label>
           <span class="auth-err" data-for="tos"></span>
           <button class="btn btn-primary auth-submit" type="submit">Create account</button>
@@ -608,7 +608,7 @@
         <p class="auth-sub">Enter your email and we'll send a link to reset it.</p>
         <form class="auth-form" id="form-forgot" novalidate>
           <div class="auth-field" data-for="email"><label for="m-fo-email">Email</label>
-            <input id="m-fo-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
+            <input maxlength="254" id="m-fo-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
           <button class="btn btn-primary auth-submit" type="submit">Send reset link</button>
           <div class="auth-msg"></div>
         </form>
@@ -631,7 +631,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x062733" data-then="/app.js?v=20261008c"></script>
+  <script src="/catalog.js?v=20261009x063659" data-then="/app.js?v=20261008c"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

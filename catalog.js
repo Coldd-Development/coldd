@@ -640,3 +640,35 @@
     })
     .catch(fail);
 })();
+
+/* Character limits on every text field. Fields in the HTML carry a maxlength already; this covers
+   fields created by script later (modals, admin tables, editors) so no input or textarea is ever
+   unbounded. The server enforces limits again, so this is the first line, not the only one. */
+(function () {
+  var LIMITS = { text: 200, email: 254, password: 128, url: 2048, tel: 32, search: 200 };
+  var SKIP = { hidden: 1, checkbox: 1, radio: 1, file: 1, submit: 1, button: 1, range: 1, color: 1, date: 1, 'datetime-local': 1, number: 1, image: 1, reset: 1 };
+  function limit(el) {
+    if (el.hasAttribute('maxlength')) return;
+    if (el.tagName === 'TEXTAREA') { el.maxLength = /^\/admin(\/|$)/.test(location.pathname) ? 20000 : 5000; return; }
+    var t = (el.getAttribute('type') || 'text').toLowerCase();
+    if (SKIP[t]) return;
+    if (LIMITS[t]) el.maxLength = LIMITS[t];
+  }
+  function scan(root) {
+    if (!root || !root.querySelectorAll) return;
+    if (root.matches && root.matches('input,textarea')) limit(root);
+    var list = root.querySelectorAll('input:not([maxlength]),textarea:not([maxlength])');
+    for (var i = 0; i < list.length; i++) limit(list[i]);
+  }
+  function start() {
+    scan(document);
+    if (!window.MutationObserver) return;
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var added = muts[i].addedNodes;
+        for (var j = 0; j < added.length; j++) if (added[j].nodeType === 1) scan(added[j]);
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

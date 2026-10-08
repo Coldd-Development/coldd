@@ -43,7 +43,11 @@ Deno.serve(async (req: Request) => {
     const sessionId = String(body.sessionId || "").slice(0, 64);
     if (!sessionId) return json({ ok: true });
 
-    const items = Array.isArray(body.items) ? body.items.slice(0, 50) : [];
+    // Keep only the small known shape of each cart line so this endpoint cannot be used to store arbitrary blobs.
+    const items = Array.isArray(body.items) ? body.items.slice(0, 50).map((i: Record<string, unknown>) => ({
+      id: String(i?.id ?? "").slice(0, 120), title: String(i?.title ?? "").slice(0, 200), price: Number(i?.price) || 0,
+      image: String(i?.image ?? "").slice(0, 500), tag: String(i?.tag ?? "").slice(0, 60), licence: String(i?.licence ?? "").slice(0, 20), qty: Math.max(1, Math.min(20, Number(i?.qty) || 1)),
+    })) : [];
     const valueUsd = Math.max(0, Number(body.valueUsd) || 0);
 
     let userId: string | null = null;

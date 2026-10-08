@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const guess = typeof body.password === "string" ? body.password : "";
+    const guess = typeof body.password === "string" ? body.password.slice(0, 256) : "";
     const correct = Deno.env.get("LOCK_PASSWORD") || "";
     const ok = guess.length > 0 && correct.length > 0 && await timingSafeEqual(guess, correct);
     return json({ ok });

@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json().catch(() => ({}));
-    const email = String(body.email || "").trim().toLowerCase();
+    const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
     if (!validEmail(email)) return json({ ok: false, error: "Enter a real email address." }, 400);
     // Where the opt-in came from, for the consent record. Defaults to the
     // site popup; the signup form passes 'signup'.

@@ -38,7 +38,7 @@
         </span>
         <span class="nav-search-wrap">
           <button class="nav-search" id="searchBtn" type="button" aria-label="Search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
-          <input class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
+          <input maxlength="120" class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
         </span>
       </nav>
       <div class="nav-cta">
@@ -277,7 +277,7 @@
     <button type="button" class="cur-opt" id="curFiat" aria-haspopup="listbox" aria-expanded="false">USD <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
     <button type="button" class="cur-opt cur-opt-robux" id="curRobux"><svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor"><g transform="translate(0,-20)"><path d="M15.6,25.1c0.9,0.5,1.4,1.5,1.4,2.5v4.8c0,1-0.5,2-1.4,2.5l-4.1,2.4c-0.9,0.5-2,0.5-2.9,0l-4.1-2.4c-1-0.5-1.5-1.5-1.5-2.5v-4.8c0-1,0.6-2,1.4-2.5l4.1-2.4c0.9-0.5,2-0.5,2.9,0L15.6,25.1z M9,23.6L5,26c-0.6,0.3-1,1-1,1.6v4.7C4,33,4.4,33.7,5,34l4,2.4c0.6,0.3,1.3,0.3,1.9,0L15,34c0.6-0.3,1-1,1-1.7v-4.7c0-0.6-0.4-1.3-1-1.6l-4-2.4C10.4,23.3,9.6,23.3,9,23.6L9,23.6z M11,24.8l3,1.7c0.6,0.4,1,1.1,1,1.8v3.3c0,0.8-0.4,1.4-1,1.8l-3,1.8c-0.6,0.4-1.4,0.4-2.1,0L6,33.5c-0.6-0.4-1-1.1-1-1.8v-3.4c0-0.7,0.4-1.4,1-1.8l3-1.7C9.6,24.5,10.4,24.5,11,24.8L11,24.8z M8,32h4v-4H8V32z"/></g></svg> Robux</button>
     <div class="cur-menu" id="curMenu" hidden role="listbox" aria-label="Choose currency">
-      <input class="cur-search" id="curSearch" type="text" placeholder="Search currency…" aria-label="Search currency" />
+      <input maxlength="120" class="cur-search" id="curSearch" type="text" placeholder="Search currency…" aria-label="Search currency" />
       <div class="cur-list" id="curList"></div>
     </div>
   </div>
@@ -322,9 +322,9 @@
         <div class="auth-divider"><span>or sign in with email</span></div>
         <form class="auth-form" id="form-signin" novalidate>
           <div class="auth-field" data-for="email"><label for="m-si-email">Email</label>
-            <input id="m-si-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
+            <input maxlength="254" id="m-si-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
           <div class="auth-field" data-for="password"><label for="m-si-pass">Password</label>
-            <div class="auth-input-wrap"><input id="m-si-pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
+            <div class="auth-input-wrap"><input maxlength="128" id="m-si-pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
           <div class="auth-row"><a href="#" data-auth-view="forgot">Forgot password?</a></div>
           <button class="btn btn-primary auth-submit" type="submit">Sign in</button>
           <div class="auth-msg"></div>
@@ -343,11 +343,11 @@
         <div class="auth-divider"><span>or sign up with email</span></div>
         <form class="auth-form" id="form-signup" novalidate>
           <div class="auth-field" data-for="email"><label for="m-su-email">Email</label>
-            <input id="m-su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
+            <input maxlength="254" id="m-su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
           <div class="auth-field" data-for="password"><label for="m-su-pass">Password</label>
-            <div class="auth-input-wrap"><input id="m-su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
+            <div class="auth-input-wrap"><input maxlength="128" id="m-su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
           <div class="auth-field" data-for="confirm"><label for="m-su-conf">Confirm password</label>
-            <div class="auth-input-wrap"><input id="m-su-conf" name="confirm" type="password" autocomplete="new-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
+            <div class="auth-input-wrap"><input maxlength="128" id="m-su-conf" name="confirm" type="password" autocomplete="new-password" placeholder="••••••••" /><button class="auth-pw-toggle" type="button" aria-label="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div><span class="auth-err"></span></div>
           <label class="auth-check"><input type="checkbox" name="tos" /> <span>I agree to the <a href="/terms-of-service">Terms of Service</a> and <a href="/privacy-policy">Privacy Policy</a>.</span></label>
           <span class="auth-err" data-for="tos"></span>
           <button class="btn btn-primary auth-submit" type="submit">Create account</button>
@@ -361,7 +361,7 @@
         <p class="auth-sub">Enter your email and we'll send a link to reset it.</p>
         <form class="auth-form" id="form-forgot" novalidate>
           <div class="auth-field" data-for="email"><label for="m-fo-email">Email</label>
-            <input id="m-fo-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
+            <input maxlength="254" id="m-fo-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /><span class="auth-err"></span></div>
           <button class="btn btn-primary auth-submit" type="submit">Send reset link</button>
           <div class="auth-msg"></div>
         </form>
@@ -381,7 +381,7 @@
             <button class="bt-opt active" type="button" data-ctype="email" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>Email</button>
             <button class="bt-opt" type="button" data-ctype="discord" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>Discord</button>
           </div>
-          <input id="resellerContact" type="text" class="rs-input" required autocomplete="off" placeholder="you@example.com" />
+          <input maxlength="200" id="resellerContact" type="text" class="rs-input" required autocomplete="off" placeholder="you@example.com" />
         </div>
         <div class="rs-field">
           <label>Where will you be selling these? <span class="rs-req-tag">Required</span></label>
@@ -390,7 +390,7 @@
         </div>
         <div class="rs-field">
           <label for="resellerNotes">Anything else we should know? <span class="rs-opt">(optional)</span></label>
-          <textarea id="resellerNotes" placeholder="Your store name, other names you or your store go by or anything else you think we should know"></textarea>
+          <textarea maxlength="5000" id="resellerNotes" placeholder="Your store name, other names you or your store go by or anything else you think we should know"></textarea>
         </div>
         <p class="rs-msg" id="resellerMsg"></p>
         <button class="btn btn-primary rs-submit" type="submit" id="resellerSubmit">Submit</button>
@@ -415,7 +415,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x062733" data-then="/app.js?v=20261008c"></script>
+  <script src="/catalog.js?v=20261009x063659" data-then="/app.js?v=20261008c"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

@@ -49,9 +49,9 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") ?? "";
 
     const body = await req.json().catch(() => ({}));
-    const sessionId = String(body.sessionId || "");
-    const orderId = String(body.orderId || "");
-    const token = String(body.token || "");
+    const sessionId = String(body.sessionId || "").slice(0, 200);
+    const orderId = String(body.orderId || "").slice(0, 100);
+    const token = String(body.token || "").slice(0, 200);
     if (!sessionId && !orderId) return json({ ok: false, error: "Missing session id." }, 400);
 
     const admin = createClient(supabaseUrl, serviceKey);
