@@ -4869,3 +4869,12 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 /* Channel badges on the merged orders feed */
 .dt-badge.ch-bbb { color: #f0883e; background: rgba(240, 136, 62, .14); border-color: rgba(240, 136, 62, .35); }
 .dt-badge.ch-site { color: #5b9cf0; background: rgba(91, 156, 240, .14); border-color: rgba(91, 156, 240, .35); }
+
+/* Robux blocked for USD-only items (checkout) */
+.co-robux-block { text-align: left; }
+.co-rb-item { display: flex; align-items: center; gap: 14px; margin: 0 0 18px; }
+.co-rb-thumb { flex: 0 0 72px; width: 72px; height: 72px; border-radius: var(--r-ctl); background: #0f1014 center / cover no-repeat; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+.co-rb-name { font-size: 14px; font-weight: 700; line-height: 1.3; min-width: 0; }
+.co-rb-name small { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.co-rb-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.co-rb-actions .btn { width: 100%; }

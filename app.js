@@ -6032,6 +6032,16 @@
           robuxRow += rbx * i.qty;
         });
         set('robux', 'R$ ' + Math.round(robuxRow).toLocaleString('en-US'));
+        var robuxTile = document.querySelector('.co-pay-btn[data-key="robux"]');
+        var robuxAllOff = cart.length > 0 && robuxOffItems().length === cart.length;
+        if (robuxAllOff) set('robux', 'N/A');
+        if (robuxTile) {
+          robuxTile.classList.toggle('co-pay-disabled', robuxAllOff);
+          robuxTile.setAttribute('aria-disabled', robuxAllOff ? 'true' : 'false');
+          var robuxSub = robuxTile.querySelector('.co-pay-sub');
+          if (robuxSub) robuxSub.textContent = robuxAllOff ? 'Not available for the items in your cart' : 'Buy a gamepass on Roblox, no card needed';
+        }
+        if (robuxAllOff && payMethod === 'robux') setPayMethod('stripe');
 
         // Card and PayPal both settle in USD at a rate their own processor
         // fixes at the moment of charge - crypto and Robux settle in
@@ -6658,6 +6668,48 @@
       var placeBtn = document.getElementById('coPlace'), msg = document.getElementById('coMsg'), agreeErr = document.getElementById('coAgreeErr');
       // Robux never goes through create-checkout-session - it leases a pool
       // pass and opens the instructions modal instead of redirecting.
+      // Cart lines whose product has Robux pricing switched off in admin.
+      function robuxOffItems() {
+        return cart.filter(function (i) { return window.__robuxOff && window.__robuxOff(i.crossSellSlug || i.id); });
+      }
+      // Mixed cart + Robux selected: say which item can't be bought with Robux and
+      // let the buyer either pick another method or drop the USD-only items.
+      function showRobuxBlockedModal(offs) {
+        var first = offs[0];
+        var more = offs.length > 1 ? ' and ' + (offs.length - 1) + ' more item' + (offs.length > 2 ? 's' : '') : '';
+        var canDrop = offs.length < cart.length;
+        var overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        overlay.innerHTML =
+          '<div class="confirm-modal mkt-popup-modal co-robux-block" role="dialog" aria-modal="true">' +
+          '<div class="co-rb-item"><span class="co-rb-thumb"></span>' +
+          '<div class="co-rb-name">' + esc(first.title) + (more ? '<small>' + more + '</small>' : '') + '</div></div>' +
+          '<h3 class="mkt-popup-title">' + esc(first.title) + more + (offs.length > 1 ? ' cannot' : ' cannot') + ' be purchased with Robux</h3>' +
+          '<p class="mkt-popup-sub">Please pay with a different payment method' + (canDrop ? ', or continue with Robux without ' + (offs.length > 1 ? 'those items' : 'this item') + '.' : '.') + '</p>' +
+          '<div class="co-rb-actions">' +
+          '<button type="button" class="btn btn-primary" id="coRbOther">Use a different payment method</button>' +
+          (canDrop ? '<button type="button" class="btn btn-tinted" id="coRbDrop">Continue without ' + esc(first.title) + (more ? ' ' + more.trim() : '') + '</button>' : '') +
+          '</div></div>';
+        document.body.appendChild(overlay);
+        overlay.querySelector('.co-rb-thumb').style.backgroundImage = 'url("' + String(first.image || '') + '")';
+        function close() { overlay.remove(); document.removeEventListener('keydown', onKey); }
+        function onKey(e) { if (e.key === 'Escape') close(); }
+        document.addEventListener('keydown', onKey);
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+        overlay.querySelector('#coRbOther').addEventListener('click', function () {
+          close();
+          setPayMethod('stripe');
+          if (payMethodsWrap && payMethodsWrap.scrollIntoView) payMethodsWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        var dropBtn = overlay.querySelector('#coRbDrop');
+        if (dropBtn) dropBtn.addEventListener('click', function () {
+          close();
+          var offIds = offs.map(function (o) { return o.id; });
+          cart = cart.filter(function (x) { return offIds.indexOf(x.id) < 0; });
+          save(cart); render();
+          startRobuxOrder();
+        });
+      }
       function startRobuxOrder() {
         if (!window.coldAuth) return;
         window.coldAuth.robloxLinkStatus().then(function (res) {
@@ -6671,8 +6723,8 @@
             return;
           }
           var robuxItems = cartToItems();
-          var offItem = cart.filter(function (i) { var base = i.id.replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, ''); var cp = (window.__CATALOG || []).filter(function (c) { return c.id === (i.crossSellSlug || base); })[0]; return cp && cp.robuxDisabled; })[0];
-          if (offItem) { if (msg) { msg.className = 'co-msg err show'; msg.textContent = 'One or more items in your cart cannot be bought with Robux. Please pay with another method.'; } return; }
+          var offs = robuxOffItems();
+          if (offs.length) { showRobuxBlockedModal(offs); return; }
           if (!robuxItems.length) {
             var nicode = logRobuxFail('Robux checkout started with no Robux-eligible items in cart', { phase: 'start_no_items' });
             if (msg) { msg.className = 'co-msg err show'; msg.innerHTML = withSupportLine('Your cart has nothing that can be bought with Robux.') + refSuffix({ errCode: nicode }); }
