@@ -255,8 +255,8 @@ Deno.serve(async (req: Request) => {
       for (const r of (res ?? []) as Obj[]) if (ours.has(norm(r.title))) subjects.push(Number(r.resource_id));
       const day = (offset: number) => new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10);
       // BuiltByBit's "30 days" runs from 30 days ago through today, so these windows do too
-      const periods: Array<[string, string]> = [["7", day(7)], ["30", day(30)], ["90", day(90)], ["all", "2023-01-01"]];
-      const TTL: Record<string, number> = { "7": 30 * 60e3, "30": 30 * 60e3, "90": 3 * 3600e3, "all": 6 * 3600e3 };
+      const periods: Array<[string, string]> = [["1", day(1)], ["7", day(7)], ["30", day(30)], ["90", day(90)], ["all", "2023-01-01"]];
+      const TTL: Record<string, number> = { "1": 30 * 60e3, "7": 30 * 60e3, "30": 30 * 60e3, "90": 3 * 3600e3, "all": 6 * 3600e3 };
       const ids = ["resources-base-total-page-views", "resources-base-total-impressions", "resources-base-total-cart-adds",
         "resources-base-total-wishlist-adds", "resources-base-total-purchases"]; // the API allows at most 5 per request; revenue comes from the purchases table
       const { data: have } = await admin.from("bbb2_funnel").select("resource_id, period, fetched_at").limit(5000);

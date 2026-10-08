@@ -4865,3 +4865,7 @@ button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 .bbb-funnel .bbb-th-bbb { color: #f0883e; text-align: center; border-bottom: 2px solid #f0883e55; }
 .bbb-funnel .bbb-th-site { color: #5b9cf0; text-align: center; border-bottom: 2px solid #5b9cf055; }
 .bbb-funnel-total td { border-top: 1px solid var(--hairline); background: rgba(255,255,255,.03); }
+
+/* Channel badges on the merged orders feed */
+.dt-badge.ch-bbb { color: #f0883e; background: rgba(240, 136, 62, .14); border-color: rgba(240, 136, 62, .35); }
+.dt-badge.ch-site { color: #5b9cf0; background: rgba(91, 156, 240, .14); border-color: rgba(91, 156, 240, .35); }

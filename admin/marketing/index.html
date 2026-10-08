@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009c" />
+  <link rel="stylesheet" href="/styles.css?v=20261009e" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -180,6 +180,16 @@
                 <div id="admCatChart"></div>
                 <div class="adm-catlist" id="admCatList"></div>
               </div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Recent orders</h2><span class="adm-sub" id="admAnRecentOrdersSub"></span></div><a href="#" data-panel="orders">View all</a></div>
+              <div class="dash-rows" id="admAnRecentOrders"></div>
+            </div>
+
+            <div class="dash-card glass" id="admBbbAnalyticsCard">
+              <div class="dash-card-head"><div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit</h2><span class="adm-sub" id="admBbbAnalyticsSub"></span></div></div>
+              <div id="admBbbAnalytics"></div>
             </div>
 
             <div class="dash-card glass">
@@ -767,7 +777,7 @@
           </section>
 
           <section class="dash-panel" id="adm-panel-orders" hidden>
-            <div class="dash-head"><h1>Order management</h1><p>Every order placed on the storefront.</p></div>
+            <div class="dash-head"><h1>Order management</h1><p>Every order from the storefront and BuiltByBit, newest first.</p></div>
             <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
             <div class="dash-filter-row">
               <label class="dash-filter-field"><span>Status</span>
@@ -777,6 +787,13 @@
                     <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                   </button>
                   <div class="adm-dd-menu" role="listbox" aria-label="Order status" hidden></div>
+                </div>
+              </label>
+              <label class="dash-filter-field"><span>Channel</span>
+                <div class="adm-mp-filter" id="admOrderChannel" role="group" aria-label="Order channel">
+                  <button type="button" data-ch="all" class="active">All</button>
+                  <button type="button" data-ch="site">Website</button>
+                  <button type="button" data-ch="bbb">BuiltByBit</button>
                 </div>
               </label>
             </div>
@@ -1508,6 +1525,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261004b"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009d" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
+  <script src="/catalog.js?v=20261009e" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261008j"></script>
 </body>
 </html>

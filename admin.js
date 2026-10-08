@@ -1658,8 +1658,8 @@
     // with actual purchases made the widget read as broken/fake ("orders
     // showing free grants"). Grants still show up in full in the Orders
     // panel itself, just not on this home-page summary.
-    var recent = ORDERS.filter(function (o) { return o.status === 'completed' && o.source !== 'granted'; }).slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); }).slice(0, 6);
-    $('admHomeRecent').innerHTML = recent.map(orderRowHTML).join('') || '<p class="adm-empty">No completed orders yet.</p>';
+    var recent = feedEntries({ completedOnly: true }).slice(0, 6);
+    $('admHomeRecent').innerHTML = recent.map(feedRowHtml).join('') || '<p class="adm-empty">No completed orders yet.</p>';
 
     // Keep the range buttons in sync with the persisted RANGE_DAYS. The
     // markup hard-codes 30D as active, so without this the Home dashboard
@@ -1667,10 +1667,38 @@
     // stored range - the figures looked "stuck" until a click ran setRange.
     document.querySelectorAll('#admHomeRange button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
   }
+  // ---- One merged sales feed: website orders + BuiltByBit purchases, newest first.
+  function feedEntries(opts) {
+    opts = opts || {};
+    var out = [];
+    if (opts.channel !== 'bbb') ORDERS.forEach(function (o) {
+      if (o.status === 'failed') return;
+      if (opts.completedOnly && (o.status !== 'completed' || o.source === 'granted')) return;
+      out.push({ ch: 'site', date: o.date, o: o });
+    });
+    if (opts.channel !== 'site' && BBB.configured === true) {
+      var titles = bbbResourceTitleById();
+      BBB.purchases.forEach(function (p) {
+        out.push({ ch: 'bbb', date: p.purchased_at, p: p, title: titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id) });
+      });
+    }
+    if (opts.since) out = out.filter(function (e) { return new Date(e.date) >= opts.since; });
+    out.sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+    return out;
+  }
+  function channelBadge(ch) { return ch === 'bbb' ? '<span class="dt-badge ch-bbb">BuiltByBit</span>' : '<span class="dt-badge ch-site">Website</span>'; }
+  function feedBbbRowHtml(e, withActions) {
+    var p = e.p, net = (Number(p.price) || 0) - (Number(p.fee) || 0);
+    return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'/mp-logos/builtbybit.png\');background-size:contain;background-repeat:no-repeat;background-position:center"></span>' +
+      '<div class="dr-main"><div class="dr-title">' + esc(e.title) + '</div><div class="dr-sub">' + fmtDateTime(new Date(e.date)) + ' · <span class="dt-mono">BBB-' + esc(p.purchase_id) + '</span> · ' + esc(bbbMethodName(p.gateway)) + ' · ' + statusBadge('completed') + '</div></div>' +
+      channelBadge('bbb') + '<span class="p-price" data-fixed style="margin-left:12px;" title="Net after BuiltByBit\'s fee: ' + usd(net) + '">' + usd(p.price) + '</span>' +
+      (withActions ? '<div class="dr-actions"></div>' : '') + '</div>';
+  }
+  function feedRowHtml(e) { return e.ch === 'bbb' ? feedBbbRowHtml(e, false) : orderRowHTML(e.o); }
   function orderRowHTML(o) {
     return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'' + o.image + '\')"></span>' +
       '<div class="dr-main"><div class="dr-title">' + esc(o.title) + '</div><div class="dr-sub">' + fmtDateTime(new Date(o.date)) + ' · ' + esc(o.id) + ' · ' + esc(o.userName) + '</div></div>' +
-      statusBadge(o.status) + '<span class="p-price" style="margin-left:12px;">' + orderAmount(o) + '</span></div>';
+      statusBadge(o.status) + channelBadge('site') + '<span class="p-price" style="margin-left:12px;">' + orderAmount(o) + '</span></div>';
   }
   function statusBadge(status) {
     var cls = status === 'completed' ? 'ok' : (status === 'refunded' || status === 'revoked') ? 'err' : 'warn';
@@ -3403,6 +3431,14 @@
     }).join('');
 
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
+    // Recent orders (website + BuiltByBit) for the selected range
+    var anFeed = feedEntries({ completedOnly: true, since: RANGE_DAYS ? rangeStart() : null });
+    if ($('admAnRecentOrders')) {
+      var shownN = Math.min(15, anFeed.length);
+      if ($('admAnRecentOrdersSub')) $('admAnRecentOrdersSub').textContent = anFeed.length + ' order' + (anFeed.length === 1 ? '' : 's') + ' in this range' + (anFeed.length > shownN ? ', showing the latest ' + shownN : '');
+      $('admAnRecentOrders').innerHTML = anFeed.slice(0, 15).map(feedRowHtml).join('') || '<p class="adm-empty">No orders in this range.</p>';
+    }
+    renderBbbAnalytics();
   }
 
   /* ================================================================
@@ -4960,7 +4996,7 @@
      Marketplaces card counts UTC days like BuiltByBit does. The website side comes from two
      admin-only RPCs (admin_site_funnel / admin_site_payments).
      ================================================================ */
-  var BBB = { configured: null, purchases: [], resources: [], funnel: {}, state: null, dismissed: {}, site: null, siteDays: null, syncing: false, error: '', syncedAt: null };
+  var BBB = { configured: null, purchases: [], resources: [], funnel: {}, state: null, dismissed: {}, siteByRange: {}, syncing: false, error: '', syncedAt: null };
   var BBB_RANGE = lsGet('coldd_admin_bbb_range_v1', 30);
   var BBB_COLOR = '#f0883e', SITE_COLOR = '#5b9cf0';
 
@@ -5042,21 +5078,37 @@
     }
     return page(0);
   }
-  function bbbSiteLoad() {
-    var sb = window.coldSupabase, days = BBB_RANGE;
+  // Website side for a date range (cached per range): admin_site_funnel + admin_site_payments.
+  function bbbSite(range) { return BBB.siteByRange[String(range)] || null; }
+  function bbbSiteLoad(range) {
+    var sb = window.coldSupabase, key = String(range);
     if (!sb) return Promise.resolve();
-    var rpcDays = days ? days + 1 : 0;
+    if (BBB.siteByRange[key]) return Promise.resolve();
+    var rpcDays = range ? range + 1 : 0;
     return Promise.all([sb.rpc('admin_site_funnel', { p_days: rpcDays }), sb.rpc('admin_site_payments', { p_days: rpcDays })]).then(function (r) {
       var f = {};
       ((r[0] && r[0].data) || []).forEach(function (x) { f[x.slug] = x; });
-      BBB.site = { funnel: f, payments: (r[1] && r[1].data) || [] };
-      BBB.siteDays = days;
+      BBB.siteByRange[key] = { funnel: f, payments: (r[1] && r[1].data) || [] };
     }).catch(function (e) { console.error('[admin] site funnel:', e && e.message); });
   }
   function bbbRenderAll() {
     if (curPanel === 'marketplaces') renderMarketplaces();
     if (curPanel === 'home') renderHome();
     if (curPanel === 'analytics') renderAnalytics();
+    if (curPanel === 'orders') renderOrders();
+  }
+  // PostgREST returns at most 1000 rows per request, so read big tables in pages.
+  function bbbPaged(build) {
+    var all = [];
+    function page(from) {
+      return build().range(from, from + 999).then(function (r) {
+        if (r.error) throw r.error;
+        var rows = r.data || [];
+        all = all.concat(rows);
+        return rows.length === 1000 ? page(from + 1000) : all;
+      });
+    }
+    return page(0);
   }
   function refreshBbbData() {
     if (!window.coldSupabase) return Promise.resolve();
@@ -5067,7 +5119,7 @@
       sb.from('bbb2_funnel').select('*').limit(5000),
       sb.from('bbb2_state').select('*').eq('id', true).maybeSingle(),
       sb.from('bbb_issue_dismissals').select('issue_key'),
-      BBB.siteDays === BBB_RANGE ? Promise.resolve() : bbbSiteLoad()
+      Promise.all([bbbSiteLoad(BBB_RANGE), bbbSiteLoad(RANGE_DAYS)])
     ]).then(function (r) {
       BBB.purchases = r[0].map(function (p) {
         return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, fee: Number(p.fee) || 0, currency: p.currency, gateway: p.gateway };
@@ -5099,7 +5151,7 @@
   // The server keeps the tables fresh; the browser just re-reads them now and then.
   setInterval(function () {
     if (document.hidden || (curPanel !== 'marketplaces' && curPanel !== 'home' && curPanel !== 'analytics')) return;
-    BBB.siteDays = null;
+    BBB.siteByRange = {};
     refreshBbbData();
   }, 5 * 60 * 1000);
 
@@ -5209,14 +5261,14 @@
   }
 
   // ---- BuiltByBit vs the website: revenue and orders split, payment methods, funnel per product
-  function bbbSiteTotals() {
+  function bbbSiteTotals(site) {
     var o = 0, rev = 0;
-    ((BBB.site && BBB.site.payments) || []).forEach(function (m) { o += Number(m.orders) || 0; rev += Number(m.revenue) || 0; });
+    ((site && site.payments) || []).forEach(function (m) { o += Number(m.orders) || 0; rev += Number(m.revenue) || 0; });
     return { orders: o, revenue: rev };
   }
-  function bbbSplitHtml(cur) {
-    if (!BBB.site) return '';
-    var site = bbbSiteTotals();
+  function bbbSplitHtml(cur, siteData) {
+    if (!siteData) return '';
+    var site = bbbSiteTotals(siteData);
     var revSeg = [
       { label: 'BuiltByBit', value: cur.usd, color: BBB_COLOR, display: usd(cur.usd), plain: usd(cur.usd) },
       { label: 'Website', value: site.revenue, color: SITE_COLOR, display: usd(site.revenue), plain: usd(site.revenue) }
@@ -5239,13 +5291,13 @@
     return String(g);
   }
   var BBB_METHOD_COLORS = ['#f0883e', '#5b9cf0', '#4cc38a', '#e0b13a', '#a78bfa', '#e5605d', '#5fb0a5', '#8a8f98', '#d67c4a', '#7aa2f7'];
-  function bbbPaymentsHtml(list) {
+  function bbbPaymentsHtml(list, siteData) {
     var by = {};
     list.forEach(function (p) {
       var m = bbbMethodName(p.gateway), e = by[m] = by[m] || { m: m, bbb: 0, bbbRev: 0, site: 0, siteRev: 0 };
       e.bbb += 1; e.bbbRev += Number(p.price) || 0;
     });
-    ((BBB.site && BBB.site.payments) || []).forEach(function (x) {
+    ((siteData && siteData.payments) || []).forEach(function (x) {
       var e = by[x.method] = by[x.method] || { m: x.method, bbb: 0, bbbRev: 0, site: 0, siteRev: 0 };
       e.site += Number(x.orders) || 0; e.siteRev += Number(x.revenue) || 0;
     });
@@ -5262,10 +5314,10 @@
     return '<div class="adm-mini-head">Payment methods</div><div class="bbb-pay">' +
       donutChart(seg, { centerLabel: num(total), centerSub: 'orders' }) + table + '</div>';
   }
-  function bbbFunnelPeriod() { return BBB_RANGE === 7 ? '7' : BBB_RANGE === 30 ? '30' : BBB_RANGE === 90 ? '90' : 'all'; }
+  function bbbFunnelPeriod(range) { return range === 1 ? '1' : range === 7 ? '7' : range === 30 ? '30' : range === 90 ? '90' : 'all'; }
   function bbbConv(sales, views) { return views > 0 ? (Math.round(sales / views * 1000) / 10) + '%' : '–'; }
-  function bbbFunnelHtml() {
-    var period = bbbFunnelPeriod(), byTitle = bbbResourceByTitle(), siteF = (BBB.site && BBB.site.funnel) || {};
+  function bbbFunnelHtml(range, siteData) {
+    var period = bbbFunnelPeriod(range), byTitle = bbbResourceByTitle(), siteF = (siteData && siteData.funnel) || {};
     function cells(f, viewsKey, cartKey, wishKey, salesKey) {
       if (!f) return '<td>–</td><td>–</td><td>–</td><td>–</td><td>–</td>';
       var v = Number(f[viewsKey]) || 0, c = Number(f[cartKey]) || 0, w = Number(f[wishKey]) || 0, s = Number(f[salesKey]) || 0;
@@ -5348,6 +5400,8 @@
       (hidden ? '<button type="button" class="btn btn-ghost adm-btn-sm" data-bbb-restore="1">Show dismissed</button>' : '') + '</div></details>';
   }
 
+  // Marketplaces tab: just the four cards. The chart, BuiltByBit-vs-website split, payment methods,
+  // per-product funnel and listing checks live in Analytics (renderBbbAnalytics below).
   function renderBbb() {
     var body = $('admBbbBody');
     if (!body) return;
@@ -5364,7 +5418,7 @@
     if (BBB.configured === null) { body.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
 
     var start = utcStart(BBB_RANGE), now = new Date(Date.now() + 1000);
-    var list = bbbPurchasesIn(start, now), cur = bbbSum(list);
+    var cur = bbbSum(bbbPurchasesIn(start, now));
     var prev = { usd: 0, orders: 0 };
     if (BBB_RANGE) prev = bbbSum(bbbPurchasesIn(utcStart(BBB_RANGE * 2 + 1), start));
     function delta(c, p) { if (!BBB_RANGE) return ''; var s = RANGE_DAYS; RANGE_DAYS = BBB_RANGE; var h = pctDelta(c, p); RANGE_DAYS = s; return h; }
@@ -5374,9 +5428,22 @@
       statTile('Orders', num(cur.orders), cur.other ? cur.other + ' in another currency, not counted in revenue' : null, delta(cur.orders, prev.orders)),
       statTile('Avg order value', cur.orders ? usd(cur.usd / cur.orders) : '–', null, '')
     ]);
-    body.innerHTML = tiles + bbbChart(BBB_RANGE) + bbbSplitHtml(cur) + bbbPaymentsHtml(list) + bbbFunnelHtml() + bbbIssuesHtml() +
+    body.innerHTML = tiles + '<p class="adm-sub" style="margin:10px 0 0">The sales chart, BuiltByBit vs website split, payment methods, per-product funnel and listing checks are in <a href="#" data-panel="analytics">Analytics</a>.</p>' +
       (BBB.state && BBB.state.last_error ? '<div class="adm-edit-msg err">Last sync: ' + esc(BBB.state.last_error) + '</div>' : '') +
       (BBB.error ? '<div class="adm-edit-msg err">' + esc(BBB.error) + '</div>' : '');
+  }
+  // Analytics tab: everything else, following that page's date range.
+  function renderBbbAnalytics() {
+    var box = $('admBbbAnalytics');
+    if (!box) return;
+    if (BBB.configured === null) { box.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
+    if (BBB.configured === false) { box.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Connect it on the Marketplaces tab.</p>'; return; }
+    var range = RANGE_DAYS, site = bbbSite(range);
+    if (!site) bbbSiteLoad(range).then(function () { if (curPanel === 'analytics') renderBbbAnalytics(); });
+    var now = new Date(Date.now() + 1000), list = bbbPurchasesIn(utcStart(range), now), cur = bbbSum(list);
+    var sub = $('admBbbAnalyticsSub');
+    if (sub) sub.textContent = 'Follows the date range above. Revenue is what buyers paid; days are UTC, like BuiltByBit.';
+    box.innerHTML = bbbChart(range) + bbbSplitHtml(cur, site) + bbbPaymentsHtml(list, site) + bbbFunnelHtml(range, site) + bbbIssuesHtml();
   }
 
   document.addEventListener('click', function (e) {
@@ -5384,23 +5451,22 @@
     if (rb) {
       BBB_RANGE = +rb.getAttribute('data-bbb-range'); lsSet('coldd_admin_bbb_range_v1', BBB_RANGE);
       renderBbb();
-      bbbSiteLoad().then(renderBbb);
       return;
     }
     if (e.target.closest('#admBbbSync')) { bbbSync(); return; }
     var ds = e.target.closest('[data-bbb-dismiss]');
     if (ds) {
       var key = ds.getAttribute('data-bbb-dismiss');
-      BBB.dismissed[key] = true; renderBbb();
+      BBB.dismissed[key] = true; renderBbbAnalytics();
       Promise.resolve(window.coldSupabase.from('bbb_issue_dismissals').upsert({ issue_key: key }, { onConflict: 'issue_key' })).then(function (r) {
-        if (r && r.error) { delete BBB.dismissed[key]; renderBbb(); admToast('Could not dismiss that', false); }
+        if (r && r.error) { delete BBB.dismissed[key]; renderBbbAnalytics(); admToast('Could not dismiss that', false); }
       });
       return;
     }
     if (e.target.closest('[data-bbb-restore]')) {
       Promise.resolve(window.coldSupabase.from('bbb_issue_dismissals').delete().neq('issue_key', '')).then(function (r) {
         if (r && r.error) { admToast('Could not restore', false); return; }
-        BBB.dismissed = {}; renderBbb();
+        BBB.dismissed = {}; renderBbbAnalytics();
       });
     }
   });
@@ -5539,24 +5605,34 @@
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>' +
       '<div class="adm-row-menu-list" hidden>' + items.join('') + '</div></div>';
   }
+  var ORDER_CHANNEL = 'all', ORDERS_SHOWN = 100;
+  document.addEventListener('click', function (e) {
+    var cb = e.target.closest('#admOrderChannel button');
+    if (cb) { ORDER_CHANNEL = cb.getAttribute('data-ch'); ORDERS_SHOWN = 100; renderOrders(); return; }
+    if (e.target.closest('#admOrdersMore')) { ORDERS_SHOWN += 100; renderOrders(); }
+  });
   function renderOrders() {
     var statusF = orderStatusDropdown.getValue() || 'all';
     var q = (($('admOrderSearch') || {}).value || '').trim().toLowerCase();
-    var rows = ORDERS.filter(function (o) {
-      if (o.status === 'failed') return false;
-      // Pending clutters the default view with checkouts that were opened
-      // and never finished - same call as the customer dashboard's own
-      // purchase history. Unlike 'failed' this isn't a hard exclude though:
-      // a pending order can still be genuinely actionable (a stuck crypto/
-      // Robux payment, "Mark completed" below), so filtering to it directly
-      // via the status dropdown still works - it's just not what shows by
-      // default alongside everything else.
+    Array.prototype.forEach.call(document.querySelectorAll('#admOrderChannel button'), function (b) { b.classList.toggle('active', b.getAttribute('data-ch') === ORDER_CHANNEL); });
+    var entries = feedEntries({ channel: ORDER_CHANNEL === 'all' ? null : ORDER_CHANNEL }).filter(function (e) {
+      if (e.ch === 'bbb') {
+        // BuiltByBit purchases are always completed sales
+        if (statusF !== 'all' && statusF !== 'completed') return false;
+        return !q || ('bbb-' + e.p.purchase_id).indexOf(q) >= 0 || String(e.title).toLowerCase().indexOf(q) >= 0 || bbbMethodName(e.p.gateway).toLowerCase().indexOf(q) >= 0 || 'builtbybit'.indexOf(q) >= 0;
+      }
+      var o = e.o;
+      // Pending clutters the default view with checkouts that were opened and never finished -
+      // filter to it directly via the status dropdown when you need a stuck one.
       if (o.status === 'pending' && statusF === 'all') return false;
       var okStatus = statusF === 'all' || o.status === statusF;
       var okQ = !q || o.id.toLowerCase().indexOf(q) >= 0 || o.title.toLowerCase().indexOf(q) >= 0 || o.userName.toLowerCase().indexOf(q) >= 0;
       return okStatus && okQ;
-    }).sort(function (a, b) { return new Date(b.date) - new Date(a.date); }).slice(0, 200);
-    $('admOrdersBody').innerHTML = rows.map(function (o) {
+    });
+    var rows = entries.slice(0, ORDERS_SHOWN);
+    $('admOrdersBody').innerHTML = rows.map(function (e) {
+      if (e.ch === 'bbb') return feedBbbRowHtml(e, true);
+      var o = e.o;
       var img = o.image ? window.imgUrl(o.image) : '/banner.jpg';
       // A real, currently-paying gift order - distinct from the "Gifted"
       // free-comp badge, so shown alongside it rather than in place of it.
@@ -5568,9 +5644,10 @@
           '<div class="dr-title">' + esc(o.title) + (o.licence === 'resell' ? ' <span class="adm-sub">· resell</span>' : '') + '</div>' +
           '<div class="dr-sub">' + fmtDate(new Date(o.date)) + ' · <span class="dt-mono">' + esc(o.id) + '</span> · ' + esc(o.userName) + ' · ' + o.currency.toUpperCase() + ' · ' + statusHtml + giftBadge + '</div>' +
         '</div>' +
-        '<span class="p-price" data-fixed>' + orderAmount(o) + '</span>' +
+        channelBadge('site') + '<span class="p-price" data-fixed style="margin-left:12px;">' + orderAmount(o) + '</span>' +
         '<div class="dr-actions">' + orderRowMenuHtml(o) + '</div></div>';
-    }).join('') || '<p class="dash-empty-note">No orders match.</p>';
+    }).join('') + (entries.length > rows.length ? '<div style="text-align:center;padding:14px 0"><button type="button" class="btn btn-ghost adm-btn-sm" id="admOrdersMore">Show 100 more (' + (entries.length - rows.length) + ' left)</button></div>' : '');
+    if (!rows.length) $('admOrdersBody').innerHTML = '<p class="dash-empty-note">No orders match.</p>';
   }
   var ordersBody = $('admOrdersBody');
   // Listens on document, not ordersBody: openRowMenu() portals the open
