@@ -33,13 +33,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const API = "https://api.builtbybit.com/v1";
 const MAX_PAGES = 60;
-const MAX_WAIT_MS = 8000;
+const MAX_WAIT_MS = 15000;
+const MAX_ATTEMPTS = 5;
 const REQUEST_TIMEOUT_MS = 15000;
 const BUDGET_MS = 100000; // well inside the edge function wall-clock limit
-const POOL = 4;
+const POOL = 2; // BuiltByBit rate-limits hard; fewer parallel calls beat constant 429s
 const RECHECK_MS = 20 * 60 * 1000; // a listing is not re-read more often than this
+// A listing whose only reason to be re-read is that it holds pending purchases (the
+// stored count already matches BuiltByBit's) is checked far less often.
+const PENDING_RECHECK_MS = 6 * 60 * 60 * 1000;
 
 let DEADLINE = Infinity;
+// Shared by every worker: once one request is told to slow down, all of them wait.
+let COOLDOWN_UNTIL = 0;
 function overBudget() { return Date.now() > DEADLINE; }
 
 function corsHeaders() {
@@ -98,8 +104,13 @@ class ApiFail extends Error {
 }
 
 async function bbb(token: string, method: string, path: string, body?: Obj): Promise<Obj> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (overBudget()) throw new ApiFail(408, "Ran out of time.");
+    const pause = COOLDOWN_UNTIL - Date.now();
+    if (pause > 0) {
+      if (Date.now() + pause > DEADLINE) throw new ApiFail(408, "Ran out of time.");
+      await new Promise((r) => setTimeout(r, pause));
+    }
     const t0 = Date.now();
     let res: Response;
     try {
@@ -118,10 +129,11 @@ async function bbb(token: string, method: string, path: string, body?: Obj): Pro
       throw new ApiFail(504, "BuiltByBit did not answer in time.");
     }
     if (res.status === 429) {
-      const wait = Math.min(MAX_WAIT_MS, Math.max(500, Number(res.headers.get("Retry-After") ?? "1") * 1000));
-      console.warn("[admin-builtbybit-sync] 429 on", path, "waiting", wait, "ms");
-      if (attempt === 2) throw new ApiFail(429, "BuiltByBit rate limit hit.");
-      await new Promise((r) => setTimeout(r, wait));
+      const hinted = Number(res.headers.get("Retry-After") ?? "0") * 1000;
+      const wait = Math.min(MAX_WAIT_MS, Math.max(hinted, 1000 * 2 ** attempt));
+      COOLDOWN_UNTIL = Math.max(COOLDOWN_UNTIL, Date.now() + wait);
+      console.warn("[admin-builtbybit-sync] 429 on", path, "cooling down", wait, "ms");
+      if (attempt === MAX_ATTEMPTS - 1) throw new ApiFail(429, "BuiltByBit rate limit hit.");
       continue;
     }
     const text = await res.text();
@@ -265,15 +277,25 @@ Deno.serve(async (req: Request) => {
     for (const s of (stateRows ?? []) as Obj[]) state.set(String(s.resource_id), s.detail_at);
 
     const nowMs = Date.now();
+    const lagOf = (l: Obj) => {
+      const st = stored.get(String(l.resource_id)) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
+      return {
+        missingP: Math.max(0, (l.purchases ?? 0) - Number(st.purchases_n)),
+        pending: Number(st.pending_n) > 0,
+        needR: (l.reviews ?? 0) > Number(st.reviews_n),
+      };
+    };
     const queue = listings.filter((l) => {
-      const id = String(l.resource_id);
-      const done = state.get(id);
-      if (done && nowMs - new Date(done).getTime() < RECHECK_MS) return false;
-      const st = stored.get(id) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
-      const needP = (l.purchases ?? 0) > Number(st.purchases_n) || Number(st.pending_n) > 0;
-      const needR = (l.reviews ?? 0) > Number(st.reviews_n);
-      return needP || needR;
-    }).sort((a, b) => (b.purchases ?? 0) - (a.purchases ?? 0));
+      const done = state.get(String(l.resource_id));
+      const age = done ? nowMs - new Date(done).getTime() : Infinity;
+      const g = lagOf(l);
+      if (g.missingP > 0 || g.needR) return age >= RECHECK_MS;
+      return g.pending && age >= PENDING_RECHECK_MS;
+    }).sort((a, b) => {
+      // Listings that are missing purchases come first, biggest gap first.
+      const ga = lagOf(a), gb = lagOf(b);
+      return (gb.missingP - ga.missingP) || ((b.purchases ?? 0) - (a.purchases ?? 0));
+    });
 
     let next = 0;
     let processed = 0;
@@ -282,6 +304,7 @@ Deno.serve(async (req: Request) => {
       const title = l.title ?? `Resource ${rid}`;
       const st = stored.get(rid) ?? { purchases_n: 0, pending_n: 0, reviews_n: 0 };
       let note: string | null = null;
+      let retryLater = false; // a rate limit / timeout: leave it at the front of the queue
 
       if ((l.purchases ?? 0) > Number(st.purchases_n) || Number(st.pending_n) > 0) {
         try {
@@ -312,6 +335,7 @@ Deno.serve(async (req: Request) => {
           const f = e as ApiFail;
           if (f.status === 408) throw e; // out of time: leave it in the queue
           note = `purchases ${f.status}`;
+          if (f.status === 429 || f.status === 504) retryLater = true;
           errors.push(`purchases ${rid}: ${f.message}`);
         }
       }
@@ -343,12 +367,13 @@ Deno.serve(async (req: Request) => {
           const f = e as ApiFail;
           if (f.status === 408) throw e;
           note = (note ? note + "; " : "") + `reviews ${f.status}`;
+          if (f.status === 429 || f.status === 504) retryLater = true;
           errors.push(`reviews ${rid}: ${f.message}`);
         }
       }
 
-      await admin.from("bbb_resource_state").upsert({ resource_id: rid, detail_at: new Date().toISOString(), note }, { onConflict: "resource_id" });
-      processed++;
+      await admin.from("bbb_resource_state").upsert({ resource_id: rid, detail_at: retryLater ? null : new Date().toISOString(), note }, { onConflict: "resource_id" });
+      if (!retryLater) processed++;
     }
     async function worker() {
       while (next < queue.length && !overBudget()) {

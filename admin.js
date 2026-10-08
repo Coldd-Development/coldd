@@ -5008,11 +5008,11 @@
 
   // Pulls fresh data from BuiltByBit. The function does a slice at a time and reports
   // how many listings are still `remaining`; keep going until it is done. Throttled to
-  // every 30 minutes once a full pass has finished, unless forced.
+  // every 10 minutes once a full pass has finished, unless forced.
   function bbbSync(force) {
     if (BBB.syncing) return Promise.resolve();
     var last = Number(lsGet(BBB_SYNC_KEY, 0)) || 0;
-    if (!force && Date.now() - last < 30 * 60 * 1000) return Promise.resolve();
+    if (!force && Date.now() - last < 10 * 60 * 1000) return Promise.resolve();
     BBB.syncing = true; BBB.error = ''; BBB.progress = 'Starting…';
     if (curPanel === 'marketplaces') renderBbb();
     var rounds = 0;
