@@ -1638,6 +1638,8 @@ body.no-scroll { overflow: hidden; }
 .adm-sticky-save { position: fixed; top: 74px; right: 26px; z-index: 60; min-height: 40px; padding: 9px 20px;
   box-shadow: 0 8px 26px rgba(0,0,0,0.45); }
 @media (max-width: 760px) { .adm-sticky-save { top: auto; bottom: 16px; right: 16px; } }
+/* keep the first card's content clear of the floating Save / Create button */
+@media (min-width: 761px) { #adm-panel-product-edit #admMpUploadCard { padding-right: 190px; } }
 .pd-price-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .pd-price-main { display: flex; align-items: baseline; gap: 10px; }
 .pd-price { font-size: 30px; font-weight: 800; color: var(--price); letter-spacing: -0.02em; }
@@ -4955,7 +4957,9 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .dash-panel:not([hidden]) { animation: panelIn .3s var(--ease) both; }
-.dash-panel:not([hidden]) .dash-card { animation: cardIn .38s var(--ease) both; }
+.dash-panel:not([hidden]) .dash-card { animation: cardIn .38s var(--ease) backwards; }
+/* a card holding an open dropdown must paint above the cards after it, or the menu is hidden behind them */
+.dash-card:has(.adm-dd-btn[aria-expanded="true"]) { position: relative; z-index: 20; }
 .dash-panel:not([hidden]) .dash-card:nth-of-type(2) { animation-delay: .04s; }
 .dash-panel:not([hidden]) .dash-card:nth-of-type(3) { animation-delay: .08s; }
 .dash-panel:not([hidden]) .dash-card:nth-of-type(4) { animation-delay: .12s; }
