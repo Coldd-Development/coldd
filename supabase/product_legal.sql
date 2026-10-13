@@ -18,6 +18,8 @@ create table if not exists public.product_legal (
   license_cost numeric(10,2) not null default 0,
   license_cost_currency text not null default 'usd' check (license_cost_currency in ('usd', 'robux')),
   license_purchased_at date,
+  min_regular_usd numeric(10,2) not null default 0,
+  min_regular_robux numeric(10,2) not null default 0,
   min_sale_usd numeric(10,2) not null default 0,
   min_sale_robux numeric(10,2) not null default 0,
   -- Cap on the discount PERCENTAGE any sale/coupon/deal may take off the

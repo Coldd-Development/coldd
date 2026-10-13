@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261014a" />
+  <link rel="stylesheet" href="/styles.css?v=20261014d" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -190,6 +190,22 @@
             <div class="dash-card glass" id="admRobuxCard">
               <div class="dash-card-head"><div><h2>Group Robux revenue</h2><span class="adm-sub">Robux received after Roblox's 30% cut.</span></div></div>
               <div id="admRobux"></div>
+            </div>
+
+            <div class="dash-card glass" id="admBbbCard">
+              <div class="dash-card-head adm-bbb-head">
+                <div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit stats</h2><span class="adm-sub" id="admBbbSub"></span></div>
+                <div class="adm-bbb-tools">
+                  <div class="adm-mp-filter" id="admBbbRange" role="group" aria-label="BuiltByBit date range">
+                    <button type="button" data-bbb-range="7">7D</button>
+                    <button type="button" data-bbb-range="30">30D</button>
+                    <button type="button" data-bbb-range="90">90D</button>
+                    <button type="button" data-bbb-range="0">All</button>
+                  </div>
+                  <button type="button" class="btn btn-ghost adm-btn-sm" id="admBbbSync">Sync now</button>
+                </div>
+              </div>
+              <div id="admBbbBody"></div>
             </div>
 
             <div class="dash-card glass" id="admBbbAnalyticsCard">
@@ -623,6 +639,8 @@
                 </div>
 
                 <label class="adm-field" style="margin-top:20px;max-width:420px;"><span>YouTube demo link</span><input maxlength="2048" type="url" id="admEditVideoUrl" class="adm-input" placeholder="https://youtube.com/watch?v=…" /></label>
+                <label class="adm-field" style="margin-top:14px;max-width:420px;"><span>Roblox test link (optional)</span><input maxlength="2048" type="url" id="admEditTestUrl" class="adm-input" placeholder="https://www.roblox.com/games/…" /></label>
+                <p class="adm-hint">Adds a "Can I test this game out in Roblox?" answer to this product's FAQ. Leave blank to hide it.</p>
 
                 <div class="adm-field" style="margin-top:20px;">
                   <span>Product file</span>
@@ -703,8 +721,13 @@
                 </div>
 
                 <div class="adm-edit-grid" style="margin-top:20px;">
-                  <label class="adm-field"><span>Minimum sale price (USD)</span><input type="number" min="0" step="0.01" id="admLegalMinUsd" class="adm-input" /></label>
-                  <label class="adm-field"><span>Minimum sale price (Robux)</span><input type="number" min="0" step="1" id="admLegalMinRobux" class="adm-input" /></label>
+                  <label class="adm-field"><span>Minimum regular price (USD)</span><input type="number" min="0" step="0.01" id="admLegalMinRegularUsd" class="adm-input" autocomplete="off" placeholder="0 = no minimum" /></label>
+                  <label class="adm-field"><span>Minimum regular price (Robux)</span><input type="number" min="0" step="1" id="admLegalMinRegularRobux" class="adm-input" autocomplete="off" placeholder="0 = no minimum" /></label>
+                </div>
+
+                <div class="adm-edit-grid" style="margin-top:20px;">
+                  <label class="adm-field"><span>Minimum sale price (USD)</span><input type="number" min="0" step="0.01" id="admLegalMinUsd" class="adm-input" autocomplete="off" /></label>
+                  <label class="adm-field"><span>Minimum sale price (Robux)</span><input type="number" min="0" step="1" id="admLegalMinRobux" class="adm-input" autocomplete="off" /></label>
                 </div>
 
                 <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admLegalCannotBeFree" /> <span>Cannot be given away for free</span></label>
@@ -772,22 +795,6 @@
           <section class="dash-panel" id="adm-panel-marketplaces" hidden>
             <div class="dash-head"><h1>Marketplaces</h1><p>What still needs doing on BuiltByBit, ClearlyDev, Parcel and Creator Store.</p></div>
             <div class="dash-stats adm-stats-4" id="admMpStats"></div>
-
-            <div class="dash-card glass" id="admBbbCard">
-              <div class="dash-card-head adm-bbb-head">
-                <div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit stats</h2><span class="adm-sub" id="admBbbSub"></span></div>
-                <div class="adm-bbb-tools">
-                  <div class="adm-mp-filter" id="admBbbRange" role="group" aria-label="BuiltByBit date range">
-                    <button type="button" data-bbb-range="7">7D</button>
-                    <button type="button" data-bbb-range="30">30D</button>
-                    <button type="button" data-bbb-range="90">90D</button>
-                    <button type="button" data-bbb-range="0">All</button>
-                  </div>
-                  <button type="button" class="btn btn-ghost adm-btn-sm" id="admBbbSync">Sync now</button>
-                </div>
-              </div>
-              <div id="admBbbBody"></div>
-            </div>
 
             <div class="dash-card glass">
               <div class="dash-card-head"><h2>Add a task</h2></div>
@@ -1629,8 +1636,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="/supabase-init.js?v=20261009x063147"></script>
+  <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261014a" data-then="/app.js?v=20261014a,/reviews.js?v=20260729a,/admin.js?v=20261014a"></script>
+  <script src="/catalog.js?v=20261014d" data-then="/app.js?v=20261014d,/reviews.js?v=20260729a,/admin.js?v=20261014d"></script>
 </body>
 </html>

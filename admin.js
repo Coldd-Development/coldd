@@ -927,7 +927,7 @@
      server-side) - never written directly from here.
      ================================================================ */
   function defaultLegal() {
-    return { tos: '', licenseTypes: [], revenueSharePct: '', revenueSharePaymentPlatform: '', revenueSharePaymentLink: '', proofFiles: [], devProofFiles: [], contacts: [], licenseCost: 0, licenseCostCurrency: 'usd', licensePurchasedAt: '', minSaleUsd: 0, minSaleRobux: 0, maxDiscountPct: 0, canBeFree: false, disallowSales: false };
+    return { tos: '', licenseTypes: [], revenueSharePct: '', revenueSharePaymentPlatform: '', revenueSharePaymentLink: '', proofFiles: [], devProofFiles: [], contacts: [], licenseCost: 0, licenseCostCurrency: 'usd', licensePurchasedAt: '', minRegularUsd: 0, minRegularRobux: 0, minSaleUsd: 0, minSaleRobux: 0, maxDiscountPct: 0, canBeFree: false, disallowSales: false };
   }
   function toYouTubeEmbed(url) {
     url = (url || '').trim();
@@ -960,6 +960,7 @@
       image: window.imgUrl(row.image),
       gallery: row.gallery || [],
       video: row.video || '',
+      testUrl: row.test_url || '',
       resell: !!row.resell_available,
       resellPrice: row.resell_price_usd != null ? Number(row.resell_price_usd) : null,
       resellRobuxPrice: row.resell_robux_price != null ? Number(row.resell_robux_price) : null,
@@ -982,7 +983,8 @@
         revenueSharePaymentLink: legalRaw.revenue_share_payment_link || '',
         proofFiles: legalRaw.proof_files, devProofFiles: legalRaw.dev_proof_files,
         contacts: legalRaw.contacts, licenseCost: legalRaw.license_cost, licenseCostCurrency: legalRaw.license_cost_currency,
-        licensePurchasedAt: legalRaw.license_purchased_at, minSaleUsd: legalRaw.min_sale_usd, minSaleRobux: legalRaw.min_sale_robux,
+        licensePurchasedAt: legalRaw.license_purchased_at, minRegularUsd: legalRaw.min_regular_usd, minRegularRobux: legalRaw.min_regular_robux,
+        minSaleUsd: legalRaw.min_sale_usd, minSaleRobux: legalRaw.min_sale_robux,
         maxDiscountPct: legalRaw.max_discount_pct,
         canBeFree: legalRaw.can_be_free, disallowSales: legalRaw.disallow_sales
       }),
@@ -1001,7 +1003,7 @@
     if (!window.coldSupabase) return Promise.resolve();
     // storage_path (the internal download path) isn't readable through the public
     // API, so '*' is out; admins get the paths from an admin-only RPC and merge them.
-    var cols = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, robux_disabled, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at, product_legal(*)';
+    var cols = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, robux_disabled, test_url, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at, product_legal(*)';
     return Promise.all([
       window.coldSupabase.from('products').select(cols).order('title'),
       window.coldSupabase.rpc('admin_product_storage_paths')
@@ -1035,6 +1037,7 @@
       image: p.image,
       gallery: p.gallery,
       video: p.video,
+      testUrl: p.testUrl,
       resell: p.resell,
       resellPrice: p.resellPrice,
       resellRobuxPrice: p.resellRobuxPrice,
@@ -4178,6 +4181,7 @@
     editGallery = (p.gallery || []).slice();
     renderGalleryList();
     $('admEditVideoUrl').value = p.video || '';
+    $('admEditTestUrl').value = p.testUrl || '';
 
     var legal = p.legal || defaultLegal();
     $('admLegalTos').value = legal.tos || '';
@@ -4190,6 +4194,8 @@
     $('admLegalCostAmount').value = legal.licenseCost || 0;
     setCostCurrency(legal.licenseCostCurrency || 'usd');
     $('admLegalPurchasedAt').value = legal.licensePurchasedAt || '';
+    $('admLegalMinRegularUsd').value = legal.minRegularUsd || 0;
+    $('admLegalMinRegularRobux').value = legal.minRegularRobux || 0;
     $('admLegalMinUsd').value = legal.minSaleUsd || 0;
     $('admLegalMinRobux').value = legal.minSaleRobux || 0;
     $('admLegalMaxDiscount').value = legal.maxDiscountPct || 0;
@@ -4660,6 +4666,7 @@
     editGallery = [];
     renderGalleryList();
     $('admEditVideoUrl').value = '';
+    $('admEditTestUrl').value = '';
 
     $('admLegalTos').value = '';
     autoGrow($('admLegalTos'));
@@ -4670,6 +4677,8 @@
     setCostCurrency('usd');
     setLicenseTypeFields({});
     $('admLegalPurchasedAt').value = '';
+    $('admLegalMinRegularUsd').value = 0;
+    $('admLegalMinRegularRobux').value = 0;
     $('admLegalMinUsd').value = 0;
     $('admLegalMinRobux').value = 0;
     $('admLegalMaxDiscount').value = 0;
@@ -4712,6 +4721,7 @@
       gallery: editGallery.slice(),
       video: toYouTubeEmbed($('admEditVideoUrl').value.trim()),
       addons: collectAddons(),
+      testUrl: $('admEditTestUrl').value.trim(),
       tech: {
         format: $('admEditTechFormat').value.trim(),
         size: $('admEditTechSize').value.trim(),
@@ -4729,6 +4739,8 @@
         licenseCost: Math.max(0, parseFloat($('admLegalCostAmount').value) || 0),
         licenseCostCurrency: $('admLegalCostCurrency').value,
         licensePurchasedAt: $('admLegalPurchasedAt').value,
+        minRegularUsd: Math.max(0, parseFloat($('admLegalMinRegularUsd').value) || 0),
+        minRegularRobux: Math.max(0, parseFloat($('admLegalMinRegularRobux').value) || 0),
         minSaleUsd: Math.max(0, parseFloat($('admLegalMinUsd').value) || 0),
         minSaleRobux: Math.max(0, parseFloat($('admLegalMinRobux').value) || 0),
         maxDiscountPct: Math.max(0, Math.min(100, parseFloat($('admLegalMaxDiscount').value) || 0)),
@@ -4756,17 +4768,20 @@
     var was = Number.isFinite(wasV) && wasV > price ? wasV : 0;
     var rbxV = parseFloat($('admEditRobuxPrice').value);
     var rbx = Number.isFinite(rbxV) && rbxV > 0 ? rbxV : 0;
+    var minRegUsd = Math.max(0, parseFloat($('admLegalMinRegularUsd').value) || 0);
+    var minRegRbx = Math.max(0, parseFloat($('admLegalMinRegularRobux').value) || 0);
     var minUsd = Math.max(0, parseFloat($('admLegalMinUsd').value) || 0);
-    var minRbx = Math.max(0, parseFloat($('admLegalMinRobux').value) || 0);
     var maxPct = Math.max(0, Math.min(100, parseFloat($('admLegalMaxDiscount').value) || 0));
     var disallow = $('admLegalDisallowSales').checked;
     var canFree = !$('admLegalCannotBeFree').checked;
     var errs = [];
     if (was && disallow) errs.push('this product is marked "do not discount"');
-    if (minUsd > 0 && price > 0 && price < minUsd) errs.push('the USD price is below the $' + minUsd.toFixed(2) + ' minimum');
+    var regularPrice = was || price;
+    if (minRegUsd > 0 && regularPrice > 0 && regularPrice < minRegUsd) errs.push('the regular USD price is below the $' + minRegUsd.toFixed(2) + ' minimum regular price');
+    if (was && minUsd > 0 && price > 0 && price < minUsd) errs.push('the sale price is below the $' + minUsd.toFixed(2) + ' minimum sale price');
     if (was && maxPct > 0 && (1 - price / was) * 100 > maxPct + 0.01) errs.push('that is a ' + Math.round((1 - price / was) * 100) + '% discount, over the ' + maxPct + '% maximum');
     if (!canFree && price <= 0) errs.push("this product isn't allowed to be free");
-    if (minRbx > 0 && rbx > 0 && rbx < minRbx) errs.push('the Robux price is below the ' + minRbx + ' minimum');
+    if (minRegRbx > 0 && rbx > 0 && rbx < minRegRbx) errs.push('the Robux price is below the ' + minRegRbx + ' minimum regular price');
     return errs.length ? ("Can't save - " + errs.join('; ') + '. Adjust the price or the Legal settings.') : null;
   }
 
@@ -5507,13 +5522,13 @@
   function bbbSync() {
     if (BBB.syncing) return Promise.resolve();
     BBB.syncing = true; BBB.error = '';
-    if (curPanel === 'marketplaces') renderBbb();
+    if (curPanel === 'analytics') renderBbb();
     return invokeAdminFn('admin-bbb-v2-sync', { action: 'sync', force: true }, 'Could not sync BuiltByBit.').then(function (d) {
       if (d && d.configured === false) BBB.configured = false;
       if (d && d.errors && d.errors.length) BBB.error = 'Some data could not be read: ' + d.errors[0];
     }).catch(function (err) {
       BBB.error = err.message || 'Could not sync BuiltByBit.';
-    }).then(function () { BBB.syncing = false; return refreshBbbData(); }).then(function () { if (curPanel === 'marketplaces') renderBbb(); });
+    }).then(function () { BBB.syncing = false; return refreshBbbData(); }).then(function () { if (curPanel === 'analytics') renderBbb(); });
   }
   function refreshBbb() { return refreshBbbData(); }
   // The server keeps the tables fresh; the browser just re-reads them now and then.
@@ -5766,8 +5781,8 @@
       (hidden ? '<button type="button" class="btn btn-ghost adm-btn-sm" data-bbb-restore="1">Show dismissed</button>' : '') + '</div></details>';
   }
 
-  // Marketplaces tab: just the four cards. The chart, BuiltByBit-vs-website split, payment methods,
-  // per-product funnel and listing checks live in Analytics (renderBbbAnalytics below).
+  // Analytics tab, BuiltByBit stats card (own date range and Sync now). The chart, BuiltByBit-vs-website split,
+  // payment methods, per-product funnel and listing checks follow in renderBbbAnalytics below.
   function renderBbb() {
     var body = $('admBbbBody');
     if (!body) return;
@@ -5800,10 +5815,11 @@
   }
   // Analytics tab: everything else, following that page's date range.
   function renderBbbAnalytics() {
+    renderBbb();
     var box = $('admBbbAnalytics');
     if (!box) return;
     if (BBB.configured === null) { box.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
-    if (BBB.configured === false) { box.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Connect it on the Marketplaces tab.</p>'; return; }
+    if (BBB.configured === false) { box.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Connect it with the steps in the BuiltByBit stats card above.</p>'; return; }
     var range = RANGE_DAYS, site = bbbSite(range);
     if (!site) bbbSiteLoad(range).then(function () { if (curPanel === 'analytics') renderBbbAnalytics(); });
     var now = new Date(Date.now() + 1000), list = bbbPurchasesIn(utcStart(range), now), cur = bbbSum(list);
@@ -5950,7 +5966,6 @@
 
   function renderMarketplaces() {
     if (!$('admMpTasks')) return;
-    renderBbb();
     var prods = allProducts();
     mpProductDD.setOptions(prods.map(function (p) { return { value: p.dbId, label: p.title }; }), $('admMpProduct').value || '');
 

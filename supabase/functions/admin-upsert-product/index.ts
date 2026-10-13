@@ -186,6 +186,8 @@ type LegalPayload = {
   licenseCost?: number;
   licenseCostCurrency?: "usd" | "robux";
   licensePurchasedAt?: string | null;
+  minRegularUsd?: number;
+  minRegularRobux?: number;
   minSaleUsd?: number;
   minSaleRobux?: number;
   maxDiscountPct?: number;
@@ -257,10 +259,11 @@ Deno.serve(async (req: Request) => {
     // sends product + legal together), falling back to the row on file.
     {
       const lp = body.legal && typeof body.legal === "object" ? body.legal : null;
-      let minUsd = 0, minRbx = 0, maxPct = 0, disallow = false, canFree = true, hasLegal = false;
+      let minRegUsd = 0, minRegRbx = 0, minUsd = 0, maxPct = 0, disallow = false, canFree = true, hasLegal = false;
       if (lp) {
+        minRegUsd = Math.max(0, Number(lp.minRegularUsd) || 0);
+        minRegRbx = Math.max(0, Number(lp.minRegularRobux) || 0);
         minUsd = Math.max(0, Number(lp.minSaleUsd) || 0);
-        minRbx = Math.max(0, Number(lp.minSaleRobux) || 0);
         maxPct = Math.max(0, Math.min(100, Number(lp.maxDiscountPct) || 0));
         disallow = !!lp.disallowSales;
         canFree = !!lp.canBeFree;
@@ -268,12 +271,13 @@ Deno.serve(async (req: Request) => {
       } else if (id) {
         const { data: row } = await admin
           .from("product_legal")
-          .select("min_sale_usd, min_sale_robux, max_discount_pct, disallow_sales, can_be_free")
+          .select("min_regular_usd, min_regular_robux, min_sale_usd, max_discount_pct, disallow_sales, can_be_free")
           .eq("product_id", id)
           .maybeSingle();
         if (row) {
+          minRegUsd = Number(row.min_regular_usd) || 0;
+          minRegRbx = Number(row.min_regular_robux) || 0;
           minUsd = Number(row.min_sale_usd) || 0;
-          minRbx = Number(row.min_sale_robux) || 0;
           maxPct = Number(row.max_discount_pct) || 0;
           disallow = !!row.disallow_sales;
           canFree = !!row.can_be_free;
@@ -284,13 +288,28 @@ Deno.serve(async (req: Request) => {
         const onSale = wasPrice != null && wasPrice > price;
         const errs: string[] = [];
         if (onSale && disallow) errs.push('this product is marked "do not discount"');
-        if (minUsd > 0 && price > 0 && price < minUsd) errs.push(`the USD price is below the $${minUsd.toFixed(2)} minimum sale price`);
+        const regularPrice = onSale ? wasPrice! : price;
+        if (minRegUsd > 0 && regularPrice > 0 && regularPrice < minRegUsd) errs.push(`the regular USD price is below the $${minRegUsd.toFixed(2)} minimum regular price`);
+        if (onSale && minUsd > 0 && price > 0 && price < minUsd) errs.push(`the sale price is below the $${minUsd.toFixed(2)} minimum sale price`);
         if (onSale && maxPct > 0 && (1 - price / wasPrice!) * 100 > maxPct + 0.01) {
           errs.push(`that's a ${Math.round((1 - price / wasPrice!) * 100)}% discount, over the ${maxPct}% maximum`);
         }
         if (!canFree && price <= 0) errs.push("this product isn't allowed to be free");
-        if (minRbx > 0 && robuxPrice > 0 && robuxPrice < minRbx) errs.push(`the Robux price is below the ${minRbx} minimum`);
+        if (minRegRbx > 0 && robuxPrice > 0 && robuxPrice < minRegRbx) errs.push(`the Robux price is below the ${minRegRbx} minimum regular price`);
         if (errs.length) return json({ ok: false, error: `Can't save - ${errs.join("; ")}. Adjust the price or the product's Legal settings.` }, 400);
+      }
+    }
+
+    // Public "try it" link: https on a roblox.com host only, so the FAQ link
+    // can never point somewhere unexpected.
+    let testUrl: string | null = null;
+    if (body.testUrl != null && String(body.testUrl).trim() !== "") {
+      try {
+        const u = new URL(String(body.testUrl).trim());
+        if (u.protocol !== "https:" || !(u.hostname === "roblox.com" || u.hostname.endsWith(".roblox.com"))) throw new Error("bad");
+        testUrl = u.toString();
+      } catch {
+        return json({ ok: false, error: "The Roblox test link must be an https://www.roblox.com/... URL." }, 400);
       }
     }
 
@@ -312,6 +331,7 @@ Deno.serve(async (req: Request) => {
       image: body.image != null ? String(body.image) : null,
       gallery: Array.isArray(body.gallery) ? body.gallery : [],
       video: body.video != null ? String(body.video) : null,
+      test_url: testUrl,
       resell_available: !!body.resell,
       resell_price_usd: body.resell && body.resellPrice != null ? Number(body.resellPrice) : null,
       resell_robux_price: !body.robuxDisabled && body.resell && body.resellRobuxPrice != null ? Number(body.resellRobuxPrice) : null,
@@ -387,6 +407,8 @@ Deno.serve(async (req: Request) => {
       license_cost: Math.max(0, Number(legal.licenseCost) || 0),
       license_cost_currency: legal.licenseCostCurrency === "robux" ? "robux" : "usd",
       license_purchased_at: legal.licensePurchasedAt || null,
+      ...(legal.minRegularUsd !== undefined ? { min_regular_usd: Math.max(0, Number(legal.minRegularUsd) || 0) } : {}),
+      ...(legal.minRegularRobux !== undefined ? { min_regular_robux: Math.max(0, Number(legal.minRegularRobux) || 0) } : {}),
       min_sale_usd: Math.max(0, Number(legal.minSaleUsd) || 0),
       min_sale_robux: Math.max(0, Number(legal.minSaleRobux) || 0),
       max_discount_pct: Math.max(0, Math.min(100, Number(legal.maxDiscountPct) || 0)),

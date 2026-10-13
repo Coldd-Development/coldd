@@ -3297,30 +3297,54 @@
           return html;
         }
         function robuxRaw(n) { return 'R$ ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+        // Answers may carry [label](url) links; everything else is escaped.
+        function faqHtml(text) {
+          return esc(text).replace(/\[([^\]]+)\]\((\/[^)\s]*|https:\/\/[^)\s]+)\)/g, function (m, label, url) {
+            var ext = url.charAt(0) !== '/';
+            return '<a href="' + url + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' + label + '</a>';
+          });
+        }
         function faqFor(p) {
           var isFree = (Number(p.priceNum) || 0) <= 0;
           var costAnswer = isFree
             ? 'This product is free - there is no payment, just add it to your cart and check out.'
             : 'This product costs ' + fiat(p.priceNum) + ', it is a one time payment with no recurring fees or subscriptions.';
           var list = [
-            ['When will I receive the purchased product?', 'You receive the source files available to download instantly after purchase.'],
-            ['Can I use this in multiple games?', 'Yes, you can use it in as many games and projects as you would like.'],
-            ['How do I add this to my game?', 'If you received an .rbxl file open it directly in Roblox Studio via File then Open. If you received an .rbxm file, drag it directly into your Workspace.'],
-            ['How much does this cost?', costAnswer],
-            ['What if I need support or installation help?', 'Contact us via our discord support tickets at discord.gg/coldd or through email at support@coldd.dev'],
-            ['Do I have to pay for future updates or support?', 'No, support is always free. Any updates we publish for this product are also free for all buyers. We do not offer custom changes, edits, or commissions for this product. Bug fixes related to the product itself are always free.'],
-            ['Do I need to credit you in my game?', 'Credit is not required when using our assets, although it is appreciated if you do!'],
-            ['Can I make money off this product?', 'Yes, you can monetize this product and profit commercially within your games and projects. You cannot resell or distribute source files or product files without an explicit resell license.'],
-            ['Can I resell or redistribute this?', 'No, you cannot sell or distribute our products unless you have purchased a specific resell license. If you hold a resell license, you may resell the product under our reselling terms.'],
-            ['Can I edit or update this product?', 'Yes, you can update, modify or edit any part of our products to fit within your games and projects.'],
-            ['Can I pay in robux instead of real currency?', 'Yes you can purchase with robux on-site by simply selecting the robux purchase option. Keep in mind that real currency (USD) purchases are 50% cheaper than robux pricing.']
+            ['When will I receive my purchase?', 'You get instant access to the source files, available to download right after checkout.'],
+            ['How do I download my files after I purchase?', 'They are available instantly to download on the order page after checkout. You can re-download your files from the [customer dashboard](/dashboard) while your licence is active.']
           ];
+          if (p.testUrl && /^https:\/\/([a-z0-9-]+\.)*roblox\.com(\/|$)/i.test(p.testUrl)) {
+            list.push(['Can I test this game out in Roblox?', 'You can test the game out here: [' + p.testUrl + '](' + p.testUrl + ')']);
+          }
+          list.push(
+            ['How much does this cost?', costAnswer],
+            ['Which payment methods do you accept?', 'We accept card payments through Stripe, PayPal, Robux, Afterpay and regional payment methods such as Klarna, Zip, Apple Pay, Google Pay, Link, Bancontact, BLIK, EPS, Przelewy24, MB WAY, Satispay, Bizum and Pix. Available methods depend on your country. Keep in mind that paying in real currency (USD) is up to 50% cheaper than paying with Robux.'],
+            ['Is the checkout secure?', 'All payments are secure. Each payment goes through our trusted payment providers, we never have access to your card information.'],
+            ['Do I need an account to purchase?', 'You do not need an account to purchase a product. You can check out as a guest, although to re-download your licences through our [customer dashboard](/dashboard) while they are active, you will need an account.'],
+            ['I lost my download, how do I get it again?', 'Sign in and open Dashboard, then Orders. For guest orders, use the link in your confirmation email or [contact support](/contact) with your order number.'],
+            ['How do I add this to my game?', 'If you received an .rbxl file open it directly in Roblox Studio via File then Open. If you received an .rbxm file, drag it directly into your Workspace.'],
+            ['This product is not working. What should I do?', 'Open a support ticket in our Discord at [discord.gg/coldd](https://discord.gg/coldd), or email support@coldd.dev with your order number and a short description or screenshot of the problem. We will help you get it running, and bug fixes related to the product itself are always free.'],
+            ['Can I use this in multiple games?', 'Yes, you can use it in as many of your own games and projects as you would like.'],
+            ['Can I release this in my game?', 'Yes, you can publish and release this product as part of your own games and experiences, including public and commercial ones.'],
+            ['Can I make money off this product?', 'Yes, you can monetize this product and profit commercially within your games and projects, for example through game passes, developer products and ads. You cannot resell or distribute the source files or product files without an explicit resell license.'],
+            ['Can I edit or modify this product?', 'Yes, you can update, modify or edit any part of our products to fit within your games and projects.'],
+            ['Can I share this with my development team?', 'Yes, teammates working on your game can use the product inside that game. Team members cannot take the files and use them in their own separate projects, each person needs their own purchase for that.'],
+            ['Can I resell, redistribute or leak this?', 'No. You cannot sell, share or distribute our products or their files unless you have purchased a specific resell license, and doing so without one is a violation of our terms. See the [Resell Licence Terms](/resell-license) for the rules that apply to license holders.'],
+            ['Do I need to credit you in my game?', 'Credit is not required when using our assets, although it is appreciated if you do!'],
+            ['Do I have to pay for future updates or support?', 'No, support is always free. Any updates we publish for this product are also free for all buyers. We do not offer custom changes, edits, or commissions for this product. Bug fixes related to the product itself are always free.'],
+            ['How do I contact support and how fast will I get a reply?', 'The fastest way is a ticket in our Discord at [discord.gg/coldd](https://discord.gg/coldd). You can also email support@coldd.dev or use our [contact form](/contact). Our target is to respond within 2 business days.'],
+            ['What is your refund policy?', 'Because files are delivered instantly, we do not offer refunds for change of mind. If a product is broken or does not work as described we will fix it first, and if we cannot, you are entitled to a refund or other remedy. Your legal consumer rights are never affected. Read the full [Refund Policy](/refund-policy).']
+          );
           // Products with add-ons say what they are, and (for setup) how to start - same wording as the site FAQ.
           var ao = window.__addonsFor ? window.__addonsFor(p.id) : [];
+          // Slot them in right after the "How do I add this to my game?" answer.
+          var addAt = 0;
+          list.forEach(function (q, i) { if (q[0] === 'How do I add this to my game?') addAt = i + 1; });
+          if (!addAt) addAt = Math.min(list.length, 6);
           if (ao.length) {
-            list.splice(5, 0, ['What are the add-ons for this product?', ao.map(function (a) { return a.title; }).join(', ') + '. Add-ons are optional extras priced separately from the product, chosen on this page or at checkout. They are not reduced by discount codes, sales or bundle discounts.']);
+            list.splice(addAt, 0, ['What are the add-ons for this product?', ao.map(function (a) { return a.title; }).join(', ') + '. Add-ons are optional extras priced separately from the product, chosen on this page or at checkout. They are not reduced by discount codes, sales or bundle discounts.']);
             if (ao.some(function (a) { return a.ticket; })) {
-              list.splice(6, 0, ['How do I start the Setup Service?', 'After you buy, create a support ticket in our Discord at discord.gg/coldd so we can get started. We aim to respond within 48 hours. Setup covers what the add-on describes; customisation is not included.']);
+              list.splice(addAt + 1, 0, ['How do I start the Setup Service?', 'After you buy, create a support ticket in our Discord at discord.gg/coldd so we can get started. We aim to respond within 48 hours. Setup covers what the add-on describes; customisation is not included.']);
             }
           }
           return list;
@@ -3835,7 +3859,7 @@
           }
           if (pdFaqList) {
             pdFaqList.innerHTML = faqFor(p).map(function (q, idx) {
-              return '<details class="pd-faq-item"' + (idx === 0 ? ' open' : '') + '><summary>' + esc(q[0]) + '</summary><p>' + esc(q[1]) + '</p></details>';
+              return '<details class="pd-faq-item"' + (idx === 0 ? ' open' : '') + '><summary>' + esc(q[0]) + '</summary><p>' + faqHtml(q[1]) + '</p></details>';
             }).join('');
           }
 
@@ -6085,7 +6109,10 @@
         }, 1500);
       }
       function deleteCartSnapshot() {
-        var sid = cartSessionId(); if (!sid || !window.coldAuth) return;
+        // Only ever clean up an id that already exists; minting a fresh one here
+        // would write analytics storage for a visitor who never consented.
+        var sid = null; try { sid = sessionStorage.getItem('coldd_session_id'); } catch (e) {}
+        if (!sid || !window.coldAuth) return;
         window.coldAuth.invokeFn('delete-cart-snapshot', { sessionId: sid }).catch(function () {});
       }
 

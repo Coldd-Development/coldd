@@ -30,7 +30,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261014a" />
+  <link rel="stylesheet" href="/styles.css?v=20261014d" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://coldd.dev/"}, {"@type": "ListItem", "position": 2, "name": "Privacy Policy", "item": "https://coldd.dev/privacy-policy"}]}</script>
   <!-- ld:end -->
@@ -134,7 +134,7 @@
     <section class="section-pad" style="padding-top: 6px;">
       <div class="wrap legal-wrap">
         <div class="glass legal-card">
-                    <p class="legal-meta">Last updated: October 4, 2026</p>
+                    <p class="legal-meta">Last updated: October 14, 2026</p>
 
           <p>This Privacy Policy explains how coldd Development ("coldd", "we", "us"; ABN 34 127 589 633) collects, uses, discloses and protects personal information when you use coldd.dev (the "Site"). This Policy forms part of our <a href="/terms-of-service">Terms of Service</a>.</p>
 
@@ -145,13 +145,33 @@
           <p><strong>Payment processors:</strong> Card payments are processed by Stripe. We also support PayPal, cryptocurrency (processed by RelayPay, an AUSTRAC-registered Australian processor), and Robux via Roblox. coldd never receives or stores your full card number, PayPal credentials, crypto wallet keys, or Roblox password - those go directly to the relevant processor. Paying with crypto shares your name and email with RelayPay so it can process the transaction and comply with its AML/CTF obligations. We keep a record of the transaction itself (amount, date, product, payment method, and the processor's own reference) for order history, refunds and support.</p>
           <p><strong>Roblox:</strong> If you pay with Robux, you link a Roblox account via Roblox's own OAuth sign-in, which requests permission to read your inventory. We use your Roblox user ID to confirm which account is yours and match a completed gamepass purchase to your order - we do not use it to browse, store or analyse the rest of your inventory. If you delete your coldd account, this link is deleted with it (see "Data Retention" below).</p>
           <p><strong>Discord and support communications:</strong> If you contact us by email or through our Discord server, we retain that correspondence to help resolve your request.</p>
-          <p><strong>Cookies and analytics:</strong> We use two kinds of browser storage. <em>Essential</em> storage keeps you signed in, remembers your cart and currency preference, and records the cookie choice you make below - the Site cannot function without it, so it isn't offered as a choice. <em>Analytics</em> storage is optional and stays off until you actively turn it on. It covers two things, which are not equally anonymous:</p>
+          <p><strong>Reviews and other public content:</strong> If you post a review, your username, avatar and the review text are shown publicly on the product page and in our review listings. We never publish your email address. If you delete your account, your reviews are removed (see section 5).</p>
+          <p><strong>Referrals:</strong> If you use the referral programme, we store your referral code, the paid orders that were attributed to your links (the product, date and amount you earned), and your payout requests (method, amount and status). We do not show you who bought. If you buy through someone's referral link, we record the referral code on your order so that the referrer can be credited; the referrer is not given your name, email or any other personal information.</p>
+          <p><strong>Gifts:</strong> If you send a gift, you enter the recipient's email address. We use it only to find that person's coldd account, show you its display name, and attach the gift to it. We send the recipient a notification that they received a gift. Only enter an email address of someone who would reasonably expect to receive the gift.</p>
+          <p><strong>Emails we send:</strong> Besides order confirmations, sign-in and password-reset codes (which are part of providing the service), we send a one-off email asking you to review a product after you buy it, and, if you have opted in to marketing, deals, drops, re-engagement and cart-reminder discount emails. Every non-essential email has an unsubscribe link, and you can switch these off in your dashboard.</p>
+          <p><strong>Cookies and similar storage:</strong> We use your browser's cookies and local/session storage in two ways. <em>Essential</em> storage keeps you signed in, remembers your cart, wishlist, currency and theme, powers recommendations while you browse (below), and records the cookie choice you make below. The Site cannot function without it, so it isn't offered as a choice. <em>Analytics</em> storage is optional and stays off until you actively turn it on. It covers three things, which are not equally anonymous:</p>
           <ul>
-            <li><strong>Page-view beacon</strong> - a page visit logged against a random id generated for that browser session, never your account. This is genuinely anonymous: it isn't linked to your identity and is used only in aggregate, to see which pages get used.</li>
+            <li><strong>Page-view beacon</strong> - a page visit logged against two random ids generated in your browser: a session id that lasts until you close the tab, and a visitor id kept in your browser's local storage so that we can tell a returning visitor from a new one. Neither is linked to your account or identity, and they are used only in aggregate, to see which pages get used. Clear your browser's site data to reset the visitor id.</li>
+            <li><strong>Event beacon</strong> - the same random ids are attached to a short list of actions: adding to cart, starting checkout, the search terms you type into the Site's search, which A/B test variant you saw, and (if you answer the optional "how did you hear about us?" question after buying) your answer. Search terms can occasionally contain personal information, so please avoid typing any.</li>
             <li><strong>Abandoned-cart snapshot</strong> - if you reach checkout with items still in your cart, we save that cart so we can follow up if you don't complete the order. If you're signed in, this snapshot <strong>is</strong> linked to your account and email address, and may be used to send you up to a few reminder emails about that cart (the later ones may include a discount code, only if you've separately opted in to marketing emails). If you're signed out, the snapshot has no account or email attached. Either way, it's cleared as soon as you check out or empty your cart.</li>
           </ul>
-          <p>Both run in-house on our own Supabase infrastructure - we do not use a third-party analytics provider, and neither is shared outside coldd or used for third-party advertising. You can grant or withdraw analytics consent at any time using the button below; withdrawing it stops new page-view and cart-snapshot data being collected going forward.</p>
+          <p>All of this runs in-house on our own Supabase infrastructure - we do not use a third-party analytics provider, and none of it is shared outside coldd or used for third-party advertising. You can grant or withdraw analytics consent at any time using the button below; withdrawing it stops new analytics data being collected going forward.</p>
+          <p><strong>Recommendations:</strong> While you browse, your browser keeps a short list of the categories and words you looked at, searched for or added to your cart (a "session interest" profile, stored locally and not linked to your account). To rank suggestions such as "you might also like" at checkout, the Site sends that list with the request. We use it to answer that request and do not store it. This is part of the essential functioning of the Site and is separate from the analytics option above.</p>
           <p>So that we can show that you made your choice, we keep a record of each cookie-banner decision: a random identifier generated in your browser (not linked to you unless you were signed in at the time, in which case your account ID is included), whether you accepted analytics, the time, the version of the banner you saw, and the page you were on.</p>
+          <table class="legal-table">
+            <thead><tr><th>Name</th><th>Where</th><th>Purpose</th><th>Type</th></tr></thead>
+            <tbody>
+              <tr><td><code>coldd_auth</code> and the Supabase sign-in session</td><td>Local storage</td><td>Keeps you signed in. Lasts until you sign out.</td><td>Essential</td></tr>
+              <tr><td><code>coldd_cart_v1</code>, <code>coldd_wish_v1</code></td><td>Local storage</td><td>Your cart and wishlist.</td><td>Essential</td></tr>
+              <tr><td><code>coldd_currency</code>, <code>coldd_theme</code>, <code>coldd_site_mode</code></td><td>Local storage</td><td>Currency, light/dark theme and site-status preference.</td><td>Essential</td></tr>
+              <tr><td><code>coldd_cookie_consent</code>, <code>coldd_consent_vid</code></td><td>Local storage</td><td>Your cookie choice, and a random id for the consent record.</td><td>Essential</td></tr>
+              <tr><td><code>coldd_interest</code></td><td>Local storage</td><td>Session interest profile used for recommendations (see above).</td><td>Essential</td></tr>
+              <tr><td><code>coldd_bundle_token</code>, <code>coldd_roblox_return</code>, <code>coldd_roblox_oauth_state</code>, <code>coldd_bounce</code></td><td>Local / session storage</td><td>Carrying a bundle offer, a Roblox sign-in, and sign-in redirects through a page load.</td><td>Essential</td></tr>
+              <tr><td><code>coldd_visitor_id</code></td><td>Local storage</td><td>Random id for the page-view and event beacons. Lasts until you clear site data.</td><td>Analytics (consent)</td></tr>
+              <tr><td><code>coldd_session_id</code></td><td>Session storage</td><td>Random id for the beacons and abandoned-cart snapshot. Cleared when you close the tab.</td><td>Analytics (consent)</td></tr>
+              <tr><td><code>coldd_how_heard</code></td><td>Local storage</td><td>Remembers that you answered the optional "how did you hear about us?" question.</td><td>Only set if you answer it</td></tr>
+            </tbody>
+          </table>
           <p><button type="button" class="btn btn-tinted" id="cookiePrefsBtn">Manage Cookie Preferences</button></p>
           <script>
             // Re-opens the consent bar so a decision is never final. Guarded
@@ -164,7 +184,7 @@
               b.addEventListener('click', function () { window.coldConsent.reopen(); });
             });
           </script>
-          <p><strong>Automatically collected information:</strong> Our infrastructure providers (Cloudflare and Supabase, see "How We Share Information" below) automatically log standard web request data for every visit to the Site, including IP address, browser and device type, the pages requested, timestamps, and error logs generated when something goes wrong. We also use IP addresses ourselves in a narrow, targeted way - for example, to rate-limit repeated abuse of coupon codes - and Supabase's authentication service keeps its own sign-in and account-security logs (such as failed login attempts) to help keep accounts secure. We use this information for security, fraud and abuse prevention, and diagnosing technical problems - not to build a profile of your browsing habits.</p>
+          <p><strong>Automatically collected information:</strong> Our infrastructure providers (our web host, Cloudflare and Supabase, see "How We Share Information" below) automatically log standard web request data for every visit to the Site, including IP address, browser and device type, the pages requested, timestamps, and error logs generated when something goes wrong. We also use IP addresses ourselves in a narrow, targeted way - for example, to rate-limit repeated abuse of coupon codes - and Supabase's authentication service keeps its own sign-in and account-security logs (such as failed login attempts) to help keep accounts secure. We use this information for security, fraud and abuse prevention, and diagnosing technical problems - not to build a profile of your browsing habits.</p>
 
           <h2>2. How We Use Your Information</h2>
           <p>If the EU or UK General Data Protection Regulation (GDPR) applies to you, we must have a lawful basis for each way we use your personal information. These are ours:</p>
@@ -173,8 +193,12 @@
             <li><strong>Keep records of transactions</strong> - to meet tax and business-records laws (<em>legal obligation</em>).</li>
             <li><strong>Provide customer support and respond to inquiries</strong> - to perform our contract with you, and in our interest in resolving your request (<em>contract / legitimate interests</em>).</li>
             <li><strong>Detect and prevent fraud, chargebacks, abuse of coupons and breaches of our license terms; keep the Site secure; fix errors</strong> - our interest in protecting the Site, our customers and ourselves (<em>legitimate interests</em>). You can object to this; see section 6.</li>
-            <li><strong>Page-view analytics and abandoned-cart reminder emails</strong> - only if you accept analytics in the cookie banner (<em>consent</em>). You can withdraw it at any time.</li>
-            <li><strong>Marketing emails</strong> (deals, drops, the welcome discount) - only if you tick the box or submit the pop-up form (<em>consent</em>). Every email has an unsubscribe link, and you can also switch it off in your dashboard.</li>
+            <li><strong>Page-view and event analytics and abandoned-cart reminder emails</strong> - only if you accept analytics in the cookie banner (<em>consent</em>). You can withdraw it at any time.</li>
+            <li><strong>Recommendations while you browse</strong> (the session interest profile) - to make the Site's suggestions relevant, which is part of the service you asked for and our interest in a useful storefront (<em>legitimate interests</em>). You can object, or clear it by clearing your browser's site data.</li>
+            <li><strong>Publish your reviews</strong> - to show your review next to the product you reviewed (<em>contract / legitimate interests</em>).</li>
+            <li><strong>Run the referral programme and deliver gifts</strong> - to credit referrers, pay out earnings and deliver a gift to the person you chose (<em>contract / legitimate interests</em>).</li>
+            <li><strong>Ask for a review after your purchase</strong> - a single service email about something you bought (<em>legitimate interests</em>). You can opt out in your dashboard or with the unsubscribe link.</li>
+            <li><strong>Marketing emails</strong> (deals, drops, the welcome discount, re-engagement emails) - only if you tick the box or submit the pop-up form (<em>consent</em>). Every email has an unsubscribe link, and you can also switch it off in your dashboard.</li>
             <li><strong>Keep a record of your cookie and marketing choices</strong> - so that we can show that you made them (<em>legal obligation / legitimate interests</em>).</li>
             <li><strong>Check that account holders are at least 13</strong> - see section 7 (<em>legitimate interests</em>).</li>
           </ul>
@@ -185,7 +209,7 @@
           <ul>
             <li><strong>Payment processors</strong> - Stripe (cards), PayPal, RelayPay (cryptocurrency) and Roblox (Robux), to take payment and confirm it completed</li>
             <li><strong>OAuth providers</strong> - Google, Discord and Roblox, when you choose to sign in or link through them</li>
-            <li><strong>Infrastructure providers</strong> - Supabase, which hosts our database, authentication and file storage; Cloudflare, which fronts the Site's traffic and provides security filtering; and GitHub Pages, which hosts the Site's static pages</li>
+            <li><strong>Infrastructure providers</strong> - Supabase, which hosts our database, authentication and file storage; Cloudflare, which fronts the Site's traffic and provides security filtering; and our web host, the server that serves the Site's pages (managed with the Hestia control panel)</li>
             <li><strong>Email delivery</strong> - Resend, which sends order confirmations, sign-in codes, and (if you've opted in) marketing emails on our behalf</li>
             <li>Where required by law, or to protect coldd's rights and users' safety</li>
           </ul>
@@ -196,11 +220,11 @@
           <p>Beyond that, the specific providers above each process information internationally as part of how they operate:</p>
           <ul>
             <li>Cloudflare operates a global network and may handle your requests at an edge location anywhere in the world, purely to route traffic and filter abuse - it does not store your personal information.</li>
-            <li>GitHub Pages (United States) hosts the Site's static pages and logs standard web requests to do so.</li>
+            <li>Our web host's server serves the Site's pages and logs standard web requests (IP address, pages requested, timestamps) to do so and to keep the Site secure.</li>
             <li>Stripe, PayPal, Resend, Google, Discord and Roblox are all headquartered in the United States and process data there and in other countries as part of their own global operations.</li>
             <li>RelayPay is an Australian, AUSTRAC-registered processor and processes cryptocurrency payments within Australia.</li>
           </ul>
-          <p>We take reasonable steps to ensure these providers handle your information consistently with this Policy and applicable privacy law, but by using the Site you acknowledge your information may be stored and processed outside your country of residence.</p>
+          <p><strong>Safeguards for transfers.</strong> Your information may be stored and processed outside the country where you live. When personal information leaves the European Economic Area or the United Kingdom, we rely on a recognised transfer safeguard: the provider's certification under the EU-US Data Privacy Framework (and its UK Extension) where it has one, or Standard Contractual Clauses in the provider's data processing terms. For Australian residents, we take reasonable steps under Australian Privacy Principle 8 to make sure overseas providers handle information consistently with the Australian Privacy Principles. Our providers act on our instructions under data processing terms. You can ask us at <a href="mailto:support@coldd.dev">support@coldd.dev</a> which safeguard applies to a specific provider.</p>
 
           <h2>5. Data Retention</h2>
           <p>How long we keep something depends on what it is:</p>
@@ -209,7 +233,8 @@
             <li><strong>Order and payment records</strong> are kept for as long as we're legally required to - Australian tax and business records law generally requires transaction records to be kept for around <strong>five years</strong>. If you delete your account, these records are kept but disassociated from your account where we're able to do that.</li>
             <li><strong>Resell licence records</strong> - your email, display name, and where you sell - are kept for as long as necessary to administer and enforce the <a href="/resell-license">Resell Licence Terms</a>, including after a licence is suspended or revoked, and to protect customers who bought a product from you while your licence was valid. If you delete your account, this record is kept but disassociated from your account where we're able to, the same as order records above.</li>
             <li><strong>Support and Discord correspondence</strong> is kept for as long as reasonably necessary to resolve your request and for a reasonable period afterwards, in case the same issue recurs.</li>
-            <li><strong>Page-view analytics</strong> (the anonymous beacon described in section 1) is never linked to an account, so it isn't affected by account deletion.</li>
+            <li><strong>Page-view and event analytics</strong> (the beacons described in section 1) are never linked to an account, so they aren't affected by account deletion. They are kept in aggregate-friendly form for as long as they are useful for understanding how the Site is used, and you can stop new collection at any time by withdrawing analytics consent.</li>
+            <li><strong>Referral records</strong> - the referral code on an order and your payout requests - are kept with order and payment records (above) because they affect money paid out.</li>
             <li><strong>Abandoned-cart snapshots</strong> are deleted automatically once you check out or empty your cart; if left abandoned, the reminder sequence itself completes within about two weeks, after which the snapshot is no longer actively used.</li>
             <li><strong>Security, fraud and error logs</strong> that we hold ourselves (rate-limiting records, client error reports and staff action logs) are kept for as long as reasonably necessary for security, fraud prevention and accountability purposes, and are not tied to routine account deletion. Infrastructure request logs kept by Supabase, Cloudflare and GitHub follow those providers' own retention schedules.</li>
             <li><strong>Cookie and marketing consent records</strong> (section 1) are kept for as long as we rely on the consent and as needed to show what you agreed to. They are not linked to you unless you were signed in when you made the choice.</li>
@@ -230,7 +255,7 @@
 
           <h2>7. Children's Privacy</h2>
           <p>coldd is not directed at children, and you must be at least 13 years old to create a coldd account. When you create an account on our sign-up page we ask for your date of birth for one reason only: to stop people under 13 from using our services.</p>
-          <p><strong>Your date of birth is not stored anywhere in our systems, whatsoever.</strong> It is checked in your browser at the moment you enter it, compared with today's date, and then discarded. It is never sent to our servers, never saved to your account or profile, never written to your browser's storage, never included in any database, log, backup or analytics, and never shared with anyone. The only thing we keep is a temporary flag in your browser tab (cleared when you close the tab) that records that an age check was not passed, so the form can't simply be retried with a different date; it contains no date of birth or age. Because we do not keep your date of birth, we can't later tell you what you entered. The check relies on what you tell us; we do not verify it against any document.</p>
+          <p><strong>We do not store your date of birth.</strong> It is checked in your browser at the moment you enter it, compared with today's date, and then discarded. It is not sent to our servers, saved to your account or profile, written to your browser's storage, or shared with anyone, and we do not intentionally include it in any database, log, backup or analytics. The only thing we keep is a temporary flag in your browser tab (cleared when you close the tab) that records that an age check was not passed, so the form can't simply be retried with a different date; it contains no date of birth or age. Because we do not keep your date of birth, we can't later tell you what you entered. The check relies on what you tell us; we do not verify it against any document.</p>
           <p><strong>Minimising information from children:</strong> Because we don't keep date of birth or any other age information, we don't knowingly collect more personal information from a child than is necessary to operate the Site, and we don't use information from an account we later learn belongs to a child for marketing or profiling.</p>
           <p><strong>If we learn a user is underage:</strong> If we become aware that an account belongs to a child below the applicable minimum age for using the Site without parental consent, we will take reasonable steps to deactivate the account and remove the associated personal information we're not otherwise legally required to retain (see "Data Retention" below), and, where practical, notify the account holder that this has happened.</p>
           <p><strong>Parent and guardian requests:</strong> A parent or guardian who believes their child has created a coldd account or given us personal information can contact <a href="mailto:support@coldd.dev">support@coldd.dev</a> to ask us to review, restrict, or delete it. We will take reasonable steps to verify the request and respond as set out in "Your Rights" below.</p>
@@ -238,10 +263,10 @@
           <p>These practices are intended to be consistent with the Australian Privacy Act, the Children's Online Privacy Code as it comes into effect and applies to services like ours, and comparable international children's privacy laws, to the extent they apply to coldd. This section describes our practices and is not a legal determination of how any specific law applies to coldd; we'll update it as those requirements take effect.</p>
 
           <h2>8. Changes to This Policy</h2>
-          <p>We may update this Policy from time to time. Material changes will be reflected by updating the "Last updated" date above.</p>
+          <p>We may update this Policy from time to time. Material changes will be reflected by updating the "Last updated" date above. If a change affects how we use personal information you have already given us in a way you would not reasonably expect, or needs your consent, we will tell you by email or a notice on the Site and, where the law requires, ask for your consent again. Our cookie banner is re-shown whenever what we ask you to accept materially changes.</p>
 
           <h2>9. Who Is Responsible and How to Contact Us</h2>
-          <p>The controller of your personal information is <strong>coldd Development</strong> (ABN 34 127 589 633), operating coldd.dev. For any privacy question or request, email <a href="mailto:support@coldd.dev">support@coldd.dev</a>. We have not appointed a data protection officer.</p>
+          <p>The controller of your personal information is <strong>coldd Development</strong> (ABN 34 127 589 633), operating coldd.dev. For any privacy question or request, email <a href="mailto:support@coldd.dev">support@coldd.dev</a>. We have not appointed a data protection officer. If you are in the EU or UK and want to raise a concern about how we handle your information, you can email us at the address above or contact your local data protection authority directly.</p>
           <p>Questions about this Policy? Email <a href="mailto:support@coldd.dev">support@coldd.dev</a> or reach us on <a href="https://discord.gg/coldd" target="_blank" rel="noopener">Discord</a>.</p>
 
           <!-- related:start -->
@@ -426,9 +451,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="/supabase-init.js?v=20261009x063147"></script>
+  <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261014a" data-then="/app.js?v=20261014a"></script>
+  <script src="/catalog.js?v=20261014d" data-then="/app.js?v=20261014d"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that
