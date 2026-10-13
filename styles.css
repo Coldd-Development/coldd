@@ -5063,14 +5063,11 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 }
 
 /* Admin: product add-ons editor -------------------------------------------- */
-.adm-addons { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--hairline); }
-.adm-addons-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.adm-addons-head .adm-hint { margin: 0; max-width: 62ch; }
-.adm-addons-h { margin: 0 0 4px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }
 .adm-addons { container-type: inline-size; }
+.adm-addons > .adm-hint { margin: 0; }
 /* Narrow cards (the usual case): two lines per add-on. Title / USD / Robux on the first, description / file on the second. */
 .adm-addon-cols { display: none; }
-.adm-addon-row { display: grid; gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: rgba(255,255,255,0.02);
+.adm-addon-row { display: grid; gap: 10px; align-items: start; padding: 0;
   grid-template-columns: minmax(0, 1fr) 96px 104px 30px;
   grid-template-areas: "title usd robux rm" "desc desc file file"; }
 .adm-addon-row .adm-input { min-width: 0; }
@@ -5084,10 +5081,10 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 @container (min-width: 820px) {
   .adm-addon-cols, .adm-addon-row { display: grid; gap: 10px; align-items: start;
     grid-template-columns: minmax(150px, 1.1fr) minmax(200px, 2fr) 96px 104px minmax(120px, 0.9fr) 30px; }
-  .adm-addon-cols { padding: 0 14px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+  .adm-addon-cols { padding: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
   .adm-addon-row { grid-template-areas: "title desc usd robux file rm"; }
 }
-.adm-addon-list { display: flex; flex-direction: column; gap: 10px; }
+.adm-addon-list { display: flex; flex-direction: column; gap: 14px; }
 .adm-addon-empty[hidden] { display: none; }
 .adm-addon-title { position: relative; }
 .adm-addon-title .adm-addon-t { width: 100%; box-sizing: border-box; padding-right: 40px; }
