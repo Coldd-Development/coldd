@@ -28,7 +28,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009x140340" />
+  <link rel="stylesheet" href="/styles.css?v=20261014a" />
   <!-- ld:start -->
   <script type="application/ld+json" id="ld-product">{"@context":"https://schema.org","@type":"Product","name":"Frigid Blast Combat VFX","description":"Highly detailed & cheap combat VFX","image":["https://cdn.coldd.dev/media/draft-muzcvvs0-fp06nm/thumbnails/b0767921-978q9zx-1.gif"],"sku":"frigid-blast-combat-vfx","category":"Animations & VFX","brand":{"@type":"Brand","name":"coldd Development"},"offers":{"@type":"Offer","url":"https://coldd.dev/product/frigid-blast-combat-vfx","price":"1.99","priceCurrency":"USD","availability":"https://schema.org/InStock","itemCondition":"https://schema.org/NewCondition","seller":{"@type":"Organization","name":"coldd Development"}}}</script>
   <script type="application/ld+json" id="ld-crumbs">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://coldd.dev/"},{"@type":"ListItem","position":2,"name":"Roblox","item":"https://coldd.dev/shop"},{"@type":"ListItem","position":3,"name":"Animations & VFX","item":"https://coldd.dev/shop?cat=animations-vfx"},{"@type":"ListItem","position":4,"name":"Frigid Blast Combat VFX","item":"https://coldd.dev/product/frigid-blast-combat-vfx"}]}</script>
@@ -155,6 +155,11 @@
             <section class="pd-tabpane" data-pane="updates" id="pdPaneUpdates" hidden></section>
             <section class="pd-tabpane" data-pane="reviews" id="pdPaneReviews" hidden></section>
           </div>
+          <!-- Curated bundles this product is part of. Filled by app.js. -->
+          <section class="pd-bundle" id="pdBundleWrap" hidden>
+            <h2 class="pd-bundle-h">Bundle and save</h2>
+            <div class="pd-bundle-list" id="pdBundleList"></div>
+          </section>
         </div>
         <aside class="pd-right">
           <div class="pd-admin-bar" id="pdAdminBar" hidden>
@@ -206,6 +211,13 @@
                 <span class="pm-lic-price" data-licprice="resell"></span>
               </button>
             </div>
+            <!-- Per-product add-ons (Setup Service, Thumbnail Access, ...). Filled by app.js from
+                 the product's own add-on list; stays hidden for products that have none. -->
+            <div class="pd-addons" id="pdAddons" hidden>
+              <span class="pd-lic-label">Add-ons</span>
+              <div class="pm-licence pd-addon-list" id="pdAddonList"></div>
+            </div>
+          </div>
           </div>
           <div class="pd-block pd-tech">
             <h3 class="pd-sec-h">Technical information</h3>
@@ -400,7 +412,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x073020" data-then="/reviews.js?v=20260729a,/app.js?v=20261008c"></script>
+  <script src="/catalog.js?v=20261014a" data-then="/reviews.js?v=20260729a,/app.js?v=20261014a"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

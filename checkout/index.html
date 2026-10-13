@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009x140340" />
+  <link rel="stylesheet" href="/styles.css?v=20261014a" />
 </head>
 <body>
   <div class="backdrop"></div>
@@ -249,6 +249,7 @@
           <h2>Order summary</h2>
           <div class="co-items" id="coItems"></div>
           <div class="co-empty" id="coEmpty" hidden>Your cart is empty. <a class="lnk-arrow" href="/shop">Browse products</a></div>
+          <div class="co-bundle" id="coBundleNudge" hidden></div>
           <div class="co-tier" id="coTierBanner" hidden></div>
           <div class="co-cross" id="coCrossSell" hidden></div>
           <div class="co-coupon">
@@ -258,6 +259,7 @@
           <div class="co-coupon-msg" id="coCouponMsg"></div>
           <div class="co-totals">
             <div class="co-line"><span>Subtotal</span><span id="coSubtotal">$0</span></div>
+            <div class="co-line" id="coAddonsLine" hidden><span>Add-ons</span><span id="coAddonsAmt">$0</span></div>
             <div class="co-line co-disc" id="coDiscLine" hidden><span id="coDiscLabel">Discount</span><span id="coDiscAmt">-$0</span></div>
             <!-- Hidden unless tax is actually charged. A permanent "Tax (est.)
                  $0" row implies tax might apply and then always says it does
@@ -267,6 +269,12 @@
             <!-- The settle line under the payment methods now states what is
                  actually charged, in context and next to the choice it affects.
                  Repeating it here said the same thing twice. -->
+          </div>
+          <!-- Shown only while the cart holds a setup add-on (any add-on with "setup"
+               in its title): the work starts with a support ticket, not the payment. -->
+          <div class="co-setup-note" id="coSetupNote" hidden>
+            <strong>Setup service</strong>
+            <p>After you pay, create a support ticket in our <a href="https://discord.gg/coldd" target="_blank" rel="noopener">Discord</a> so we can get started. We aim to respond within 48 hours.</p>
           </div>
           <!-- Mirrors #coPlace (disabled state, label, visibility) via a
                MutationObserver in app.js and forwards clicks to it - the
@@ -537,7 +545,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x073020" data-then="/app.js?v=20261008c"></script>
+  <script src="/catalog.js?v=20261014a" data-then="/app.js?v=20261014a"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

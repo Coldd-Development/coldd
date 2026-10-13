@@ -360,14 +360,32 @@ export async function sendOrderReceipt(
     .select("title, qty, product_slug")
     .eq("order_id", orderId);
 
+  // Add-ons are best-effort: a failure here (or the table not existing yet)
+  // must never stop a receipt going out.
+  const { data: addonRows } = await admin
+    .from("order_addons")
+    .select("title, product_slug, needs_ticket")
+    .eq("order_id", orderId);
+  const addons: any[] = addonRows || [];
+  const needsTicket = addons.some((a) => a.needs_ticket);
+
   const itemsHtml = itemsTableHtml(
     (items || []).map((i: any) => ({
       title: i.title,
       qty: i.qty,
       linkUrl: `https://coldd.dev/product?id=${encodeURIComponent(i.product_slug)}`,
       linkLabel: "View",
-    })),
+    })).concat(addons.map((a: any) => ({
+      title: `Add-on: ${a.title}`,
+      qty: 1,
+      linkUrl: "",
+      linkLabel: "",
+    }))),
   );
+  // Setup-style add-ons don't start on their own: the buyer opens a ticket.
+  const ticketNote = needsTicket
+    ? `<p style="margin:0 0 24px;padding:14px 16px;background:#111111;border:1px solid #1a1a1a;border-radius:6px;font-size:13px;color:#d7d7d7;"><strong style="color:#ffffff;">Next step for your setup service:</strong> open a support ticket in our <a href="https://discord.gg/coldd" style="color:#ff3344;text-decoration:none;">Discord</a> so we can get started. We aim to respond within 48 hours.</p>`
+    : "";
 
   const total = `$${Number(order.total_usd).toFixed(2)}`;
   const shortId = String(order.id).slice(0, 8).toUpperCase();
@@ -376,6 +394,7 @@ export async function sendOrderReceipt(
 <p style="margin:0 0 4px;font-size:20px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">Order confirmed</p>
 <p style="margin:0 0 24px;">Thanks for your order - here's your receipt. Every item below is ready to download right away.</p>
 ${itemsHtml}
+${ticketNote}
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
 <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#7a7a7a;">Order #${shortId} &middot; Total charged</td>
 <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#ffffff;">${total}</td></tr>

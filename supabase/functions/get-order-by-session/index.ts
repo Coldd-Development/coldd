@@ -76,10 +76,27 @@ Deno.serve(async (req: Request) => {
     const verdict = await verifyOrderAccess(order, getUserId, token, { requirePaid: false });
     if (!verdict.ok) return json({ ok: false, code: verdict.code, error: verdict.error }, verdict.status);
 
+    // Add-ons live in their own table. Read separately and tolerate failure so
+    // the success page keeps working for every order even before the add-ons
+    // migration has been applied.
+    const { data: addonRows } = await admin
+      .from("order_addons")
+      .select("id, product_slug, title, needs_ticket, file_name, storage_path")
+      .eq("order_id", order.id);
+    const addons = (addonRows || []).map((a: { id: string; product_slug: string; title: string; needs_ticket: boolean; file_name: string | null; storage_path: string | null }) => ({
+      id: a.id,
+      product_slug: a.product_slug,
+      title: a.title,
+      needs_ticket: !!a.needs_ticket,
+      file_name: a.file_name,
+      has_file: !!a.storage_path,
+    }));
+
     return json({
       ok: true,
       status: order.status,
       items: order.order_items || [],
+      addons,
       guest: !order.user_id,
     });
   } catch (err) {

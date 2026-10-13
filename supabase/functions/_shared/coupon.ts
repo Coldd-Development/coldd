@@ -49,6 +49,12 @@ export type PricedLine = {
   disallowSales: boolean;
   canBeFree: boolean;
   floorUsd: number;
+  // The licence-adjusted list price before any line-level deal, and the
+  // bundle percentage that was actually applied to this line (0 = none).
+  // The Robux checkout reads bundlePct to give the same bundle discount on
+  // the line's Robux price.
+  baseUnitPrice: number;
+  bundlePct: number;
 };
 
 export async function priceItems(
@@ -85,6 +91,27 @@ export async function priceItems(
     }
   }
   const bundleFullySatisfied = bundle ? bundle.slugs.every((s) => slugs.includes(s)) : false;
+
+  // Curated bundles (admin Sales & Discounts > Bundles) apply by themselves:
+  // when EVERY product in a live bundle is in the cart, each of its products
+  // takes the bundle's percentage - no token, no code. A product in several
+  // bundles takes the best one. Membership counts any licence, but the
+  // discount itself only ever lands on standard-licence lines (see below).
+  // Only worth a query when the cart could possibly complete a bundle.
+  const curatedPctBySlug = new Map<string, number>();
+  if (slugs.length >= 2) {
+    const { data: curated } = await admin
+      .from("bundle_deals")
+      .select("slugs, bundle_pct")
+      .eq("source", "curated")
+      .eq("active", true);
+    for (const b of (curated ?? []) as { slugs: string[]; bundle_pct: number }[]) {
+      if (!Array.isArray(b.slugs) || b.slugs.length < 2) continue;
+      if (!b.slugs.every((s) => slugs.includes(s))) continue;
+      const pct = Number(b.bundle_pct) || 0;
+      for (const s of b.slugs) if (pct > (curatedPctBySlug.get(s) || 0)) curatedPctBySlug.set(s, pct);
+    }
+  }
 
   const bySlug = new Map((products ?? []).map((p: any) => [p.slug, p]));
   const lines: PricedLine[] = [];
@@ -131,8 +158,14 @@ export async function priceItems(
       if (floored < baseUnitPrice) { unitPrice = floored; isCrossSellDeal = true; }
     }
     let bundlePctApplied = 0;
-    if (bundle && bundle.slugs.includes(slug) && !disallowSales && licence !== "resell") {
-      const pct = bundle.item_pct + (bundleFullySatisfied ? bundle.bundle_pct : 0);
+    let bundleFromCurated = false;
+    const tokenPct = bundle && bundle.slugs.includes(slug)
+      ? bundle.item_pct + (bundleFullySatisfied ? bundle.bundle_pct : 0)
+      : 0;
+    const curatedPct = curatedPctBySlug.get(slug) || 0;
+    if ((tokenPct > 0 || curatedPct > 0) && !disallowSales && licence !== "resell") {
+      const pct = Math.max(tokenPct, curatedPct);
+      bundleFromCurated = curatedPct >= tokenPct;
       const discounted = Math.round(baseUnitPrice * (1 - pct / 100) * 100) / 100;
       const floored = floorUsd > 0 ? Math.max(discounted, floorUsd) : discounted;
       if (floored < unitPrice) { unitPrice = floored; bundlePctApplied = pct; }
@@ -141,7 +174,7 @@ export async function priceItems(
       slug,
       title: product.title + (licence === "resell" ? " (Resell licence)" : "")
         + (isCrossSellDeal ? ` (${CROSS_SELL_PCT}% off)` : "")
-        + (bundlePctApplied ? ` (${bundlePctApplied}% off)` : ""),
+        + (bundlePctApplied ? (bundleFromCurated ? ` (Bundle ${bundlePctApplied}% off)` : ` (${bundlePctApplied}% off)`) : ""),
       unitPrice,
       qty,
       licence,
@@ -153,6 +186,8 @@ export async function priceItems(
       disallowSales,
       canBeFree,
       floorUsd,
+      baseUnitPrice,
+      bundlePct: bundlePctApplied,
     });
   }
 

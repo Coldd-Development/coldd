@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
     if (profileErr || !profile?.is_admin) return json({ ok: false, error: "Admin access required." }, 403);
 
     const body = await req.json().catch(() => ({}));
-    const kind = ["gallery", "productFile", "unreleasedFile", "legalDoc"].includes(body.kind) ? body.kind : "thumbnail";
+    const kind = ["gallery", "productFile", "unreleasedFile", "legalDoc", "addonFile"].includes(body.kind) ? body.kind : "thumbnail";
     const filename = safeName(String(body.filename || "file"));
 
     // File types each upload area accepts. admin.js checks the same lists before uploading;
@@ -76,6 +76,8 @@ Deno.serve(async (req: Request) => {
       gallery: ["gif", "png", "jpg", "jpeg", "zip", "mp4"],
       productFile: ["zip", "rbxm", "rbxl"],
       legalDoc: ["zip", "mp4", "png", "jpg", "jpeg", "pdf"],
+      // The deliverable of a per-product add-on (e.g. an unwatermarked thumbnail).
+      addonFile: ["zip", "rbxm", "rbxl", "png", "jpg", "jpeg", "gif", "pdf", "mp4"],
     };
     const allowed = ALLOWED[kind];
     if (allowed) {
@@ -91,12 +93,12 @@ Deno.serve(async (req: Request) => {
     // product media, so they get no publicUrl back (see admin.js's
     // legal-doc list, which fetches a short-lived signed URL on click
     // instead of storing a permanent one).
-    const bucket = kind === "unreleasedFile" || kind === "productFile" || kind === "legalDoc" ? FILES_BUCKET : MEDIA_BUCKET;
+    const bucket = kind === "unreleasedFile" || kind === "productFile" || kind === "legalDoc" || kind === "addonFile" ? FILES_BUCKET : MEDIA_BUCKET;
     const path = kind === "unreleasedFile"
       ? `unreleased/${unique}-${filename}`
       : (() => {
         const productSlug = safeName(String(body.productSlug || "untitled"));
-        const subdir = kind === "productFile" ? "files" : kind === "gallery" ? "gallery" : kind === "legalDoc" ? "legal" : "thumbnails";
+        const subdir = kind === "productFile" ? "files" : kind === "addonFile" ? "addons" : kind === "gallery" ? "gallery" : kind === "legalDoc" ? "legal" : "thumbnails";
         return `${productSlug}/${subdir}/${unique}-${filename}`;
       })();
 

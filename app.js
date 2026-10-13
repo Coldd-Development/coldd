@@ -1901,6 +1901,8 @@
           }
         }
         function matches(p) {
+          // Bundles is its own view (curated bundles, drawn below), not a product category.
+          if (curCat === 'bundles') return false;
           const price = parseFloat(p.getAttribute('data-price')) || 0;
           const nameEl = p.querySelector('.p-name') || p.querySelector('h3');
           const title = (nameEl ? nameEl.textContent : '').toLowerCase();
@@ -2358,8 +2360,75 @@
             priceRow.innerHTML = (was ? '<span class="p-was">' + ((robuxOff2 && window.__fiat) ? window.__fiat(Number(was)) : (window.__money ? window.__money(Number(was)) : ('$' + was))) + '</span>' : '') + '<span class="p-price" data-usd="' + baseUsd + '">' + baseText + '</span>';
           }
         }
+        // ---- Bundles category ----
+        // Same card as the product page's "Bundle and save": the most popular product is the
+        // cover, with the percentage off and the bundle price on it. Only this platform's
+        // bundles, and the search box narrows them by title or by a product inside.
+        const bundlesEl = document.getElementById('shopBundles');
+        function bEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+        function bundleCardHtml(v) {
+          var behind = v.prods.filter(function (x) { return x !== v.cover; }).slice(0, 2);
+          var stack = behind.map(function (x, k) {
+            return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + x.image + '\')"></span>';
+          }).join('');
+          var fiat = window.__fiat || function (n) { return '$' + n; };
+          return '<article class="pd-bundle-card" data-token="' + bEsc(v.token) + '">' +
+            '<div class="pd-bundle-art">' + stack +
+              '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')">' +
+                '<span class="pd-bundle-off">' + Math.round(v.pct) + '% off</span>' +
+                '<span class="pd-bundle-price"><b>' + fiat(v.priceUsd) + '</b><s>' + fiat(v.listUsd) + '</s></span>' +
+              '</span></div>' +
+            '<h3 class="pd-bundle-name">' + bEsc(v.title) + '</h3>' +
+            (v.desc ? '<p class="pd-bundle-desc">' + bEsc(v.desc) + '</p>' : '') +
+            '<p class="pd-bundle-incl">Includes ' + v.prods.map(function (x) { return bEsc(x.title); }).join(', ') + '</p>' +
+            '<button class="btn btn-primary pd-bundle-add" type="button">Add bundle to cart</button>' +
+            '</article>';
+        }
+        function bundlesForShop() {
+          return (window.__bundleViews ? window.__bundleViews() : []).filter(function (v) {
+            if (v.cover.platform !== 'Roblox') return false;
+            if (!query) return true;
+            return v.title.toLowerCase().indexOf(query) >= 0 ||
+              v.prods.some(function (x) { return x.title.toLowerCase().indexOf(query) >= 0; });
+          });
+        }
+        function paintBundles() {
+          const on = curCat === 'bundles' && !!bundlesEl;
+          // style.display, not [hidden]: the grid and pager have their own display rules, which would win.
+          if (grid) grid.style.display = on ? 'none' : '';
+          if (pager) pager.style.display = on ? 'none' : '';
+          if (!bundlesEl) return 0;
+          bundlesEl.hidden = !on;
+          if (!on) return 0;
+          const list = bundlesForShop();
+          bundlesEl.innerHTML = list.map(bundleCardHtml).join('');
+          if (empty) { empty.textContent = 'No bundles match your search.'; empty.hidden = list.length > 0; }
+          if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' bundle' : ' bundles');
+          return list.length;
+        }
+        if (bundlesEl) bundlesEl.addEventListener('click', function (e) {
+          const card = e.target.closest('.pd-bundle-card'); if (!card) return;
+          const v = (window.__bundleViews ? window.__bundleViews() : []).filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
+          if (!v) return;
+          v.prods.forEach(function (x) {
+            if (window.__coldOwned && window.__coldOwned.has(x.id)) return; // never re-sell something they already own
+            if (window.__cartAdd) window.__cartAdd({ id: x.id, title: x.title, price: x.priceNum, image: x.image, tag: x.cat || '' });
+          });
+          if (window.__openCart) window.__openCart();
+        });
+
         function refilter(resetPage) {
           if (resetPage) page = 1;
+          if (curCat === 'bundles') {
+            const n = paintBundles();
+            if (clearBtn) clearBtn.hidden = !isFiltered();
+            syncFilterSheet(n);
+            return;
+          }
+          if (bundlesEl && !bundlesEl.hidden) {
+            grid.style.display = ''; if (pager) pager.style.display = '';
+            bundlesEl.hidden = true; if (empty) empty.textContent = 'No products match your filters.';
+          }
           const matched = sortMatches(products.filter(matches));
           const pages = Math.max(1, Math.ceil(matched.length / PER_PAGE));
           if (page > pages) page = pages;
@@ -2583,11 +2652,26 @@
       // it. Once the live catalog has loaded, re-price each plain item from it
       // and drop products that are no longer on sale. Bundle and cross-sell
       // lines carry their own discounted price, so they are left alone.
+      // addon id -> order_addons id, for the signed-in customer's PAID orders. RLS already limits the
+      // rows to their own; the inner join filters out unpaid attempts. Resolves {} when signed out or
+      // if the table isn't there, so callers can always use it.
+      var ownedAddonsP = null;
+      window.__loadOwnedAddons = function (force) {
+        if (ownedAddonsP && !force) return ownedAddonsP;
+        if (!window.coldSupabase) return Promise.resolve({});
+        ownedAddonsP = window.coldSupabase.from('order_addons').select('id, addon_id, orders!inner(status)').eq('orders.status', 'paid')
+          .then(function (r) {
+            var m = {};
+            ((r && !r.error && r.data) || []).forEach(function (row) { if (row.addon_id) m[row.addon_id] = row.id; });
+            return m;
+          }, function () { return {}; });
+        return ownedAddonsP;
+      };
       window.__coldRepriceCart = function (arr) {
         if (!window.__CATALOG_OK) return arr;
         var byId = {};
         (window.__CATALOG || []).forEach(function (p) { byId[p.id] = p; });
-        return (arr || []).filter(function (i) {
+        var list = (arr || []).filter(function (i) {
           var id = String(i.id);
           var base = id.replace(/--resell$/, '');
           if (base.indexOf('--') !== -1) return true;
@@ -2596,6 +2680,30 @@
           i.price = /--resell$/.test(id) ? (p.resellPrice != null ? p.resellPrice : Math.round(p.priceNum * 3)) : p.priceNum;
           return true;
         });
+        // Curated bundles: once EVERY product of a bundle is in the cart each of its standard
+        // licence lines takes the bundle's percentage (any licence counts toward completing
+        // it, resell lines are never discounted - same rule as the server's priceItems). This
+        // is only the preview; the server prices the order again.
+        var slugOf = function (i) { return String(i.crossSellSlug || i.id).replace(/--addons$/, '').replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, ''); };
+        var pcts = window.__bundlePctMap ? window.__bundlePctMap(list.map(slugOf)) : {};
+        list.forEach(function (i) {
+          var id = String(i.id), slug = slugOf(i), p = byId[slug];
+          delete i.bundlePct;
+          if (p && id.indexOf('--') === -1 && pcts[slug] > 0) {
+            var bp = Math.round(p.priceNum * (1 - pcts[slug] / 100) * 100) / 100;
+            if (bp < i.price) { i.price = bp; i.bundlePct = pcts[slug]; }
+          }
+          // Add-ons are re-read from the live catalog too (price, title, or gone).
+          if (Array.isArray(i.addons) && i.addons.length && window.__ADDONS_OK) {
+            i.addons = i.addons.map(function (a) {
+              var cur = (window.__ADDON_BY_ID || {})[a.id];
+              if (!cur || cur.slug !== slug) return null;
+              return { id: cur.id, title: cur.title, usd: cur.usd, robux: cur.robux, ticket: cur.ticket };
+            }).filter(Boolean);
+            if (!i.addons.length) delete i.addons;
+          }
+        });
+        return list;
       };
       var cart = [];
       try {
@@ -2620,6 +2728,8 @@
       // place while the other still holds its stale page-load snapshot
       // could charge/display a different cart than what the user last saw.
       function save() {
+        // Bundle prices depend on what else is in the cart, so re-derive them on every change.
+        if (window.__coldRepriceCart) window.__coldRepriceCart(cart);
         try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch (_) {}
         try { window.dispatchEvent(new CustomEvent('coldd:cart-sync', { detail: { source: 'drawer' } })); } catch (_) {}
       }
@@ -2631,6 +2741,15 @@
       function money(n) { return window.__money ? window.__money(n) : ('$' + n); }
       function count() { return cart.reduce(function (s, i) { return s + i.qty; }, 0); }
       function subtotal() { return cart.reduce(function (s, i) { return s + i.price * i.qty; }, 0); }
+      // Add-ons sit outside the product subtotal on purpose: discounts and the spend-tier
+      // ladder only ever apply to products (a service done by hand is never marked down).
+      function addonsUsd() { return cart.reduce(function (s, i) { return s + (i.addons || []).reduce(function (t, a) { return t + (Number(a.usd) || 0); }, 0); }, 0); }
+      function addonsRobux() { return cart.reduce(function (s, i) { return s + (i.addons || []).reduce(function (t, a) { return t + (a.robux != null ? Number(a.robux) : Math.round((Number(a.usd) || 0) * 80)); }, 0); }, 0); }
+      function addonMoney(a) {
+        var robuxMode = window.__currencyMode && window.__currencyMode() === 'robux';
+        if (robuxMode && a.robux != null) return 'R$ ' + Math.round(a.robux).toLocaleString('en-US');
+        return money(a.usd);
+      }
 
       // The flat 80-Robux-per-$1 conversion (window.__robux/__money) is
       // only a display estimate for arbitrary numbers - it ignores each
@@ -2643,7 +2762,7 @@
       // USD price (or 3x list) flat-converted, matching _shared/roblox.ts's
       // robuxUnitPrice(product, true).
       var ROBUX_PER_USD_FALLBACK = 80; // matches _shared/roblox.ts's ROBUX_PER_USD
-      function catalogRobuxPrice(id, licence) {
+      function catalogRobuxPrice(id, licence, bundlePct) {
         var raw = String(id);
         var baseId = raw.replace(/--resell$/, '').replace(/--bundle$/, '');
         var isResell = licence === 'resell' || /--resell$/.test(raw);
@@ -2662,13 +2781,16 @@
         // Robux) - treating it as "no override" instead of "R$ 0" is what
         // stops one bad field value from making a product unsellable via
         // Robux instead of just falling back to the flat estimate.
-        return p.robuxPrice > 0 ? p.robuxPrice : null;
+        // A completed bundle takes its percentage off the Robux price too (never below
+        // the server's own floor - this is the preview, the server prices the order).
+        if (p.robuxPrice > 0) return bundlePct > 0 ? Math.round(p.robuxPrice * (1 - bundlePct / 100)) : p.robuxPrice;
+        return null;
       }
       function itemUnitMoney(item) {
         if ((Number(item.price) || 0) <= 0) return 'Free';
         var robuxMode = window.__currencyMode && window.__currencyMode() === 'robux';
         if (robuxMode) {
-          var rbx = catalogRobuxPrice(item.id, item.licence);
+          var rbx = catalogRobuxPrice(item.id, item.licence, item.bundlePct);
           if (rbx != null) return 'R$ ' + Math.round(rbx).toLocaleString('en-US');
         }
         if (window.__robuxOff && window.__robuxOff(item.id) && window.__fiat) return window.__fiat(item.price);
@@ -2678,13 +2800,13 @@
         if (window.__currencyMode && window.__currencyMode() === 'robux') {
           var total = 0, allPriced = true;
           cart.forEach(function (i) {
-            var rbx = catalogRobuxPrice(i.id, i.licence);
+            var rbx = catalogRobuxPrice(i.id, i.licence, i.bundlePct);
             if (rbx == null) { allPriced = false; return; }
             total += rbx * i.qty;
           });
-          if (allPriced) return 'R$ ' + Math.round(total).toLocaleString('en-US');
+          if (allPriced) return 'R$ ' + Math.round(total + addonsRobux()).toLocaleString('en-US');
         }
-        return money(subtotal());
+        return money(subtotal() + addonsUsd());
       }
 
       // Same spend-tier ladder as checkout (must match _shared/coupon.ts's
@@ -2766,7 +2888,7 @@
       function robuxSubtotalWithFallback() {
         var total = 0;
         cart.forEach(function (i) {
-          var rbx = catalogRobuxPrice(i.id, i.licence);
+          var rbx = catalogRobuxPrice(i.id, i.licence, i.bundlePct);
           if (rbx == null) rbx = Math.round(i.price * ROBUX_PER_USD_FALLBACK);
           total += rbx * i.qty;
         });
@@ -2835,15 +2957,39 @@
       window.addEventListener('currencychange', function () { updateBadge(); renderCart(); });
       function clearCart() { cart = []; save(); updateBadge(); renderCart(); }
       function add(item) {
+        if (item.addonOnly) {
+          // Add-ons for a product the customer already owns: its own cart line, no product price.
+          var onlyId = item.id + '--addons';
+          var onlyPicked = (item.addons || []).map(function (a) { return { id: a.id, title: a.title, usd: a.usd, robux: a.robux != null ? a.robux : null, ticket: !!a.ticket }; });
+          var onlyFound = cart.filter(function (i) { return i.id === onlyId; })[0];
+          if (onlyFound) {
+            var have = {}; (onlyFound.addons || []).forEach(function (a) { have[a.id] = true; });
+            onlyFound.addons = (onlyFound.addons || []).concat(onlyPicked.filter(function (a) { return !have[a.id]; }));
+          } else {
+            cart.push({ id: onlyId, title: 'Add-ons: ' + item.title, price: 0, image: item.image, tag: item.tag || '', licence: 'standard', qty: 1, addonOnly: true, addons: onlyPicked });
+          }
+          save(); updateBadge(); renderCart();
+          return;
+        }
         var lic = item.licence || 'standard';
         var id = item.id + (lic === 'resell' ? '--resell' : '');
         var found = cart.filter(function (i) { return i.id === id; })[0];
+        // Add-ons chosen on the product page ride along on the line. Only trusted fields are kept;
+        // the server re-reads the real price and title from the add-on's id.
+        var picked = Array.isArray(item.addons) ? item.addons.map(function (a) {
+          return { id: a.id, title: a.title, usd: a.usd, robux: a.robux != null ? a.robux : null, ticket: !!a.ticket };
+        }) : null;
         // Already in the cart - a digital licence isn't a quantity, so
         // clicking Add to cart again on the same item is a no-op rather
-        // than stacking a second copy.
+        // than stacking a second copy. (It does refresh the add-ons, so picking one on the
+        // product page and pressing Add to cart again takes effect.)
         if (!found) {
-          cart.push({ id: id, title: item.title, price: item.price, image: item.image, tag: item.tag || '', licence: lic, qty: 1 });
+          var line = { id: id, title: item.title, price: item.price, image: item.image, tag: item.tag || '', licence: lic, qty: 1 };
+          if (picked && picked.length) line.addons = picked;
+          cart.push(line);
           if (window.coldTrack) window.coldTrack('add_to_cart', { id: item.id, price: item.price });
+        } else if (picked) {
+          if (picked.length) found.addons = picked; else delete found.addons;
         }
         save(); updateBadge(); renderCart();
       }
@@ -2863,10 +3009,22 @@
           row.className = 'cart-item';
           row.innerHTML =
             '<span class="ci-thumb" style="background-image:url(\'' + i.image + '\')"></span>' +
-            '<div class="ci-info"><div class="ci-title">' + esc(i.title) + (i.licence === 'resell' ? ' <span style="color:var(--accent);font-size:11px;font-weight:700;">· RESELL</span>' : '') + '</div>' +
-            '<div class="ci-price">' + itemUnitMoney(i) + '</div></div>' +
+            '<div class="ci-info"><div class="ci-title">' + esc(i.title) + (i.licence === 'resell' ? ' <span style="color:var(--accent);font-size:11px;font-weight:700;">· RESELL</span>' : '') + (i.bundlePct ? ' <span class="ci-bundle">Bundle −' + Math.round(i.bundlePct) + '%</span>' : '') + '</div>' +
+            (i.addonOnly ? '' : '<div class="ci-price">' + itemUnitMoney(i) + '</div>') +
+            (i.addons || []).map(function (a) {
+              return '<div class="ci-addon"><span class="ci-addon-t">+ ' + esc(a.title) + '</span><span class="ci-addon-p">' + addonMoney(a) + '</span>' +
+                '<button class="ci-addon-x" type="button" data-act="rm-addon" data-addon="' + esc(a.id) + '" aria-label="Remove ' + esc(a.title) + '">×</button></div>';
+            }).join('') + '</div>' +
             '<button class="ci-remove" type="button" data-act="rm" aria-label="Remove">×</button>';
           row.querySelector('[data-act="rm"]').addEventListener('click', function () { removeItem(i.id); });
+          row.querySelectorAll('[data-act="rm-addon"]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var aid = b.getAttribute('data-addon');
+              i.addons = (i.addons || []).filter(function (a) { return a.id !== aid; });
+              if (!i.addons.length) delete i.addons;
+              save(); updateBadge(); renderCart();
+            });
+          });
 
           // Opens the real product page in a new tab, like every other route
           // to a product. This was the last caller of the retired quick-view
@@ -3157,6 +3315,14 @@
             ['Can I edit or update this product?', 'Yes, you can update, modify or edit any part of our products to fit within your games and projects.'],
             ['Can I pay in robux instead of real currency?', 'Yes you can purchase with robux on-site by simply selecting the robux purchase option. Keep in mind that real currency (USD) purchases are 50% cheaper than robux pricing.']
           ];
+          // Products with add-ons say what they are, and (for setup) how to start - same wording as the site FAQ.
+          var ao = window.__addonsFor ? window.__addonsFor(p.id) : [];
+          if (ao.length) {
+            list.splice(5, 0, ['What are the add-ons for this product?', ao.map(function (a) { return a.title; }).join(', ') + '. Add-ons are optional extras priced separately from the product, chosen on this page or at checkout. They are not reduced by discount codes, sales or bundle discounts.']);
+            if (ao.some(function (a) { return a.ticket; })) {
+              list.splice(6, 0, ['How do I start the Setup Service?', 'After you buy, create a support ticket in our Discord at discord.gg/coldd so we can get started. We aim to respond within 48 hours. Setup covers what the add-on describes; customisation is not included.']);
+            }
+          }
           return list;
         }
 
@@ -3237,7 +3403,96 @@
             el.textContent = (cur.robuxDisabled || isResellOpt) ? fiat(pp) : (window.__money ? window.__money(pp) : fiat(pp));
           });
           if (pdReferEarn) pdReferEarn.textContent = 'earn ' + fiat(Math.round(cur.priceNum * 0.2 * 100) / 100);
+          renderAddonsBlock();
         }
+        // ---- Add-ons: optional extras for this product, chosen before adding to the cart. ----
+        var pdAddons = $('pdAddons'), pdAddonList = $('pdAddonList');
+        function addonPrice(a) {
+          var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
+          if (robuxMode && a.robux != null) return 'R$ ' + Math.round(a.robux).toLocaleString('en-US');
+          return fiat(a.usd);
+        }
+        var ownedAddonMap = null; // addon id -> true, once loaded (owners only)
+        function renderAddonsBlock() {
+          if (!pdAddons || !pdAddonList) return;
+          var list = cur && window.__addonsFor ? window.__addonsFor(cur.id) : [];
+          if (!cur || !list.length) { pdAddons.hidden = true; return; }
+          var owner = isOwned(cur.id);
+          // An owner can still buy this product's add-ons: they go to the cart on their own, with no
+          // product to pay for. Add-ons they already bought are shown as purchased.
+          if (owner && ownedAddonMap == null) {
+            ownedAddonMap = {};
+            window.__loadOwnedAddons().then(function (m) { ownedAddonMap = m; renderAddonsBlock(); });
+          }
+          var chosen = {}; (cur.addons || []).forEach(function (a) { chosen[a.id] = true; });
+          pdAddonList.innerHTML = list.map(function (a) {
+            var had = owner && ownedAddonMap && ownedAddonMap[a.id];
+            return '<button class="pm-lic pd-addon' + (chosen[a.id] && !had ? ' active' : '') + '" type="button" data-addon="' + esc(a.id) + '"' + (had ? ' disabled' : '') + ' aria-pressed="' + (chosen[a.id] && !had ? 'true' : 'false') + '">' +
+              '<span class="pm-lic-radio"></span>' +
+              '<span class="pm-lic-text"><span class="pm-lic-name">' + esc(a.title) + '</span>' + (a.desc ? '<span class="pm-lic-note">' + esc(a.desc) + '</span>' : '') + '</span>' +
+              '<span class="pm-lic-price">' + (had ? 'Purchased' : addonPrice(a)) + '</span></button>';
+          }).join('') + (owner ? '<button class="btn btn-primary pd-addon-buy" type="button"' + ((cur.addons || []).length ? '' : ' disabled') + '>Add selected add-ons to cart</button>' : '');
+          pdAddons.hidden = false;
+        }
+        if (pdAddonList) pdAddonList.addEventListener('click', function (e) {
+          var buy = e.target.closest('.pd-addon-buy');
+          if (buy && cur) {
+            if (!(cur.addons || []).length) return;
+            if (window.__cartAdd) window.__cartAdd({ id: cur.id, title: cur.title, image: cur.image, tag: cur.tag, addonOnly: true, addons: cur.addons });
+            cur.addons = []; renderAddonsBlock(); openCart();
+            return;
+          }
+          var btn = e.target.closest('.pd-addon'); if (!btn || !cur) return;
+          var id = btn.getAttribute('data-addon');
+          var src = (window.__ADDON_BY_ID || {})[id]; if (!src) return;
+          var have = (cur.addons || []).some(function (a) { return a.id === id; });
+          if (btn.disabled) return;
+          cur.addons = have
+            ? (cur.addons || []).filter(function (a) { return a.id !== id; })
+            : (cur.addons || []).concat([{ id: src.id, title: src.title, usd: src.usd, robux: src.robux, ticket: src.ticket }]);
+          renderAddonsBlock();
+        });
+
+        // ---- Bundle and save: every curated bundle this product belongs to. ----
+        // The most popular product is the cover; the percentage and the bundle price are shown
+        // on it. Adding the bundle adds every product (standard licence); the discount is then
+        // applied by the cart and by the server once the whole set is in.
+        var pdBundleWrap = $('pdBundleWrap'), pdBundleList = $('pdBundleList');
+        function renderBundleCards(p) {
+          if (!pdBundleWrap || !pdBundleList) return;
+          var views = window.__bundlesForProduct ? window.__bundlesForProduct(p.id) : [];
+          if (!views.length) { pdBundleWrap.hidden = true; pdBundleList.innerHTML = ''; return; }
+          pdBundleList.innerHTML = views.map(function (v) {
+            // Two more covers peek out behind the main one, like a stack of products.
+            var behind = v.prods.filter(function (x) { return x !== v.cover; }).slice(0, 2);
+            var stack = behind.map(function (x, k) {
+              return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + x.image + '\')"></span>';
+            }).join('');
+            return '<article class="pd-bundle-card" data-token="' + esc(v.token) + '">' +
+              '<div class="pd-bundle-art">' + stack +
+                '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')">' +
+                  '<span class="pd-bundle-off">' + Math.round(v.pct) + '% off</span>' +
+                  '<span class="pd-bundle-price"><b>' + fiat(v.priceUsd) + '</b><s>' + fiat(v.listUsd) + '</s></span>' +
+                '</span></div>' +
+              '<h3 class="pd-bundle-name">' + esc(v.title) + '</h3>' +
+              (v.desc ? '<p class="pd-bundle-desc">' + esc(v.desc) + '</p>' : '') +
+              '<p class="pd-bundle-incl">Includes ' + v.prods.map(function (x) { return esc(x.title); }).join(', ') + '</p>' +
+              '<button class="btn btn-primary pd-bundle-add" type="button">Add bundle to cart</button>' +
+              '</article>';
+          }).join('');
+          pdBundleWrap.hidden = false;
+        }
+        if (pdBundleList) pdBundleList.addEventListener('click', function (e) {
+          var card = e.target.closest('.pd-bundle-card'); if (!card) return;
+          var v = (window.__bundleViews ? window.__bundleViews() : []).filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
+          if (!v) return;
+          v.prods.forEach(function (x) {
+            if (isOwned(x.id)) return; // never re-sell something they already own
+            if (window.__cartAdd) window.__cartAdd({ id: x.id, title: x.title, price: x.priceNum, image: x.image, tag: x.cat || '' });
+          });
+          openCart();
+        });
+
         function setLic(lic) {
           if (!cur) return;
           cur.licence = lic;
@@ -3585,6 +3840,7 @@
           }
 
           syncWish(); syncOwned();
+          renderAddonsBlock(); renderBundleCards(p);
           applySeo(p, ups);
         }
 
@@ -4436,7 +4692,10 @@
           }
           return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'' + img + '\')"></span>' +
             '<div class="dr-main"><div class="dr-title">' + titles + '</div>' +
-            '<div class="dr-sub">' + fmtDate(o.created_at) + ' · ' + idCell + (special ? ' · <span class="dt-badge ' + badge + '">' + label + '</span>' : '') + '</div></div>' +
+            '<div class="dr-sub">' + fmtDate(o.created_at) + ' · ' + idCell + (special ? ' · <span class="dt-badge ' + badge + '">' + label + '</span>' : '') +
+              ((o.addons || []).length ? ' · Add-ons: ' + esc(o.addons.map(function (a) { return a.title; }).join(', ')) : '') +
+              ((o.addons || []).some(function (a) { return a.needs_ticket; }) ? ' · <a href="https://discord.gg/coldd" target="_blank" rel="noopener">Open a Discord ticket to start your setup</a>' : '') +
+              '</div></div>' +
             '<span class="p-price" data-fixed>' + orderMoney(o) + '</span>' +
             '<div class="dr-actions">' + actions + '</div></div>';
         }).join('');
@@ -4544,6 +4803,8 @@
       }
 
       var OWNED_ITEMS = [];
+      var DASH_ADDONS = []; // the customer's purchased add-ons (paid orders): id, addon_id, product_slug, title, file_name
+      var addonsOpenFor = {}; // product slug -> add-ons panel open
       function renderOwnedAndDownloads(orders) {
         OWNED_ITEMS = ownedFromOrders(orders);
         renderOwnedGrid();
@@ -4575,6 +4836,67 @@
           reviewLink.href = '/product/' + encodeURIComponent(item.product_slug) + '?tab=reviews';
           reviewLink.innerHTML = window.msym('reviews', 15) + '<span>Review</span>';
           actions.appendChild(reviewLink);
+          // Add-ons for this product, even long after buying it: what they already have, and the rest to buy.
+          var offers = window.__addonsFor ? window.__addonsFor(item.product_slug) : [];
+          var bought = DASH_ADDONS.filter(function (a) { return a.product_slug === item.product_slug; });
+          if (offers.length || bought.length) {
+            var open = !!addonsOpenFor[item.product_slug];
+            var tog = document.createElement('button');
+            tog.type = 'button'; tog.className = 'btn btn-tinted dp-btn dp-addons-toggle'; tog.setAttribute('aria-expanded', open ? 'true' : 'false');
+            var boughtIds = {}; bought.forEach(function (a) { boughtIds[a.addon_id] = a; });
+            var availableN = offers.filter(function (a) { return !boughtIds[a.id]; }).length;
+            tog.innerHTML = '<span>Add-ons' + (availableN ? ' (' + availableN + ')' : '') + '</span>';
+            actions.appendChild(tog);
+            var panel = document.createElement('div');
+            panel.className = 'dp-addons'; panel.hidden = !open;
+            var picked = {};
+            function paintPanel() {
+              var fiat = window.__fiat || function (n) { return '$' + n; };
+              panel.innerHTML =
+                bought.map(function (a) {
+                  return '<div class="dp-addon dp-addon-had"><span class="dp-addon-t">' + esc(a.title) + '</span><span class="dp-addon-state">Purchased</span>' +
+                    (a.file_name ? '<button class="btn btn-ghost dr-btn dp-addon-dl" type="button" data-oa="' + esc(a.id) + '">Download</button>' : '') + '</div>';
+                }).join('') +
+                offers.filter(function (a) { return !boughtIds[a.id]; }).map(function (a) {
+                  return '<button class="dp-addon dp-addon-pick' + (picked[a.id] ? ' active' : '') + '" type="button" data-addon="' + esc(a.id) + '" aria-pressed="' + (picked[a.id] ? 'true' : 'false') + '">' +
+                    '<span class="dp-addon-box"></span><span class="dp-addon-main"><span class="dp-addon-t">' + esc(a.title) + '</span>' + (a.desc ? '<span class="dp-addon-d">' + esc(a.desc) + '</span>' : '') + '</span>' +
+                    '<span class="dp-addon-p">' + fiat(a.usd) + '</span></button>';
+                }).join('') +
+                (availableN ? '<button class="btn btn-primary dp-addons-add" type="button"' + (Object.keys(picked).length ? '' : ' disabled') + '>Add to cart</button>' : '');
+            }
+            paintPanel();
+            tog.addEventListener('click', function () {
+              addonsOpenFor[item.product_slug] = panel.hidden; // about to flip
+              panel.hidden = !panel.hidden;
+              tog.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+            });
+            panel.addEventListener('click', function (e) {
+              var dl = e.target.closest('.dp-addon-dl');
+              if (dl) {
+                var prev = dl.textContent; dl.disabled = true; dl.textContent = 'Preparing…';
+                (window.coldAuth ? window.coldAuth.invokeFn('get-download-url', { orderAddonId: dl.getAttribute('data-oa') }) : Promise.reject(new Error('x')))
+                  .then(function (data) { return triggerFileDownload(data.url, data.filename); })
+                  .then(function () { dl.disabled = false; dl.textContent = prev; })
+                  .catch(function () { dl.disabled = false; dl.textContent = 'Unavailable'; });
+                return;
+              }
+              var pick = e.target.closest('.dp-addon-pick');
+              if (pick) {
+                var id = pick.getAttribute('data-addon');
+                if (picked[id]) delete picked[id]; else picked[id] = true;
+                paintPanel(); return;
+              }
+              if (e.target.closest('.dp-addons-add')) {
+                var chosen = offers.filter(function (a) { return picked[a.id]; });
+                if (!chosen.length || !window.__cartAdd) return;
+                window.__cartAdd({ id: item.product_slug, title: item.title, image: img, tag: '', addonOnly: true,
+                  addons: chosen.map(function (a) { return { id: a.id, title: a.title, usd: a.usd, robux: a.robux, ticket: a.ticket }; }) });
+                picked = {}; paintPanel();
+                if (window.__openCart) window.__openCart();
+              }
+            });
+            card.querySelector('.dp-body').appendChild(panel);
+          }
           grid.appendChild(card);
         });
       }
@@ -4608,9 +4930,24 @@
           // purchase yet, so none of it belongs here even briefly.
           var orders = ((results[0] && results[0].data) || []).filter(function (o) { return o.status === 'paid'; });
           var sentGiftOrders = ((results[1] && results[1].data) || []).filter(function (o) { return o.status === 'paid'; });
-          renderOverview(orders);
-          renderPurchases(orders, sentGiftOrders);
-          renderOwnedAndDownloads(orders);
+          // Add-ons live in their own table. Read separately and tolerate failure, so the dashboard
+          // never depends on them (or on the add-ons migration having been applied).
+          var addonOrderIds = orders.concat(sentGiftOrders).map(function (o) { return o.id; });
+          var addonsLoad = addonOrderIds.length
+            ? window.coldSupabase.from('order_addons').select('id, order_id, addon_id, product_slug, title, needs_ticket, file_name').in('order_id', addonOrderIds)
+                .then(function (r) { return (r && !r.error && r.data) || []; }, function () { return []; })
+            : Promise.resolve([]);
+          addonsLoad.then(function (addonRows) {
+            var addonsByOrder = {};
+            addonRows.forEach(function (a) { (addonsByOrder[a.order_id] = addonsByOrder[a.order_id] || []).push(a); });
+            orders.concat(sentGiftOrders).forEach(function (o) { o.addons = addonsByOrder[o.id] || []; });
+            // Only add-ons from orders this customer owns (not gifts they sent) count as theirs.
+            var ownOrderIds = {}; orders.forEach(function (o) { ownOrderIds[o.id] = true; });
+            DASH_ADDONS = addonRows.filter(function (a) { return ownOrderIds[a.order_id]; });
+            renderOverview(orders);
+            renderPurchases(orders, sentGiftOrders);
+            renderOwnedAndDownloads(orders);
+          });
           // Reveal the Seller profile tab straight away if any paid order
           // holds a resell licence, rather than waiting on the separate
           // reseller-profile fetch.
@@ -5703,6 +6040,8 @@
         } catch (e) { return []; }
       }
       function save(c) {
+        // Bundle prices depend on what else is in the cart, so re-derive them on every change.
+        if (window.__coldRepriceCart) window.__coldRepriceCart(c);
         try { localStorage.setItem(CART_KEY, JSON.stringify(c)); } catch (e) {}
         scheduleCartSnapshot();
         try { window.dispatchEvent(new CustomEvent('coldd:cart-sync', { detail: { source: 'checkout' } })); } catch (e) {}
@@ -5753,6 +6092,15 @@
       var itemsEl = document.getElementById('coItems'), emptyEl = document.getElementById('coEmpty');
 
       function subtotal() { return cart.reduce(function (s, i) { return s + i.price * i.qty; }, 0); }
+      // Add-ons are charged on top of the products and never discounted - see the drawer's
+      // copy of these helpers, and _shared/addons.ts on the server.
+      function addonsUsd() { return cart.reduce(function (s, i) { return s + (i.addons || []).reduce(function (t, a) { return t + (Number(a.usd) || 0); }, 0); }, 0); }
+      function addonsRobux() { return cart.reduce(function (s, i) { return s + (i.addons || []).reduce(function (t, a) { return t + (a.robux != null ? Number(a.robux) : Math.round((Number(a.usd) || 0) * 80)); }, 0); }, 0); }
+      function addonMoney(a) {
+        if (robuxView() && a.robux != null) return 'R$ ' + Math.round(a.robux).toLocaleString('en-US');
+        return fiatMoney(a.usd);
+      }
+      function hasSetupAddon() { return cart.some(function (i) { return (i.addons || []).some(function (a) { return a.ticket; }); }); }
 
       // Same fix as the cart drawer (app.js's other IIFE): don't
       // estimate Robux with a flat 80-per-$1 conversion - use each
@@ -5766,7 +6114,7 @@
       // a ReferenceError the moment renderPayAmounts hit the fallback
       // branch below.
       var ROBUX_PER_USD_FALLBACK = 80; // matches _shared/roblox.ts's ROBUX_PER_USD
-      function catalogRobuxPrice(id, licence) {
+      function catalogRobuxPrice(id, licence, bundlePct) {
         var raw = String(id);
         var baseId = raw.replace(/--resell$/, '').replace(/--bundle$/, '');
         var isResell = licence === 'resell' || /--resell$/.test(raw);
@@ -5783,11 +6131,14 @@
         // estimate instead of quoting R$0 for a product that costs real
         // money, and instead of failing the whole Robux order (server
         // rejects a total <= 0) if that were the only item in the cart.
-        return p.robuxPrice > 0 ? p.robuxPrice : null;
+        // A completed bundle takes its percentage off the Robux price too (never below
+        // the server's own floor - this is the preview, the server prices the order).
+        if (p.robuxPrice > 0) return bundlePct > 0 ? Math.round(p.robuxPrice * (1 - bundlePct / 100)) : p.robuxPrice;
+        return null;
       }
       function lineMoney(item) {
         if (robuxView() && !(window.__robuxOff && window.__robuxOff(item.id))) {
-          var rbx = catalogRobuxPrice(item.id, item.licence);
+          var rbx = catalogRobuxPrice(item.id, item.licence, item.bundlePct);
           if (rbx != null) return 'R$ ' + Math.round(rbx * item.qty).toLocaleString('en-US');
         }
         return fiatMoney(item.price * item.qty);
@@ -5802,12 +6153,13 @@
       function robuxSubtotalRaw() {
         var total = 0;
         cart.forEach(function (i) {
-          var rbx = catalogRobuxPrice(i.id, i.licence);
+          var rbx = catalogRobuxPrice(i.id, i.licence, i.bundlePct);
           if (rbx == null) rbx = Math.round(i.price * ROBUX_PER_USD_FALLBACK);
           total += rbx * i.qty;
         });
         return total;
       }
+      // The product subtotal only (add-ons are listed on their own line below it).
       function subtotalMoney() {
         if (robuxView()) {
           var rbxTotal = robuxSubtotalRaw();
@@ -5819,13 +6171,17 @@
       function cartToItems() {
         return cart.map(function (i) {
           var licence = i.id.indexOf('--resell') !== -1 ? 'resell' : 'standard';
-          var slug = i.crossSellSlug || i.id.replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, '');
+          var slug = i.crossSellSlug || i.id.replace(/--addons$/, '').replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, '');
           var out = { slug: slug, qty: i.qty, licence: licence };
+          // Add-ons for a product the buyer already owns: no product is bought, the server checks ownership.
+          if (i.addonOnly) out.addonOnly = true;
           // Tells priceItems (server-side, floor-checked) to apply the
           // cross-sell discount to this specific line - the client-shown
           // price above is a preview, this flag is what actually makes it
           // real at checkout.
           if (i.crossSellSlug) out.crossSell = true;
+          // Add-on ids only - the server re-reads each add-on's price and checks it belongs to this product.
+          if (i.addons && i.addons.length) out.addons = i.addons.map(function (a) { return a.id; });
           return out;
         });
       }
@@ -6013,14 +6369,43 @@
           // No "Qty" shown - every product is a single digital licence, not
           // a quantity, so there is never anything to count.
           var lic = i.licence === 'resell' ? '<div class="co-item-sub">Resell licence</div>' : '';
+          if (i.bundlePct) lic += '<div class="co-item-sub co-item-bundle">Bundle −' + Math.round(i.bundlePct) + '%</div>';
+          var picked = {}; (i.addons || []).forEach(function (a) { picked[a.id] = true; });
+          var slugForAddons = String(i.id).replace(/--addons$/, '').replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, '');
+          // Chosen add-ons (removable) and the ones still on offer for this product (one click to add).
+          var addonHtml = (i.addons || []).map(function (a) {
+            return '<div class="co-addon"><span class="co-addon-t">+ ' + esc(a.title) + '</span><span class="co-addon-p">' + addonMoney(a) + '</span>' +
+              '<button class="co-addon-x" type="button" data-act="rm-addon" data-addon="' + esc(a.id) + '" aria-label="Remove ' + esc(a.title) + '">×</button></div>';
+          }).join('');
+          var offerHtml = i.addonOnly ? '' : (window.__addonsFor ? window.__addonsFor(slugForAddons) : []).filter(function (a) { return !picked[a.id]; }).map(function (a) {
+            return '<button class="co-addon-offer" type="button" data-act="add-addon" data-addon="' + esc(a.id) + '" title="' + esc(a.desc) + '">' +
+              '<span class="co-addon-plus">+</span><span class="co-addon-offer-t">' + esc(a.title) + '</span><span class="co-addon-p">' + addonMoney(a) + '</span></button>';
+          }).join('');
           row.innerHTML = '<span class="co-item-thumb" style="background-image:url(\'' + i.image + '\')"></span>' +
             '<div class="co-item-info"><div class="co-item-title">' + esc(i.title) + '</div>' + lic + '</div>' +
-            '<span class="co-item-price">' + lineMoney(i) + '</span>' +
+            '<span class="co-item-price">' + (i.addonOnly ? '' : lineMoney(i)) + '</span>' +
             '<button class="co-item-x" type="button" aria-label="Remove ' + esc(i.title) + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
           row.querySelector('.co-item-x').addEventListener('click', function () {
             cart = cart.filter(function (x) { return x.id !== i.id; });
             save(cart); render();
           });
+          if (addonHtml || offerHtml) {
+            var ab = document.createElement('div'); ab.className = 'co-addons';
+            ab.innerHTML = addonHtml + (offerHtml ? '<div class="co-addon-offers">' + offerHtml + '</div>' : '');
+            ab.addEventListener('click', function (e) {
+              var btn = e.target.closest('[data-act]'); if (!btn) return;
+              var aid = btn.getAttribute('data-addon');
+              if (btn.getAttribute('data-act') === 'rm-addon') {
+                i.addons = (i.addons || []).filter(function (a) { return a.id !== aid; });
+                if (!i.addons.length) delete i.addons;
+              } else {
+                var src = (window.__ADDON_BY_ID || {})[aid]; if (!src) return;
+                i.addons = (i.addons || []).concat([{ id: src.id, title: src.title, usd: src.usd, robux: src.robux, ticket: src.ticket }]);
+              }
+              save(cart); render();
+            });
+            row.appendChild(ab);
+          }
           itemsEl.appendChild(row);
         });
       }
@@ -6060,12 +6445,22 @@
         var taxLine = document.getElementById('coTaxLine');
         if (taxLine) taxLine.hidden = true;
         set('coTax', fiatMoney(0));
-        if (rr) {
-          set('coTotal', 'R$ ' + rr.finalTotal.toLocaleString('en-US'));
-        } else {
-          set('coTotal', disc > 0 ? fiatMoney(total) : subtotalMoney());
+        // Add-ons are charged on top of the (discounted) products, in whichever unit is showing.
+        var addonsU = addonsUsd(), addonsR = addonsRobux();
+        var addonsLine = document.getElementById('coAddonsLine');
+        if (addonsLine) {
+          addonsLine.hidden = !(addonsU > 0);
+          set('coAddonsAmt', rr ? ('R$ ' + addonsR.toLocaleString('en-US')) : fiatMoney(addonsU));
         }
-        renderPayAmounts(total);
+        if (rr) {
+          set('coTotal', 'R$ ' + (rr.finalTotal + addonsR).toLocaleString('en-US'));
+        } else {
+          set('coTotal', fiatMoney(total + addonsU));
+        }
+        // A setup add-on starts with a support ticket - say so before they pay, not after.
+        var setupNote = document.getElementById('coSetupNote');
+        if (setupNote) setupNote.hidden = !hasSetupAddon();
+        renderPayAmounts(total + addonsU);
         return total;
       }
 
@@ -6102,9 +6497,9 @@
         // than the actual Robux panel below once any cart item had a real
         // robux_price - the classic "why does checkout show two different
         // Robux prices" report.
-        var robuxRow = 0;
+        var robuxRow = addonsRobux();
         cart.forEach(function (i) {
-          var rbx = catalogRobuxPrice(i.id, i.licence);
+          var rbx = catalogRobuxPrice(i.id, i.licence, i.bundlePct);
           if (rbx == null) rbx = Math.round(i.price * ROBUX_PER_USD_FALLBACK);
           robuxRow += rbx * i.qty;
         });
@@ -6137,9 +6532,41 @@
         settle.hidden = !showSettle;
         if (showSettle) settle.textContent = 'Every payment method settles in USD price (' + usd + ').';
       }
+      // "Complete the bundle": the closest-to-complete curated bundle the cart is partway
+      // through, with the one click that finishes it. This sits above the generic cross-sell
+      // because a bundle takes more off than the 10% cross-sell and covers every product in it.
+      // Bundles only ever add standard licences, so a reseller's cart can finish one without
+      // touching their resell lines (resell lines count toward a bundle but are never discounted).
+      function renderBundleNudge() {
+        var box = document.getElementById('coBundleNudge'); if (!box) return;
+        var views = window.__bundleViews ? window.__bundleViews() : [];
+        var have = {};
+        cart.forEach(function (i) { have[String(i.crossSellSlug || i.id).replace(/--resell$/, '').replace(/--bundle$/, '').replace(/--crosssell$/, '')] = true; });
+        var owned = window.__coldOwned && window.__coldOwned.has ? window.__coldOwned : null;
+        var best = null;
+        views.forEach(function (v) {
+          var missing = v.prods.filter(function (p) { return !have[p.id]; });
+          if (missing.length === v.prods.length || !missing.length || missing.length > 3) return; // not started, or already complete
+          if (owned && missing.some(function (p) { return owned.has(p.id); })) return; // can't be completed by buying
+          var saving = v.prods.reduce(function (sum, p) { return sum + p.priceNum * v.pct / 100; }, 0);
+          if (!best || saving > best.saving) best = { v: v, missing: missing, saving: saving };
+        });
+        if (!best) { box.hidden = true; box.innerHTML = ''; return; }
+        var cost = best.missing.reduce(function (sum, p) { return sum + Math.round(p.priceNum * (1 - best.v.pct / 100) * 100) / 100; }, 0);
+        box.innerHTML = '<span class="co-bundle-thumb" style="background-image:url(\'' + best.v.image + '\')"></span>' +
+          '<div class="co-bundle-body"><div class="co-bundle-title">Complete the ' + esc(best.v.title) + '</div>' +
+          '<div class="co-bundle-sub">Add ' + best.missing.map(function (p) { return esc(p.title); }).join(' + ') + ' and save ' + Math.round(best.v.pct) + '% on every product in the bundle</div></div>' +
+          '<button class="btn btn-tinted co-bundle-add" type="button">Add · ' + fiatMoney(cost) + '</button>';
+        box.hidden = false;
+        box.querySelector('.co-bundle-add').addEventListener('click', function () {
+          best.missing.forEach(function (p) {
+            if (window.__cartAdd) window.__cartAdd({ id: p.id, title: p.title, price: p.priceNum, image: p.image, tag: p.cat || '' });
+          });
+        });
+      }
       function render() {
         renderItems(); renderTotals(); updateResell();
-        renderTierBanner(); renderCrossSell();
+        renderTierBanner(); renderBundleNudge(); renderCrossSell();
         if (typeof payMethod !== 'undefined' && payMethod === 'robux') renderRobuxPanel();
       }
 
@@ -7288,7 +7715,7 @@
         placeBtnSide.addEventListener('click', function () { placeBtn.click(); });
       }
 
-      window.addEventListener('currencychange', function () { renderTotals(); renderItems(); renderTierBanner(); renderCrossSell(); });
+      window.addEventListener('currencychange', function () { renderTotals(); renderItems(); renderTierBanner(); renderBundleNudge(); renderCrossSell(); });
       if (cart.length) scheduleCartSnapshot();
       render();
     })();
@@ -7481,6 +7908,49 @@
         });
       }
 
+      // Add-ons bought with the order: each gets a card under the products. A setup-style add-on
+      // (title contains "setup") needs the buyer to open a Discord ticket before any work starts,
+      // so that instruction is the first thing shown; an add-on with a file gets its own download.
+      function renderAddons(addons) {
+        if (!itemsEl || !addons || !addons.length) return;
+        var catBy = {};
+        (window.__CATALOG || []).forEach(function (c) { catBy[c.id] = c; });
+        if (addons.some(function (a) { return a.needs_ticket; })) {
+          var note = document.createElement('div');
+          note.className = 'dash-card glass dl-item dl-setup-note';
+          note.innerHTML = '<div class="dl-info"><div class="dl-name">Next step: open a support ticket</div>' +
+            '<div class="dl-meta">To start your setup service, create a ticket in our Discord. We aim to respond within 48 hours.</div></div>' +
+            '<div class="dl-actions"><a class="btn btn-primary" href="https://discord.gg/coldd" target="_blank" rel="noopener">Open Discord</a></div>';
+          itemsEl.appendChild(note);
+        }
+        addons.forEach(function (a) {
+          var prod = catBy[a.product_slug];
+          var card = document.createElement('div');
+          card.className = 'dash-card glass dl-item';
+          card.innerHTML = '<div class="dl-top"><span class="dl-thumb" style="background-image:url(\'' + (prod && prod.image ? prod.image : '') + '\')"></span>' +
+            '<div class="dl-info"><div class="dl-name"></div><div class="dl-meta"></div></div><div class="dl-actions"></div></div>';
+          card.querySelector('.dl-name').textContent = a.title;
+          card.querySelector('.dl-meta').textContent = 'Add-on' + (prod ? ' for ' + prod.title : '');
+          if (a.has_file) {
+            var btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'btn btn-primary dl-get'; btn.textContent = 'Download';
+            btn.addEventListener('click', function () {
+              var prev = btn.textContent;
+              btn.disabled = true; btn.textContent = 'Preparing…';
+              window.coldSupabase.functions.invoke('get-download-url', { body: sessionId ? { orderAddonId: a.id, sessionId: sessionId, token: claimToken } : { orderAddonId: a.id, orderId: robuxOrderIdParam, token: claimToken } })
+                .then(function (res) {
+                  var data = res && res.data;
+                  if (!data || !data.ok) { btn.disabled = false; btn.textContent = (data && data.error) || 'Could not get download.'; return; }
+                  return triggerFileDownload(data.url, data.filename).then(function () { btn.disabled = false; btn.textContent = prev; });
+                })
+                .catch(function () { btn.disabled = false; btn.textContent = prev; });
+            });
+            card.querySelector('.dl-actions').appendChild(btn);
+          }
+          itemsEl.appendChild(card);
+        });
+      }
+
       // Guest checkout (no account): the ?t= link is a short-lived,
       // single-use key, not a permanent download page. Nudge them to claim
       // a free account with their checkout email so access survives.
@@ -7595,6 +8065,7 @@
               if (subEl) subEl.textContent = 'Payment confirmed - your files are ready below.';
               confettiBurst();
               renderItems(data.items || []);
+              renderAddons(data.addons || []);
               if (data.guest) showGuestClaimNote();
               maybeShowResellerPopup(data.items || []);
               maybeShowHowHeard();

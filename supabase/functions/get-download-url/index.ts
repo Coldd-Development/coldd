@@ -31,6 +31,7 @@ import { verifyOrderAccess } from "../_shared/order_access.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const SIGNED_URL_TTL_SECONDS = 120;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function corsHeaders() {
   return {
@@ -64,9 +65,36 @@ Deno.serve(async (req: Request) => {
     const orderId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.orderId || ""))
       ? String(body.orderId)
       : "";
-    if (!slug) return json({ ok: false, error: "Missing product." }, 400);
+    const orderAddonId = UUID_RE.test(String(body.orderAddonId || "")) ? String(body.orderAddonId) : "";
+    if (!slug && !orderAddonId) return json({ ok: false, error: "Missing product." }, 400);
 
     const admin = createClient(supabaseUrl, serviceKey);
+
+    // An add-on's deliverable (e.g. the unwatermarked thumbnail). Same access
+    // model as a product file - account order needs the buyer's JWT, guest
+    // order needs the claim token - checked against the add-on's own order.
+    if (orderAddonId) {
+      const { data: oa, error: oaErr } = await admin
+        .from("order_addons")
+        .select("storage_path, file_name, title, orders!inner(status, user_id, purchased_by_user_id, paid_at, created_at, claim_token_hash)")
+        .eq("id", orderAddonId)
+        .maybeSingle();
+      if (oaErr) return json({ ok: false, error: "Could not verify ownership." }, 500);
+      if (!oa || !oa.storage_path) return json({ ok: false, error: "This add-on has no file to download." }, 404);
+      const addonOrder = Array.isArray(oa.orders) ? oa.orders[0] : oa.orders;
+      const getAddonUserId = async (): Promise<string | null> => {
+        if (!authHeader) return null;
+        const c = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+        const { data } = await c.auth.getUser();
+        return data?.user?.id ?? null;
+      };
+      const addonVerdict = await verifyOrderAccess(addonOrder, getAddonUserId, token, { requirePaid: true });
+      if (!addonVerdict.ok) return json({ ok: false, code: addonVerdict.code, error: addonVerdict.error }, addonVerdict.status);
+      const addonName = oa.file_name || downloadName(oa.storage_path, oa.title);
+      const addonUrl = await signPrivateDownload(admin, oa.storage_path, addonName, SIGNED_URL_TTL_SECONDS);
+      if (!addonUrl) return json({ ok: false, error: "Could not generate download link." }, 500);
+      return json({ ok: true, url: addonUrl, filename: addonName });
+    }
 
     let owned = false;
     if (sessionId || orderId) {

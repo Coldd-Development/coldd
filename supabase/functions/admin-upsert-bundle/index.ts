@@ -4,17 +4,34 @@
 //   supabase functions deploy admin-upsert-bundle
 //
 // Admin CRUD for curated (permanent, public) product bundles. Writes
-// bundle_deals rows with source='curated' - see supabase/bundles.sql.
-// A curated bundle gives bundle_pct off every listed product, but only
-// when the whole set is in the cart (item_pct stays 0), which is exactly
-// what priceItems() already does with the row's token.
+// bundle_deals rows with source='curated' - see supabase/bundles.sql and
+// supabase/addons_bundles.sql. A curated bundle gives bundle_pct off every
+// listed product, but only when the whole set is in the cart (item_pct stays
+// 0); priceItems() applies it automatically, no token needed.
+//
+// Every bundle is checked against each product's price limits (min_sale_usd /
+// min_sale_robux, max_discount_pct, disallow_sales, can_be_free) before it is
+// saved - see _shared/bundles.ts. A bundle that cannot respect them is refused
+// here, never silently clamped later.
 //
 // Body:
 //   { action: "list" }
-//   { action: "upsert", token?, slug, title, image?, productSlugs: [], discountPct, active? }
+//   { action: "limits", productSlugs: [] }            -> the most discount that set can take
+//   { action: "suggest" }                             -> genre-matched bundle ideas
+//   { action: "upsert", token?, slug?, title, description?, coverSlug?, image?,
+//                       productSlugs: [], discountPct, active? }
 //   { action: "delete", token }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  BUNDLE_MAX_PCT,
+  BUNDLE_PRODUCT_COLS,
+  bundleMaxPct,
+  pickCoverSlug,
+  suggestBundles,
+  validateBundle,
+  type BundleProduct,
+} from "../_shared/bundles.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 
@@ -35,6 +52,8 @@ function randToken(): string {
   for (let i = 0; i < 12; i++) s += a[Math.floor(Math.random() * a.length)];
   return "BNDL-" + s;
 }
+
+const slugify = (s: string) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
@@ -58,7 +77,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list") {
       const { data } = await admin.from("bundle_deals")
-        .select("token, slug, title, image, slugs, bundle_pct, active, created_at")
+        .select("token, slug, title, description, cover_slug, image, slugs, bundle_pct, active, created_at")
         .eq("source", "curated").order("created_at", { ascending: false });
       return json({ ok: true, bundles: data ?? [] });
     }
@@ -70,24 +89,56 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true });
     }
 
-    if (action === "upsert") {
-      const slug = String(body.slug || "").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
-      const title = String(body.title || "").trim();
-      const image = String(body.image || "").trim() || null;
-      const productSlugs = Array.isArray(body.productSlugs)
+    // The most discount a candidate set can take, for the form's live hint.
+    if (action === "limits") {
+      const slugs = Array.isArray(body.productSlugs)
         ? Array.from(new Set(body.productSlugs.map((s: unknown) => String(s || "").trim()).filter(Boolean)))
         : [];
-      const discountPct = Math.max(1, Math.min(90, Math.round(Number(body.discountPct) || 0)));
-      const active = body.active !== false;
+      if (!slugs.length) return json({ ok: true, maxPct: BUNDLE_MAX_PCT, blockers: [] });
+      const { data: found } = await admin.from("products").select(BUNDLE_PRODUCT_COLS).in("slug", slugs).eq("is_active", true);
+      const lim = bundleMaxPct((found ?? []) as BundleProduct[]);
+      return json({ ok: true, maxPct: lim.maxPct, blockers: lim.blockers });
+    }
 
-      if (!slug || !title) return json({ ok: false, error: "Slug and title are required." }, 400);
-      if (productSlugs.length < 2) return json({ ok: false, error: "A bundle needs at least 2 products." }, 400);
+    if (action === "suggest") {
+      const [{ data: prods }, { data: existing }] = await Promise.all([
+        admin.from("products").select(BUNDLE_PRODUCT_COLS).eq("is_active", true).limit(5000),
+        admin.from("bundle_deals").select("slugs").eq("source", "curated"),
+      ]);
+      const { suggestions, blocked } = suggestBundles((prods ?? []) as BundleProduct[], (existing ?? []) as { slugs: string[] }[]);
+      return json({ ok: true, suggestions, blocked });
+    }
+
+    if (action === "upsert") {
+      const title = String(body.title || "").trim();
+      const description = String(body.description || "").trim();
+      const image = String(body.image || "").trim() || null;
+      const productSlugs: string[] = Array.isArray(body.productSlugs)
+        ? Array.from(new Set(body.productSlugs.map((s: unknown) => String(s || "").trim()).filter(Boolean)))
+        : [];
+      const discountPct = Math.round(Number(body.discountPct) || 0);
+      const active = body.active !== false;
+      const slug = slugify(body.slug || title);
+
+      if (!slug || !title) return json({ ok: false, error: "A title is required." }, 400);
+      if (title.length > 80) return json({ ok: false, error: "The title is over 80 characters." }, 400);
+      if (description.length > 300) return json({ ok: false, error: "The description is over 300 characters." }, 400);
 
       // Every product must exist and be active.
-      const { data: found } = await admin.from("products").select("slug").in("slug", productSlugs).eq("is_active", true);
-      const foundSet = new Set((found ?? []).map((p: { slug: string }) => p.slug));
+      const { data: found } = await admin.from("products").select(BUNDLE_PRODUCT_COLS).in("slug", productSlugs).eq("is_active", true);
+      const prods = (found ?? []) as BundleProduct[];
+      const foundSet = new Set(prods.map((p) => p.slug as string));
       const missing = productSlugs.filter((s) => !foundSet.has(s));
       if (missing.length) return json({ ok: false, error: `Not active products: ${missing.join(", ")}` }, 400);
+
+      // The price-floor gate: refuse any bundle that cannot respect every
+      // product's limits at the chosen discount.
+      const floorErr = validateBundle(prods, discountPct);
+      if (floorErr) return json({ ok: false, error: floorErr }, 400);
+
+      // The cover is the most popular product unless one was picked by hand.
+      const requestedCover = String(body.coverSlug || "").trim();
+      const coverSlug = requestedCover && productSlugs.includes(requestedCover) ? requestedCover : pickCoverSlug(prods);
 
       const row = {
         slugs: productSlugs,
@@ -98,6 +149,8 @@ Deno.serve(async (req: Request) => {
         user_id: null,
         email: null,
         title,
+        description: description || null,
+        cover_slug: coverSlug,
         image,
         slug,
         active,
@@ -106,16 +159,19 @@ Deno.serve(async (req: Request) => {
       const token = body.token ? String(body.token) : null;
       if (token) {
         const { error } = await admin.from("bundle_deals").update(row).eq("token", token).eq("source", "curated");
-        if (error) return json({ ok: false, error: error.message }, 500);
+        if (error) {
+          if (/duplicate key/i.test(error.message)) return json({ ok: false, error: "A bundle with that name already exists." }, 400);
+          return json({ ok: false, error: error.message }, 500);
+        }
         return json({ ok: true, token });
       }
-      // New: retry on the rare slug/token collision.
+      // New: retry on the rare token collision.
       for (let i = 0; i < 4; i++) {
         const t = randToken();
         const { error } = await admin.from("bundle_deals").insert({ ...row, token: t });
         if (!error) return json({ ok: true, token: t });
         if (/duplicate key/i.test(error.message) && /slug/i.test(error.message)) {
-          return json({ ok: false, error: "A bundle with that slug already exists." }, 400);
+          return json({ ok: false, error: "A bundle with that name already exists." }, 400);
         }
       }
       return json({ ok: false, error: "Could not create the bundle." }, 500);

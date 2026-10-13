@@ -296,7 +296,7 @@
     // True when the admin turned Robux pricing off for this product (id may carry --resell/--bundle/--crosssell).
     window.__robuxOff = function (id) {
       if (/--resell$/.test(String(id || ''))) return true; // resell licences are USD only
-      var base = String(id || '').replace(/--(resell|bundle|crosssell)$/, '');
+      var base = String(id || '').replace(/--(resell|bundle|crosssell|addons)$/, '');
       var p = (window.__CATALOG || []).filter(function (c) { return c.id === base; })[0];
       return !!(p && p.robuxDisabled);
     };
@@ -454,6 +454,7 @@
     var priceNum = Number(row.price_usd) || 0;
     return {
       id: row.slug,
+      dbId: row.id,
       title: row.title,
       price: fmtPrice(priceNum),
       priceNum: priceNum,
@@ -580,6 +581,75 @@
     });
   };
 
+  // ---- Add-ons -------------------------------------------------------------
+  // Optional extras sold per product (Setup Service, Thumbnail Access, ...).
+  // window.__ADDONS maps product slug -> [add-on], __ADDON_BY_ID maps add-on id ->
+  // add-on. Robux price: the admin-set one, else the USD price converted with the
+  // same DevEx rounding the admin form and the server use (_shared/addons.ts); null
+  // for products that aren't sold for Robux.
+  function buildAddons(rows, ok) {
+    var byDb = {};
+    (window.__CATALOG || []).forEach(function (p) { byDb[p.dbId] = p; });
+    var by = {}, byId = {};
+    rows.forEach(function (a) {
+      var p = byDb[a.product_id]; if (!p) return;
+      var usd = Number(a.price_usd) || 0; if (!(usd > 0)) return;
+      var robux = Number(a.price_robux) > 0 ? Math.round(Number(a.price_robux)) : Math.ceil(usd / 0.0038 / 100) * 100;
+      var o = {
+        id: a.id, slug: p.id, title: a.title, desc: a.description || '', usd: usd,
+        robux: (p.platform === 'Roblox' && !p.robuxDisabled) ? robux : null,
+        hasFile: !!a.has_file, fileName: a.file_name || '',
+        ticket: /setup/i.test(a.title || ''), order: Number(a.sort_order) || 0
+      };
+      (by[p.id] = by[p.id] || []).push(o);
+      byId[a.id] = o;
+    });
+    Object.keys(by).forEach(function (k) { by[k].sort(function (x, y) { return x.order - y.order; }); });
+    window.__ADDONS = by; window.__ADDON_BY_ID = byId; window.__ADDONS_OK = ok;
+  }
+  window.__addonsFor = function (slug) { return (window.__ADDONS || {})[slug] || []; };
+
+  // ---- Bundles ---------------------------------------------------------------
+  // A bundle takes its percentage off every product in it, once the WHOLE set is in
+  // the cart (the server applies it automatically - see priceItems). These helpers
+  // only describe that to the shopper; the discount that is charged is always the
+  // server's. Prices round per product, exactly as the server does.
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function popularity(p) { return (Number(p.reviews) || 0) * 10 + (Number(p.rating) || 0); }
+  window.__bundleView = function (b) {
+    var by = {};
+    (window.__CATALOG || []).forEach(function (p) { by[p.id] = p; });
+    var prods = (b.slugs || []).map(function (s) { return by[s]; }).filter(Boolean);
+    if (prods.length < 2 || prods.length !== (b.slugs || []).length) return null; // a member is hidden or gone
+    var pct = Number(b.bundle_pct) || 0;
+    var cover = null;
+    prods.forEach(function (p) { if (p.id === b.cover_slug) cover = p; });
+    if (!cover) cover = prods.slice().sort(function (x, y) { return popularity(y) - popularity(x); })[0];
+    var listUsd = 0, priceUsd = 0;
+    prods.forEach(function (p) { listUsd += p.priceNum; priceUsd += round2(p.priceNum * (1 - pct / 100)); });
+    return { b: b, token: b.token, title: b.title, desc: b.description || '', pct: pct, prods: prods, cover: cover,
+             image: b.image || cover.image, listUsd: round2(listUsd), priceUsd: round2(priceUsd) };
+  };
+  window.__bundleViews = function () {
+    return (window.__BUNDLES || []).map(window.__bundleView).filter(Boolean);
+  };
+  window.__bundlesForProduct = function (slug) {
+    return window.__bundleViews().filter(function (v) { return v.b.slugs.indexOf(slug) >= 0; });
+  };
+  // slug -> best bundle % earned by a cart holding these slugs (any licence counts toward
+  // completing a bundle; only standard-licence lines are discounted, matching the server).
+  window.__bundlePctMap = function (slugs) {
+    var have = {}, out = {};
+    (slugs || []).forEach(function (s) { have[s] = true; });
+    (window.__BUNDLES || []).forEach(function (b) {
+      if (!b.slugs || b.slugs.length < 2) return;
+      if (!b.slugs.every(function (s) { return have[s]; })) return;
+      var pct = Number(b.bundle_pct) || 0;
+      b.slugs.forEach(function (s) { if (pct > (out[s] || 0)) out[s] = pct; });
+    });
+    return out;
+  };
+
   function fail(err) {
     if (err) console.error('[coldd] Failed to load live product catalog, falling back to empty:', err);
     window.__CATALOG = [];
@@ -587,6 +657,7 @@
     window.__POSTS = []; window.__TUTORIALS = []; window.__RELEASES = [];
     window.__ACTIVE_SALE = null;
     window.__BUNDLES = [];
+    window.__ADDONS = {}; window.__ADDON_BY_ID = {}; window.__ADDONS_OK = false;
     loadDependents();
   }
 
@@ -614,15 +685,22 @@
       .limit(20000),
     contentQuery,
     window.coldSupabase.from('bundle_deals')
-      .select('token, slug, title, image, slugs, bundle_pct')
-      .eq('source', 'curated').eq('active', true).order('created_at', { ascending: false }).limit(200)
+      .select('token, slug, title, description, cover_slug, image, slugs, bundle_pct')
+      .eq('source', 'curated').eq('active', true).order('created_at', { ascending: false }).limit(200),
+    // Per-product add-ons. A failure here (or the table not existing yet) must never
+    // break the catalog, so it resolves to an empty list instead of rejecting.
+    window.coldSupabase.from('product_addons')
+      .select('id, product_id, title, description, price_usd, price_robux, file_name, has_file, sort_order')
+      .eq('active', true).order('sort_order', { ascending: true }).limit(2000)
+      .then(function (r) { return r; }, function () { return { data: [], error: true }; })
   ])
     .then(function (results) {
-      var prodRes = results[0], revRes = results[1], contentRes = results[2], bundleRes = results[3];
+      var prodRes = results[0], revRes = results[1], contentRes = results[2], bundleRes = results[3], addonRes = results[4];
       window.__BUNDLES = (bundleRes && !bundleRes.error && bundleRes.data) ? bundleRes.data : [];
       if (prodRes.error) { fail(prodRes.error); return; }
       window.__CATALOG = (prodRes.data || []).map(toCard);
       window.__CATALOG_OK = true; // distinguishes a real (possibly empty) catalog from a failed fetch
+      buildAddons((addonRes && !addonRes.error && addonRes.data) ? addonRes.data : [], !!(addonRes && !addonRes.error));
       if (revRes.error) { console.error('[coldd] Failed to load reviews:', revRes.error); window.__REVIEWS = []; }
       else window.__REVIEWS = (revRes.data || []).map(toReview);
       if (contentRes.error) {

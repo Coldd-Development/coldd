@@ -81,6 +81,97 @@ async function uniqueSlug(admin: ReturnType<typeof createClient>, base: string, 
   }
 }
 
+// ---- Per-product add-ons (Setup Service, Thumbnail Access, ...) -------------
+// The editor sends the product's whole add-on list with every save:
+//   addons: [{ id?, title, description, priceUsd, priceRobux?, storagePath?, fileName?, removeFile? }]
+// An entry with a known id is updated in place, one without is created, and a
+// saved add-on missing from the list is deleted. Orders already placed keep
+// their own snapshot (order_addons), so editing or deleting is always safe.
+type AddonIn = {
+  id?: string;
+  title: string;
+  description: string;
+  price_usd: number;
+  price_robux: number | null;
+  storagePath?: string | null;
+  fileName?: string | null;
+  removeFile?: boolean;
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseAddons(raw: unknown, robuxOk: boolean): { ok: true; addons: AddonIn[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: true, addons: [] };
+  if (raw.length > 10) return { ok: false, error: "A product can have at most 10 add-ons." };
+  const out: AddonIn[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < raw.length; i++) {
+    const a = raw[i] && typeof raw[i] === "object" ? raw[i] : {};
+    const n = i + 1;
+    const title = String(a.title || "").trim();
+    if (!title) return { ok: false, error: `Add-on ${n}: enter a title.` };
+    if (title.length > 80) return { ok: false, error: `Add-on ${n}: the title is over 80 characters.` };
+    if (seen.has(title.toLowerCase())) return { ok: false, error: `Add-on ${n}: "${title}" is listed twice.` };
+    seen.add(title.toLowerCase());
+    const description = String(a.description || "").trim();
+    if (description.length > 300) return { ok: false, error: `Add-on ${n}: the description is over 300 characters.` };
+    const priceUsd = Math.round((Number(a.priceUsd) || 0) * 100) / 100;
+    if (!(priceUsd > 0) || priceUsd > 10000) return { ok: false, error: `Add-on ${n}: enter a USD price above $0.` };
+    const rbx = Math.round(Number(a.priceRobux) || 0);
+    out.push({
+      id: typeof a.id === "string" && UUID_RE.test(a.id) ? a.id : undefined,
+      title,
+      description,
+      price_usd: priceUsd,
+      // Only Roblox products sold for Robux keep a Robux price.
+      price_robux: robuxOk && rbx > 0 ? rbx : null,
+      storagePath: typeof a.storagePath === "string" && a.storagePath ? a.storagePath.slice(0, 500) : null,
+      fileName: typeof a.fileName === "string" && a.fileName ? a.fileName.slice(0, 200) : null,
+      removeFile: !!a.removeFile,
+    });
+  }
+  return { ok: true, addons: out };
+}
+
+// deno-lint-ignore no-explicit-any
+async function syncAddons(admin: any, productId: string, addons: AddonIn[]): Promise<string | null> {
+  const { data: existing, error: loadErr } = await admin.from("product_addons").select("id").eq("product_id", productId);
+  if (loadErr) return "Product saved, but add-ons could not be loaded (has the add-ons SQL been run?).";
+  const have = new Set<string>((existing ?? []).map((r: { id: string }) => r.id));
+  const keep = new Set<string>();
+  const now = new Date().toISOString();
+  for (let i = 0; i < addons.length; i++) {
+    const a = addons[i];
+    const row: Record<string, unknown> = {
+      product_id: productId,
+      title: a.title,
+      description: a.description,
+      price_usd: a.price_usd,
+      price_robux: a.price_robux,
+      sort_order: i,
+      active: true,
+      updated_at: now,
+    };
+    if (a.removeFile) { row.storage_path = null; row.file_name = null; }
+    else if (a.storagePath) { row.storage_path = a.storagePath; row.file_name = a.fileName; }
+    if (a.id && have.has(a.id)) {
+      const { error } = await admin.from("product_addons").update(row).eq("id", a.id).eq("product_id", productId);
+      if (error) return `Product saved, but add-on "${a.title}" failed to save.`;
+      keep.add(a.id);
+    } else {
+      const { data, error } = await admin.from("product_addons").insert(row).select("id").single();
+      if (error || !data) return `Product saved, but add-on "${a.title}" failed to save.`;
+      keep.add(data.id);
+    }
+  }
+  const drop = [...have].filter((id) => !keep.has(id));
+  if (drop.length) {
+    const { error } = await admin.from("product_addons").delete().in("id", drop).eq("product_id", productId);
+    if (error) return "Product saved, but removed add-ons could not be deleted.";
+  }
+  return null;
+}
+
 const LICENSE_TYPES = ["ownership", "resell_plus", "resell_rights", "revenue_share"];
 
 type LegalPayload = {
@@ -155,6 +246,10 @@ Deno.serve(async (req: Request) => {
     // otherwise this isn't a sale, it's just a number sitting in a field.
     const wasPrice = body.wasPrice != null && Number(body.wasPrice) > price ? Number(body.wasPrice) : null;
     const robuxPrice = body.robuxPrice != null ? Math.max(0, Number(body.robuxPrice) || 0) : 0;
+
+    // Add-ons are validated up front so a bad row never half-saves the product.
+    const addonsParsed = parseAddons(body.addons, platform === "Roblox" && !body.robuxDisabled);
+    if (!addonsParsed.ok) return json({ ok: false, error: addonsParsed.error }, 400);
 
     // Enforce product_legal against the price an admin is trying to set by
     // hand - the same limits every automatic discount path already
@@ -301,6 +396,13 @@ Deno.serve(async (req: Request) => {
     };
     const { error: legalErr } = await admin.from("product_legal").upsert(legalFields);
     if (legalErr) return json({ ok: false, error: "Product saved, but legal info failed to save." }, 500);
+
+    // Only touch add-ons when the editor sent the list (an older cached admin
+    // page that doesn't know about add-ons must never wipe them).
+    if (Array.isArray(body.addons) && productId) {
+      const addonErr = await syncAddons(admin, productId, addonsParsed.addons);
+      if (addonErr) return json({ ok: false, error: addonErr }, 500);
+    }
 
     // Auto-announce: brand-new product launch, or a newly pushed version
     // on an existing one (versions is append-only, so a longer array means

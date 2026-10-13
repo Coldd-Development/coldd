@@ -32,12 +32,13 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@17?target=deno";
-import { priceItems, resolveCoupon, spendTierDiscount, clampCombinedDiscount, activeSaleEvent, saleEventDiscount } from "../_shared/coupon.ts";
+import { type PricedLine, priceItems, resolveCoupon, spendTierDiscount, clampCombinedDiscount, activeSaleEvent, saleEventDiscount } from "../_shared/coupon.ts";
 import { resolveCampaignCode } from "../_shared/campaign.ts";
 import { resolveProductReferral } from "../_shared/referrals.ts";
 import { isSiteInMaintenance } from "../_shared/maintenance.ts";
 import { genClaimToken, sha256Hex } from "../_shared/order_access.ts";
 import { usdTo } from "../_shared/fx.ts";
+import { priceAddons, insertOrderAddons, addonLineName } from "../_shared/addons.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 
@@ -145,10 +146,20 @@ Deno.serve(async (req: Request) => {
       if (!isStaff) return json({ ok: false, error: "coldd is temporarily down for maintenance. Please check back shortly." }, 503);
     }
 
-    const priced = await priceItems(admin, Array.isArray(body.items) ? body.items : [], { bundleToken: body.bundleToken ? String(body.bundleToken) : undefined });
+    // Items flagged addonOnly are add-ons for a product the buyer already owns: no product line to price.
+    const allItems = Array.isArray(body.items) ? body.items : [];
+    const productItems = allItems.filter((i: { addonOnly?: boolean }) => !i?.addonOnly);
+    const priced = productItems.length
+      ? await priceItems(admin, productItems, { bundleToken: body.bundleToken ? String(body.bundleToken) : undefined })
+      : { ok: true as const, lines: [] as PricedLine[], subtotal: 0 };
     if (!priced.ok) return json({ ok: false, error: priced.error }, 400);
     const { lines, subtotal } = priced;
-    if (subtotal <= 0) return json({ ok: false, error: "Order total must be greater than zero." }, 400);
+
+    // Per-product add-ons ride on top of the priced lines, outside every discount - see _shared/addons.ts.
+    const addonPriced = await priceAddons(admin, allItems, { userId: user?.id ?? null, gift: !!body.giftRecipientUserId });
+    if (!addonPriced.ok) return json({ ok: false, error: addonPriced.error }, 400);
+    const { addons, totalUsd: addonsUsd } = addonPriced;
+    if (subtotal <= 0 && addonsUsd <= 0) return json({ ok: false, error: "Order total must be greater than zero." }, 400);
 
     // The live store-wide/scoped sale event (admin Sales tab), if any -
     // applied automatically, stacks with a coupon and the spend tiers.
@@ -179,7 +190,8 @@ Deno.serve(async (req: Request) => {
     // subtotal, stacks with a coupon the same floor-safe way the old
     // marketing discount did.
     discount = clampCombinedDiscount(lines, discount + saleDisc + spendTierDiscount(lines).discount);
-    const total = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    const productsTotal = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    const total = Math.round((productsTotal + addonsUsd) * 100) / 100;
     const campaignCode = await resolveCampaignCode(admin, body.campaignCode);
     const productReferral = await resolveProductReferral(admin, body.refCode, body.refSlug, lines, user?.id ?? null);
 
@@ -205,7 +217,7 @@ Deno.serve(async (req: Request) => {
         user_id: giftRecipientId || (user ? user.id : null),
         purchased_by_user_id: giftRecipientId ? user!.id : null,
         status: "pending",
-        subtotal_usd: subtotal,
+        subtotal_usd: Math.round((subtotal + addonsUsd) * 100) / 100,
         discount_usd: discount,
         total_usd: total,
         coupon_code: appliedCouponCode,
@@ -219,7 +231,7 @@ Deno.serve(async (req: Request) => {
       .single();
     if (orderErr || !order) return json({ ok: false, error: "Could not create order." }, 500);
 
-    const { error: itemsErr } = await admin.from("order_items").insert(
+    const { error: itemsErr } = lines.length === 0 ? { error: null } : await admin.from("order_items").insert(
       lines.map((li) => ({
         order_id: order.id,
         product_id: li.productId,
@@ -233,6 +245,10 @@ Deno.serve(async (req: Request) => {
     if (itemsErr) {
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
       return json({ ok: false, error: "Could not create order items." }, 500);
+    }
+    if (!(await insertOrderAddons(admin, order.id, addons))) {
+      await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
+      return json({ ok: false, error: "Could not record your add-ons." }, 500);
     }
 
     // Guest orders (no account) carry a one-time claim token in the success
@@ -264,6 +280,7 @@ Deno.serve(async (req: Request) => {
       // keep in sync - just each line and the discount).
       const convert = (amountUsd: number) => usdTo(amountUsd, currency);
       const lineUnitAmounts = await Promise.all(lines.map((li) => convert(li.unitPrice)));
+      const addonUnitAmounts = await Promise.all(addons.map((a) => convert(a.unitUsd)));
       const chargedTotal = await convert(total);
 
       let discounts: { coupon: string }[] | undefined;
@@ -298,7 +315,14 @@ Deno.serve(async (req: Request) => {
             product_data: { name: li.title },
           },
           quantity: li.qty,
-        })),
+        })).concat(addons.map((a, i) => ({
+          price_data: {
+            currency,
+            unit_amount: Math.round(addonUnitAmounts[i] * 100),
+            product_data: { name: addonLineName(a) },
+          },
+          quantity: 1,
+        }))),
         ...(discounts ? { discounts } : {}),
         success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}${isGuest ? `&t=${claimToken}` : ""}`,
         cancel_url: `${siteUrl}/checkout`,

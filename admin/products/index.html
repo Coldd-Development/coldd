@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009x140340" />
+  <link rel="stylesheet" href="/styles.css?v=20261014a" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -569,6 +569,22 @@
                   </label>
                 </div>
 
+                <!-- Per-product add-ons: optional extras sold alongside this product (a setup service, an
+                     unwatermarked thumbnail, ...). Each row has its own price; the file is what the buyer
+                     receives after purchase. Rows are built by admin.js. -->
+                <div class="adm-addons" id="admAddons">
+                  <div class="adm-addons-head">
+                    <div>
+                      <h3 class="adm-addons-h">Add-ons</h3>
+                      <p class="adm-hint">Optional extras buyers can add to this product. Pick a template from the title field to fill in the rest, then edit anything. An add-on with "setup" in its title asks the buyer to open a Discord ticket after they pay.</p>
+                    </div>
+                    <button type="button" class="btn btn-ghost adm-btn-sm" id="admAddonAdd">Add add-on</button>
+                  </div>
+                  <div class="adm-addon-cols" aria-hidden="true"><span>Title</span><span>Description</span><span>USD price</span><span>Robux price</span><span>File (optional)</span><span></span></div>
+                  <div class="adm-addon-list" id="admAddonList"></div>
+                  <p class="adm-hint adm-addon-empty" id="admAddonEmpty">No add-ons on this product.</p>
+                </div>
+
                 <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Summary</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="100" /></label>
                 <div class="adm-field adm-field-wide" style="margin-top:16px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admEditBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea maxlength="20000" id="admEditLongDesc" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></div>
 
@@ -1031,26 +1047,66 @@
 
             <div id="admBundleDealsView" hidden>
               <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><h2>Curated bundles</h2><span class="adm-sub">Permanent, public bundles shown on the homepage. The discount applies only when the whole bundle is in the cart.</span></div>
+                <div class="dash-card-head adm-head-actions">
+                  <div><h2>Bundles</h2><span class="adm-sub">Products sold together at a discount. The discount applies on its own once every product in the bundle is in the cart, and never takes a product below its price limits.</span></div>
+                  <button class="btn btn-primary adm-btn-sm" type="button" id="admBundleNew">New bundle</button>
+                </div>
                 <table class="dash-table">
-                  <thead><tr><th>Title</th><th>Slug</th><th>Products</th><th>Discount</th><th>Status</th><th></th></tr></thead>
+                  <thead><tr><th>Bundle</th><th>Products</th><th>Discount</th><th>Price</th><th>Status</th><th></th></tr></thead>
                   <tbody id="admCuratedBundlesBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
-                <div class="dash-card-head"><h2 id="admBundleFormTitle">New curated bundle</h2></div>
-                <form class="adm-form" id="admBundleForm" style="flex-wrap:wrap;">
+
+              <div class="dash-card glass" id="admBundleEditor" hidden>
+                <div class="dash-card-head"><h2 id="admBundleFormTitle">New bundle</h2></div>
+                <form id="admBundleForm" novalidate>
                   <input type="hidden" id="admBundleToken" />
-                  <input maxlength="120" type="text" id="admBundleTitle" class="adm-input" placeholder="Title" required style="min-width:200px;" />
-                  <input maxlength="120" type="text" id="admBundleSlug" class="adm-input adm-input-sm" placeholder="slug" required />
-                  <input maxlength="200" type="text" id="admBundleImage" class="adm-input adm-input-sm" placeholder="Image, e.g. banner.jpg (optional)" />
-                  <input type="number" id="admBundleDiscount" class="adm-input adm-input-sm" placeholder="Discount %" min="1" max="90" required style="max-width:110px;" />
-                  <input maxlength="200" type="text" id="admBundleProducts" class="adm-input adm-field-wide" placeholder="Product slugs, comma-separated (min 2)" required style="flex:1;min-width:280px;" />
-                  <label class="adm-check"><input type="checkbox" id="admBundleActive" checked /> Active</label>
-                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admBundleSubmitBtn">Save bundle</button>
-                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admBundleCancelBtn" hidden>Cancel edit</button>
+                  <div class="adm-edit-grid">
+                    <label class="adm-field adm-field-wide"><span>Title</span><input maxlength="80" type="text" id="admBundleTitle" class="adm-input" required /></label>
+                    <div class="adm-tpl adm-field-wide" id="admBundleTitleTpl" hidden></div>
+                    <label class="adm-field adm-field-wide"><span>Description (optional)</span><textarea maxlength="300" rows="2" id="admBundleDesc" class="adm-input adm-textarea"></textarea></label>
+                    <div class="adm-tpl adm-field-wide" id="admBundleDescTpl" hidden></div>
+                    <div class="adm-field adm-field-wide">
+                      <span>Products (2 to 8, all Roblox or all Minecraft)</span>
+                      <div class="adm-dd" id="admBundleProductsDD">
+                        <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="adm-dd-val placeholder">Select products</span>
+                          <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="adm-dd-menu" role="listbox" aria-label="Products in this bundle" hidden></div>
+                      </div>
+                      <input type="hidden" id="admBundleProducts" />
+                    </div>
+                    <div class="adm-field">
+                      <span>Cover image</span>
+                      <div class="adm-dd" id="admBundleCoverDD">
+                        <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="adm-dd-val placeholder">Most popular product (automatic)</span>
+                          <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="adm-dd-menu" role="listbox" aria-label="Cover product" hidden></div>
+                      </div>
+                      <input type="hidden" id="admBundleCover" />
+                    </div>
+                    <label class="adm-field"><span>Discount (%)</span><input type="number" id="admBundleDiscount" class="adm-input" min="1" max="60" step="1" required /></label>
+                  </div>
+                  <div class="adm-bundle-limit" id="admBundleLimit" hidden></div>
+                  <div class="adm-bundle-preview" id="admBundlePreview" hidden></div>
+                  <label class="adm-field-check"><input type="checkbox" id="admBundleActive" checked /> <span>Active (shown on the site and discounting)</span></label>
+                  <div class="adm-form-actions">
+                    <button class="btn btn-primary" type="submit" id="admBundleSubmitBtn">Save bundle</button>
+                    <button class="btn btn-ghost" type="button" id="admBundleCancelBtn">Cancel</button>
+                  </div>
+                  <div class="adm-edit-msg" id="admBundleMsg"></div>
                 </form>
-                <div class="adm-edit-msg" id="admBundleMsg"></div>
+              </div>
+
+              <div class="dash-card glass">
+                <div class="dash-card-head adm-head-actions">
+                  <div><h2>Suggested bundles</h2><span class="adm-sub">Matched from each product's genre and keywords, most relevant first. A set that can't be discounted without breaking a product's price limits is never suggested.</span></div>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admBundleSuggestRefresh">Refresh</button>
+                </div>
+                <div class="adm-sugg-list" id="admBundleSuggestions"><p class="adm-hint">Open this tab to load suggestions.</p></div>
               </div>
 
               <div class="dash-card glass dash-tablewrap">
@@ -1575,6 +1631,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x073020" data-then="/app.js?v=20261008c,/reviews.js?v=20260729a,/admin.js?v=20261009n"></script>
+  <script src="/catalog.js?v=20261014a" data-then="/app.js?v=20261014a,/reviews.js?v=20260729a,/admin.js?v=20261014a"></script>
 </body>
 </html>

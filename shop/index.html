@@ -30,7 +30,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261009x140340" />
+  <link rel="stylesheet" href="/styles.css?v=20261014a" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://coldd.dev/"}, {"@type": "ListItem", "position": 2, "name": "Roblox", "item": "https://coldd.dev/shop"}]}</script>
   <!-- ld:end -->
@@ -355,6 +355,8 @@
             </div>
           </article>
             </div>
+            <!-- The Bundles category: curated bundles instead of single products. Filled by app.js. -->
+            <div class="shop-bundles" id="shopBundles" hidden></div>
             <div class="shop-empty" id="shopEmpty" hidden>No products match your filters.</div>
             <div class="shop-pager" aria-label="Pagination"></div>
           </div>
@@ -405,6 +407,7 @@
                   <button class="fc-sub" data-cat="resell" data-subcat="animations-vfx">Animations &amp; VFX</button>
                 </div>
               </div>
+              <button class="fc-cat fc-cat-bundles" data-cat="bundles"><span>Bundles</span></button>
               <div class="fc-cat-group">
                 <button class="fc-cat" data-cat="game-templates"><span>Finished Games &amp; Templates</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                 <div class="fc-subs" hidden>
@@ -753,7 +756,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261009x063147"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261009x073020" data-then="/app.js?v=20261008c"></script>
+  <script src="/catalog.js?v=20261014a" data-then="/app.js?v=20261014a"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

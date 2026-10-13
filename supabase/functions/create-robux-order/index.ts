@@ -17,15 +17,16 @@
 // linked a Roblox account, before an order can even be created.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { priceRobuxItems, getValidRobloxToken } from "../_shared/roblox.ts";
+import { priceRobuxItems, getValidRobloxToken, type RobuxPricedLine } from "../_shared/roblox.ts";
 import { leasePassForOrder } from "../_shared/roblox_pool.ts";
 import { resolveCampaignCode } from "../_shared/campaign.ts";
 import { resolveProductReferral } from "../_shared/referrals.ts";
 import {
-  priceItems, resolveCoupon, spendTierDiscountRobux, clampCombinedDiscount,
+  type PricedLine, priceItems, resolveCoupon, spendTierDiscountRobux, clampCombinedDiscount,
   clampCombinedDiscountRobux, robuxLegalHeadroom, activeSaleEvent, saleEventDiscount,
 } from "../_shared/coupon.ts";
 import { isSiteInMaintenance } from "../_shared/maintenance.ts";
+import { priceAddons, insertOrderAddons } from "../_shared/addons.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 
@@ -78,11 +79,48 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const items = Array.isArray(body.items) ? body.items : [];
-    const priced = await priceRobuxItems(admin, items);
+    const allItems = Array.isArray(body.items) ? body.items : [];
+    // Items flagged addonOnly are add-ons for a product the buyer already owns: no product line to price.
+    const items = allItems.filter((i: { addonOnly?: boolean }) => !i?.addonOnly);
+    const priced = items.length
+      ? await priceRobuxItems(admin, items)
+      : { ok: true as const, lines: [] as RobuxPricedLine[], totalRobux: 0 };
     if (!priced.ok) return json({ ok: false, error: priced.error }, 400);
-    const { lines, totalRobux } = priced;
-    if (totalRobux <= 0) return json({ ok: false, error: "Order total must be greater than zero." }, 400);
+    const { lines } = priced;
+
+    // The same cart priced in USD. Carries the curated-bundle percentage each
+    // line earned (see priceItems), which is applied to the Robux price here,
+    // and is reused below to turn coupon / sale discounts into Robux.
+    const usdPriced = items.length
+      ? await priceItems(admin, items)
+      : { ok: true as const, lines: [] as PricedLine[], subtotal: 0 };
+    if (usdPriced.ok) {
+      for (const li of lines) {
+        if (li.licence === "resell" || li.disallowSales) continue;
+        const u = usdPriced.lines.find((x) => x.slug === li.slug && x.licence === "standard");
+        if (!u || !(u.bundlePct > 0)) continue;
+        // Never below the product's own Robux floor (min_sale_robux /
+        // max_discount_pct) - the same floor the USD line already respected.
+        const discounted = Math.round(li.unitRobux * (1 - u.bundlePct / 100));
+        const floored = Math.max(discounted, li.floorRobux);
+        if (floored < li.unitRobux) {
+          li.unitRobux = floored;
+          li.unitPriceUsd = u.unitPrice;
+          li.title += ` (Bundle ${u.bundlePct}% off)`;
+        }
+      }
+    }
+    const totalRobux = lines.reduce((sum, li) => sum + li.unitRobux * li.qty, 0);
+
+    // Per-product add-ons ride on top, outside every discount - see
+    // _shared/addons.ts. Their Robux price is the add-on's own Robux price.
+    const addonPriced = await priceAddons(admin, allItems, { userId: userData.user.id, gift: !!body.giftRecipientUserId });
+    if (!addonPriced.ok) return json({ ok: false, error: addonPriced.error }, 400);
+    const { addons, totalUsd: addonsUsd, totalRobux: addonsRobux } = addonPriced;
+    if (totalRobux <= 0 && addonsRobux <= 0) return json({ ok: false, error: "Order total must be greater than zero." }, 400);
+    // A product's add-ons can only be paid in Robux where the product itself can be.
+    const noRobux = addons.find((a) => !a.robuxOk);
+    if (noRobux) return json({ ok: false, error: `${noRobux.title} (${noRobux.productTitle}) can't be bought with Robux.` }, 400);
 
     const subtotalUsd = lines.reduce((sum, li) => sum + li.unitPriceUsd * li.qty, 0);
 
@@ -103,7 +141,6 @@ Deno.serve(async (req: Request) => {
       // evaluated directly in Robux (see spendTierDiscountRobux), and the
       // whole Robux reduction is re-clamped against the cart's Robux legal
       // headroom so no product_legal floor is breached.
-      const usdPriced = await priceItems(admin, items);
       const saleEvent = await activeSaleEvent(admin);
       let usdReduction = 0;
       if (usdPriced.ok && usdPriced.subtotal > 0) {
@@ -160,10 +197,10 @@ Deno.serve(async (req: Request) => {
         purchased_by_user_id: giftRecipientId ? userData.user.id : null,
         status: "pending",
         currency: "robux",
-        subtotal_usd: subtotalUsd,
+        subtotal_usd: Math.round((subtotalUsd + addonsUsd) * 100) / 100,
         discount_usd: discountUsd,
-        total_usd: finalTotalUsd,
-        total_robux: finalTotalRobux,
+        total_usd: Math.round((finalTotalUsd + addonsUsd) * 100) / 100,
+        total_robux: finalTotalRobux + addonsRobux,
         coupon_code: appliedCouponCode,
         sale_event_slug: saleEventSlug,
         roblox_buyer_id: robloxAcct.roblox_id,
@@ -176,7 +213,7 @@ Deno.serve(async (req: Request) => {
       .single();
     if (orderErr || !order) return json({ ok: false, error: "Could not create order." }, 500);
 
-    const { error: itemsErr } = await admin.from("order_items").insert(
+    const { error: itemsErr } = lines.length === 0 ? { error: null } : await admin.from("order_items").insert(
       lines.map((li) => ({
         order_id: order.id,
         product_id: li.productId,
@@ -191,6 +228,10 @@ Deno.serve(async (req: Request) => {
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
       return json({ ok: false, error: "Could not create order items." }, 500);
     }
+    if (!(await insertOrderAddons(admin, order.id, addons))) {
+      await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
+      return json({ ok: false, error: "Could not record your add-ons." }, 500);
+    }
 
     // One pass for the whole order, priced to the exact (post-discount)
     // total - not one pass per product. The buyer makes a single Roblox
@@ -200,7 +241,7 @@ Deno.serve(async (req: Request) => {
     // user.inventory-item:read scope; silently skipped if not granted).
     const buyerToken = await getValidRobloxToken(admin, userData.user.id).catch(() => null);
     const leased = await leasePassForOrder(
-      admin, order.id, finalTotalRobux, robloxAcct.roblox_id, buyerToken?.accessToken,
+      admin, order.id, finalTotalRobux + addonsRobux, robloxAcct.roblox_id, buyerToken?.accessToken,
     );
     if (!leased.ok) {
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
@@ -214,7 +255,7 @@ Deno.serve(async (req: Request) => {
     return json({
       ok: true,
       orderId: order.id,
-      totalRobux: finalTotalRobux,
+      totalRobux: finalTotalRobux + addonsRobux,
       // The single pass to buy. priceRobux is what we actually set on Roblox,
       // which verification checks against - it is not merely the display total.
       gamePassId: leased.pass.gamepassId,
@@ -227,7 +268,12 @@ Deno.serve(async (req: Request) => {
         title: li.title,
         qty: li.qty,
         unitRobux: li.unitRobux,
-      })),
+      })).concat(addons.map((a) => ({
+        slug: a.productSlug,
+        title: `${a.title} - ${a.productTitle}`,
+        qty: 1,
+        unitRobux: a.unitRobux,
+      }))),
     });
   } catch (err) {
     console.error("[create-robux-order] error:", err);

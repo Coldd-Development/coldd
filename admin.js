@@ -526,6 +526,7 @@
       platform: product ? product.platform : null,
       licence: first.licence || 'standard',
       items: items.map(function (it) { return { slug: it.product_slug, title: it.title, licence: it.licence || 'standard' }; }),
+      addons: (row.order_addons || []).map(function (a) { return { title: a.title, slug: a.product_slug, price: Number(a.unit_price_usd) || 0, needsTicket: !!a.needs_ticket, fileName: a.file_name || '' }; }),
       qty: items.reduce(function (s, it) { return s + (it.qty || 1); }, 0),
       unitPrice: Number(first.unit_price_usd) || 0,
       subtotal: Number(row.subtotal_usd) || 0,
@@ -569,13 +570,23 @@
       if (res.error) { console.error('[admin] failed to load orders:', res.error.message); ORDERS_LOADED = true; renderAll(); return; }
       var rows = res.data || [];
       var userIds = rows.map(function (o) { return o.user_id; }).filter(function (v, i, arr) { return v && arr.indexOf(v) === i; });
+      // Add-ons are in their own table; read them separately so a missing table never hides orders.
+      var addonsLoad = window.coldSupabase.from('order_addons')
+        .select('order_id, product_slug, title, unit_price_usd, needs_ticket, file_name').limit(20000)
+        .then(function (r) { return (r && !r.error && r.data) || []; }, function () { return []; })
+        .then(function (list) {
+          var by = {};
+          list.forEach(function (a) { (by[a.order_id] = by[a.order_id] || []).push(a); });
+          rows.forEach(function (o) { o.order_addons = by[o.id] || []; });
+        });
       if (!userIds.length) {
-        ORDERS = rows.map(function (o) { return mapOrderRow(o, null); });
-        ORDERS_LOADED = true;
-        renderAll();
-        return;
+        return addonsLoad.then(function () {
+          ORDERS = rows.map(function (o) { return mapOrderRow(o, null); });
+          ORDERS_LOADED = true;
+          renderAll();
+        });
       }
-      return window.coldSupabase.from('profiles').select('id,username,email').in('id', userIds).then(function (pRes) {
+      return addonsLoad.then(function () { return window.coldSupabase.from('profiles').select('id,username,email').in('id', userIds); }).then(function (pRes) {
         var byId = {};
         (pRes.data || []).forEach(function (p) { byId[p.id] = p; });
         ORDERS = rows.map(function (o) { return mapOrderRow(o, byId[o.user_id]); });
@@ -3587,7 +3598,8 @@
     thumbnail: ['gif', 'png', 'jpg', 'jpeg', 'zip', 'mp4'],
     gallery: ['gif', 'png', 'jpg', 'jpeg', 'zip', 'mp4'],
     productFile: ['zip', 'rbxm', 'rbxl'],
-    legalDoc: ['zip', 'mp4', 'png', 'jpg', 'jpeg', 'pdf']
+    legalDoc: ['zip', 'mp4', 'png', 'jpg', 'jpeg', 'pdf'],
+    addonFile: ['zip', 'rbxm', 'rbxl', 'png', 'jpg', 'jpeg', 'gif', 'pdf', 'mp4']
   };
   function uploadAllowedMsg(kind, file) {
     var list = UPLOAD_ALLOWED[kind];
@@ -3598,7 +3610,97 @@
     var shown = list.filter(function (e) { return e !== 'jpg'; }).map(function (e) { return '.' + e; });
     return file.name + ' is not an accepted file type. Accepted: ' + shown.join(', ') + '.';
   }
+  /* Upload tray (bottom-right, next to the toasts): one animated progress card per upload, so a big
+     file visibly moves instead of the page feeling stuck until it finishes. Each card shows the file
+     name, bytes sent, speed and a bar; it turns into a tick when done (and fades away) or a red
+     message if it failed (stays until dismissed). */
+  var upTrayEl = null;
+  function upTray() {
+    if (upTrayEl) return upTrayEl;
+    upTrayEl = document.createElement('div');
+    upTrayEl.className = 'adm-uptray';
+    upTrayEl.setAttribute('role', 'region');
+    upTrayEl.setAttribute('aria-label', 'Uploads');
+    document.body.appendChild(upTrayEl);
+    return upTrayEl;
+  }
+  // Keeps toasts clear of the tray: they sit just above it while uploads are showing.
+  function upTraySync() {
+    var n = upTrayEl ? upTrayEl.children.length : 0;
+    document.documentElement.style.setProperty('--adm-uptray-h', n ? (upTrayEl.offsetHeight + 12) + 'px' : '0px');
+    document.body.classList.toggle('adm-uploading', n > 0);
+  }
+  function fmtRate(bps) { return bps > 0 ? formatFileSize(bps) + '/s' : ''; }
+  function uploadTrack(file) {
+    var card = document.createElement('div');
+    card.className = 'adm-up';
+    var ext = (/\.([a-z0-9]+)$/i.exec(file.name || '') || [, 'file'])[1].toUpperCase().slice(0, 4);
+    card.innerHTML =
+      '<span class="adm-up-ic">' + esc(ext) + '</span>' +
+      '<div class="adm-up-main"><div class="adm-up-top"><span class="adm-up-name"></span><span class="adm-up-pct">0%</span></div>' +
+      '<div class="adm-up-bar"><span class="adm-up-fill"></span></div>' +
+      '<div class="adm-up-sub">Preparing…</div></div>' +
+      '<button type="button" class="adm-up-x" aria-label="Dismiss" hidden>×</button>';
+    card.querySelector('.adm-up-name').textContent = file.name;
+    var fill = card.querySelector('.adm-up-fill'), pctEl = card.querySelector('.adm-up-pct'), sub = card.querySelector('.adm-up-sub'), x = card.querySelector('.adm-up-x');
+    upTray().appendChild(card);
+    void card.offsetWidth; card.classList.add('in'); upTraySync();
+    var t0 = Date.now(), closed = false;
+    function close() {
+      if (closed) return; closed = true;
+      card.classList.remove('in'); card.classList.add('out');
+      setTimeout(function () { card.remove(); upTraySync(); }, 260);
+    }
+    x.addEventListener('click', close);
+    return {
+      // sent / total in bytes. Without a real byte count (storage that can't report it) the bar just animates.
+      progress: function (sent, total) {
+        if (closed) return;
+        card.classList.remove('indeterminate');
+        var f = total > 0 ? Math.max(0, Math.min(1, sent / total)) : 0;
+        fill.style.width = (f * 100).toFixed(1) + '%';
+        pctEl.textContent = Math.floor(f * 100) + '%';
+        var secs = Math.max(0.25, (Date.now() - t0) / 1000);
+        sub.textContent = formatFileSize(sent) + ' of ' + formatFileSize(total) + (sent > 0 ? ' · ' + fmtRate(sent / secs) : '');
+      },
+      indeterminate: function (msg) { card.classList.add('indeterminate'); sub.textContent = msg || 'Uploading…'; pctEl.textContent = ''; },
+      done: function () {
+        if (closed) return;
+        card.classList.remove('indeterminate'); card.classList.add('ok');
+        fill.style.width = '100%'; pctEl.textContent = '✓'; sub.textContent = formatFileSize(file.size) + ' uploaded';
+        setTimeout(close, 1800);
+      },
+      fail: function (msg) {
+        if (closed) return;
+        card.classList.remove('indeterminate'); card.classList.add('err');
+        pctEl.textContent = '!'; sub.textContent = msg || 'Upload failed'; x.hidden = false;
+      }
+    };
+  }
+  // POST with upload progress (fetch can't report it). Resolves {status, ok, json()} like the pieces of a
+  // fetch Response the callers below already use.
+  function xhrPost(url, body, onProgress) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.upload.onprogress = function (e) { if (e.lengthComputable && onProgress) onProgress(e.loaded, e.total); };
+      xhr.onerror = function () { reject(new TypeError('network')); };
+      xhr.onabort = function () { reject(new TypeError('aborted')); };
+      xhr.onload = function () {
+        var text = xhr.responseText;
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, json: function () { try { return Promise.resolve(JSON.parse(text)); } catch (e) { return Promise.reject(e); } } });
+      };
+      xhr.send(body);
+    });
+  }
   function uploadToStorageRaw(kind, file, slugOverride) {
+    var tracker = uploadTrack(file);
+    return uploadToStorageRaw2(kind, file, slugOverride, tracker).then(function (r) { tracker.done(); return r; }, function (err) {
+      tracker.fail((err && err.message) || 'Upload failed');
+      throw err;
+    });
+  }
+  function uploadToStorageRaw2(kind, file, slugOverride, tracker) {
     var typeMsg = uploadAllowedMsg(kind, file);
     if (typeMsg) return Promise.reject(new Error(typeMsg));
     var slug = slugOverride || $('admEditId').value;
@@ -3624,7 +3726,7 @@
           var body = new FormData();
           body.append('file', file.slice(offset, end), 'chunk');
           var last = end >= file.size ? 1 : 0;
-          return fetch(d.uploadUrl + '&offset=' + offset + '&last=' + last, { method: 'POST', body: body }).then(function (r) {
+          return xhrPost(d.uploadUrl + '&offset=' + offset + '&last=' + last, body, function (loaded) { tracker.progress(offset + Math.min(end - offset, loaded), file.size); }).then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (j) {
               if (r.status === 409 && typeof j.have === 'number' && j.have > offset && j.have < file.size) return sendChunk(j.have, 3); // earlier attempt had landed; resume after it
               if (!r.ok || !j.ok) { var e = new Error(j.error || 'Upload failed (' + r.status + ').'); e.fatal = r.status >= 400 && r.status < 500; throw e; }
@@ -3635,18 +3737,21 @@
             throw new Error(e.fatal ? e.message : 'File storage is temporarily unavailable. Please try again shortly.');
           });
         };
+        tracker.progress(0, file.size);
         return sendChunk(0, 3).then(function () { return { path: d.path, publicUrl: d.publicUrl }; });
       }
       if (d.driver === 'cdn') {
         var fd = new FormData();
         fd.append('file', file);
-        return fetch(d.uploadUrl, { method: 'POST', body: fd }).then(function (r) {
+        tracker.progress(0, file.size);
+        return xhrPost(d.uploadUrl, fd, function (loaded, total) { tracker.progress(Math.min(file.size, loaded), file.size); }).then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (j) {
             if (!r.ok || !j.ok) throw new Error(j.error || 'Upload failed (' + r.status + ').');
             return { path: d.path, publicUrl: d.publicUrl };
           });
         }, function () { throw new Error('Image storage is temporarily unavailable. Please try again shortly.'); });
       }
+      tracker.indeterminate('Uploading ' + formatFileSize(file.size) + '…');
       return window.coldSupabase.storage.from(d.bucket).uploadToSignedUrl(d.path, d.token, file).then(function (upRes) {
         if (upRes.error) throw new Error(upRes.error.message || 'Upload failed.');
         return { path: d.path, publicUrl: d.publicUrl };
@@ -4081,6 +4186,7 @@
     editProofFiles = (legal.proofFiles || []).map(function (f) { return typeof f === 'string' ? { name: f, url: null } : f; });
     editDevProofFiles = (legal.devProofFiles || []).map(function (f) { return typeof f === 'string' ? { name: f, url: null } : f; });
     renderContactList(); renderProofList(); renderDevProofList();
+    loadEditAddons(p.dbId);
     $('admLegalCostAmount').value = legal.licenseCost || 0;
     setCostCurrency(legal.licenseCostCurrency || 'usd');
     $('admLegalPurchasedAt').value = legal.licensePurchasedAt || '';
@@ -4293,6 +4399,183 @@
     });
   }
 
+  /* ================================================================
+     PRODUCT ADD-ONS (edit form, under the price fields)
+     One row per add-on: Title | Description | USD | Robux | File.
+     The title field has a template dropdown - picking one fills the other fields
+     (the Robux price from the same DevEx rounding as the product's own), and every
+     field stays editable afterwards.
+     ================================================================ */
+  var ADDON_PRESETS = [
+    { title: 'Setup Service', description: 'Setup service, includes gamepasses, config & more (customization not included)', usd: 8.99 },
+    { title: 'Thumbnail Access', description: 'Receive our unwatermarked thumbnail & permission to use it for your game', usd: 3.99 }
+  ];
+  var editAddons = [];
+  // False when the saved add-ons could not be read (e.g. the add-ons SQL hasn't been run yet).
+  // Saving then leaves add-ons alone instead of sending an empty list that would wipe them.
+  var editAddonsLoaded = true;
+  var ADDON_CHEV = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  function addonRobuxAllowed() {
+    return (($('admEditPlatform') || {}).value === 'Roblox') && !noRobuxOn();
+  }
+  function newAddon(preset) {
+    var a = { id: null, title: '', description: '', priceUsd: '', priceRobux: '', robuxManual: false, storagePath: null, fileName: '', hasFile: false, removeFile: false };
+    if (preset) applyAddonPreset(a, preset);
+    return a;
+  }
+  function applyAddonPreset(a, preset) {
+    a.title = preset.title; a.description = preset.description; a.priceUsd = preset.usd;
+    a.robuxManual = false;
+    a.priceRobux = addonRobuxAllowed() && preset.usd > 0 ? devexRobuxPrice(preset.usd) : '';
+  }
+  function addonRowHtml(a, i) {
+    var robuxOff = !addonRobuxAllowed();
+    return '<div class="adm-addon-row" data-i="' + i + '">' +
+      '<div class="adm-dd adm-addon-title">' +
+        '<input type="text" class="adm-input adm-addon-t" maxlength="80" placeholder="Title" aria-label="Add-on title" value="' + esc(a.title) + '" />' +
+        '<button type="button" class="adm-addon-ddbtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a template">' + ADDON_CHEV + '</button>' +
+        '<div class="adm-dd-menu adm-addon-menu" role="listbox" aria-label="Add-on templates" hidden>' +
+          ADDON_PRESETS.map(function (pr, k) {
+            return '<button type="button" class="adm-dd-opt" data-preset="' + k + '" role="option"><span>' + esc(pr.title) + '</span><span class="adm-addon-opt-price">' + usd(pr.usd) + '</span></button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<textarea class="adm-input adm-addon-d" rows="2" maxlength="300" placeholder="Description" aria-label="Add-on description">' + esc(a.description) + '</textarea>' +
+      '<input type="number" class="adm-input adm-addon-u" min="0" step="0.01" placeholder="USD" aria-label="Add-on USD price" value="' + esc(a.priceUsd) + '" />' +
+      '<input type="number" class="adm-input adm-addon-r" min="0" step="1" placeholder="' + (robuxOff ? 'N/A' : 'Robux') + '" aria-label="Add-on Robux price"' + (robuxOff ? ' disabled' : '') + ' value="' + (robuxOff ? '' : esc(a.priceRobux)) + '" />' +
+      '<div class="adm-addon-file">' +
+        (a.fileName ? '<span class="adm-addon-fname" title="' + esc(a.fileName) + '">' + esc(a.fileName) + '</span><button type="button" class="adm-addon-fx" aria-label="Remove file">×</button>'
+                    : '<label class="btn btn-ghost adm-btn-sm adm-addon-up">Upload<input type="file" class="adm-addon-fi" hidden /></label>') +
+      '</div>' +
+      '<button type="button" class="adm-addon-rm" aria-label="Remove add-on">×</button>' +
+    '</div>';
+  }
+  function renderAddonRows() {
+    var list = $('admAddonList'); if (!list) return;
+    list.innerHTML = editAddons.map(addonRowHtml).join('');
+    var empty = $('admAddonEmpty'); if (empty) empty.hidden = editAddons.length > 0;
+  }
+  function resetEditAddons(rows, loaded) {
+    editAddons = rows || [];
+    editAddonsLoaded = loaded !== false;
+    renderAddonRows();
+  }
+  // Reads this product's saved add-ons (admins may read every add-on, including inactive ones).
+  function loadEditAddons(dbId) {
+    resetEditAddons([], true);
+    if (!dbId || !window.coldSupabase) return;
+    editAddonsLoaded = false; // stays false until the read below succeeds
+    window.coldSupabase.from('product_addons')
+      .select('id, title, description, price_usd, price_robux, file_name, has_file, sort_order')
+      .eq('product_id', dbId).order('sort_order', { ascending: true })
+      .then(function (res) {
+        if (res.error) { editAddonsLoaded = false; return; }
+        var rows = (res.data || []).map(function (r) {
+          var usdN = Number(r.price_usd) || 0;
+          return { id: r.id, title: r.title, description: r.description || '', priceUsd: usdN,
+            priceRobux: r.price_robux != null ? Number(r.price_robux) : (usdN > 0 ? devexRobuxPrice(usdN) : ''),
+            robuxManual: r.price_robux != null, storagePath: null, fileName: r.file_name || '', hasFile: !!r.has_file, removeFile: false };
+        });
+        resetEditAddons(rows, true);
+      }, function () { editAddonsLoaded = false; });
+  }
+  // What admin-upsert-product receives; null = leave the saved add-ons untouched.
+  function collectAddons() {
+    if (!editAddonsLoaded) return null;
+    return editAddons.map(function (a) {
+      var out = {
+        id: a.id || undefined, title: String(a.title || '').trim(), description: String(a.description || '').trim(),
+        priceUsd: parseFloat(a.priceUsd) || 0, priceRobux: parseFloat(a.priceRobux) > 0 ? Math.round(parseFloat(a.priceRobux)) : null
+      };
+      if (a.storagePath) { out.storagePath = a.storagePath; out.fileName = a.fileName; }
+      else if (a.removeFile) out.removeFile = true;
+      return out;
+    });
+  }
+  function addonsSaveError() {
+    if (!editAddonsLoaded) return null;
+    for (var i = 0; i < editAddons.length; i++) {
+      var a = editAddons[i], n = i + 1;
+      if (!String(a.title || '').trim()) return 'Add-on ' + n + ': enter a title.';
+      if (!(parseFloat(a.priceUsd) > 0)) return 'Add-on ' + n + ' (' + a.title + '): enter a USD price above $0.';
+    }
+    return null;
+  }
+  var addAddonBtn = $('admAddonAdd');
+  if (addAddonBtn) addAddonBtn.addEventListener('click', function () {
+    if (editAddons.length >= 10) { admToast('A product can have at most 10 add-ons.', false); return; }
+    editAddons.push(newAddon());
+    renderAddonRows();
+    var last = $('admAddonList').querySelector('.adm-addon-row:last-child .adm-addon-t'); if (last) last.focus();
+  });
+  var addonListEl = $('admAddonList');
+  if (addonListEl) {
+    // Typing updates the state in place (no re-render, so focus is never lost).
+    addonListEl.addEventListener('input', function (e) {
+      var row = e.target.closest('.adm-addon-row'); if (!row) return;
+      var a = editAddons[+row.getAttribute('data-i')]; if (!a) return;
+      var t = e.target;
+      if (t.classList.contains('adm-addon-t')) a.title = t.value;
+      else if (t.classList.contains('adm-addon-d')) a.description = t.value;
+      else if (t.classList.contains('adm-addon-u')) {
+        a.priceUsd = t.value;
+        // The Robux price follows the USD price until it has been typed by hand.
+        if (!a.robuxManual && addonRobuxAllowed()) {
+          var v = parseFloat(t.value) || 0;
+          a.priceRobux = v > 0 ? devexRobuxPrice(v) : '';
+          var rb = row.querySelector('.adm-addon-r'); if (rb) rb.value = a.priceRobux;
+        }
+      } else if (t.classList.contains('adm-addon-r')) { a.priceRobux = t.value; a.robuxManual = true; }
+    });
+    addonListEl.addEventListener('click', function (e) {
+      // Close any open template menu when clicking elsewhere in the list.
+      Array.prototype.forEach.call(addonListEl.querySelectorAll('.adm-addon-title.open'), function (d) {
+        if (!d.contains(e.target)) { d.classList.remove('open'); d.querySelector('.adm-addon-menu').hidden = true; }
+      });
+      var row = e.target.closest('.adm-addon-row'); if (!row) return;
+      var i = +row.getAttribute('data-i'), a = editAddons[i]; if (!a) return;
+      if (e.target.closest('.adm-addon-ddbtn')) {
+        var dd = row.querySelector('.adm-addon-title'), menu = dd.querySelector('.adm-addon-menu');
+        var willOpen = menu.hidden;
+        menu.hidden = !willOpen; dd.classList.toggle('open', willOpen);
+        dd.querySelector('.adm-addon-ddbtn').setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        return;
+      }
+      var opt = e.target.closest('[data-preset]');
+      if (opt) { applyAddonPreset(a, ADDON_PRESETS[+opt.getAttribute('data-preset')]); renderAddonRows(); return; }
+      if (e.target.closest('.adm-addon-rm')) { editAddons.splice(i, 1); renderAddonRows(); return; }
+      if (e.target.closest('.adm-addon-fx')) {
+        if (a.id && a.hasFile && !a.storagePath) a.removeFile = true;
+        a.storagePath = null; a.fileName = ''; a.hasFile = false;
+        renderAddonRows(); return;
+      }
+    });
+    addonListEl.addEventListener('change', function (e) {
+      if (!e.target.classList.contains('adm-addon-fi')) return;
+      var row = e.target.closest('.adm-addon-row'); if (!row) return;
+      var a = editAddons[+row.getAttribute('data-i')]; if (!a) return;
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      var up = row.querySelector('.adm-addon-up'); if (up) up.classList.add('busy');
+      uploadToStorage('addonFile', f).then(function (r) {
+        a.storagePath = r.path; a.fileName = f.name; a.hasFile = true; a.removeFile = false;
+        renderAddonRows();
+      }).catch(function () { renderAddonRows(); });
+    });
+    // Clicking anywhere outside an open template menu closes it.
+    document.addEventListener('click', function (e) {
+      if (addonListEl.contains(e.target)) return;
+      Array.prototype.forEach.call(addonListEl.querySelectorAll('.adm-addon-title.open'), function (d) {
+        d.classList.remove('open'); d.querySelector('.adm-addon-menu').hidden = true;
+      });
+    });
+  }
+  // Switching Robux pricing off changes whether add-ons carry a Robux price.
+  if ($('admEditNoRobux')) $('admEditNoRobux').addEventListener('change', function () {
+    if (noRobuxOn()) editAddons.forEach(function (a) { a.priceRobux = ''; a.robuxManual = false; });
+    else editAddons.forEach(function (a) { if (!a.robuxManual && parseFloat(a.priceUsd) > 0) a.priceRobux = devexRobuxPrice(parseFloat(a.priceUsd)); });
+    renderAddonRows();
+  });
+
   // Real Storage upload (private product-files bucket, kind 'legalDoc') -
   // this used to just wrap the file in a blob: URL, which is only valid
   // for the tab that created it and is already gone by the time the saved
@@ -4382,6 +4665,7 @@
     autoGrow($('admLegalTos'));
     editContacts = []; editProofFiles = []; editDevProofFiles = [];
     renderContactList(); renderProofList(); renderDevProofList();
+    resetEditAddons([], true);
     $('admLegalCostAmount').value = 0;
     setCostCurrency('usd');
     setLicenseTypeFields({});
@@ -4427,6 +4711,7 @@
       image: $('admEditThumbUrl').value.trim(),
       gallery: editGallery.slice(),
       video: toYouTubeEmbed($('admEditVideoUrl').value.trim()),
+      addons: collectAddons(),
       tech: {
         format: $('admEditTechFormat').value.trim(),
         size: $('admEditTechSize').value.trim(),
@@ -4540,8 +4825,8 @@
     var isCreate = !id;
     var platform = $('admEditPlatform').value;
     var msg = $('admEditMsg');
-    var legalSaveErr = productLegalSaveError();
-    if (legalSaveErr) { if (msg) msg.textContent = legalSaveErr; return; }
+    var legalSaveErr = productLegalSaveError() || addonsSaveError();
+    if (legalSaveErr) { if (msg) msg.textContent = legalSaveErr; admToast(legalSaveErr, false); return; }
     var realSaveBtn = $('admEditSaveBtn');
     var stickySave = $('admEditStickySave');
     // A stand-in for the real save button that also drives the floating
@@ -5990,6 +6275,15 @@
         '<div class="dash-card-head"><h2>Items</h2></div>' +
         '<table class="dash-table"><thead><tr><th>Product</th><th>Licence</th><th>Qty</th><th>Unit price</th></tr></thead><tbody>' + itemsRows + '</tbody></table>' +
       '</div>' +
+      ((o.addons || []).length ?
+        '<div class="dash-card glass dash-tablewrap">' +
+          '<div class="dash-card-head"><h2>Add-ons</h2>' + (o.addons.some(function (a) { return a.needsTicket; }) ? '<span class="adm-sub">Setup: the buyer opens a Discord ticket to start. Respond within 48 hours.</span>' : '') + '</div>' +
+          '<table class="dash-table"><thead><tr><th>Add-on</th><th>Product</th><th>Price</th><th></th></tr></thead><tbody>' +
+          o.addons.map(function (a) {
+            var pr = findProduct(a.slug);
+            return '<tr><td>' + esc(a.title) + '</td><td>' + esc(pr ? pr.title : a.slug) + '</td><td>' + usd(a.price) + '</td><td>' +
+              (a.needsTicket ? '<span class="dt-badge warn">Needs ticket</span>' : (a.fileName ? '<span class="dt-badge ok">File</span>' : '')) + '</td></tr>';
+          }).join('') + '</tbody></table></div>' : '') +
       '<div class="dash-card glass">' +
         '<div class="dash-card-head"><h2>Payment reference</h2></div>' +
         payHtml +
@@ -6822,73 +7116,256 @@
     $('admBundleDealsView').hidden = type !== 'bundles';
     $('admHomepageView').hidden = type !== 'homepage';
     if (type === 'homepage') { renderHomepageTab(); loadWeeklyDealsSettings(); }
-    if (type === 'bundles') { renderCuratedBundles(); renderBundleDeals(); }
+    if (type === 'bundles') { renderBundleDeals(); if (window.__admLoadBundlesTab) window.__admLoadBundlesTab(); }
   });
 
-  /* Curated bundles - hand-built, permanent, public. admin-upsert-bundle. */
+  /* Bundles - curated, permanent and public (admin-upsert-bundle). Built by hand, or started from a
+     suggestion matched on genre / keywords. Every bundle is checked server-side against each product's
+     price limits (minimum sale price, maximum discount, "do not discount") before it can be saved, and the
+     form shows the highest discount the chosen products allow as soon as they are picked. */
+  var BUNDLE_MAX_PCT_UI = 60;
+  function bundleProd(slug) { return allProducts().filter(function (p) { return p.id === slug; })[0] || null; }
+  function bundleRound2(n) { return Math.round(n * 100) / 100; }
+  // Same rule as the storefront and the server: the most popular product is the cover.
+  function bundlePopular(prods) {
+    return prods.slice().sort(function (a, b) { return ((b.reviews || 0) * 10 + (b.rating || 0)) - ((a.reviews || 0) * 10 + (a.rating || 0)); })[0] || null;
+  }
+  function bundlePrices(slugs, pct) {
+    var list = 0, sale = 0;
+    slugs.forEach(function (sl) { var p = bundleProd(sl); if (!p) return; list += p.price; sale += bundleRound2(p.price * (1 - pct / 100)); });
+    return { list: bundleRound2(list), sale: bundleRound2(sale) };
+  }
+  var curatedBundles = [];
   function renderCuratedBundles() {
     var el = $('admCuratedBundlesBody'); if (!el) return;
     el.innerHTML = '<tr><td colspan="6" class="adm-empty">Loading…</td></tr>';
     invokeAdminFn('admin-upsert-bundle', { action: 'list' }, 'Could not load bundles.').then(function (data) {
-      var rows = data.bundles || [];
-      el.innerHTML = rows.map(function (b) {
+      curatedBundles = data.bundles || [];
+      el.innerHTML = curatedBundles.map(function (b) {
+        var prods = (b.slugs || []).map(bundleProd).filter(Boolean);
+        var cover = bundleProd(b.cover_slug) || bundlePopular(prods);
+        var pr = bundlePrices(b.slugs || [], Number(b.bundle_pct) || 0);
         return '<tr data-token="' + esc(b.token) + '">' +
-          '<td>' + esc(b.title || '') + '</td><td>' + esc(b.slug || '') + '</td>' +
-          '<td>' + esc((b.slugs || []).join(', ')) + '</td>' +
+          '<td><div class="adm-bundle-cell"><span class="adm-bundle-thumb" style="background-image:url(\'' + esc(cover ? cover.image : '') + '\')"></span>' +
+            '<div><div class="adm-bundle-name">' + esc(b.title || '') + '</div>' + (b.description ? '<div class="adm-bundle-sub">' + esc(b.description) + '</div>' : '') + '</div></div></td>' +
+          '<td>' + esc((b.slugs || []).map(function (sl) { var p = bundleProd(sl); return p ? p.title : sl; }).join(', ')) + '</td>' +
           '<td>-' + esc(Math.round(b.bundle_pct)) + '%</td>' +
+          '<td><span class="adm-bundle-was">' + usd(pr.list) + '</span> ' + usd(pr.sale) + '</td>' +
           '<td>' + (b.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge">Off</span>') + '</td>' +
           '<td class="adm-row-actions"><button class="btn btn-ghost adm-btn-sm adm-bundle-edit" type="button">Edit</button>' +
           '<button class="btn btn-ghost adm-btn-sm adm-bundle-del" type="button">Delete</button></td></tr>';
-      }).join('') || '<tr><td colspan="6" class="adm-empty">No curated bundles yet.</td></tr>';
+      }).join('') || '<tr><td colspan="6" class="adm-empty">No bundles yet. Create one, or start from a suggestion below.</td></tr>';
     }).catch(function (err) { el.innerHTML = '<tr><td colspan="6" class="adm-empty">' + esc(err.message) + '</td></tr>'; });
   }
-  var bundleForm = $('admBundleForm');
-  if (bundleForm) {
-    function resetBundleForm() {
-      $('admBundleToken').value = ''; $('admBundleTitle').value = ''; $('admBundleSlug').value = '';
-      $('admBundleImage').value = ''; $('admBundleDiscount').value = ''; $('admBundleProducts').value = '';
-      $('admBundleActive').checked = true;
-      $('admBundleFormTitle').textContent = 'New curated bundle';
-      $('admBundleCancelBtn').hidden = true;
+
+  var bundleEditorEl = $('admBundleEditor');
+  if (bundleEditorEl) {
+    var bundleProdDD = makeDropdown($('admBundleProductsDD'), {
+      valueInput: $('admBundleProducts'), placeholder: 'Select products', searchable: true, multi: true,
+      onChange: function () { onBundleProductsChanged(); }
+    });
+    var bundleCoverDD = makeDropdown($('admBundleCoverDD'), {
+      valueInput: $('admBundleCover'), placeholder: 'Most popular product (automatic)',
+      onChange: function () { renderBundlePreview(); }
+    });
+    var bundleLimit = { maxPct: BUNDLE_MAX_PCT_UI, blockers: [], loaded: false };
+    var bundleLimitTimer = null, bundleLimitSeq = 0;
+
+    function bundleSelectedSlugs() { return (bundleProdDD.getValue() || []).slice(); }
+    function refreshBundleProductOptions() {
+      var opts = allProducts().filter(function (p) { return p.visible && p.price > 0; })
+        .sort(function (a, b) { return a.title.localeCompare(b.title); })
+        .map(function (p) { return { value: p.id, label: p.title + ' (' + usd(p.price) + ')' }; });
+      // Keep any already-selected product visible even if it has since been hidden.
+      bundleSelectedSlugs().forEach(function (sl) {
+        if (!opts.some(function (o) { return o.value === sl; })) { var p = bundleProd(sl); opts.push({ value: sl, label: (p ? p.title : sl) }); }
+      });
+      bundleProdDD.setOptions(opts, bundleSelectedSlugs());
     }
-    $('admBundleCancelBtn').addEventListener('click', resetBundleForm);
-    bundleForm.addEventListener('submit', function (e) {
+    function refreshBundleCoverOptions() {
+      var cur = $('admBundleCover').value;
+      var sel = bundleSelectedSlugs();
+      var opts = [{ value: '', label: 'Most popular product (automatic)' }].concat(sel.map(function (sl) { var p = bundleProd(sl); return { value: sl, label: p ? p.title : sl }; }));
+      bundleCoverDD.setOptions(opts, sel.indexOf(cur) >= 0 ? cur : '');
+    }
+    function onBundleProductsChanged() {
+      refreshBundleCoverOptions();
+      renderBundlePreview();
+      // The limit comes from the server (it reads each product's private price limits).
+      clearTimeout(bundleLimitTimer);
+      var sel = bundleSelectedSlugs();
+      if (sel.length < 1) { bundleLimit = { maxPct: BUNDLE_MAX_PCT_UI, blockers: [], loaded: false }; renderBundleLimit(); return; }
+      var seq = ++bundleLimitSeq;
+      bundleLimitTimer = setTimeout(function () {
+        invokeAdminFn('admin-upsert-bundle', { action: 'limits', productSlugs: sel }, 'Could not check price limits.').then(function (d) {
+          if (seq !== bundleLimitSeq) return;
+          bundleLimit = { maxPct: d.maxPct, blockers: d.blockers || [], loaded: true };
+          renderBundleLimit();
+        }).catch(function () { if (seq === bundleLimitSeq) { bundleLimit.loaded = false; renderBundleLimit(); } });
+      }, 250);
+    }
+    function renderBundleLimit() {
+      var box = $('admBundleLimit'); if (!box) return;
+      var sel = bundleSelectedSlugs();
+      var pct = Number($('admBundleDiscount').value) || 0;
+      var platforms = {}; sel.forEach(function (sl) { var p = bundleProd(sl); if (p) platforms[p.platform] = true; });
+      var msgs = [], bad = false;
+      if (Object.keys(platforms).length > 1) { msgs.push("A bundle can't mix Roblox and Minecraft products."); bad = true; }
+      if (bundleLimit.loaded && sel.length) {
+        if (bundleLimit.maxPct < 1) {
+          bad = true;
+          var b0 = bundleLimit.blockers[0];
+          msgs.push("This set can't be discounted: " + (b0 ? (b0.title + ' ' + b0.reason + '.') : 'a product has a price limit.'));
+        } else {
+          msgs.push('Highest discount this set allows: <b>' + bundleLimit.maxPct + '%</b>' + (bundleLimit.blockers.length ? ' (' + esc(bundleLimit.blockers[0].title) + ' ' + esc(bundleLimit.blockers[0].reason) + ')' : '') + '.');
+          if (pct > bundleLimit.maxPct) { bad = true; msgs.push(pct + '% would take a product below its price limit. Lower the discount to ' + bundleLimit.maxPct + '% or less.'); }
+        }
+      }
+      box.hidden = !msgs.length;
+      box.classList.toggle('bad', bad);
+      box.innerHTML = msgs.map(function (m) { return '<div>' + (m.indexOf('<b>') >= 0 ? m : esc(m)) + '</div>'; }).join('');
+    }
+    function renderBundlePreview() {
+      var box = $('admBundlePreview'); if (!box) return;
+      var sel = bundleSelectedSlugs(), prods = sel.map(bundleProd).filter(Boolean);
+      var pct = Number($('admBundleDiscount').value) || 0;
+      if (prods.length < 2) { box.hidden = true; box.innerHTML = ''; return; }
+      var coverSlug = $('admBundleCover').value;
+      var cover = bundleProd(coverSlug) || bundlePopular(prods);
+      var pr = bundlePrices(sel, pct);
+      var behind = prods.filter(function (p) { return p !== cover; }).slice(0, 2);
+      box.hidden = false;
+      box.innerHTML = '<div class="adm-bundle-preview-label">Preview</div>' +
+        '<div class="pd-bundle-card"><div class="pd-bundle-art">' +
+        behind.map(function (x, k) { return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + esc(x.image) + '\')"></span>'; }).join('') +
+        '<span class="pd-bundle-cover" style="background-image:url(\'' + esc(cover.image) + '\')">' +
+          '<span class="pd-bundle-off">' + (pct > 0 ? Math.round(pct) + '% off' : 'Bundle') + '</span>' +
+          '<span class="pd-bundle-price"><b>' + usd(pr.sale) + '</b><s>' + usd(pr.list) + '</s></span></span></div>' +
+        '<h3 class="pd-bundle-name">' + esc($('admBundleTitle').value || 'Bundle title') + '</h3>' +
+        ($('admBundleDesc').value ? '<p class="pd-bundle-desc">' + esc($('admBundleDesc').value) + '</p>' : '') + '</div>';
+    }
+    function renderBundleTemplates(titles, descs) {
+      function fill(id, list, targetId) {
+        var box = $(id); if (!box) return;
+        if (!list || !list.length) { box.hidden = true; box.innerHTML = ''; return; }
+        box.hidden = false;
+        box.innerHTML = '<span class="adm-tpl-label">Templates</span>' + list.map(function (t, k) {
+          return '<button type="button" class="adm-tpl-chip" data-k="' + k + '">' + esc(t) + '</button>';
+        }).join('');
+        box.onclick = function (e) {
+          var b = e.target.closest('.adm-tpl-chip'); if (!b) return;
+          $(targetId).value = list[+b.getAttribute('data-k')];
+          renderBundlePreview();
+        };
+      }
+      fill('admBundleTitleTpl', titles, 'admBundleTitle');
+      fill('admBundleDescTpl', descs, 'admBundleDesc');
+    }
+    function openBundleEditor(d) {
+      d = d || {};
+      $('admBundleToken').value = d.token || '';
+      $('admBundleTitle').value = d.title || '';
+      $('admBundleDesc').value = d.description || '';
+      $('admBundleDiscount').value = d.pct != null ? d.pct : '';
+      $('admBundleActive').checked = d.active !== false;
+      $('admBundleFormTitle').textContent = d.heading || (d.token ? 'Edit bundle' : 'New bundle');
+      $('admBundleSubmitBtn').textContent = d.token ? 'Save changes' : 'Create bundle';
+      $('admBundleMsg').textContent = '';
+      bundleProdDD.setValue(d.slugs || [], true);
+      refreshBundleProductOptions();
+      $('admBundleCover').value = d.cover || '';
+      refreshBundleCoverOptions();
+      bundleCoverDD.setValue(d.cover || '', true);
+      renderBundleTemplates(d.titleOptions, d.descriptionOptions);
+      bundleLimit = { maxPct: BUNDLE_MAX_PCT_UI, blockers: [], loaded: false };
+      renderBundleLimit(); renderBundlePreview();
+      bundleEditorEl.hidden = false;
+      onBundleProductsChanged();
+      bundleEditorEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      $('admBundleTitle').focus({ preventScroll: true });
+    }
+    function closeBundleEditor() { bundleEditorEl.hidden = true; }
+    $('admBundleNew').addEventListener('click', function () { openBundleEditor({}); });
+    $('admBundleCancelBtn').addEventListener('click', closeBundleEditor);
+    ['admBundleTitle', 'admBundleDesc'].forEach(function (id) { $(id).addEventListener('input', renderBundlePreview); });
+    $('admBundleDiscount').addEventListener('input', function () { renderBundleLimit(); renderBundlePreview(); });
+
+    $('admBundleForm').addEventListener('submit', function (e) {
       e.preventDefault();
-      var msg = $('admBundleMsg'); msg.textContent = 'Saving…';
+      var msg = $('admBundleMsg'), sel = bundleSelectedSlugs();
+      var pct = Math.round(Number($('admBundleDiscount').value) || 0);
+      var err = !$('admBundleTitle').value.trim() ? 'Enter a title.'
+        : sel.length < 2 ? 'Pick at least 2 products.'
+        : sel.length > 8 ? 'A bundle can have at most 8 products.'
+        : !(pct >= 1 && pct <= BUNDLE_MAX_PCT_UI) ? 'Enter a discount between 1% and ' + BUNDLE_MAX_PCT_UI + '%.' : '';
+      if (err) { msg.textContent = err; return; }
+      var btn = $('admBundleSubmitBtn'); btn.disabled = true; msg.textContent = 'Saving…';
       invokeAdminFn('admin-upsert-bundle', {
         action: 'upsert',
         token: $('admBundleToken').value || undefined,
-        title: $('admBundleTitle').value,
-        slug: $('admBundleSlug').value,
-        image: $('admBundleImage').value,
-        discountPct: Number($('admBundleDiscount').value),
-        productSlugs: $('admBundleProducts').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+        title: $('admBundleTitle').value.trim(),
+        description: $('admBundleDesc').value.trim(),
+        productSlugs: sel,
+        coverSlug: $('admBundleCover').value || undefined,
+        discountPct: pct,
         active: $('admBundleActive').checked
       }, 'Could not save.').then(function () {
-        msg.textContent = 'Saved.'; resetBundleForm(); renderCuratedBundles();
-      }).catch(function (err) { msg.textContent = err.message; });
+        btn.disabled = false; msg.textContent = '';
+        admToast('Bundle saved', true);
+        logAudit('Saved bundle "' + $('admBundleTitle').value.trim() + '"');
+        closeBundleEditor(); renderCuratedBundles(); renderBundleSuggestions();
+      }).catch(function (e2) { btn.disabled = false; msg.textContent = e2.message; });
     });
+
     $('admCuratedBundlesBody').addEventListener('click', async function (e) {
       var tr = e.target.closest('tr[data-token]'); if (!tr) return;
       var token = tr.getAttribute('data-token');
+      var b = curatedBundles.filter(function (x) { return x.token === token; })[0];
       if (e.target.closest('.adm-bundle-del')) {
         if (!(await dialogConfirm('Delete this bundle? This cannot be undone.', { title: 'Delete bundle', acceptLabel: 'Delete bundle' }))) return;
-        invokeAdminFn('admin-upsert-bundle', { action: 'delete', token: token }, 'Delete failed.').then(renderCuratedBundles);
+        invokeAdminFn('admin-upsert-bundle', { action: 'delete', token: token }, 'Delete failed.').then(function () { renderCuratedBundles(); renderBundleSuggestions(); });
         return;
       }
-      if (e.target.closest('.adm-bundle-edit')) {
-        var tds = tr.querySelectorAll('td');
-        $('admBundleToken').value = token;
-        $('admBundleTitle').value = tds[0].textContent;
-        $('admBundleSlug').value = tds[1].textContent;
-        $('admBundleProducts').value = tds[2].textContent;
-        $('admBundleDiscount').value = tds[3].textContent.replace(/[^0-9]/g, '');
-        $('admBundleActive').checked = /Active/.test(tds[4].textContent);
-        $('admBundleFormTitle').textContent = 'Edit bundle';
-        $('admBundleCancelBtn').hidden = false;
-        bundleForm.scrollIntoView({ block: 'center' });
+      if (e.target.closest('.adm-bundle-edit') && b) {
+        openBundleEditor({ token: b.token, title: b.title, description: b.description || '', slugs: b.slugs || [], cover: b.cover_slug || '', pct: Math.round(b.bundle_pct), active: !!b.active });
       }
     });
+
+    /* Suggested bundles: products that share a genre (title keywords, subcategory, category), most
+       relevant first. Computed server-side so each set is checked against its price limits before it
+       is ever shown. "Create" opens the editor pre-filled, with template titles and descriptions. */
+    var bundleSuggestions = [];
+    function renderBundleSuggestions() {
+      var box = $('admBundleSuggestions'); if (!box) return;
+      box.innerHTML = '<p class="adm-hint">Finding matches…</p>';
+      invokeAdminFn('admin-upsert-bundle', { action: 'suggest' }, 'Could not load suggestions.').then(function (d) {
+        bundleSuggestions = d.suggestions || [];
+        if (!bundleSuggestions.length) {
+          box.innerHTML = '<p class="adm-hint">No new suggestions right now.' + (d.blocked ? ' ' + d.blocked + ' matching set' + (d.blocked === 1 ? ' was' : 's were') + ' left out because ' + (d.blocked === 1 ? 'it' : 'they') + " can't be discounted without breaking a product's price limits." : '') + '</p>';
+          return;
+        }
+        box.innerHTML = bundleSuggestions.map(function (sg, k) {
+          var prods = sg.slugs.map(bundleProd).filter(Boolean);
+          return '<div class="adm-sugg" data-k="' + k + '">' +
+            '<div class="adm-sugg-thumbs">' + prods.slice(0, 4).map(function (p) { return '<span class="adm-bundle-thumb" title="' + esc(p.title) + '" style="background-image:url(\'' + esc(p.image) + '\')"></span>'; }).join('') + '</div>' +
+            '<div class="adm-sugg-body"><div class="adm-bundle-name">' + esc(sg.titleOptions[0] || 'Bundle') + '</div>' +
+              '<div class="adm-bundle-sub">' + esc(prods.map(function (p) { return p.title; }).join(' + ')) + '</div>' +
+              '<div class="adm-sugg-meta"><span>' + esc(sg.reason) + '</span><span><span class="adm-bundle-was">' + usd(sg.listUsd) + '</span> ' + usd(sg.bundleUsd) + ' at ' + sg.suggestedPct + '% (up to ' + sg.maxPct + '%)</span></div></div>' +
+            '<button class="btn btn-primary adm-btn-sm adm-sugg-create" type="button">Create</button></div>';
+        }).join('') + (d.blocked ? '<p class="adm-hint">' + d.blocked + ' more matching set' + (d.blocked === 1 ? ' was' : 's were') + " left out: it can't be discounted without breaking a product's price limits.</p>" : '');
+      }).catch(function (err) { box.innerHTML = '<p class="adm-hint">' + esc(err.message) + '</p>'; });
+    }
+    $('admBundleSuggestions').addEventListener('click', function (e) {
+      var card = e.target.closest('.adm-sugg'); if (!card || !e.target.closest('.adm-sugg-create')) return;
+      var sg = bundleSuggestions[+card.getAttribute('data-k')]; if (!sg) return;
+      openBundleEditor({
+        title: sg.titleOptions[0], description: sg.descriptionOptions[0], slugs: sg.slugs, cover: sg.coverSlug,
+        pct: sg.suggestedPct, active: true, heading: 'New bundle from suggestion',
+        titleOptions: sg.titleOptions, descriptionOptions: sg.descriptionOptions
+      });
+    });
+    $('admBundleSuggestRefresh').addEventListener('click', renderBundleSuggestions);
+    window.__admLoadBundlesTab = function () { renderCuratedBundles(); renderBundleSuggestions(); };
   }
 
   /* Bundle deals are auto-minted (post-purchase upsell, wishlist
