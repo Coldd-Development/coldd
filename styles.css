@@ -5217,3 +5217,7 @@ body.adm-uploading .adm-toast { bottom: calc(var(--adm-uptray-h, 0px) + 20px); }
 .legal-card .legal-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-3); font-weight: 600; }
 .legal-card .legal-table td { color: var(--fg-2); line-height: 1.55; }
 .legal-card .legal-table code { font-size: 12px; word-break: break-word; }
+
+/* "Test the game here: <link>" line under a product's description */
+.pd-test-link { margin-top: 14px; }
+.pd-test-link a { color: var(--accent); text-decoration: underline; word-break: break-all; }

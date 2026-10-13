@@ -3296,6 +3296,12 @@
           flush();
           return html;
         }
+        // "Test the game here: <link>" under the description, only when the product has a valid Roblox test link.
+        function testLinkHtml(p) {
+          var u = p && p.testUrl;
+          if (!u || !/^https:\/\/([a-z0-9-]+\.)*roblox\.com(\/|$)/i.test(u)) return '';
+          return '<p class="pd-test-link">Test the game here: <a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(u) + '</a></p>';
+        }
         function robuxRaw(n) { return 'R$ ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
         // Answers may carry [label](url) links; everything else is escaped.
         function faqHtml(text) {
@@ -3816,7 +3822,7 @@
             pdAbout.innerHTML = '<h4>Product Features</h4>' + (p.longDesc && p.longDesc.trim()
               ? formatLongDesc(p.longDesc)
               : ('<p>' + esc(p.desc || '') + ' Every coldd release ships with clean, well documented files and free lifetime updates. If you get stuck, our team is one message away.</p>' +
-                 '<ul class="pd-feat-list">' + FEATURES.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'));
+                 '<ul class="pd-feat-list">' + FEATURES.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>')) + testLinkHtml(p);
           }
           if (pdTechList) {
             var techRows = techFor(p);
