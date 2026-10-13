@@ -5232,13 +5232,13 @@
   function bbbSync() {
     if (BBB.syncing) return Promise.resolve();
     BBB.syncing = true; BBB.error = '';
-    if (curPanel === 'marketplaces') renderBbb();
+    if (curPanel === 'analytics') renderBbb();
     return invokeAdminFn('admin-bbb-v2-sync', { action: 'sync', force: true }, 'Could not sync BuiltByBit.').then(function (d) {
       if (d && d.configured === false) BBB.configured = false;
       if (d && d.errors && d.errors.length) BBB.error = 'Some data could not be read: ' + d.errors[0];
     }).catch(function (err) {
       BBB.error = err.message || 'Could not sync BuiltByBit.';
-    }).then(function () { BBB.syncing = false; return refreshBbbData(); }).then(function () { if (curPanel === 'marketplaces') renderBbb(); });
+    }).then(function () { BBB.syncing = false; return refreshBbbData(); }).then(function () { if (curPanel === 'analytics') renderBbb(); });
   }
   function refreshBbb() { return refreshBbbData(); }
   // The server keeps the tables fresh; the browser just re-reads them now and then.
@@ -5491,8 +5491,8 @@
       (hidden ? '<button type="button" class="btn btn-ghost adm-btn-sm" data-bbb-restore="1">Show dismissed</button>' : '') + '</div></details>';
   }
 
-  // Marketplaces tab: just the four cards. The chart, BuiltByBit-vs-website split, payment methods,
-  // per-product funnel and listing checks live in Analytics (renderBbbAnalytics below).
+  // Analytics tab, BuiltByBit stats card (own date range and Sync now). The chart, BuiltByBit-vs-website split,
+  // payment methods, per-product funnel and listing checks follow in renderBbbAnalytics below.
   function renderBbb() {
     var body = $('admBbbBody');
     if (!body) return;
@@ -5525,10 +5525,11 @@
   }
   // Analytics tab: everything else, following that page's date range.
   function renderBbbAnalytics() {
+    renderBbb();
     var box = $('admBbbAnalytics');
     if (!box) return;
     if (BBB.configured === null) { box.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
-    if (BBB.configured === false) { box.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Connect it on the Marketplaces tab.</p>'; return; }
+    if (BBB.configured === false) { box.innerHTML = '<p class="adm-empty">BuiltByBit is not connected yet. Connect it with the steps in the BuiltByBit stats card above.</p>'; return; }
     var range = RANGE_DAYS, site = bbbSite(range);
     if (!site) bbbSiteLoad(range).then(function () { if (curPanel === 'analytics') renderBbbAnalytics(); });
     var now = new Date(Date.now() + 1000), list = bbbPurchasesIn(utcStart(range), now), cur = bbbSum(list);
@@ -5675,7 +5676,6 @@
 
   function renderMarketplaces() {
     if (!$('admMpTasks')) return;
-    renderBbb();
     var prods = allProducts();
     mpProductDD.setOptions(prods.map(function (p) { return { value: p.dbId, label: p.title }; }), $('admMpProduct').value || '');
 
