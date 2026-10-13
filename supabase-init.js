@@ -681,7 +681,10 @@
   // Bumped to 2 when the analytics wording started covering abandoned-cart
   // reminder emails - a materially different thing to agree to, so everyone is
   // asked again rather than carrying an old yes forward.
-  var CONSENT_VERSION = 2;
+  // Bumped to 3 when the analytics wording was widened to say plainly that it
+  // also covers search terms and add-to-cart events, and the banner's two
+  // buttons were given equal visual weight.
+  var CONSENT_VERSION = 3;
 
   function readConsent() {
     try {
@@ -766,12 +769,12 @@
         '<div class="cookie-bar-tx">' +
           '<h2 class="cookie-bar-h">Cookies</h2>' +
           '<p>We use essential cookies to keep you signed in and your cart intact. ' +
-          'We would also like optional analytics cookies to see which pages people use and to send cart reminder emails if you leave items behind while signed in. ' +
+          'We would also like optional analytics cookies to see which pages people use, what they search for and add to their cart, and to send cart reminder emails if you leave items behind while signed in. ' +
           '<a href="/privacy-policy">Read our privacy policy</a>.</p>' +
         '</div>' +
         '<div class="cookie-bar-actions">' +
           '<button type="button" class="btn btn-ghost cookie-config" aria-expanded="' + (opts.openConfig ? 'true' : 'false') + '">Configure</button>' +
-          '<button type="button" class="btn btn-tinted cookie-reject">Essential only</button>' +
+          '<button type="button" class="btn btn-primary cookie-reject">Essential only</button>' +
           '<button type="button" class="btn btn-primary cookie-accept">Accept all</button>' +
         '</div>' +
         // Per-category detail. Collapsed by default so the common cases stay
@@ -792,7 +795,7 @@
             '<input type="checkbox" class="cookie-cat-analytics"' + (analyticsChecked ? ' checked' : '') + ' />' +
             '<span class="cookie-cat-tx">' +
               '<span class="cookie-cat-n">Analytics</span>' +
-              '<span class="cookie-cat-d">Tells us which pages get used and whether a cart was abandoned. If you are signed in, an abandoned cart is linked to your account and may trigger up to a few reminder emails. Not shared with anyone else. Off unless you turn it on.</span>' +
+              '<span class="cookie-cat-d">Tells us which pages get used, what people search for and add to their cart, and whether a cart was abandoned. Uses a random id stored in your browser, not linked to your account. If you are signed in, an abandoned cart is linked to your account and may trigger up to a few reminder emails. Not shared with anyone else. Off unless you turn it on.</span>' +
             '</span>' +
           '</label>' +
           '<button type="button" class="btn btn-primary cookie-save">Save preferences</button>' +

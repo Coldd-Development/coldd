@@ -69,10 +69,11 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile } = await admin
       .from("profiles")
-      .select("username, email")
+      .select("username")
       .eq("id", userData.user.id)
       .single();
-    const userName = (profile && (profile.username || profile.email)) || "user";
+    // Reviews are public: never fall back to the account email as a display name.
+    const userName = (profile && profile.username) || "user";
 
     const { error: upsertErr } = await admin.from("reviews").upsert(
       {

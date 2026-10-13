@@ -4969,3 +4969,11 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
   .cold-veil-spin { animation: none; }
   .dash-panel:not([hidden]), .dash-panel:not([hidden]) .dash-card { animation: none; }
 }
+
+/* Cookie / storage table on the privacy policy. Scrolls sideways on narrow
+   screens instead of squashing the Name column. */
+.legal-card .legal-table { display: block; overflow-x: auto; width: 100%; border-collapse: collapse; font-size: 13px; margin: 16px 0 22px; }
+.legal-card .legal-table th, .legal-card .legal-table td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--hairline); min-width: 120px; }
+.legal-card .legal-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-3); font-weight: 600; }
+.legal-card .legal-table td { color: var(--fg-2); line-height: 1.55; }
+.legal-card .legal-table code { font-size: 12px; word-break: break-word; }
