@@ -3575,7 +3575,7 @@
     'Graphics': [['military', 'Military'], ['scpf', 'SCPF'], ['logos', 'Logos']],
     'Buildings': [['filler', 'Filler'], ['furnished', 'Furnished'], ['roleplay', 'Roleplay'], ['building-packs', 'Building Packs'], ['military', 'Military'], ['houses-residential', 'Houses & Residential'], ['government', 'Government & Politics'], ['medieval', 'Medieval'], ['scpf', 'SCPF'], ['sci-fi', 'Sci-Fi'], ['stores-commercial', 'Stores & Commercial']],
     'Assets': [['asset-packs', 'Asset Packs'], ['realistic', 'Realistic'], ['roleplay', 'Roleplay'], ['medieval', 'Medieval'], ['sci-fi', 'Sci-Fi'], ['low-poly', 'Low Poly'], ['aviation', 'Aviation'], ['scpf', 'SCPF'], ['furniture', 'Furniture'], ['nature', 'Nature'], ['stud-style', 'Stud-Style']],
-    'Uniforms & Gear': [['2d-uniforms', '2D Uniforms'], ['3d-gear', '3D Gear'], ['military-government', 'Military & Government'], ['roleplay', 'Roleplay'], ['aviation', 'Aviation'], ['morphs', 'Morphs'], ['sci-fi', 'Sci Fi']],
+    'Uniforms & Gear': [['2d-uniforms', '2D Uniforms'], ['3d-gear', '3D Gear'], ['military-government', 'Military & Government'], ['roleplay', 'Roleplay'], ['aviation', 'Aviation'], ['morphs', 'Morphs'], ['sci-fi', 'Sci Fi'], ['medieval', 'Medieval']],
     'Boats': [['military', 'Military'], ['civilian', 'Civilian'], ['commercial', 'Commercial']],
     'Weapons': [['military', 'Military'], ['medieval', 'Medieval'], ['scripted', 'Scripted'], ['firearms', 'Firearms'], ['melees', 'Melees']],
     'Vehicles': [['scripted', 'Scripted Vehicles'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services'], ['sci-fi', 'Sci-Fi']],
