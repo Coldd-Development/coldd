@@ -155,6 +155,11 @@
             <section class="pd-tabpane" data-pane="updates" id="pdPaneUpdates" hidden></section>
             <section class="pd-tabpane" data-pane="reviews" id="pdPaneReviews" hidden></section>
           </div>
+          <!-- Curated bundles this product is part of. Filled by app.js. -->
+          <section class="pd-bundle" id="pdBundleWrap" hidden>
+            <h2 class="pd-bundle-h">Bundle and save</h2>
+            <div class="pd-bundle-list" id="pdBundleList"></div>
+          </section>
         </div>
         <aside class="pd-right">
           <div class="pd-admin-bar" id="pdAdminBar" hidden>
@@ -205,6 +210,12 @@
                 <span class="pm-lic-text"><span class="pm-lic-name">Resell license</span><span class="pm-lic-note">Resell in your own store</span></span>
                 <span class="pm-lic-price" data-licprice="resell"></span>
               </button>
+            </div>
+            <!-- Per-product add-ons (Setup Service, Thumbnail Access, ...). Filled by app.js from
+                 the product's own add-on list; stays hidden for products that have none. -->
+            <div class="pd-addons" id="pdAddons" hidden>
+              <span class="pd-lic-label">Add-ons</span>
+              <div class="pm-licence pd-addon-list" id="pdAddonList"></div>
             </div>
           </div>
           <div class="pd-block pd-tech">
