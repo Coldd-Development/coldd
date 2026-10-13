@@ -205,6 +205,19 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Public "try it" link: https on a roblox.com host only, so the FAQ link
+    // can never point somewhere unexpected.
+    let testUrl: string | null = null;
+    if (body.testUrl != null && String(body.testUrl).trim() !== "") {
+      try {
+        const u = new URL(String(body.testUrl).trim());
+        if (u.protocol !== "https:" || !(u.hostname === "roblox.com" || u.hostname.endsWith(".roblox.com"))) throw new Error("bad");
+        testUrl = u.toString();
+      } catch {
+        return json({ ok: false, error: "The Roblox test link must be an https://www.roblox.com/... URL." }, 400);
+      }
+    }
+
     const productFields: Record<string, unknown> = {
       title,
       platform,
@@ -223,6 +236,7 @@ Deno.serve(async (req: Request) => {
       image: body.image != null ? String(body.image) : null,
       gallery: Array.isArray(body.gallery) ? body.gallery : [],
       video: body.video != null ? String(body.video) : null,
+      test_url: testUrl,
       resell_available: !!body.resell,
       resell_price_usd: body.resell && body.resellPrice != null ? Number(body.resellPrice) : null,
       resell_robux_price: !body.robuxDisabled && body.resell && body.resellRobuxPrice != null ? Number(body.resellRobuxPrice) : null,
