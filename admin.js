@@ -4478,17 +4478,20 @@
     var was = Number.isFinite(wasV) && wasV > price ? wasV : 0;
     var rbxV = parseFloat($('admEditRobuxPrice').value);
     var rbx = Number.isFinite(rbxV) && rbxV > 0 ? rbxV : 0;
+    var minRegUsd = Math.max(0, parseFloat($('admLegalMinRegularUsd').value) || 0);
+    var minRegRbx = Math.max(0, parseFloat($('admLegalMinRegularRobux').value) || 0);
     var minUsd = Math.max(0, parseFloat($('admLegalMinUsd').value) || 0);
-    var minRbx = Math.max(0, parseFloat($('admLegalMinRobux').value) || 0);
     var maxPct = Math.max(0, Math.min(100, parseFloat($('admLegalMaxDiscount').value) || 0));
     var disallow = $('admLegalDisallowSales').checked;
     var canFree = !$('admLegalCannotBeFree').checked;
     var errs = [];
     if (was && disallow) errs.push('this product is marked "do not discount"');
-    if (minUsd > 0 && price > 0 && price < minUsd) errs.push('the USD price is below the $' + minUsd.toFixed(2) + ' minimum');
+    var regularPrice = was || price;
+    if (minRegUsd > 0 && regularPrice > 0 && regularPrice < minRegUsd) errs.push('the regular USD price is below the $' + minRegUsd.toFixed(2) + ' minimum regular price');
+    if (was && minUsd > 0 && price > 0 && price < minUsd) errs.push('the sale price is below the $' + minUsd.toFixed(2) + ' minimum sale price');
     if (was && maxPct > 0 && (1 - price / was) * 100 > maxPct + 0.01) errs.push('that is a ' + Math.round((1 - price / was) * 100) + '% discount, over the ' + maxPct + '% maximum');
     if (!canFree && price <= 0) errs.push("this product isn't allowed to be free");
-    if (minRbx > 0 && rbx > 0 && rbx < minRbx) errs.push('the Robux price is below the ' + minRbx + ' minimum');
+    if (minRegRbx > 0 && rbx > 0 && rbx < minRegRbx) errs.push('the Robux price is below the ' + minRegRbx + ' minimum regular price');
     return errs.length ? ("Can't save - " + errs.join('; ') + '. Adjust the price or the Legal settings.') : null;
   }
 
