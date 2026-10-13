@@ -916,7 +916,7 @@
      server-side) - never written directly from here.
      ================================================================ */
   function defaultLegal() {
-    return { tos: '', licenseTypes: [], revenueSharePct: '', revenueSharePaymentPlatform: '', revenueSharePaymentLink: '', proofFiles: [], devProofFiles: [], contacts: [], licenseCost: 0, licenseCostCurrency: 'usd', licensePurchasedAt: '', minSaleUsd: 0, minSaleRobux: 0, maxDiscountPct: 0, canBeFree: false, disallowSales: false };
+    return { tos: '', licenseTypes: [], revenueSharePct: '', revenueSharePaymentPlatform: '', revenueSharePaymentLink: '', proofFiles: [], devProofFiles: [], contacts: [], licenseCost: 0, licenseCostCurrency: 'usd', licensePurchasedAt: '', minRegularUsd: 0, minRegularRobux: 0, minSaleUsd: 0, minSaleRobux: 0, maxDiscountPct: 0, canBeFree: false, disallowSales: false };
   }
   function toYouTubeEmbed(url) {
     url = (url || '').trim();
@@ -971,7 +971,8 @@
         revenueSharePaymentLink: legalRaw.revenue_share_payment_link || '',
         proofFiles: legalRaw.proof_files, devProofFiles: legalRaw.dev_proof_files,
         contacts: legalRaw.contacts, licenseCost: legalRaw.license_cost, licenseCostCurrency: legalRaw.license_cost_currency,
-        licensePurchasedAt: legalRaw.license_purchased_at, minSaleUsd: legalRaw.min_sale_usd, minSaleRobux: legalRaw.min_sale_robux,
+        licensePurchasedAt: legalRaw.license_purchased_at, minRegularUsd: legalRaw.min_regular_usd, minRegularRobux: legalRaw.min_regular_robux,
+        minSaleUsd: legalRaw.min_sale_usd, minSaleRobux: legalRaw.min_sale_robux,
         maxDiscountPct: legalRaw.max_discount_pct,
         canBeFree: legalRaw.can_be_free, disallowSales: legalRaw.disallow_sales
       }),
@@ -4084,6 +4085,8 @@
     $('admLegalCostAmount').value = legal.licenseCost || 0;
     setCostCurrency(legal.licenseCostCurrency || 'usd');
     $('admLegalPurchasedAt').value = legal.licensePurchasedAt || '';
+    $('admLegalMinRegularUsd').value = legal.minRegularUsd || 0;
+    $('admLegalMinRegularRobux').value = legal.minRegularRobux || 0;
     $('admLegalMinUsd').value = legal.minSaleUsd || 0;
     $('admLegalMinRobux').value = legal.minSaleRobux || 0;
     $('admLegalMaxDiscount').value = legal.maxDiscountPct || 0;
@@ -4386,6 +4389,8 @@
     setCostCurrency('usd');
     setLicenseTypeFields({});
     $('admLegalPurchasedAt').value = '';
+    $('admLegalMinRegularUsd').value = 0;
+    $('admLegalMinRegularRobux').value = 0;
     $('admLegalMinUsd').value = 0;
     $('admLegalMinRobux').value = 0;
     $('admLegalMaxDiscount').value = 0;
@@ -4444,6 +4449,8 @@
         licenseCost: Math.max(0, parseFloat($('admLegalCostAmount').value) || 0),
         licenseCostCurrency: $('admLegalCostCurrency').value,
         licensePurchasedAt: $('admLegalPurchasedAt').value,
+        minRegularUsd: Math.max(0, parseFloat($('admLegalMinRegularUsd').value) || 0),
+        minRegularRobux: Math.max(0, parseFloat($('admLegalMinRegularRobux').value) || 0),
         minSaleUsd: Math.max(0, parseFloat($('admLegalMinUsd').value) || 0),
         minSaleRobux: Math.max(0, parseFloat($('admLegalMinRobux').value) || 0),
         maxDiscountPct: Math.max(0, Math.min(100, parseFloat($('admLegalMaxDiscount').value) || 0)),
