@@ -223,6 +223,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/cag-troop-2b-caps</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/electric-scooter</loc>
     <lastmod>2026-10-08</lastmod>
     <changefreq>weekly</changefreq>
@@ -231,6 +237,12 @@
   <url>
     <loc>https://coldd.dev/product/halo-covenant-ground-tanks</loc>
     <lastmod>2026-10-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/fbi-hrt-g-sqdn-insignias</loc>
+    <lastmod>2026-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -535,6 +547,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/uk-nhs-ambulance-basic-life-support-bag</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/tactical-toyota-hilux</loc>
     <lastmod>2026-10-08</lastmod>
     <changefreq>weekly</changefreq>
@@ -543,6 +561,12 @@
   <url>
     <loc>https://coldd.dev/product/park-ranger-uniform</loc>
     <lastmod>2026-10-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/team-nbdy-ukraine-uniform</loc>
+    <lastmod>2026-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -697,20 +721,32 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/sith-dark-honor-guard-morphs</loc>
-    <lastmod>2026-10-13</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://coldd.dev/product/medieval-mega-shield-pack</loc>
     <lastmod>2026-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/phase-two-clone-wars-141-morphs</loc>
-    <lastmod>2026-10-13</lastmod>
+    <loc>https://coldd.dev/product/fbi-hostage-rescue-team-uniform-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/florida-highway-patrol-uniform-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/michigan-state-police-uniform-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/nypd-uniform-pack</loc>
+    <lastmod>2026-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -758,6 +794,66 @@
   </url>
   <url>
     <loc>https://coldd.dev/product/airport-security-uniform-pack</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/georgia-state-patrol-uniform-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/usa-military-patch</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/ukraine-military-patch-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/sparta-helmet</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/army-helmet</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/generic-fire-department-bunker-gear</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/texas-highway-patrol-uniform-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/mega-medieval-asset-pack</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/sith-dark-honor-guard-morphs</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/phase-two-clone-wars-141-morphs</loc>
     <lastmod>2026-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
