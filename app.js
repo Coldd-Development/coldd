@@ -2299,7 +2299,9 @@
             return b;
           }
           pager.appendChild(btn('‹', page - 1, { disabled: page === 1 }));
-          for (let i = 1; i <= pages; i++) pager.appendChild(btn(String(i), i, { active: i === page }));
+          const span = Math.min(4, pages);
+          const first = Math.max(1, Math.min(page - 1, pages - span + 1));
+          for (let i = first; i < first + span; i++) pager.appendChild(btn(String(i), i, { active: i === page }));
           pager.appendChild(btn('›', page + 1, { disabled: page === pages }));
         }
         // The Resell filter shows the same cards as their real category
