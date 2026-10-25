@@ -5214,7 +5214,7 @@
           if (!refCode) { refProdBody.innerHTML = '<p class="dash-empty-note">Loading…</p>'; return; }
           refProdBody.innerHTML = rows.map(function (p) {
             var earn = Math.round(p.priceNum * 0.2 * 100) / 100;
-            var link = (p.page || '/product') + '/' + p.id + '?ref=' + encodeURIComponent(refCode);
+            var link = '/product/' + encodeURIComponent(p.id) + '?ref=' + encodeURIComponent(refCode);
             return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'' + esc(p.image) + '\')"></span>' +
               '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div>' +
               '<div class="dr-sub">' + esc(p.cat || '') + (p.cat ? ' · ' : '') + 'Earn ' + fmt(earn) + ' per sale</div></div>' +
