@@ -5224,3 +5224,5 @@ body.adm-uploading .adm-toast { bottom: calc(var(--adm-uptray-h, 0px) + 20px); }
 
 /* Referral payouts */
 .ref-source{max-width:560px;margin-bottom:24px}.ref-source select,#refPayoutForm select{width:100%;min-height:46px;padding:10px 14px;border:1px solid var(--hairline-strong);border-radius:8px;background:var(--bg-2);color:var(--fg);font:inherit}#refPayoutForm [hidden]{display:none!important}.ref-payout-intro{max-width:70ch;line-height:1.65;color:var(--fg-2);margin:0 0 20px}.ref-payout-intro strong{color:var(--fg)}.ref-detail-note{font-size:14px;line-height:1.6;color:var(--fg-2);max-width:65ch;white-space:normal;overflow-wrap:anywhere}#refPayoutForm small{font-size:13px;line-height:1.6;color:var(--fg-2)}#refPayoutForm .btn{align-self:flex-start}#refPayoutBody td,#admPayoutsBody td{vertical-align:top}.ref-revise{margin-top:10px}#admPayoutsBody .ref-detail-note{max-width:260px}#coCreditWrap{margin:18px 0;padding:16px 0;border-block:1px solid var(--hairline)}
+
+#coCreditAmountWrap[hidden],#coCreditMinimumNotice[hidden],#coCreditLine[hidden],#coDueLine[hidden]{display:none!important}
