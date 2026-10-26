@@ -1094,6 +1094,7 @@
 /* Two actions per card: add to cart carries the colour and leads, buy now sits
    beside it as the direct route to checkout. */
 .p-actions { margin-top: auto; display: grid; grid-template-columns: 1.25fr 1fr; gap: 8px; }
+.product[data-free="yes"] .p-actions { grid-template-columns: 1fr; }
 .p-add, .p-buy { min-height: 40px; width: 100%; font-family: inherit; font-size: 13px; font-weight: 700;
   border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   transition: background .18s var(--ease-out), border-color .18s var(--ease-out),
