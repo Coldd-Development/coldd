@@ -1067,6 +1067,8 @@
   color: #fff; padding: 5px 9px; border-radius: 10px; background: var(--accent-deep);
   box-shadow: 0 6px 16px -6px var(--ink-75); }
 .product.owned .p-sale-ribbon { top: 44px; }
+.product[data-lic-mode="resell"] .p-off,
+.product[data-lic-mode="resell"] .p-sale-ribbon { display: none; }
 .pd-sale-event { font-size: 12px; font-weight: 700; color: var(--accent-ink); margin-top: 6px; }
 .p-body { padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }
 .p-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
