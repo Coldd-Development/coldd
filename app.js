@@ -1805,6 +1805,9 @@
               if (p.resell) {
                 existing.setAttribute('data-resell', 'yes');
                 existing.setAttribute('data-resell-price', p.resellPrice != null ? p.resellPrice : Math.round(p.priceNum * RESELL_MULT));
+              } else {
+                existing.removeAttribute('data-resell');
+                existing.removeAttribute('data-resell-price');
               }
               applyRating(existing, p);
               return;
@@ -2243,6 +2246,7 @@
             var map = {};
             rows.forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0 }; });
             catalogDemand = map;
+            if (gridRevealed && sortMode === 'popular') refilter(true);
           }).catch(function () {}).then(function () { signalSettled('demand'); });
         }
         loadCatalogDemand();
@@ -3133,7 +3137,7 @@
         var card = e.target.closest('.product');
         if (!card) return;
         e.preventDefault();
-        if (card.getAttribute('data-free') === 'yes') { window.open('https://discord.gg/coldd', '_blank', 'noopener'); return; }
+        if (card.getAttribute('data-free') === 'yes' && card.getAttribute('data-lic-mode') !== 'resell') { window.open('https://discord.gg/coldd', '_blank', 'noopener'); return; }
         if (e.target.closest('.p-buy')) { add(readCard(card)); location.href = '/checkout'; }
         else if (e.target.closest('.p-add')) { add(readCard(card)); openCart(); }
         else {
