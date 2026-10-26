@@ -880,7 +880,7 @@
           return c.label.toLowerCase().indexOf(q) >= 0;
         }).slice(0, 5);
         const assets = (window.__CATALOG || []).filter(function (p) {
-          return p.title.toLowerCase().indexOf(q) >= 0;
+          return p.priceNum > 0 && p.title.toLowerCase().indexOf(q) >= 0;
         }).slice(0, 8);
 
         list.innerHTML = '';
@@ -1534,7 +1534,7 @@
           });
         });
       }
-      var catalog = window.__CATALOG || [];
+      var catalog = (window.__CATALOG || []).filter(function (p) { return p.priceNum > 0; });
       // Both grids ship `hidden` in the static HTML - see index.html - so the
       // hardcoded example cards below (a fallback for no-JS/no-picks-yet,
       // not real inventory) never get a first paint of their own. Without
@@ -1856,6 +1856,21 @@
         })();
 
         const products = Array.prototype.slice.call(grid.querySelectorAll('.product'));
+        products.forEach(function (card) {
+          var free = Number(card.getAttribute('data-price')) <= 0;
+          if (!free) { card.removeAttribute('data-free'); return; }
+          card.setAttribute('data-free', 'yes');
+          card.removeAttribute('data-resell');
+          card.removeAttribute('data-resell-price');
+          card.removeAttribute('data-was');
+          card.querySelectorAll('.p-off, .p-sale-ribbon').forEach(function (badge) { badge.remove(); });
+          var actions = card.querySelector('.p-actions');
+          if (actions) actions.innerHTML = '<a class="btn btn-ghost free-btn" href="https://discord.gg/coldd" target="_blank" rel="noopener">Join Discord to unlock</a>';
+          else {
+            var button = card.querySelector('.free-btn');
+            if (button) button.textContent = 'Join Discord to unlock';
+          }
+        });
         const PER_PAGE = 12;
         let page = 1;
 
@@ -2593,6 +2608,8 @@
           gridRevealed = true;
           clearTimeout(revealSafetyTimer);
           const initial = new URLSearchParams(location.search).get('cat');
+          onFree = new URLSearchParams(location.search).get('free') === '1';
+          if (freeBox) freeBox.checked = onFree;
           onResell = initial === 'resell' || new URLSearchParams(location.search).get('resell') === '1';
           if (resellBox) resellBox.checked = onResell;
           const hasInit = initial && ((chips && chips.querySelector('.chip[data-cat="' + initial + '"]')) || (sideCats && sideCats.querySelector('.fc-cat[data-cat="' + initial + '"]')));
@@ -2694,8 +2711,9 @@
         (window.__CATALOG || []).forEach(function (p) { byId[p.id] = p; });
         var list = (arr || []).filter(function (i) {
           var id = String(i.id);
-          var base = id.replace(/--resell$/, '');
-          if (base.indexOf('--') !== -1) return true;
+          var base = id.replace(/--(resell|bundle|crosssell|addons)$/, '');
+          if (byId[base] && byId[base].priceNum <= 0) return false;
+          if (base !== id && !/--resell$/.test(id)) return true;
           var p = byId[base];
           if (!p) return false;
           i.price = /--resell$/.test(id) ? (p.resellPrice != null ? p.resellPrice : Math.round(p.priceNum * 3)) : p.priceNum;
@@ -2978,6 +2996,10 @@
       window.addEventListener('currencychange', function () { updateBadge(); renderCart(); });
       function clearCart() { cart = []; save(); updateBadge(); renderCart(); }
       function add(item) {
+        var productSlug = String(item.id || '').replace(/--(resell|bundle|crosssell|addons)$/, '');
+        var catalogItem = (window.__CATALOG || []).filter(function (p) { return p.id === productSlug; })[0];
+        if (catalogItem && catalogItem.priceNum <= 0) return;
+
         if (item.addonOnly) {
           // Add-ons for a product the customer already owns: its own cart line, no product price.
           var onlyId = item.id + '--addons';
@@ -3137,7 +3159,7 @@
         var card = e.target.closest('.product');
         if (!card) return;
         e.preventDefault();
-        if (card.getAttribute('data-free') === 'yes' && card.getAttribute('data-lic-mode') !== 'resell') { window.open('https://discord.gg/coldd', '_blank', 'noopener'); return; }
+        if (card.getAttribute('data-free') === 'yes' || Number(card.getAttribute('data-price')) <= 0) { window.open('https://discord.gg/coldd', '_blank', 'noopener'); return; }
         if (e.target.closest('.p-buy')) { add(readCard(card)); location.href = '/checkout'; }
         else if (e.target.closest('.p-add')) { add(readCard(card)); openCart(); }
         else {
@@ -3570,7 +3592,7 @@
             '<button class="p-add" type="button">Add to cart</button></div></div></article>';
         }
         function related(p) {
-          var cat = (window.__CATALOG || []).filter(function (x) { return x.id !== p.id && x.platform === p.platform && !isOwned(x.id); });
+          var cat = (window.__CATALOG || []).filter(function (x) { return x.priceNum > 0 && x.id !== p.id && x.platform === p.platform && !isOwned(x.id); });
           function score(x) {
             var s = 0;
             if (x.subcat && p.subcat && x.subcat.split(',').some(function (v) { return p.subcat.split(',').indexOf(v) >= 0; })) s += 4;
@@ -3599,7 +3621,7 @@
             if (!slugs.length) return;
             var bySlug = {};
             (window.__CATALOG || []).forEach(function (x) { bySlug[x.id] = x; });
-            var alsoBought = slugs.map(function (s) { return bySlug[s]; }).filter(Boolean).filter(function (x) { return !isOwned(x.id); });
+            var alsoBought = slugs.map(function (s) { return bySlug[s]; }).filter(Boolean).filter(function (x) { return x.priceNum > 0 && !isOwned(x.id); });
             if (!alsoBought.length) return;
             var already = {}; alsoBought.forEach(function (x) { already[x.id] = true; });
             var blended = alsoBought.concat(related(p).filter(function (x) { return !already[x.id]; })).slice(0, 4);
@@ -3745,6 +3767,7 @@
           if (!p && id) { renderNotFound(); return; }
           if (!p) p = cat[0];
           if (!p) return;
+          if (p.priceNum <= 0) { location.replace('/shop?free=1'); return; }
           setNotFound(false);
 
           // Canonical address is /product/<slug>. Whether we got here via a

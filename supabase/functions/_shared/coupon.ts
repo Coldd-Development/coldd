@@ -121,6 +121,7 @@ export async function priceItems(
     const licence = raw.licence === "resell" ? "resell" : "standard";
     const product = bySlug.get(slug);
     if (!product) return { ok: false, error: `"${slug}" is no longer available.` };
+    if (!(Number(product.price_usd) > 0)) return { ok: false, error: "Join Discord to unlock free products: https://discord.gg/coldd" };
     if (licence === "resell" && !product.resell_available) {
       return { ok: false, error: `${product.title} doesn't offer a resell licence.` };
     }

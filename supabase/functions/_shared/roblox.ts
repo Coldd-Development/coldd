@@ -253,6 +253,7 @@ export async function priceRobuxItems(
     const isResell = raw.licence === "resell";
     const product = bySlug.get(slug);
     if (!product) return { ok: false, error: `"${slug}" is no longer available.` };
+    if (!(Number(product.price_usd) > 0)) return { ok: false, error: "Join Discord to unlock free products: https://discord.gg/coldd" };
     if (product.robux_disabled) {
       return { ok: false, error: `${product.title} cannot be bought with Robux.` };
     }

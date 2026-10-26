@@ -244,7 +244,10 @@ def main():
         active.add(p['slug'])
         dest = OUT_DIR / p['slug'] / 'index.html'
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(build_one(template, p), encoding='utf-8')
+        if not (float(p.get('price_usd') or 0) > 0):
+            dest.write_text('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,follow"><meta http-equiv="refresh" content="0;url=/shop?free=1"><title>Free products - coldd</title></head><body><a href="/shop?free=1">Join Discord to unlock free products</a></body></html>', encoding='utf-8')
+        else:
+            dest.write_text(build_one(template, p), encoding='utf-8')
 
     # Prune shells for products that are no longer active.
     pruned = 0

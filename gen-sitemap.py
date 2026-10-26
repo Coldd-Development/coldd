@@ -61,7 +61,7 @@ def iso_day(value):
 
 def products():
     try:
-        rows = fetch('products?select=slug,updated_at,created_at,is_active&is_active=eq.true')
+        rows = fetch('products?select=slug,updated_at,created_at,is_active&is_active=eq.true&price_usd=gt.0')
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
         print('  ! products unavailable (%s) - writing static pages only' % e, file=sys.stderr)
         return []
