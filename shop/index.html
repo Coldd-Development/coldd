@@ -143,7 +143,7 @@
             </button>
             <div class="sort-menu" role="listbox" aria-label="Sort products" hidden>
               <button type="button" class="sort-opt active" data-sort="recommended" role="option" aria-selected="true"><span>Recommended</span><span class="sort-radio"></span></button>
-              <button type="button" class="sort-opt" data-sort="featured" role="option" aria-selected="false"><span>Featured</span><span class="sort-radio"></span></button>
+              <button type="button" class="sort-opt" data-sort="popular" role="option" aria-selected="false"><span>Most Popular</span><span class="sort-radio"></span></button>
               <button type="button" class="sort-opt" data-sort="price-asc" role="option" aria-selected="false"><span>Lowest Price</span><span class="sort-radio"></span></button>
               <button type="button" class="sort-opt" data-sort="price-desc" role="option" aria-selected="false"><span>Highest Price</span><span class="sort-radio"></span></button>
               <button type="button" class="sort-opt" data-sort="newest" role="option" aria-selected="false"><span>Newest</span><span class="sort-radio"></span></button>
@@ -385,28 +385,17 @@
                     <span class="fc-check-box"></span>
                     <span class="fc-check-label">Free</span>
                   </label>
+                  <label class="fc-check">
+                    <input type="checkbox" class="fc-resell" />
+                    <span class="fc-check-box"></span>
+                    <span class="fc-check-label">Resell Licenses</span>
+                  </label>
                 </div>
               </div>
               <div class="fc-group">
                 <span class="fc-label">Categories</span>
                 <div class="fc-cats">
               <button class="fc-cat active" data-cat="all"><span>All</span></button>
-              <div class="fc-cat-group">
-                <button class="fc-cat fc-cat-resell" data-cat="resell"><span>Resell License</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="resell" data-subcat="game-templates">Finished Games &amp; Templates</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="maps">Maps</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="scripts-ui">Scripts &amp; UI</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="graphics">Graphics</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="buildings">Buildings</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="assets">Assets</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="uniforms-gear">Uniforms &amp; Gear</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="boats">Boats</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="weapons">Weapons</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="vehicles">Vehicles</button>
-                  <button class="fc-sub" data-cat="resell" data-subcat="animations-vfx">Animations &amp; VFX</button>
-                </div>
-              </div>
               <button class="fc-cat fc-cat-bundles" data-cat="bundles"><span>Bundles</span></button>
               <div class="fc-cat-group">
                 <button class="fc-cat" data-cat="game-templates"><span>Finished Games &amp; Templates</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>

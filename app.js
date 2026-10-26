@@ -1679,6 +1679,7 @@
         const pager = shop.querySelector('.shop-pager');
         const saleBox = shop.querySelector('.fc-sale');
         const freeBox = shop.querySelector('.fc-free');
+        const resellBox = shop.querySelector('.fc-resell');
         const sortField = shop.querySelector('.sort-field');
         const sortBtn = shop.querySelector('.sort-btn');
         const sortMenu = shop.querySelector('.sort-menu');
@@ -1863,7 +1864,7 @@
             // check resell ownership, not personal - see __coldOwned's own
             // comment. Owning the personal licence must never block buying
             // the resell one for the same product.
-            var showingResell = curCat === 'resell' && card.getAttribute('data-resell') === 'yes';
+            var showingResell = onResell && card.getAttribute('data-resell') === 'yes';
             var owned = window.__coldOwned.has(card.getAttribute('data-id'), showingResell ? 'resell' : 'standard');
             card.classList.toggle('owned', owned);
             var addBtn = card.querySelector('.p-add');
@@ -1882,11 +1883,11 @@
         window.__coldOwned.load().then(markOwned);
 
         let maxPrice = 0;
-        products.forEach(function (p) { maxPrice = Math.max(maxPrice, parseFloat(p.getAttribute('data-price')) || 0); });
+        products.forEach(function (p) { maxPrice = Math.max(maxPrice, parseFloat(p.getAttribute('data-price')) || 0, parseFloat(p.getAttribute('data-resell-price')) || 0); });
         maxPrice = Math.max(10, Math.ceil(maxPrice / 10) * 10);
         if (prMin && prMax) { prMin.max = prMax.max = maxPrice; prMin.value = 0; prMax.value = maxPrice; }
         if (prMinVal && prMaxVal) { prMinVal.max = prMaxVal.max = maxPrice; prMinVal.value = 0; prMaxVal.value = maxPrice; }
-        let curCat = 'all', curSub = null, query = '', lo = 0, hi = maxPrice, onSale = false, onFree = false, sortMode = 'recommended';
+        let curCat = 'all', curSub = null, query = '', lo = 0, hi = maxPrice, onSale = false, onFree = false, onResell = false, sortMode = 'recommended';
 
         function paintRange() {
           if (prFill) { prFill.style.left = (lo / maxPrice * 100) + '%'; prFill.style.width = ((hi - lo) / maxPrice * 100) + '%'; }
@@ -1900,28 +1901,27 @@
             sideCats.querySelectorAll('.fc-sub').forEach(function (c) { c.classList.toggle('active', curSub && c.getAttribute('data-cat') === curCat && c.getAttribute('data-subcat') === curSub); });
           }
         }
+        function filterPrice(p) {
+          var basePrice = parseFloat(p.getAttribute('data-price')) || 0;
+          if (!onResell) return basePrice;
+          var price = p.getAttribute('data-resell-price');
+          return price != null ? Number(price) : Math.round(basePrice * RESELL_MULT);
+        }
         function matches(p) {
           // Bundles is its own view (curated bundles, drawn below), not a product category.
           if (curCat === 'bundles') return false;
-          const price = parseFloat(p.getAttribute('data-price')) || 0;
+          const price = filterPrice(p);
           const nameEl = p.querySelector('.p-name') || p.querySelector('h3');
           const title = (nameEl ? nameEl.textContent : '').toLowerCase();
-          const okCat = curCat === 'all' ? true
-                      : curCat === 'resell' ? p.getAttribute('data-resell') === 'yes'
-                      : p.getAttribute('data-cat') === curCat;
-          // Resell License is a cross-cutting filter, not a category of its
-          // own - a resellable product still lives in Maps or Scripts & UI. So
-          // under Resell the sub-buttons ARE the real categories, and curSub
-          // matches data-cat rather than data-subcat.
-          const okSub = !curSub ? true
-                      : curCat === 'resell' ? p.getAttribute('data-cat') === curSub
-                      : (p.getAttribute('data-subcat') || '').split(',').indexOf(curSub) >= 0;
-          const okSale = !onSale || p.hasAttribute('data-was') || p.getAttribute('data-sale-event') === 'yes';
-          const okFree = !onFree || p.getAttribute('data-free') === 'yes';
-          return okCat && okSub && okSale && okFree && (!query || title.indexOf(query) >= 0) && price >= lo && price <= hi;
+          const okCat = curCat === 'all' || p.getAttribute('data-cat') === curCat;
+          const okSub = !curSub || (p.getAttribute('data-subcat') || '').split(',').indexOf(curSub) >= 0;
+          const okResell = !onResell || p.getAttribute('data-resell') === 'yes';
+          const okSale = !onSale || (!onResell && (p.hasAttribute('data-was') || p.getAttribute('data-sale-event') === 'yes'));
+          const okFree = !onFree || (onResell ? price === 0 : p.getAttribute('data-free') === 'yes');
+          return okCat && okSub && okResell && okSale && okFree && (!query || title.indexOf(query) >= 0) && price >= lo && price <= hi;
         }
         function isFiltered() {
-          return curCat !== 'all' || !!curSub || !!query || lo > 0 || hi < maxPrice || onSale || onFree;
+          return curCat !== 'all' || !!curSub || !!query || lo > 0 || hi < maxPrice || onSale || onFree || onResell;
         }
 
         // Below 1040px .shop-side becomes a sheet (see styles.css) so the grid,
@@ -1941,6 +1941,7 @@
           if (lo > 0 || hi < maxPrice) n++;
           if (onSale) n++;
           if (onFree) n++;
+          if (onResell) n++;
           return n;
         }
         // main.page carries a transform for the page-transition animation, and
@@ -2271,7 +2272,8 @@
           const withMeta = arr.map(function (p, i) {
             return {
               p: p, i: i,
-              price: parseFloat(p.getAttribute('data-price')) || 0,
+              price: filterPrice(p),
+              popularity: (catalogDemand && catalogDemand[p.getAttribute('data-id')] || {}).views || 0,
               rating: parseFloat(p.getAttribute('data-rating')) || 0,
               reviews: parseFloat(p.getAttribute('data-reviews')) || 0
             };
@@ -2279,7 +2281,7 @@
           withMeta.sort(function (a, b) {
             if (mode === 'price-asc') return (a.price - b.price) || (a.i - b.i);
             if (mode === 'price-desc') return (b.price - a.price) || (a.i - b.i);
-            if (mode === 'featured') return (b.rating - a.rating) || (b.reviews - a.reviews) || (a.i - b.i);
+            if (mode === 'popular') return (b.popularity - a.popularity) || (b.reviews - a.reviews) || (b.rating - a.rating) || (a.i - b.i);
             return a.i - b.i;
           });
           return withMeta.map(function (m) { return m.p; });
@@ -2334,7 +2336,7 @@
           if (!priceRow) return;
           var resell = card.getAttribute('data-resell') === 'yes';
           var robuxMode = window.__currencyMode ? window.__currencyMode() === 'robux' : false;
-          var showResell = curCat === 'resell' && resell;
+          var showResell = onResell && resell;
           // Buy/Add reads this so the cart gets the resell licence + price
           // the card is actually showing, not the base licence.
           card.setAttribute('data-lic-mode', showResell ? 'resell' : 'standard');
@@ -2388,7 +2390,7 @@
         }
         function bundlesForShop() {
           return (window.__bundleViews ? window.__bundleViews() : []).filter(function (v) {
-            if (v.cover.platform !== 'Roblox') return false;
+            if (onResell || v.cover.platform !== 'Roblox') return false;
             if (!query) return true;
             return v.title.toLowerCase().indexOf(query) >= 0 ||
               v.prods.some(function (x) { return x.title.toLowerCase().indexOf(query) >= 0; });
@@ -2455,14 +2457,22 @@
           if (clearBtn) clearBtn.hidden = !isFiltered();
           syncFilterSheet(matched.length);
         }
-        function setCat(cat) { curCat = cat; curSub = null; syncCats(); refilter(true); applyCatSeo(cat); }
-        function setSub(cat, sub) { curCat = cat; curSub = sub; syncCats(); refilter(true); applyCatSeo(cat); }
+        function setCat(cat) { if (cat === 'resell') { onResell = true; if (resellBox) resellBox.checked = true; cat = 'all'; } curCat = cat; curSub = null; syncCats(); refilter(true); applyCatSeo(cat); syncFilterUrl(); }
+        function setSub(cat, sub) { curCat = cat; curSub = sub; syncCats(); refilter(true); applyCatSeo(cat); syncFilterUrl(); }
+        function syncFilterUrl() {
+          try {
+            var params = new URLSearchParams(location.search);
+            if (curCat === 'all') params.delete('cat'); else params.set('cat', curCat);
+            if (onResell) params.set('resell', '1'); else params.delete('resell');
+            history.replaceState(null, '', base + (params.toString() ? '?' + params.toString() : ''));
+          } catch (_) {}
+        }
         shop.__applyCat = setCat;
 
         if (chips) chips.addEventListener('click', function (e) {
           const c = e.target.closest('.chip'); if (!c) return;
           setCat(c.getAttribute('data-cat'));
-          try { history.replaceState(null, '', curCat === 'all' ? base : (base + '?cat=' + curCat)); } catch (_) {}
+          syncFilterUrl();
         });
         // The subcategory lists open via grid-template-rows: 0fr -> 1fr, which
         // needs every item inside one grid row. Wrapping here rather than in
@@ -2527,6 +2537,7 @@
 
         if (saleBox) saleBox.addEventListener('change', function () { onSale = saleBox.checked; refilter(true); });
         if (freeBox) freeBox.addEventListener('change', function () { onFree = freeBox.checked; refilter(true); });
+        if (resellBox) resellBox.addEventListener('change', function () { onResell = resellBox.checked; syncFilterUrl(); refilter(true); });
 
         function closeSort() { if (sortField) sortField.classList.remove('open'); if (sortMenu) sortMenu.hidden = true; if (sortBtn) sortBtn.setAttribute('aria-expanded', 'false'); }
         function openSort() { if (sortField) sortField.classList.add('open'); if (sortMenu) sortMenu.hidden = false; if (sortBtn) sortBtn.setAttribute('aria-expanded', 'true'); if (sortMenu) window.__coldMenuFit && window.__coldMenuFit(sortMenu, sortField || sortBtn); }
@@ -2555,10 +2566,11 @@
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSort(); });
 
         if (clearBtn) clearBtn.addEventListener('click', function () {
-          curCat = 'all'; curSub = null; query = ''; lo = 0; hi = maxPrice; onSale = false; onFree = false;
+          curCat = 'all'; curSub = null; query = ''; lo = 0; hi = maxPrice; onSale = false; onFree = false; onResell = false;
           if (searchEl) searchEl.value = '';
           if (saleBox) saleBox.checked = false;
           if (freeBox) freeBox.checked = false;
+          if (resellBox) resellBox.checked = false;
           syncCats(); paintRange(); refilter(true);
           try { history.replaceState(null, '', base); } catch (_) {}
         });
@@ -2577,12 +2589,15 @@
           gridRevealed = true;
           clearTimeout(revealSafetyTimer);
           const initial = new URLSearchParams(location.search).get('cat');
+          onResell = initial === 'resell' || new URLSearchParams(location.search).get('resell') === '1';
+          if (resellBox) resellBox.checked = onResell;
           const hasInit = initial && ((chips && chips.querySelector('.chip[data-cat="' + initial + '"]')) || (sideCats && sideCats.querySelector('.fc-cat[data-cat="' + initial + '"]')));
           setCat(hasInit ? initial : 'all');
 
           // Lets a link (the Shop mega-menu's New Releases tile, currently
           // the only user of this) land pre-sorted instead of on Recommended.
-          const initialSort = new URLSearchParams(location.search).get('sort');
+          const requestedSort = new URLSearchParams(location.search).get('sort');
+          const initialSort = requestedSort === 'featured' ? 'popular' : requestedSort;
           const initialSortOpt = initialSort && sortOpts.filter(function (o) { return o.getAttribute('data-sort') === initialSort; })[0];
           if (initialSortOpt) {
             var initialSortLabel = initialSortOpt.querySelector('span') ? initialSortOpt.querySelector('span').textContent : initialSortOpt.textContent;
