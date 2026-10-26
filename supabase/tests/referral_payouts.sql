@@ -68,6 +68,13 @@ begin
  r:=public.spend_store_credit(u,oc,'usd');if(r->>'ok')::boolean then raise exception 'Double credit redemption accepted';end if;
  update public.orders set status='refunded' where id=oc;
  if(select count(*) from public.store_credit_ledger where order_id=oc and kind='refund')<>1 then raise exception 'Store credit refund not restored';end if;
+ r:=public.request_referral_payout(u,'store_credit',20,'robux');
+ if not(r->>'ok')::boolean then raise exception 'Robux to store credit failed: %',r;end if;cpay:=(r->>'id')::uuid;
+ select coalesce(sum(amount),0) into before_credit from public.store_credit_ledger where user_id=u and currency='robux';
+ r:=public.manage_referral_payout(u,cpay,'mark_paid');
+ if not(r->>'ok')::boolean then raise exception 'Robux store credit issuance failed: %',r;end if;
+ select coalesce(sum(amount),0) into n from public.store_credit_ledger where user_id=u and currency='robux';
+ if n<>before_credit+20 then raise exception 'Robux credit converted or missing';end if;
  update public.orders set status='refunded' where id=o1;
  if exists(select 1 from public.referral_order_earnings where order_id=o1) then raise exception 'Refunded commission retained';end if;
  if not exists(select 1 from public.referral_email_outbox where payout_id=pay and body like '%72 hours%') then raise exception '72-hour email missing';end if;
