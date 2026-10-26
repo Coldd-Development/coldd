@@ -2931,11 +2931,9 @@
   // Shared by the campaign composer and each automation's own preview -
   // same shell either way, since both send through the same Resend path.
   function emailPreviewDoc(bodyHtml) {
-    return '<!doctype html><html><head><meta charset="utf-8">' +
-      '<style>body{margin:0;padding:20px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;' +
-      'font-size:15px;line-height:1.5;color:#1a1a1a;background:#fff;} img{max-width:100%;}</style>' +
-      '</head><body>' + bodyHtml + '</body></html>';
+    return "<!doctype html><html lang=\"en\" xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"color-scheme\" content=\"dark\"><meta name=\"supported-color-schemes\" content=\"dark\"><title>coldd Development</title><style>@font-face{font-family:Archivo;src:url('https://coldd.dev/fonts/archivo-latin.woff2') format('woff2');font-weight:400 900}body,table,td,a{font-family:Archivo,Arial,Helvetica,sans-serif}p{margin:0 0 22px}a{color:#ff8079}img{border:0;outline:none;text-decoration:none}table{border-collapse:collapse}a:focus{outline:2px solid #ff8079}@media only screen and (max-width:620px){.email-wrap{width:100%!important}.email-pad{padding-left:24px!important;padding-right:24px!important}h1{font-size:32px!important}.code-text{font-size:32px!important;letter-spacing:4px!important}.receipt-meta,.receipt-amount{display:block!important;width:100%!important;text-align:left!important}.receipt-amount{padding-top:8px!important}} </style><!--[if mso]><style>body,table,td,a{font-family:Arial,Helvetica,sans-serif!important}</style><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]--></head><body style=\"margin:0;padding:0;background:#111217;color:#e2e6ec;\"><div style=\"display:none;max-height:0;overflow:hidden;mso-hide:all;\">A message from coldd Development.</div><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"#111217\"><tr><td align=\"center\" style=\"padding:24px 0;\"><!--[if mso]><table role=\"presentation\" width=\"600\"><tr><td><![endif]--><table class=\"email-wrap\" role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#191b21;color:#e2e6ec;\"><tr><td class=\"email-pad\" style=\"padding:30px 40px;border-bottom:1px solid #33363f;\"><table role=\"presentation\" width=\"100%\"><tr><td width=\"48\"><img src=\"https://coldd.dev/logo.png\" alt=\"\" width=\"34\" height=\"40\" style=\"display:block;object-fit:contain;\"></td><td style=\"font-size:28px;font-weight:800;letter-spacing:-1px;color:#f4f6f9;\">coldd</td><td align=\"right\" style=\"font-size:13px;color:#aab2c0;\">coldd.dev</td></tr></table></td></tr><tr><td class=\"email-pad\" style=\"padding:36px 40px 40px;font-size:16px;line-height:1.65;color:#e2e6ec;word-wrap:break-word;overflow-wrap:anywhere;\">__COLDD_EMAIL_BODY__</td></tr><tr><td class=\"email-pad\" bgcolor=\"#15161b\" style=\"padding:24px 40px 30px;font-size:13px;line-height:1.7;color:#aab2c0;\"><p style=\"margin:0 0 8px;\">coldd Development</p><p style=\"margin:0 0 12px;\">You opted in to product news and offers from coldd.</p><p style=\"margin:0;\"><a href=\"mailto:support@coldd.dev\" style=\"color:#c4cbd6;text-decoration:underline;\">support@coldd.dev</a> &nbsp;&nbsp; <a href=\"https://coldd.dev\" style=\"color:#c4cbd6;text-decoration:underline;\">Visit coldd.dev</a> &nbsp;&nbsp; <a href=\"https://coldd.dev/dashboard?actab=notifications\" style=\"color:#c4cbd6;text-decoration:underline;\">Unsubscribe</a></p></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>".replace("__COLDD_EMAIL_BODY__", bodyHtml);
   }
+
   function updateCampaignPreview() {
     var frame = $('admCampaignPreviewFrame');
     if (!frame || $('admCampaignPreviewWrap').hidden) return;
@@ -3043,8 +3041,8 @@
           sendBtn.disabled = true;
           if (msg) msg.textContent = 'Sending…';
           invokeAdminFn('admin-send-campaign', { action: 'send', subject: subject, bodyHtml: campaignBodyHtml(), audience: campaignAudience }, 'Could not send campaign.').then(function (data) {
-            if (msg) msg.textContent = 'Sent to ' + data.sentCount + ' of ' + data.recipientCount + (data.failedCount ? ' (' + data.failedCount + ' failed)' : '') + '.';
-            logAudit('Sent ' + (isAnnounce ? 'announcement' : 'marketing') + ' email "' + subject + '" to ' + data.sentCount + ' recipients');
+            if (msg) msg.textContent = (data.queuedCount != null ? 'Queued ' + data.queuedCount + ' emails for delivery' : 'Sent to ' + data.sentCount + ' of ' + data.recipientCount) + (data.failedCount ? ' (' + data.failedCount + ' failed)' : '') + '.';
+            logAudit('Queued ' + (isAnnounce ? 'announcement' : 'marketing') + ' email "' + subject + '" to ' + (data.queuedCount != null ? data.queuedCount : data.sentCount) + ' recipients');
             campaignForm.reset();
             sendBtn.disabled = false;
             done();
@@ -3179,17 +3177,18 @@
   var AUTOMATIONS = {};
   var AUTOMATION_META = [
     { key: 'abandoned_cart_1', label: 'Abandoned cart · step 1', hint: 'Hours after a cart goes stale.' },
-    { key: 'abandoned_cart_2', label: 'Abandoned cart · step 2', hint: 'Hours after step 1 would have sent.' },
-    { key: 'abandoned_cart_3', label: 'Abandoned cart · step 3', hint: 'Hours after step 2 would have sent.' },
+    { key: 'abandoned_cart_2', label: 'Abandoned cart · step 2', hint: 'Hours after the cart was last updated. Marketing consent required.' },
+    { key: 'abandoned_cart_3', label: 'Abandoned cart · step 3', hint: 'Hours after the cart was last updated. Marketing consent required.' },
     { key: 'post_purchase_review', label: 'Post-purchase review request', hint: 'Hours after an order is marked paid.' },
     { key: 'reengagement', label: 'Re-engagement', hint: 'Hours since last purchase (or signup, if they never bought) before we call the account lapsed. Sent once.' },
     { key: 'wishlist_reminder', label: 'Wishlist reminder', hint: 'Hours a wishlist item sits with no purchase since. Always includes a discount, so it only sends to accounts with real marketing consent.' },
-    { key: 'signup_nudge', label: 'Signup nudge (no purchase)', hint: 'Hours after signup with no order yet. Plain nudge, no offer - sends to anyone not unsubscribed.' },
-    { key: 'wishlist_price_drop', label: 'Wishlist price drop', hint: 'A wishlisted item is on sale right now. Promotional, so marketing consent required. One email per sale price.' },
-    { key: 'getting_started', label: 'Getting started', hint: 'Hours after a paid order. Setup help + links to files and Discord. No offer - sends to anyone not unsubscribed.' },
-    { key: 'resell_upgrade', label: 'Resell licence upgrade', hint: 'Hours after buying a standard licence for a resell-eligible product, if they don’t already own the resell licence. Upsell, no code - sends to anyone not unsubscribed.' },
-    { key: 'review_incentive', label: 'Review incentive', hint: 'Hours after a paid order with no review yet. Mints a discount code, so marketing consent required.' },
+    { key: 'signup_nudge', label: 'Signup nudge (no purchase)', hint: 'Hours after signup with no order yet. Marketing consent required.' },
+    { key: 'wishlist_price_drop', label: 'Wishlist price drop', hint: 'Hours after the product sale price changed. Marketing consent required. One email per sale-price change.' },
+    { key: 'getting_started', label: 'Getting started', hint: 'Hours after a paid order. Setup help + links to files and Discord. Marketing consent required.' },
+    { key: 'resell_upgrade', label: 'Resell licence upgrade', hint: 'Hours after buying a standard licence for a resell-eligible product, if they don’t already own the resell licence. Marketing consent required.' },
+    { key: 'review_incentive', label: 'Review request with discount', hint: 'Hours after a paid order with no review yet. Mints a discount code, so marketing consent required.' },
     { key: 'repeat_buyer', label: 'Repeat buyer thank-you', hint: 'Hours after a 2nd (or later) paid order. Mints a discount code, so marketing consent required. Once per account.' },
+    { key: 'new_for_you', label: 'New products matching purchase history', hint: 'New products recommended to opted-in past buyers. One message per buyer and product.' },
     { key: 'winback', label: 'Win-back (lapsed)', hint: 'Hours since the last paid order. Discount scales with how long they’ve been gone (15/20/25%). Marketing consent required. Once per account.' }
   ];
 

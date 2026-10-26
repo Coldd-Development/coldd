@@ -5022,14 +5022,14 @@
         });
       }
 
-      var NTF_DEFAULTS = { orderReceipts: true, productUpdates: true, promotions: true, saleDms: true, roleSync: true, supportReplies: true, inAppSales: true, inAppProductUpdates: true };
+      var NTF_DEFAULTS = { orderReceipts: true, productUpdates: true, promotions: false, saleDms: true, roleSync: true, supportReplies: true, inAppSales: true, inAppProductUpdates: true };
       var NTF_IDS = { orderReceipts: 'ntfOrderReceipts', productUpdates: 'ntfProductUpdates', promotions: 'ntfPromotions', saleDms: 'ntfSaleDms', roleSync: 'ntfRoleSync', supportReplies: 'ntfSupportReplies', inAppSales: 'ntfInAppSales', inAppProductUpdates: 'ntfInAppProductUpdates' };
       function loadNotificationPrefs(userId) {
         window.coldSupabase.from('profiles').select('notification_prefs').eq('id', userId).maybeSingle().then(function (res) {
           var prefs = Object.assign({}, NTF_DEFAULTS, (res && res.data && res.data.notification_prefs) || {});
           Object.keys(NTF_IDS).forEach(function (key) {
             var el = document.getElementById(NTF_IDS[key]);
-            if (el) el.checked = !!prefs[key];
+            if (el) { el.checked = key === "orderReceipts" ? true : !!prefs[key]; if (key === "orderReceipts") el.disabled = true; }
           });
         });
       }
@@ -5042,7 +5042,7 @@
           var prefs = {};
           Object.keys(NTF_IDS).forEach(function (key) {
             var el = document.getElementById(NTF_IDS[key]);
-            prefs[key] = el ? el.checked : NTF_DEFAULTS[key];
+            prefs[key] = key === "orderReceipts" ? true : el ? el.checked : NTF_DEFAULTS[key];
           });
           setBtnLoading(ntfSaveBtn, true);
           window.coldSupabase.from('profiles').update({ notification_prefs: prefs }).eq('id', session.user.id).then(function (upRes) {

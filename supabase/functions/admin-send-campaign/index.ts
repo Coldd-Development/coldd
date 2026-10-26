@@ -1,3 +1,5 @@
+import { emailHeading } from "../_shared/email_design.ts";
+import { queueEmail, drainEmailQueue } from "../_shared/email_delivery.ts";
 // supabase/functions/admin-send-campaign/index.ts
 //
 // Deploy with:
@@ -116,7 +118,7 @@ Deno.serve(async (req: Request) => {
       const testEmail = String(body.testEmail || "").trim();
       if (!testEmail) return json({ ok: false, error: "Enter an email to send the test to." }, 400);
       const testUnsubUrl = unsubUrl(profile.email_unsub_token);
-      const html = wrap(bodyHtml, testUnsubUrl);
+      const html = wrap((/<h1\b/i.test(bodyHtml) ? "" : emailHeading(subject)) + bodyHtml, testUnsubUrl);
       const result = await sendSingle(testEmail, `[Test] ${subject}`, html, unsubscribeHeaders(testUnsubUrl));
       if (!result.ok) return json({ ok: false, error: result.error, code: result.code }, result.code === "NOT_CONFIGURED" ? 400 : 502);
       return json({ ok: true });
@@ -157,11 +159,12 @@ Deno.serve(async (req: Request) => {
       // An account can also withdraw via the dashboard Notifications toggle
       // (profiles.marketing_unsubscribed) without touching marketing_optins,
       // or be banned - exclude both.
-      const { data: profRows } = await admin
-        .from("profiles").select("email, banned, marketing_unsubscribed").not("email", "is", null);
+      const { data: profRows, error: profileError } = await admin
+        .from("profiles").select("email, email_unsub_token, banned, marketing_unsubscribed, notification_prefs").not("email", "is", null);
+      if (profileError) return json({ ok: false, error: "Could not check marketing preferences." }, 503);
       const blocked = new Set(
         (profRows || [])
-          .filter((p) => p.banned || p.marketing_unsubscribed)
+          .filter((p) => p.banned || p.marketing_unsubscribed || p.notification_prefs?.promotions === false)
           .map((p) => String(p.email).toLowerCase()),
       );
       const seen = new Set<string>();
@@ -173,6 +176,13 @@ Deno.serve(async (req: Request) => {
           return true;
         })
         .map((r) => ({ to: r.email as string, token: r.unsub_token as string }));
+      for (const p of profRows || []) {
+        const email = String(p.email || "").toLowerCase();
+        if (p.notification_prefs?.promotions === true && !blocked.has(email) && !seen.has(email) && !SYNTH_EMAIL_RE.test(email)) {
+          recipientList.push({ to: email, token: p.email_unsub_token });
+          seen.add(email);
+        }
+      }
     }
 
     if (!recipientList.length) return json({ ok: false, error: "No recipients for this audience." }, 400);
@@ -191,45 +201,14 @@ Deno.serve(async (req: Request) => {
       .single();
     if (campaignErr || !campaign) return json({ ok: false, error: "Could not create campaign." }, 500);
 
-    let sentCount = 0;
-    let failedCount = 0;
-    let lastError: string | null = null;
-
-    for (let i = 0; i < recipientList.length; i += BATCH_SIZE) {
-      const chunk = recipientList.slice(i, i + BATCH_SIZE);
-      const emails: BatchEmail[] = chunk.map((r) => {
-        const u = unsubUrl(r.token);
-        return {
-          to: r.to,
-          subject,
-          html: wrap(bodyHtml, u),
-          headers: unsubscribeHeaders(u),
-          tags: [{ name: "campaign_id", value: campaign.id }],
-        };
-      });
-      const result = await sendBatch(emails);
-      if (result.ok) {
-        sentCount += result.sent;
-      } else {
-        failedCount += chunk.length;
-        lastError = result.error;
-        console.error("[admin-send-campaign] batch failed:", result.error);
-      }
+    let queuedCount = 0;
+    for (const recipient of recipientList) {
+      const u = unsubUrl(recipient.token);
+      const result = await queueEmail(admin, { dedupe_key: 'campaign/'+campaign.id+'/'+recipient.to.toLowerCase(), recipient: recipient.to.toLowerCase(), kind: audience === 'marketing' ? 'marketing' : 'service', category: audience, campaign_id: campaign.id, subject, html: wrap((/<h1\b/i.test(bodyHtml) ? "" : emailHeading(subject)) + bodyHtml, u), headers: unsubscribeHeaders(u) });
+      if (!result.ok) return json({ ok: false, error: result.error, queuedCount }, 503);
+      queuedCount++;
     }
-
-    const finalStatus = failedCount === 0 ? "sent" : sentCount === 0 ? "failed" : "sent";
-    await admin
-      .from("email_campaigns")
-      .update({
-        status: finalStatus,
-        sent_count: sentCount,
-        failed_count: failedCount,
-        error: lastError,
-        sent_at: new Date().toISOString(),
-      })
-      .eq("id", campaign.id);
-
-    return json({ ok: true, sentCount, failedCount, recipientCount: recipientList.length, audience });
+    return json({ ok: true, queuedCount, sentCount: 0, failedCount: 0, recipientCount: recipientList.length, audience });
   } catch (err) {
     console.error("[admin-send-campaign] error:", err);
     return json({ ok: false, error: "Server error." }, 500);

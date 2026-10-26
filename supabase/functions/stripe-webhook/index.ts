@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
         // only ever fires once per order.
         const { data: updated, error } = await admin
           .from("orders")
-          .update({ status: "paid", stripe_payment_intent_id: paymentIntentId, paid_at: new Date().toISOString() })
+          .update({ status: "paid", stripe_payment_intent_id: paymentIntentId, receipt_email: session.customer_details?.email || session.customer_email || null, paid_at: new Date().toISOString() })
           .eq("id", orderId)
           .neq("status", "paid")
           .select("coupon_code, user_id, purchased_by_user_id, marketing_opt_in")

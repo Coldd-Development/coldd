@@ -23,7 +23,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function b64ToBytes(b64: string): Uint8Array {
+function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -107,5 +107,9 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false }, 500);
   }
 
+  if (recipient && (type === 'email.complained' || (type === 'email.bounced' && String(data.bounce?.type).toLowerCase() === 'permanent'))) {
+    const { error: suppressionError } = await admin.from('email_suppressions').upsert({ email: String(recipient).toLowerCase(), reason: type });
+    if (suppressionError) return json({ ok: false }, 500);
+  }
   return json({ ok: true });
 });

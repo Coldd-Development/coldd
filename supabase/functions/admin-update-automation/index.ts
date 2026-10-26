@@ -18,7 +18,7 @@ const KNOWN_KEYS = [
   "abandoned_cart_1", "abandoned_cart_2", "abandoned_cart_3", "post_purchase_review", "reengagement",
   "wishlist_reminder",
   "signup_nudge", "wishlist_price_drop", "getting_started", "resell_upgrade",
-  "review_incentive", "repeat_buyer", "winback",
+  "review_incentive", "repeat_buyer", "winback", "new_for_you",
 ];
 
 function corsHeaders() {
@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
     if (!KNOWN_KEYS.includes(key)) return json({ ok: false, error: "Unknown automation." }, 400);
 
     const enabled = !!body.enabled;
-    const delayHours = Math.max(1, Math.floor(Number(body.delayHours) || 0));
+    const delayHours = Math.max(key === "new_for_you" ? 0 : 1, Math.floor(Number(body.delayHours) || 0));
     const subject = String(body.subject || "").trim();
     const bodyMd = String(body.bodyMd || "").trim();
 

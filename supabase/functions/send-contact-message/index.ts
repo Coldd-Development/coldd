@@ -1,3 +1,4 @@
+import { queueEmail, drainEmailQueue } from "../_shared/email_delivery.ts";
 // supabase/functions/send-contact-message/index.ts
 //
 // Deploy with:
@@ -62,7 +63,7 @@ Deno.serve(async (req: Request) => {
       p_max: RATE_LIMIT_MAX,
       p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
     });
-    if (!rlErr && allowed === false) {
+    if (rlErr || allowed === false) {
       return json({ ok: false, error: "Too many messages sent. Please try again in a bit." }, 429);
     }
 
@@ -82,33 +83,20 @@ Deno.serve(async (req: Request) => {
     if (!key) return json({ ok: false, error: "Contact form isn't configured yet - email support@coldd.dev directly." }, 503);
 
     const bodyHtml = `
-<p style="margin:0 0 4px;font-size:20px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">New contact form message</p>
-<p style="margin:0 0 20px;color:#7a7a7a;font-size:12px;">Reason: ${escapeHtml(reason.label)}</p>
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111111;border-radius:6px;border:1px solid #1a1a1a;padding:16px 18px;margin-bottom:20px;">
+<p style="margin:0 0 4px;font-size:32px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">New contact form message</p>
+<p style="margin:0 0 20px;color:#aab2c0;font-size:12px;">Reason: ${escapeHtml(reason.label)}</p>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#1f2127;border-radius:6px;border:1px solid #33363f;padding:16px 18px;margin-bottom:20px;">
 <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#d7d7d7;padding-bottom:8px;"><strong style="color:#ffffff;">From:</strong> ${escapeHtml(name)} &lt;${escapeHtml(email)}&gt;</td></tr>
-<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#d7d7d7;white-space:pre-wrap;border-top:1px solid #1a1a1a;padding-top:10px;">${escapeHtml(message)}</td></tr>
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#d7d7d7;white-space:pre-wrap;border-top:1px solid #33363f;padding-top:10px;">${escapeHtml(message)}</td></tr>
 </table>
-<p style="margin:0;color:#7a7a7a;font-size:12px;">Reply directly to this email to respond to ${escapeHtml(name)}.</p>
+<p style="margin:0;color:#aab2c0;font-size:12px;">Reply directly to this email to respond to ${escapeHtml(name)}.</p>
 `;
     const html = wrapTransactionalEmail(bodyHtml);
 
-    const res = await fetch(`${RESEND_API_BASE}/emails`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: FROM_ADDRESS,
-        to: reason.to,
-        reply_to: email,
-        subject: `[${reason.label}] Message from ${name}`,
-        html,
-        text: htmlToText(html),
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("[send-contact-message] Resend error:", res.status, text.slice(0, 200));
-      return json({ ok: false, error: "Could not send your message. Please try again or email support@coldd.dev directly." }, 502);
-    }
+    const deliveryKey = 'contact/'+crypto.randomUUID();
+    const result = await queueEmail(admin, { dedupe_key: deliveryKey, kind: 'service', category: 'contact', recipient: reason.to, from_address: FROM_ADDRESS, reply_to: email, subject: `[${reason.label}] Message from ${name}`, html });
+    if (!result.ok) return json({ ok: false, error: 'Could not save your message. Please try again.' }, 503);
+    try { await drainEmailQueue(admin, deliveryKey); } catch (error) { console.error('[contact] delivery queued', String(error)); }
 
     return json({ ok: true });
   } catch (err) {

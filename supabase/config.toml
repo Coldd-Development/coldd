@@ -1,0 +1,262 @@
+project_id = "coldd"
+
+[functions.email-otp]
+verify_jwt = true
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.get-download-url]
+verify_jwt = true
+
+[functions.get-order-by-session]
+verify_jwt = false
+
+[functions.admin-upsert-product]
+verify_jwt = true
+
+[functions.admin-delete-product]
+verify_jwt = true
+
+[functions.admin-get-upload-url]
+verify_jwt = true
+
+[functions.validate-coupon]
+verify_jwt = true
+
+[functions.admin-upsert-coupon]
+verify_jwt = true
+
+[functions.admin-delete-coupon]
+verify_jwt = true
+
+[functions.lock-check]
+verify_jwt = false
+
+[functions.admin-manage-order]
+verify_jwt = true
+
+[functions.roblox-oauth-callback]
+verify_jwt = true
+
+[functions.roblox-link-status]
+verify_jwt = true
+
+[functions.roblox-signin]
+verify_jwt = true
+
+[functions.admin-upsert-roblox-container]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.create-robux-order]
+verify_jwt = true
+
+[functions.verify-robux-order]
+verify_jwt = true
+
+[functions.roblox-cookie-healthcheck]
+verify_jwt = false
+
+[functions.admin-set-site-status]
+verify_jwt = true
+
+[functions.admin-set-user-banned]
+verify_jwt = true
+
+[functions.submit-review]
+verify_jwt = true
+
+[functions.admin-moderate-review]
+verify_jwt = true
+
+[functions.admin-upsert-content]
+verify_jwt = true
+
+[functions.admin-delete-content]
+verify_jwt = true
+
+[functions.get-referral-code]
+verify_jwt = true
+
+[functions.get-referral-stats]
+verify_jwt = true
+
+[functions.request-referral-payout]
+verify_jwt = true
+
+[functions.admin-manage-referral-payout]
+verify_jwt = true
+
+[functions.track-pageview]
+verify_jwt = false
+
+[functions.save-cart-snapshot]
+verify_jwt = false
+
+[functions.delete-cart-snapshot]
+verify_jwt = false
+
+[functions.admin-set-staff-role]
+verify_jwt = true
+
+[functions.admin-discord-stats]
+verify_jwt = true
+
+[functions.roblox-group-revenue-sync]
+verify_jwt = false
+
+[functions.admin-import-review]
+verify_jwt = true
+
+[functions.admin-grant-product]
+verify_jwt = true
+
+[functions.admin-get-download-url]
+verify_jwt = true
+
+[functions.public-site-stats]
+verify_jwt = true
+
+[functions.create-paypal-order]
+verify_jwt = true
+
+[functions.capture-paypal-order]
+verify_jwt = true
+
+[functions.create-crypto-charge]
+verify_jwt = true
+
+[functions.crypto-webhook]
+verify_jwt = false
+
+[functions.admin-robux-pool]
+verify_jwt = true
+
+[functions.admin-adblox-stats]
+verify_jwt = true
+
+[functions.discord-member-snapshot]
+verify_jwt = false
+
+[functions.admin-send-campaign]
+verify_jwt = false
+
+[functions.email-unsubscribe]
+verify_jwt = false
+
+[functions.admin-update-automation]
+verify_jwt = true
+
+[functions.cron-lifecycle-emails]
+verify_jwt = false
+
+[functions.admin-delete-user]
+verify_jwt = true
+
+[functions.admin-unreleased-files]
+verify_jwt = true
+
+[functions.submit-reseller-info]
+verify_jwt = true
+
+[functions.admin-resellers]
+verify_jwt = true
+
+[functions.admin-youtube-stats]
+verify_jwt = true
+
+[functions.admin-x-stats]
+verify_jwt = true
+
+[functions.admin-tiktok-stats]
+verify_jwt = true
+
+[functions.track-campaign-click]
+verify_jwt = false
+
+[functions.admin-campaign-links]
+verify_jwt = true
+
+[functions.tiktok-oauth-exchange]
+verify_jwt = true
+
+[functions.admin-generate-legal-docx]
+verify_jwt = true
+
+[functions.admin-weekly-deals]
+verify_jwt = false
+
+[functions.lookup-gift-recipient]
+verify_jwt = true
+
+[functions.get-avatar-upload-url]
+verify_jwt = true
+
+[functions.marketing-signup]
+verify_jwt = false
+
+[functions.get-post-purchase-upsell]
+verify_jwt = true
+
+[functions.get-bundle-deal]
+verify_jwt = false
+
+[functions.get-my-bundle-deal]
+verify_jwt = true
+
+[functions.send-contact-message]
+verify_jwt = false
+
+[functions.resend-webhook]
+verify_jwt = false
+
+[functions.track-event]
+verify_jwt = false
+
+[functions.youtube-oauth-url]
+verify_jwt = true
+
+[functions.youtube-oauth-exchange]
+verify_jwt = true
+
+[functions.admin-youtube-analytics]
+verify_jwt = true
+
+[functions.claim-account]
+verify_jwt = true
+
+[functions.reseller-profile]
+verify_jwt = true
+
+[functions.admin-broadcast-notification]
+verify_jwt = true
+
+[functions.admin-upsert-bundle]
+verify_jwt = true
+
+[functions.get-set-deal]
+verify_jwt = true
+
+[functions.mint-bypass-cookie]
+verify_jwt = false
+
+[functions.admin-builtbybit-sync]
+verify_jwt = false
+
+[functions.admin-bbb-v2-sync]
+verify_jwt = false
+
+[functions.admin-robux-revenue]
+verify_jwt = false
+
+[functions.password-reset-code]
+verify_jwt = false
+
+[functions.admin-manage-user]
+verify_jwt = true

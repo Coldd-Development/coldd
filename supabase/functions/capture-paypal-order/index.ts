@@ -127,6 +127,7 @@ Deno.serve(async (req: Request) => {
       .from("orders")
       .update({
         status: "paid",
+        receipt_email: paypalOrder?.payer?.email_address || null,
         paid_at: new Date().toISOString(),
         paypal_capture_id: capture?.id ?? null,
       })

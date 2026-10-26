@@ -10,7 +10,7 @@
 // settles on-chain minutes later, often after the buyer has closed the tab, so
 // fulfilment belongs exclusively to the signed webhook.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type PricedLine, priceItems, resolveCoupon, spendTierDiscount, clampCombinedDiscount, activeSaleEvent, saleEventDiscount } from "../_shared/coupon.ts";
 import { resolveCampaignCode } from "../_shared/campaign.ts";
 import { resolveProductReferral } from "../_shared/referrals.ts";
@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const siteUrl = Deno.env.get("SITE_URL") ?? ALLOWED_ORIGIN;
 
-    let user: { id: string } | null = null;
+    let user: { id: string; email?: string } | null = null;
     if (authHeader) {
       const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
@@ -147,6 +147,7 @@ Deno.serve(async (req: Request) => {
         total_usd: total,
         coupon_code: appliedCouponCode,
         sale_event_slug: saleEvent && saleDisc > 0 ? saleEvent.slug : null,
+        receipt_email: customerEmail,
         payment_provider: "crypto",
         crypto_provider: provider.name,
         campaign_code: campaignCode,

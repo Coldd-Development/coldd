@@ -1,3 +1,4 @@
+import { codeEmailHtml } from "../_shared/email_design.ts";
 // supabase/functions/claim-account/index.ts
 //
 // Deploy with:
@@ -62,22 +63,7 @@ Enter this code to finish adding an email and password to your account. It expir
 Didn't do this? You can ignore this email - your account isn't changed until the code is entered.
 
 coldd Development - https://coldd.dev`;
-  const html = `<!DOCTYPE html><html><body style="margin:0;background:#0b0b0b;font-family:Arial,Helvetica,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0b0b0b;padding:40px 0;"><tr><td align="center">
-<table width="520" cellpadding="0" cellspacing="0" style="background:#111;border-radius:8px;overflow:hidden;">
-<tr><td style="background:linear-gradient(90deg,#ff2233,#ff6677,#ff2233);height:3px;"></td></tr>
-<tr><td style="padding:36px 40px 8px;">
-<p style="margin:0;font-size:9px;letter-spacing:4px;color:#ff3344;text-transform:uppercase;font-weight:700;">coldd Development</p>
-<p style="margin:12px 0 0;font-size:20px;color:#fff;font-weight:700;">Confirm your email</p>
-<p style="margin:8px 0 0;font-size:13px;color:#666;line-height:1.7;">Enter this code to add an email and password to your account. Expires in ${EXPIRY_MIN} minutes.</p>
-</td></tr>
-<tr><td style="padding:22px 40px 34px;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#cc0011,#ff3344);border-radius:5px;"><tr><td align="center" style="padding:18px;">
-<span style="font-size:30px;font-weight:700;letter-spacing:6px;color:#fff;">${code}</span>
-</td></tr></table>
-</td></tr>
-<tr><td style="padding:0 40px 34px;"><p style="margin:0;font-size:11px;color:#3e3e3e;line-height:1.8;">Didn't do this? Ignore this email - nothing changes until the code is entered. Questions? <a href="mailto:support@coldd.dev" style="color:#ff3344;text-decoration:none;">support@coldd.dev</a></p></td></tr>
-</table></td></tr></table></body></html>`;
+  const html = codeEmailHtml("Confirm your email", "Enter this code on coldd.dev to add an email and password to your account.", code, EXPIRY_MIN);
   return { text, html };
 }
 

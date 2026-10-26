@@ -1,4 +1,4 @@
-import { dispatchReferralEmails } from "../_shared/referral_emails.ts";
+import { queueEmail, drainEmailQueue } from "../_shared/email_delivery.ts";
 // supabase/functions/cron-lifecycle-emails/index.ts
 //
 // Deploy with:
@@ -33,8 +33,9 @@ import { dispatchReferralEmails } from "../_shared/referral_emails.ts";
 //    order (or account creation, if they never bought) is older than
 //    delay_hours, sent once (reengagement_email_sent_at gates repeats).
 
+import { dispatchReferralEmails } from "../_shared/referral_emails.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { ctaButtonHtml, emailConfigured, itemsTableHtml, renderAutomationEmail, sendSingle, unsubscribeHeaders } from "../_shared/email.ts";
+import { ctaButtonHtml, emailConfigured, itemsTableHtml, productHeroHtml, renderAutomationEmail, unsubscribeHeaders } from "../_shared/email.ts";
 import { mintOneTimeCoupon, mintBundleDeal } from "../_shared/discount_codes.ts";
 
 const MAX_PER_AUTOMATION = 50;
@@ -59,7 +60,9 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
+
     try { await dispatchReferralEmails(admin); } catch (error) { console.error("[referral-email] retry deferred", String(error)); }
+    await drainEmailQueue(admin);
 
     const { data: configRows } = await admin.from("email_automations").select("*");
     const configs = new Map<string, Config>((configRows || []).map((c: Config) => [c.key, c]));
@@ -79,7 +82,8 @@ Deno.serve(async (req: Request) => {
       newForYou: await runNewForYou(admin, configs.get("new_for_you"), supabaseUrl),
     };
 
-    return json({ ok: true, ...results });
+    const delivery = await drainEmailQueue(admin);
+    return json({ ok: true, ...results, delivery });
   } catch (err) {
     console.error("[cron-lifecycle-emails] error:", err);
     return json({ ok: false, error: "Server error." }, 500);
@@ -93,7 +97,9 @@ async function eligibleProfile(admin: any, userId: string): Promise<{ email: str
     .select("email, email_unsub_token, marketing_unsubscribed, banned, notification_prefs")
     .eq("id", userId)
     .maybeSingle();
-  if (!data || !data.email || data.marketing_unsubscribed || data.banned) return null;
+  if (!data || !data.email || /@roblox\.coldd\.internal$/i.test(data.email) || data.marketing_unsubscribed || data.banned || data.notification_prefs?.promotions !== true) return null;
+  const { data: allowed, error } = await admin.rpc('email_marketing_allowed', { p_email: data.email });
+  if (error || !allowed) return null;
   return { email: data.email, email_unsub_token: data.email_unsub_token, hasMarketingOptIn: !!data.notification_prefs?.promotions };
 }
 
@@ -113,9 +119,9 @@ async function runAbandonedCart(admin: any, configs: Map<string, Config>, supaba
   let sent = 0, skipped = 0;
   for (const cart of carts || []) {
     const ageHours = (Date.now() - new Date(cart.updated_at).getTime()) / 3_600_000;
-    const nextStepNum = cart.abandoned_step_sent + 1;
-    const step = steps.find((s) => Number(s.key.slice(-1)) === nextStepNum);
-    if (!step || !step.enabled || ageHours < step.delay_hours) continue;
+    const step = steps.find((s) => s.enabled && Number(s.key.slice(-1)) > cart.abandoned_step_sent);
+    const nextStepNum = step ? Number(step.key.slice(-1)) : 4;
+    if (!step || ageHours < step.delay_hours) continue;
 
     const prof = await eligibleProfile(admin, cart.user_id);
     if (!prof) { skipped++; await admin.from("cart_snapshots").update({ abandoned_step_sent: nextStepNum }).eq("session_id", cart.session_id); continue; }
@@ -140,20 +146,20 @@ async function runAbandonedCart(admin: any, configs: Map<string, Config>, supaba
 
     const extraBlocks = [itemsTableHtml(items)];
     if (nextStepNum >= 2 && discountCode) {
-      extraBlocks.push(`<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d7d7d7;">Use code <strong style="color:#ff3344;letter-spacing:0.03em;">${discountCode}</strong> at checkout.</p>`);
+      extraBlocks.push(`<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d7d7d7;">Use code <strong style="color:#ff8079;letter-spacing:0.03em;">${discountCode}</strong> at checkout.</p>`);
     }
     extraBlocks.push(ctaButtonHtml(`${SITE_URL}/checkout`, "Finish checkout"));
 
     const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const html = renderAutomationEmail(step.body_md, extraBlocks, unsubscribeUrl);
-    const result = await sendSingle(prof.email, step.subject, html, unsubscribeHeaders(unsubscribeUrl));
+    const html = renderAutomationEmail(step.body_md, extraBlocks, unsubscribeUrl, step.subject);
+    const result = await queueEmail(admin, { dedupe_key: 'cart/'+cart.session_id+'/'+step.key+'/'+cart.updated_at, category: 'cart/'+cart.session_id, kind: 'marketing', recipient: prof.email, subject: step.subject, html, headers: unsubscribeHeaders(unsubscribeUrl) });
     if (result.ok) {
       sent++;
       // Recorded only on a real send, so the admin's "Email sent" marker is
       // accurate (a skipped or failed step advances abandoned_step_sent but
       // never sets this).
-      updatePayload.abandoned_email_sent_at = new Date().toISOString();
-    } else console.error("[cron-lifecycle-emails] abandoned-cart send failed:", result.error);
+
+    } else { console.error("[cron-lifecycle-emails] abandoned-cart queue failed:", result.error); continue; }
     await admin.from("cart_snapshots").update(updatePayload).eq("session_id", cart.session_id);
   }
   return { sent, skipped };
@@ -193,9 +199,9 @@ async function runPostPurchaseReview(admin: any, config: Config | undefined, sup
       const picks = await pickedForYouBlock(admin, order.user_id, (items || []).map((i: { product_slug: string }) => i.product_slug).filter(Boolean));
       if (picks) reviewBlocks.push(picks);
     }
-    const html = renderAutomationEmail(config.body_md, reviewBlocks, unsubscribeUrl);
-    const result = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsubscribeUrl));
-    if (result.ok) sent++; else console.error("[cron-lifecycle-emails] review-request send failed:", result.error);
+    const html = renderAutomationEmail(config.body_md, reviewBlocks, unsubscribeUrl, config.subject);
+    const result = await queueEmail(admin, { dedupe_key: 'review/'+order.id, category: 'post_purchase_review', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsubscribeUrl) });
+    if (result.ok) sent++; else { console.error("[cron-lifecycle-emails] review-request queue failed:", result.error); continue; }
     await admin.from("orders").update({ review_email_sent_at: new Date().toISOString() }).eq("id", order.id);
   }
   return { sent, skipped };
@@ -230,12 +236,13 @@ async function runReengagement(admin: any, config: Config | undefined, supabaseU
   let sent = 0, skipped = 0;
   for (const prof of pool) {
     if (sent >= MAX_PER_AUTOMATION) break;
+    if (!(await eligibleProfile(admin, prof.id))) { skipped++; continue; }
     if (recentBuyers.has(prof.id)) continue; // still active - not lapsed, leave sent_at null for a future check
 
     const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const html = renderAutomationEmail(config.body_md, [ctaButtonHtml(`${SITE_URL}/shop`, "See what's new")], unsubscribeUrl);
-    const result = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsubscribeUrl));
-    if (result.ok) sent++; else { skipped++; console.error("[cron-lifecycle-emails] reengagement send failed:", result.error); }
+    const html = renderAutomationEmail(config.body_md, [ctaButtonHtml(`${SITE_URL}/shop`, "Browse products")], unsubscribeUrl, config.subject);
+    const result = await queueEmail(admin, { dedupe_key: 'reengagement/'+prof.id, category: 'reengagement', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsubscribeUrl) });
+    if (result.ok) sent++; else { skipped++; console.error("[cron-lifecycle-emails] reengagement send failed:", result.error); continue; }
     await admin.from("profiles").update({ reengagement_email_sent_at: new Date().toISOString() }).eq("id", prof.id);
   }
   return { sent, skipped };
@@ -326,10 +333,10 @@ async function runWishlistReminder(admin: any, config: Config | undefined, supab
     const html = renderAutomationEmail(
       config.body_md,
       [itemsTableHtml(lineItems), discountNote, ctaButtonHtml(`${SITE_URL}/dashboard?panel=wishlist&bundle=${token}`, "See your wishlist")],
-      unsubscribeUrl,
+      unsubscribeUrl, config.subject,
     );
-    const result = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsubscribeUrl));
-    if (result.ok) sent++; else { skipped++; console.error("[cron-lifecycle-emails] wishlist-reminder send failed:", result.error); }
+    const result = await queueEmail(admin, { dedupe_key: 'wishlist/'+userId+'/'+productIds.sort().join(','), category: 'wishlist_reminder', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsubscribeUrl) });
+    if (result.ok) sent++; else { skipped++; console.error("[cron-lifecycle-emails] wishlist-reminder send failed:", result.error); continue; }
     await admin.from("wishlist_items").update({ reminder_sent_at: new Date().toISOString() }).eq("user_id", userId).in("product_id", productIds);
   }
   return { sent, skipped };
@@ -358,9 +365,9 @@ async function mintCoupon(admin: any, prefix: string, pct: number, days: number)
   catch (e) { console.error("[cron-lifecycle-emails] coupon mint failed:", e instanceof Error ? e.message : e); return null; }
 }
 function couponBlockHtml(code: string, pct: number): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:22px;"><tr><td style="background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:16px 18px;text-align:center;">
-<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#7a7a7a;">${pct}% off your next order</p>
-<p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:700;letter-spacing:3px;color:#ff3344;">${code}</p></td></tr></table>`;
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:22px;"><tr><td style="background:#111;border:1px solid #33363f;border-radius:6px;padding:16px 18px;text-align:center;">
+<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#aab2c0;">${pct}% off your next order</p>
+<p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:700;letter-spacing:3px;color:#ff8079;">${code}</p></td></tr></table>`;
 }
 
 // Slugs of everything this user has paid for - the context the relevance engine matches against.
@@ -404,13 +411,14 @@ async function runSignupNudge(admin: any, config: Config | undefined, supabaseUr
   let sent = 0, skipped = 0;
   for (const p of (profs || []).filter((x: { banned?: boolean }) => !x.banned)) {
     if (sent >= MAX_PER_AUTOMATION) break;
+    if (!(await eligibleProfile(admin, p.id))) { skipped++; continue; }
     if (await dedupeSeen(admin, "signup_nudge", p.id)) continue;
     const { count } = await admin.from("orders").select("id", { count: "exact", head: true }).eq("user_id", p.id).eq("status", "paid");
     if ((count || 0) > 0) { await dedupeMark(admin, "signup_nudge", p.id); continue; } // bought since - never nudge
     const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${p.email_unsub_token}`;
-    const html = renderAutomationEmail(config.body_md, [ctaButtonHtml(`${SITE_URL}/shop`, "Browse the catalog")], unsub);
-    const r = await sendSingle(p.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+    const html = renderAutomationEmail(config.body_md, [ctaButtonHtml(`${SITE_URL}/shop`, "Browse the catalog")], unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'signup/'+p.id, category: 'signup_nudge', kind: 'marketing', recipient: p.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "signup_nudge", p.id);
   }
   return { sent, skipped };
@@ -422,23 +430,26 @@ async function runSignupNudge(admin: any, config: Config | undefined, supabaseUr
 async function runWishlistPriceDrop(admin: any, config: Config | undefined, supabaseUrl: string) {
   if (!config || !config.enabled) return { sent: 0, skipped: 0 };
   const { data: rows } = await admin.from("wishlist_items")
-    .select("user_id, products(slug, title, price_usd, was_price, is_active)")
+    .select("user_id, products(slug, title, price_usd, was_price, is_active, email_price_changed_at)")
     .limit(MAX_PER_AUTOMATION * 4);
   let sent = 0, skipped = 0;
   for (const row of rows || []) {
     if (sent >= MAX_PER_AUTOMATION) break;
     const pr = row.products;
     if (!pr || !pr.is_active || pr.was_price == null || Number(pr.was_price) <= Number(pr.price_usd)) continue;
-    const dedupe = `${row.user_id}:${pr.slug}:${pr.price_usd}`;
+    if (!pr.email_price_changed_at || Date.now() - new Date(pr.email_price_changed_at).getTime() < config.delay_hours * 3_600_000) continue;
+    const { count: ownedCount, error: ownedError } = await admin.from('order_items').select('id, orders!inner(user_id,status)', { count: 'exact', head: true }).eq('product_slug', pr.slug).eq('orders.user_id', row.user_id).eq('orders.status','paid');
+    if (ownedError || (ownedCount || 0)>0) continue;
+    const dedupe = `${row.user_id}:${pr.slug}:${pr.price_usd}:${pr.email_price_changed_at}`;
     if (await dedupeSeen(admin, "wishlist_price_drop", dedupe)) continue;
     const prof = await eligibleProfile(admin, row.user_id);
     if (!prof || !prof.hasMarketingOptIn) { await dedupeMark(admin, "wishlist_price_drop", dedupe); skipped++; continue; }
     const off = Math.round((1 - Number(pr.price_usd) / Number(pr.was_price)) * 100);
     const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const note = `<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d7d7d7;"><strong>${pr.title}</strong> is ${off}% off right now - $${Number(pr.price_usd).toFixed(2)}, was $${Number(pr.was_price).toFixed(2)}.</p>`;
-    const html = renderAutomationEmail(config.body_md, [note, ctaButtonHtml(`${SITE_URL}/product/${encodeURIComponent(pr.slug)}`, "See the deal")], unsub);
-    const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+    const note = `<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d7d7d7;"><strong>${String(pr.title).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!))}</strong> is ${off}% off right now - $${Number(pr.price_usd).toFixed(2)}, was $${Number(pr.was_price).toFixed(2)}.</p>`;
+    const html = renderAutomationEmail(config.body_md, [note, ctaButtonHtml(`${SITE_URL}/product/${encodeURIComponent(pr.slug)}`, "See the deal")], unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'price-drop/'+dedupe, category: 'wishlist_price_drop', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "wishlist_price_drop", dedupe);
   }
   return { sent, skipped };
@@ -468,10 +479,10 @@ async function runGettingStarted(admin: any, config: Config | undefined, supabas
     const html = renderAutomationEmail(config.body_md, [
       itemsTableHtml(lineItems),
       ctaButtonHtml(`${SITE_URL}/dashboard?panel=owned`, "Open your files"),
-      `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#9a9a9a;">Stuck on setup? Ask in the <a href="https://discord.gg/coldd" style="color:#ff3344;text-decoration:none;">Discord</a>.</p>`,
-    ], unsub);
-    const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+      `<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#aab2c0;">Stuck on setup? Ask in the <a href="https://discord.gg/coldd" style="color:#ff8079;text-decoration:none;">Discord</a>.</p>`,
+    ], unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'getting-started/'+o.id, category: 'getting_started', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "getting_started", o.id);
   }
   return { sent, skipped };
@@ -501,10 +512,10 @@ async function runResellUpgrade(admin: any, config: Config | undefined, supabase
     const prof = await eligibleProfile(admin, userId);
     if (!prof || (hasResell || 0) > 0) { await dedupeMark(admin, "resell_upgrade", it.id); skipped++; continue; }
     const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const note = `<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d7d7d7;">Resell licence for <strong>${it.products.title}</strong>: pick "Resell licence" on the product page at checkout.</p>`;
-    const html = renderAutomationEmail(config.body_md, [note, ctaButtonHtml(`${SITE_URL}/product/${encodeURIComponent(it.products.slug)}`, "Upgrade the licence")], unsub);
-    const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+    const note = `<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d7d7d7;">Resell licence for <strong>${String(it.products.title).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!))}</strong>: pick "Resell licence" on the product page at checkout.</p>`;
+    const html = renderAutomationEmail(config.body_md, [note, ctaButtonHtml(`${SITE_URL}/product/${encodeURIComponent(it.products.slug)}`, "Upgrade the licence")], unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'resell/'+it.id, category: 'resell_upgrade', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "resell_upgrade", it.id);
   }
   return { sent, skipped };
@@ -540,9 +551,9 @@ async function runReviewIncentive(admin: any, config: Config | undefined, supaba
       linkLabel: "Write a review",
     }));
     const html = renderAutomationEmail(config.body_md, [itemsTableHtml(lineItems), couponBlockHtml(code, 15),
-      `<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#7a7a7a;">The code is yours to use whether or not you leave a review - but a review really does help.</p>`], unsub);
-    const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+      `<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#aab2c0;">The code is yours to use whether or not you leave a review - but a review really does help.</p>`], unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'review-offer/'+o.id, category: 'review_incentive', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "review_incentive", o.id);
   }
   return { sent, skipped };
@@ -571,9 +582,9 @@ async function runRepeatBuyer(admin: any, config: Config | undefined, supabaseUr
     const code = await mintCoupon(admin, "AGAIN", 15, 45);
     if (!code) { skipped++; continue; }
     const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
-    const html = renderAutomationEmail(config.body_md, [couponBlockHtml(code, 15), ctaButtonHtml(`${SITE_URL}/shop`, "Browse the catalog")], unsub);
-    const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+    const html = renderAutomationEmail(config.body_md, [couponBlockHtml(code, 15), ctaButtonHtml(`${SITE_URL}/shop`, "Browse the catalog")], unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'repeat/'+userId, category: 'repeat_buyer', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "repeat_buyer", userId);
   }
   return { sent, skipped };
@@ -609,9 +620,10 @@ async function runNewForYou(admin: any, config: Config | undefined, supabaseUrl:
     if (await dedupeSeen(admin, "new_for_you", `${userId}:${hit}`)) continue;
     const unsub = `${supabaseUrl}/functions/v1/email-unsubscribe?t=${prof.email_unsub_token}`;
     const title = String(freshBySlug.get(hit));
-    const html = renderAutomationEmail(config.body_md, [itemsTableHtml([{ title, linkUrl: `${SITE_URL}/product/${hit}`, linkLabel: "View" }]), ctaButtonHtml(`${SITE_URL}/product/${hit}`, "Take a look")], unsub);
-    const r = await sendSingle(prof.email, config.subject.replace("{product}", title), html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+    const { data: productImage } = await admin.from("products").select("image").eq("slug", hit).maybeSingle();
+    const html = renderAutomationEmail(config.body_md, [itemsTableHtml([{ title, linkUrl: `${SITE_URL}/product/${hit}`, linkLabel: "View" }]), ctaButtonHtml(`${SITE_URL}/product/${hit}`, "Take a look")], unsub, config.subject.replace("{product}", title), productHeroHtml(productImage?.image || "", title));
+    const r = await queueEmail(admin, { dedupe_key: 'new/'+userId+'/'+hit, category: 'new_for_you', kind: 'marketing', recipient: prof.email, subject: config.subject.replace("{product}", title), html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "new_for_you", `${userId}:${hit}`);
   }
   return { sent, skipped };
@@ -641,9 +653,9 @@ async function runWinback(admin: any, config: Config | undefined, supabaseUrl: s
     const winPicks = await pickedForYouBlock(admin, userId, await boughtSlugs(admin, userId));
     if (winPicks) winBlocks.push(winPicks);
     winBlocks.push(ctaButtonHtml(`${SITE_URL}/shop`, "See what's new"));
-    const html = renderAutomationEmail(config.body_md, winBlocks, unsub);
-    const r = await sendSingle(prof.email, config.subject, html, unsubscribeHeaders(unsub));
-    if (r.ok) sent++; else skipped++;
+    const html = renderAutomationEmail(config.body_md, winBlocks, unsub, config.subject);
+    const r = await queueEmail(admin, { dedupe_key: 'winback/'+userId, category: 'winback', kind: 'marketing', recipient: prof.email, subject: config.subject, html, headers: unsubscribeHeaders(unsub) });
+    if (r.ok) sent++; else { skipped++; continue; }
     await dedupeMark(admin, "winback", userId);
   }
   return { sent, skipped };
