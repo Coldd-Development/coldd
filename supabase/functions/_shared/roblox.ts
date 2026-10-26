@@ -245,7 +245,7 @@ export async function priceRobuxItems(
   if (error) return { ok: false, error: "Could not load products." };
 
   // deno-lint-ignore no-explicit-any
-  const bySlug = new Map((products ?? []).map((p: any) => [p.slug, p]));
+  const bySlug = new Map<string, any>((products ?? []).map((p: any) => [p.slug, p]));
   const lines: RobuxPricedLine[] = [];
   for (const raw of items) {
     const slug = String(raw.slug || "");

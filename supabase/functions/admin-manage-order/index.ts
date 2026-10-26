@@ -103,6 +103,11 @@ Deno.serve(async (req: Request) => {
 
     // action === "refund"
     if (order.status !== "paid") return json({ ok: false, error: "Only paid orders can be refunded." }, 400);
+    if (order.payment_provider === "store_credit") {
+      const {error}=await admin.from("orders").update({status:"refunded",refund_reason:String(body.reason||"Store credit refunded").slice(0,500)}).eq("id",orderId).eq("status","paid");
+      if(error) return json({ok:false,error:"Could not refund store credit."},500);
+      return json({ok:true});
+    }
     if (!order.stripe_payment_intent_id) {
       return json({ ok: false, error: "This order has no payment on file to refund." }, 400);
     }

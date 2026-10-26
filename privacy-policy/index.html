@@ -30,7 +30,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261014f" />
+  <link rel="stylesheet" href="/styles.css?v=20261026-payouts" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://coldd.dev/"}, {"@type": "ListItem", "position": 2, "name": "Privacy Policy", "item": "https://coldd.dev/privacy-policy"}]}</script>
   <!-- ld:end -->
@@ -146,7 +146,7 @@
           <p><strong>Roblox:</strong> If you pay with Robux, you link a Roblox account via Roblox's own OAuth sign-in, which requests permission to read your inventory. We use your Roblox user ID to confirm which account is yours and match a completed gamepass purchase to your order - we do not use it to browse, store or analyse the rest of your inventory. If you delete your coldd account, this link is deleted with it (see "Data Retention" below).</p>
           <p><strong>Discord and support communications:</strong> If you contact us by email or through our Discord server, we retain that correspondence to help resolve your request.</p>
           <p><strong>Reviews and other public content:</strong> If you post a review, your username, avatar and the review text are shown publicly on the product page and in our review listings. We never publish your email address. If you delete your account, your reviews are removed (see section 5).</p>
-          <p><strong>Referrals:</strong> If you use the referral programme, we store your referral code, the paid orders that were attributed to your links (the product, date and amount you earned), and your payout requests (method, amount and status). We do not show you who bought. If you buy through someone's referral link, we record the referral code on your order so that the referrer can be credited; the referrer is not given your name, email or any other personal information.</p>
+          <p><strong>Referrals:</strong> If you use the referral programme, we store your referral code, the paid orders that were attributed to your links (the product, date and amount you earned), and your payout requests (method, original currency, amount, status, PayPal payout email or Roblox gamepass URL, correction messages and payment references), your store-credit transactions and service email delivery records. We do not show you who bought. If you buy through someone's referral link, we record the referral code on your order so that the referrer can be credited; the referrer is not given your name, email or any other personal information.</p>
           <p><strong>Gifts:</strong> If you send a gift, you enter the recipient's email address. We use it only to find that person's coldd account, show you its display name, and attach the gift to it. We send the recipient a notification that they received a gift. Only enter an email address of someone who would reasonably expect to receive the gift.</p>
           <p><strong>Emails we send:</strong> Besides order confirmations, sign-in and password-reset codes (which are part of providing the service), we send a one-off email asking you to review a product after you buy it, and, if you have opted in to marketing, deals, drops, re-engagement and cart-reminder discount emails. Every non-essential email has an unsubscribe link, and you can switch these off in your dashboard.</p>
           <p><strong>Cookies and similar storage:</strong> We use your browser's cookies and local/session storage in two ways. <em>Essential</em> storage keeps you signed in, remembers your cart, wishlist, currency and theme, powers recommendations while you browse (below), and records the cookie choice you make below. The Site cannot function without it, so it isn't offered as a choice. <em>Analytics</em> storage is optional and stays off until you actively turn it on. It covers three things, which are not equally anonymous:</p>
@@ -453,7 +453,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261026-referrals" data-then="/app.js?v=20261026-referrals"></script>
+  <script src="/catalog.js?v=20261026-payouts" data-then="/app.js?v=20261026-payouts"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

@@ -113,7 +113,7 @@ export async function priceItems(
     }
   }
 
-  const bySlug = new Map((products ?? []).map((p: any) => [p.slug, p]));
+  const bySlug = new Map<string, any>((products ?? []).map((p: any) => [p.slug, p]));
   const lines: PricedLine[] = [];
   for (const raw of items) {
     const slug = String(raw.slug || "");

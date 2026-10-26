@@ -3434,7 +3434,7 @@
             var pp = isResellOpt ? resellUsd : cur.priceNum;
             el.textContent = (cur.robuxDisabled || isResellOpt) ? fiat(pp) : (window.__money ? window.__money(pp) : fiat(pp));
           });
-          if (pdReferEarn) pdReferEarn.textContent = 'earn ' + fiat(Math.round(cur.priceNum * 0.2 * 100) / 100);
+          if (pdReferEarn) pdReferEarn.textContent = 'earn up to ' + fiat(Math.round(cur.priceNum * 0.2 * 100) / 100) + ' USD on USD purchases';
           renderAddonsBlock();
         }
         // ---- Add-ons: optional extras for this product, chosen before adding to the cart. ----
@@ -5078,94 +5078,96 @@
         }).finally(function () { robloxUnlinkBtn.disabled = false; });
       });
 
-      var refStats = null;
-      var refLoaded = false;
-      function refFmtUsd(n) { return window.__money ? window.__money(n) : ('$' + n); }
-      function refFmtRobux(n) { return 'R$ ' + n; }
-      function refFmtDate(iso) {
-        try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
-        catch (e) { return iso; }
-      }
-      function refEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-      function refreshReferrals() {
-        if (refLoaded || !window.coldAuth) return;
-        refLoaded = true;
-        window.coldAuth.invokeFn('get-referral-stats', {}).then(function (res) {
-          refStats = res;
-          var earnedEl = document.getElementById('refStatEarned');
-          if (earnedEl) earnedEl.textContent = refFmtUsd(res.earnedUsd);
-          var availEl = document.getElementById('refStatAvailable');
-          if (availEl) availEl.textContent = refFmtUsd(res.availableUsd);
-          var paidEl = document.getElementById('refStatPaid');
-          if (paidEl) paidEl.textContent = refFmtUsd(res.paidUsd);
-
-          var actBody = document.getElementById('refActivityBody');
-          if (actBody) {
-            var rows = res.recentSales || [];
-            actBody.innerHTML = rows.length ? rows.map(function (r) {
-              return '<tr><td>' + refEsc(r.product) + '</td><td>' + refFmtDate(r.date) + '</td><td>' + refFmtUsd(r.earned) + '</td></tr>';
-            }).join('') : '<tr><td colspan="3" class="adm-empty">No referral sales yet.</td></tr>';
-          }
-
-          var payBody = document.getElementById('refPayoutBody');
-          if (payBody) {
-            var payouts = res.payouts || [];
-            payBody.innerHTML = payouts.length ? payouts.map(function (p) {
-              var amount = p.method === 'robux' ? refFmtRobux(p.amount_robux || 0) : refFmtUsd(p.amount_usd || 0);
-              var status = p.status === 'paid' ? '<span class="dt-badge ok">Paid</span>' : p.status === 'denied' ? '<span class="dt-badge err">Denied</span>' : '<span class="dt-badge warn">Requested</span>';
-              var method = p.method === 'usd' ? 'USD' : p.method === 'robux' ? 'Robux' : 'Store credit';
-              return '<tr><td>' + refFmtDate(p.requested_at) + '</td><td>' + method + '</td><td>' + amount + '</td><td>' + status + '</td></tr>';
-            }).join('') : '<tr><td colspan="4" class="adm-empty">No payout requests yet.</td></tr>';
-          }
-        }).catch(function () {
-          refLoaded = false;
-        });
-      }
-
-      (function () {
-        var dd = document.querySelector('.ref-method-dd');
-        if (!dd) return;
-        var native = dd.querySelector('.ref-method-native');
-        var btn = dd.querySelector('.ref-method-btn');
-        var val = dd.querySelector('.ref-method-val');
-        var menu = dd.querySelector('.ref-method-menu');
-        var opts = Array.prototype.slice.call(dd.querySelectorAll('.ref-method-opt'));
-        function close() { dd.classList.remove('open'); menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
-        function open() { dd.classList.add('open'); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); window.__coldMenuFit && window.__coldMenuFit(menu, dd); }
-        function select(opt) {
-          native.value = opt.getAttribute('data-value');
-          val.textContent = opt.querySelector('span').textContent;
-          opts.forEach(function (o) {
-            var active = o === opt;
-            o.classList.toggle('active', active);
-            o.setAttribute('aria-selected', active ? 'true' : 'false');
-          });
-        }
-        btn.addEventListener('click', function (e) { e.stopPropagation(); menu.hidden ? open() : close(); });
-        opts.forEach(function (o) { o.addEventListener('click', function () { select(o); close(); btn.focus(); }); });
-        document.addEventListener('click', function (e) { if (!dd.contains(e.target)) close(); });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-      })();
-
+      var refStats = null, refLoaded = false, refEditing = null, refRequestKey = null;
+      function refFmtUsd(n) { return '$' + Number(n || 0).toFixed(2) + ' USD'; }
+      function refFmtRobux(n) { return 'R$ ' + Number(n || 0).toLocaleString(); }
+      function refNative(source, n) { return source.indexOf('robux') >= 0 ? refFmtRobux(n) : refFmtUsd(n); }
+      function refFmtDate(iso) { return new Date(iso).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); }
+      function refEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+      var refSource = document.getElementById('refSourceCurrency');
+      var refMethod = document.getElementById('refPayoutMethod');
       var refPayoutForm = document.getElementById('refPayoutForm');
-      if (refPayoutForm) refPayoutForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var msgEl = refPayoutForm.querySelector('.auth-msg');
-        var btn = refPayoutForm.querySelector('.auth-submit');
-        var method = document.getElementById('refPayoutMethod').value;
-        var amount = parseFloat(document.getElementById('refPayoutAmount').value);
-        if (!amount || amount <= 0) return;
-        setBtnLoading(btn, true);
-        window.coldAuth.invokeFn('request-referral-payout', { method: method, amount: amount }).then(function () {
-          setBtnLoading(btn, false);
-          if (msgEl) { msgEl.className = 'auth-msg ok show'; msgEl.textContent = 'Payout requested - our team will review it manually.'; }
-          refPayoutForm.reset();
-          refLoaded = false;
-          refreshReferrals();
-        }).catch(function (err) {
-          setBtnLoading(btn, false);
-          if (msgEl) { msgEl.className = 'auth-msg show'; msgEl.textContent = (err && err.message) || 'Could not request payout.'; }
-        });
+      function refMethodFields() {
+        if (!refMethod) return;
+        var method=refMethod.value, source=refSource.value, rb=source.indexOf('robux')>=0;
+        document.getElementById('refPaypalField').hidden=method!=='usd';
+        document.getElementById('refGamepassField').hidden=method!=='robux';
+        document.getElementById('refPaypalEmail').required=method==='usd';document.getElementById('refPaypalEmail').disabled=method!=='usd';
+        document.getElementById('refGamepassUrl').required=method==='robux';document.getElementById('refGamepassUrl').disabled=method!=='robux';
+        var amount=document.getElementById('refPayoutAmount'); amount.step=rb?'1':'0.01'; amount.min=rb?'1':'0.01';
+        document.getElementById('refAmountLabel').textContent=rb?'Amount (Robux)':'Amount (USD)';
+        document.getElementById('refMethodHelp').textContent=method==='robux'
+          ? 'Set your gamepass price to the amount requested and keep it on sale. This is the gamepass purchase price; Roblox deducts its fee and may hold the proceeds as pending Robux.'
+          : method==='usd' ? 'We send USD manually to your saved PayPal payout email. Check that the address belongs to your PayPal account.'
+          : 'Store credit keeps the same currency as these earnings. Once approved, it can pay for an entire order at checkout.';
+      }
+      function refSelectSource() {
+        if(!refSource||!refMethod) return;
+        var source=refSource.value, old=refMethod.value;
+        refMethod.innerHTML=(source==='usd'?'<option value="usd">PayPal (USD)</option>':source==='robux'?'<option value="robux">Robux gamepass</option>':'')+'<option value="store_credit">Store credit</option>';
+        if(Array.prototype.some.call(refMethod.options,function(o){return o.value===old;})) refMethod.value=old;
+        var b=refStats&&refStats.balances&&refStats.balances[source]||{};
+        ['Earned','Available','Paid'].forEach(function(key){var el=document.getElementById('refStat'+key);if(el)el.textContent=refNative(source,b[key==='Available'?'available':key==='Earned'?'earned':'paid']);});
+        document.getElementById('refBalanceHelp').textContent=Number(b.debt)>0?'Previous refunds exceed remaining earnings by '+refNative(source,b.debt)+'. Future earnings cover that amount first.':'USD and Robux earnings stay separate. Sandbox purchases do not earn commission.';
+        refMethodFields();
+      }
+      function refEndEdit() {
+        refEditing=null;refRequestKey=null;refSource.disabled=false;refMethod.disabled=false;
+        document.getElementById('refPayoutAmount').disabled=false;
+        document.getElementById('refPayoutAmount').value='';
+        document.getElementById('refPayoutSubmit').querySelector('.btn-label').textContent='Request payout';
+        document.getElementById('refCancelEdit').hidden=true;
+        document.getElementById('refEditReason').hidden=true;
+        refSelectSource();
+      }
+      function refreshReferrals() {
+        if(refLoaded||!window.coldAuth)return;refLoaded=true;
+        window.coldAuth.invokeFn('get-referral-stats',{}).then(function(res){
+          refStats=res;refSelectSource();
+          var details=res.paymentDetails||{};
+          if(!refEditing){document.getElementById('refPaypalEmail').value=details.paypal_email||'';document.getElementById('refGamepassUrl').value=details.gamepass_url||'';}
+          document.getElementById('refCreditBalance').textContent='Store credit ready to spend: '+refFmtUsd(res.credit&&res.credit.usd)+' and '+refFmtRobux(res.credit&&res.credit.robux)+'.';
+          var rows=res.recentSales||[];
+          document.getElementById('refActivityBody').innerHTML=rows.length?rows.map(function(r){return '<tr><td>'+refEsc(r.product)+'</td><td>'+refFmtDate(r.date)+'</td><td>'+refNative(r.currency,r.earned)+'</td></tr>';}).join(''):'<tr><td colspan="3" class="adm-empty">No referral sales yet.</td></tr>';
+          var payouts=res.payouts||[];
+          document.getElementById('refPayoutBody').innerHTML=payouts.length?payouts.map(function(p){
+            var status=p.status==='paid'?'Completed':p.status==='denied'?'Denied':p.status==='changes_requested'?'Update details':'Requested';
+            var tone=p.status==='paid'?'ok':p.status==='denied'?'err':'warn';
+            var detail=p.status==='changes_requested'?p.change_reason:p.status==='denied'?p.note:p.transfer_reference;
+            var action=p.status==='changes_requested'?'<button type="button" class="btn btn-ghost ref-revise" data-id="'+refEsc(p.id)+'">Update details</button>':'';
+            return '<tr><td>'+refFmtDate(p.requested_at)+'</td><td>'+({usd:'PayPal',robux:'Robux gamepass',store_credit:'Store credit'}[p.method])+'</td><td>'+refNative(p.source_currency,p.source_currency.indexOf('robux')>=0?p.amount_robux:p.amount_usd)+'</td><td><span class="dt-badge '+tone+'">'+status+'</span>'+(detail?'<p class="ref-detail-note">'+refEsc(detail)+'</p>':'')+action+'</td></tr>';
+          }).join(''):'<tr><td colspan="4" class="adm-empty">No payout requests yet.</td></tr>';
+        }).catch(function(err){refLoaded=false;var msg=refPayoutForm&&refPayoutForm.querySelector('.auth-msg');if(msg){msg.className='auth-msg show';msg.textContent=err.message||'Could not load referrals. Reload to try again.';}});
+      }
+      if(refSource)refSource.addEventListener('change',function(){refRequestKey=null;refSelectSource();});
+      if(refMethod)refMethod.addEventListener('change',function(){refRequestKey=null;refMethodFields();});
+      var refCancelEdit=document.getElementById('refCancelEdit');if(refCancelEdit)refCancelEdit.addEventListener('click',refEndEdit);
+      var refHistory=document.getElementById('refPayoutBody');
+      if(refHistory)refHistory.addEventListener('click',function(e){
+        var button=e.target.closest('.ref-revise');if(!button||!refStats)return;
+        var p=(refStats.payouts||[]).filter(function(p){return p.id===button.getAttribute('data-id');})[0];if(!p)return;
+        refEditing=p.id;refSource.value=p.source_currency;refSelectSource();refMethod.value=p.method;refMethodFields();
+        refSource.disabled=true;refMethod.disabled=true;
+        var amount=document.getElementById('refPayoutAmount');amount.value=p.source_currency.indexOf('robux')>=0?p.amount_robux:p.amount_usd;amount.disabled=true;
+        document.getElementById('refPaypalEmail').value=p.paypal_email||'';document.getElementById('refGamepassUrl').value=p.gamepass_url||'';
+        document.getElementById('refEditReason').textContent=p.change_reason;document.getElementById('refEditReason').hidden=false;
+        document.getElementById('refPayoutSubmit').querySelector('.btn-label').textContent='Resubmit corrected details';
+        refCancelEdit.hidden=false;refPayoutForm.scrollIntoView({behavior:'smooth',block:'center'});
+      });
+      if(refPayoutForm)refPayoutForm.addEventListener('input',function(){refRequestKey=null;});
+      if(refPayoutForm)refPayoutForm.addEventListener('submit',function(e){
+        e.preventDefault();if(!refPayoutForm.reportValidity())return;
+        var amount=Number(document.getElementById('refPayoutAmount').value),msg=refPayoutForm.querySelector('.auth-msg'),btn=document.getElementById('refPayoutSubmit');
+        if(!Number.isFinite(amount)||amount<=0){msg.className='auth-msg show';msg.textContent='Enter a positive payout amount.';return;}
+        if(btn.disabled)return;
+        var payload={method:refMethod.value,sourceCurrency:refSource.value,amount:amount,paypalEmail:document.getElementById('refPaypalEmail').value.trim(),gamepassUrl:document.getElementById('refGamepassUrl').value.trim()};
+        if(!refRequestKey)refRequestKey=crypto.randomUUID();payload.idempotencyKey=refRequestKey;
+        if(refEditing)payload.id=refEditing;
+        setBtnLoading(btn,true);
+        window.coldAuth.invokeFn(refEditing?'update-referral-payout':'request-referral-payout',payload).then(function(){
+          setBtnLoading(btn,false);refEndEdit();msg.className='auth-msg ok show';msg.textContent='Request received. Allow around 72 hours for review and fulfillment. We will email you with updates.';
+          refLoaded=false;refreshReferrals();
+        }).catch(function(err){setBtnLoading(btn,false);msg.className='auth-msg show';msg.textContent=err.message||'Could not submit your request. Please retry.';});
       });
 
       var refProdBody = document.getElementById('refProdBody');
@@ -5217,7 +5219,7 @@
             var link = '/product/' + encodeURIComponent(p.id) + '?ref=' + encodeURIComponent(refCode);
             return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'' + esc(p.image) + '\')"></span>' +
               '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div>' +
-              '<div class="dr-sub">' + esc(p.cat || '') + (p.cat ? ' · ' : '') + 'Earn ' + fmt(earn) + ' per sale</div></div>' +
+              '<div class="dr-sub">' + esc(p.cat || '') + (p.cat ? ' · ' : '') + 'Up to ' + fmt(earn) + ' USD per USD sale, after discounts</div></div>' +
               '<div class="dr-actions"><button class="btn btn-primary ref-prod-copy" type="button" data-link="' + esc(link) + '">Copy link</button></div></div>';
           }).join('');
           refProdBody.querySelectorAll('.ref-prod-copy').forEach(function (b) {
@@ -7071,6 +7073,7 @@
           if (isMatch) picked = b;
         });
         var method = picked ? picked.getAttribute('data-method') : 'stripe';
+        var creditWrap=document.getElementById('coCreditWrap');if(creditWrap){creditWrap.hidden=method!=='stripe'&&method!=='robux';if(creditWrap.hidden)document.getElementById('coUseCredit').checked=false;}
         payMethod = method;
         document.querySelectorAll('.co-pay-panel').forEach(function (p) {
           p.hidden = p.getAttribute('data-method-panel') !== method;
@@ -7652,7 +7655,7 @@
       });
 
       function proceedToOrder() {
-        if (payMethod === 'robux') { startRobuxOrder(); return; }
+        if (payMethod === 'robux' && !(document.getElementById('coUseCredit') || {}).checked) { startRobuxOrder(); return; }
 
         var prevText = placeBtn.textContent;
         placeBtn.setAttribute('data-busy', '1');
@@ -7660,6 +7663,7 @@
         if (msg) { msg.className = 'co-msg'; msg.textContent = ''; }
 
         var checkoutBody = { items: cartToItems() };
+        checkoutBody.useStoreCredit=!!(document.getElementById('coUseCredit')||{}).checked && (payMethod==='stripe'||payMethod==='robux');
         if (appliedCoupon) checkoutBody.couponCode = appliedCoupon.code;
         if (window.coldAuth && window.coldAuth.getCampaignCode()) checkoutBody.campaignCode = window.coldAuth.getCampaignCode();
         var checkoutRefAttr = window.coldAuth && window.coldAuth.getReferralAttribution();
@@ -7680,7 +7684,7 @@
         // Only slugs, quantities and a coupon code are ever sent. Both
         // functions re-price the whole cart from the database, so a tampered
         // request buys nothing at the wrong price.
-        var checkoutFn = payMethod === 'paypal' ? 'create-paypal-order'
+        var checkoutFn = checkoutBody.useStoreCredit && payMethod === 'robux' ? 'create-robux-order' : payMethod === 'paypal' ? 'create-paypal-order'
           : payMethod === 'crypto' ? 'create-crypto-charge'
           : 'create-checkout-session';
 
@@ -8074,8 +8078,23 @@
         // match, so this is the only way (guest or signed-in) to see it
         // right after paying.
         window.coldSupabase.functions.invoke('get-order-by-session', { body: sessionId ? { sessionId: sessionId, token: claimToken } : { orderId: robuxOrderIdParam, token: claimToken } })
-          .then(function (res) {
+          .then(async function (res) {
             var data = res && res.data;
+            var lookupStatus = res && res.error && res.error.context && res.error.context.status;
+            if ([401,403,404].indexOf(lookupStatus)>=0) {
+              mark('fail');
+              if(titleEl)titleEl.textContent=lookupStatus===404?'Order not found':'Order access unavailable';
+              if(subEl)subEl.innerHTML=withSupportLine(lookupStatus===404?'This order link could not be found. Check your dashboard or contact support with your payment reference.':'This link cannot open the order. Sign in with the buyer account or use the original secure link from checkout.');
+              if(tyRetryBtn)tyRetryBtn.hidden=true;
+              return;
+            }
+            if(data && ['refunded','revoked','canceled','failed'].indexOf(data.status)>=0){
+              mark('fail');
+              if(titleEl)titleEl.textContent={refunded:'Order refunded',revoked:'Order access revoked',canceled:'Checkout canceled',failed:'Payment unsuccessful'}[data.status];
+              if(subEl)subEl.innerHTML=withSupportLine('This order is '+data.status+'. Check your dashboard for current order details.');
+              if(tyRetryBtn)tyRetryBtn.hidden=true;
+              return;
+            }
             if (!data || !data.ok) {
               if (triesLeft > 0) { setTimeout(function () { poll(triesLeft - 1); }, 1500); return; }
               // A real "declined" state and "we just haven't found the row

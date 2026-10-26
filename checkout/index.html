@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261014f" />
+  <link rel="stylesheet" href="/styles.css?v=20261026-payouts" />
 </head>
 <body>
   <div class="backdrop"></div>
@@ -177,6 +177,7 @@
               <span class="co-pay-amt" data-pay-amt="robux"></span>
             </button>
           </div>
+          <div class="co-check" id="coCreditWrap"><label><input type="checkbox" id="coUseCredit" /> Use my store credit for this entire order</label><p class="ref-detail-note">Sign in first. Credit must cover the full total and match the currency: choose Card for USD credit or Robux for Robux credit. We do not convert currencies.</p></div>
           <!-- Local Stripe payment methods, beyond the four tiles above.
                Visible regardless of which method is currently selected -
                picking a tile switches to Stripe and restricts that session
@@ -545,7 +546,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261026-referrals" data-then="/app.js?v=20261026-referrals"></script>
+  <script src="/catalog.js?v=20261026-payouts" data-then="/app.js?v=20261026-payouts"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

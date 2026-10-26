@@ -11,7 +11,7 @@
 // slugs and quantities, never amounts - a client-supplied price is a client-
 // controlled price.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type PricedLine, priceItems, resolveCoupon, spendTierDiscount, clampCombinedDiscount, activeSaleEvent, saleEventDiscount } from "../_shared/coupon.ts";
 import { resolveCampaignCode } from "../_shared/campaign.ts";
 import { resolveProductReferral } from "../_shared/referrals.ts";
@@ -128,6 +128,7 @@ Deno.serve(async (req: Request) => {
         user_id: giftRecipientId || (user ? user.id : null),
         purchased_by_user_id: giftRecipientId ? user!.id : null,
         status: "pending",
+        is_test: paypalEnv() !== "live",
         subtotal_usd: Math.round((subtotal + addonsUsd) * 100) / 100,
         discount_usd: discount,
         total_usd: total,

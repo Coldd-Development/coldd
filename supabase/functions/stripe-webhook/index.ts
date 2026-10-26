@@ -71,7 +71,7 @@ Deno.serve(async (req: Request) => {
           .neq("status", "paid")
           .select("coupon_code, user_id, purchased_by_user_id, marketing_opt_in")
           .single();
-        if (error && error.code !== "PGRST116") console.error("[stripe-webhook] failed to mark order paid:", error);
+        if (error && error.code !== "PGRST116") throw error;
 
         if (updated) {
           if (updated.coupon_code) {
@@ -101,14 +101,12 @@ Deno.serve(async (req: Request) => {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.order_id;
       if (orderId) {
-        await admin.from("orders").update({ status: "failed" }).eq("id", orderId).neq("status", "paid");
+        await admin.from("orders").update({ status: "failed" }).eq("id", orderId).in("status", ["pending"]);
       }
     }
   } catch (err) {
     console.error("[stripe-webhook] handler error:", err);
-    // Still return 200 below - an internal error shouldn't make Stripe
-    // retry-storm an event we may have already partially processed. Errors
-    // are visible in the function logs for manual follow-up.
+    return new Response("Payment processing failed; please retry.", {status:500});
   }
 
   // Always ack quickly so Stripe doesn't retry unhandled event types.

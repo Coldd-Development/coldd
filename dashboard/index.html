@@ -37,7 +37,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261014f" />
+  <link rel="stylesheet" href="/styles.css?v=20261026-payouts" />
 </head>
 <body class="dash-body">
   <div class="backdrop"></div>
@@ -206,7 +206,8 @@
         </div>
       </section>
       <section class="dash-panel" id="panel-referrals" hidden>
-        <div class="dash-head"><h1>Referrals</h1><p>Share a link to any single product and earn 20% of its price on every purchase made through your link.</p></div>
+        <div class="dash-head"><h1>Referrals</h1><p>Earn 20% of the referred product's price after discounts. USD purchases earn USD; Robux purchases earn Robux. Store-credit purchases earn store credit.</p></div>
+        <div class="auth-field ref-source"><label for="refSourceCurrency">Earnings balance</label><select id="refSourceCurrency"><option value="usd">USD earnings</option><option value="robux">Robux earnings</option><option value="store_usd">USD store-credit earnings</option><option value="store_robux">Robux store-credit earnings</option></select><p id="refBalanceHelp" class="ref-detail-note"></p></div>
         <div class="dash-stats">
           <div class="dash-stat glass"><span class="ds-label">Total earned</span><span class="ds-num" id="refStatEarned"> - </span></div>
           <div class="dash-stat glass"><span class="ds-label">Available</span><span class="ds-num" id="refStatAvailable"> - </span></div>
@@ -226,28 +227,18 @@
         </div>
         <div class="dash-card glass" id="refPayoutCard">
           <div class="dash-card-head"><h2>Request a payout</h2></div>
-          <form class="auth-form" id="refPayoutForm" novalidate style="max-width:420px;">
-            <div class="auth-field" data-for="method"><label for="refPayoutMethod">Method</label>
-              <div class="ref-method-dd">
-                <select id="refPayoutMethod" name="method" class="ref-method-native">
-                  <option value="usd">USD</option>
-                  <option value="robux">Robux</option>
-                  <option value="store_credit">Store credit (USD)</option>
-                </select>
-                <button type="button" class="ref-method-btn" aria-haspopup="listbox" aria-expanded="false">
-                  <span class="ref-method-val">USD</span>
-                  <svg class="ref-method-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="ref-method-menu" role="listbox" aria-label="Payout method" hidden>
-                  <button type="button" class="ref-method-opt active" data-value="usd" role="option" aria-selected="true"><span>USD</span><span class="ref-method-radio"></span></button>
-                  <button type="button" class="ref-method-opt" data-value="robux" role="option" aria-selected="false"><span>Robux</span><span class="ref-method-radio"></span></button>
-                  <button type="button" class="ref-method-opt" data-value="store_credit" role="option" aria-selected="false"><span>Store credit (USD)</span><span class="ref-method-radio"></span></button>
-                </div>
-              </div>
-            </div>
-            <div class="auth-field" data-for="amount"><label for="refPayoutAmount">Amount</label><input id="refPayoutAmount" name="amount" type="number" min="0.01" step="0.01" /><span class="auth-err"></span></div>
-            <button class="btn btn-primary auth-submit" type="submit" style="width:auto;align-self:flex-start;"><span class="btn-label">Request payout</span><span class="btn-spinner" hidden></span></button>
-            <div class="auth-msg"></div>
+          <p class="ref-payout-intro">Payouts are reviewed and fulfilled manually in around <strong>72 hours</strong>. We email you when a request is received, completed, denied, or needs corrected details. Allow around 72 hours again after resubmitting corrections.</p>
+          <p id="refCreditBalance" class="ref-detail-note"></p>
+          <form class="auth-form" id="refPayoutForm" style="max-width:560px;">
+            <p id="refEditReason" class="ref-detail-note" hidden></p>
+            <div class="auth-field"><label for="refPayoutMethod">Payout method</label><select id="refPayoutMethod" name="method"><option value="usd">PayPal (USD)</option><option value="store_credit">Store credit</option></select></div>
+            <div class="auth-field"><label id="refAmountLabel" for="refPayoutAmount">Amount (USD)</label><input id="refPayoutAmount" name="amount" type="number" min="0.01" step="0.01" required /></div>
+            <div class="auth-field" id="refPaypalField"><label for="refPaypalEmail">PayPal payout email</label><input id="refPaypalEmail" type="email" maxlength="254" autocomplete="email" required /><small>Use the email linked to your PayPal account. We save it for your next request.</small></div>
+            <div class="auth-field" id="refGamepassField" hidden><label for="refGamepassUrl">Your gamepass link</label><input id="refGamepassUrl" type="url" maxlength="300" placeholder="https://www.roblox.com/game-pass/123456789" /><small>Submit a gamepass you control. It must be on sale at the amount requested.</small></div>
+            <p id="refMethodHelp" class="ref-detail-note"></p>
+            <button class="btn btn-primary auth-submit" id="refPayoutSubmit" type="submit"><span class="btn-label">Request payout</span><span class="btn-spinner" hidden></span></button>
+            <button class="btn btn-ghost" id="refCancelEdit" type="button" hidden>Cancel editing</button>
+            <div class="auth-msg" role="status" aria-live="polite"></div>
           </form>
         </div>
         <div class="dash-card glass dash-tablewrap"><div class="dash-card-head"><h2>Referral sales</h2></div><table class="dash-table"><thead><tr><th>Product</th><th>Date</th><th>Earned</th></tr></thead><tbody id="refActivityBody">
@@ -367,9 +358,9 @@
 
         <div class="ac-tabpanel" data-actabpanel="notifications" hidden>
           <div class="dash-card glass"><div class="dash-card-head"><h2>Email</h2></div>
-            <div class="ntf-row"><div class="ntf-text"><div class="ntf-label">Order receipts</div><div class="ntf-sub">Confirmations and invoices</div></div><label class="switch"><input type="checkbox" id="ntfOrderReceipts" checked /><span class="track"></span></label></div>
+            <div class="ntf-row"><div class="ntf-text"><div class="ntf-label">Order receipts</div><div class="ntf-sub">Always sent for purchases</div></div><label class="switch"><input type="checkbox" id="ntfOrderReceipts" checked disabled /><span class="track"></span></label></div>
             <div class="ntf-row"><div class="ntf-text"><div class="ntf-label">Product updates</div><div class="ntf-sub">New versions of things you own</div></div><label class="switch"><input type="checkbox" id="ntfProductUpdates" checked /><span class="track"></span></label></div>
-            <div class="ntf-row"><div class="ntf-text"><div class="ntf-label">Promotions &amp; sales</div><div class="ntf-sub">Occasional deals and drops</div></div><label class="switch"><input type="checkbox" id="ntfPromotions" checked /><span class="track"></span></label></div>
+            <div class="ntf-row"><div class="ntf-text"><div class="ntf-label">Promotions &amp; sales</div><div class="ntf-sub">Deals, product recommendations and shopping reminders</div></div><label class="switch"><input type="checkbox" id="ntfPromotions" /><span class="track"></span></label></div>
           </div>
           <div class="dash-card glass"><div class="dash-card-head"><h2>In-app (the bell)</h2></div>
             <div class="ntf-row"><div class="ntf-text"><div class="ntf-label">Site-wide sale alerts</div><div class="ntf-sub">A notification when a store-wide sale goes live</div></div><label class="switch"><input type="checkbox" id="ntfInAppSales" checked /><span class="track"></span></label></div>
@@ -631,7 +622,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261026-referrals" data-then="/app.js?v=20261026-referrals"></script>
+  <script src="/catalog.js?v=20261026-payouts" data-then="/app.js?v=20261026-payouts"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

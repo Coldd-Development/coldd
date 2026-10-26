@@ -1,3 +1,4 @@
+import { sendOrderReceipt } from "../_shared/email.ts";
 // supabase/functions/create-checkout-session/index.ts
 //
 // Deploy with:
@@ -249,6 +250,17 @@ Deno.serve(async (req: Request) => {
     if (!(await insertOrderAddons(admin, order.id, addons))) {
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
       return json({ ok: false, error: "Could not record your add-ons." }, 500);
+    }
+
+    if (body.useStoreCredit) {
+      if (!user) { await admin.from("orders").update({status:"canceled"}).eq("id",order.id); return json({ ok:false, error:"Please sign in to use store credit." },401); }
+      const {data:credit,error:creditError}=await admin.rpc("spend_store_credit",{p_user_id:user.id,p_order_id:order.id,p_currency:"usd"});
+      if(creditError || !credit?.ok) {
+        await admin.from("orders").update({status:"canceled"}).eq("id",order.id);
+        return json({ok:false,error:credit?.error||"Could not apply store credit."},400);
+      }
+      await sendOrderReceipt(admin,order.id,user.email).catch(console.error);
+      return json({ok:true,url:siteUrl+"/success?order_id="+order.id});
     }
 
     // Guest orders (no account) carry a one-time claim token in the success

@@ -1,3 +1,4 @@
+import { dispatchReferralEmails } from "../_shared/referral_emails.ts";
 // supabase/functions/cron-lifecycle-emails/index.ts
 //
 // Deploy with:
@@ -58,6 +59,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
+    try { await dispatchReferralEmails(admin); } catch (error) { console.error("[referral-email] retry deferred", String(error)); }
 
     const { data: configRows } = await admin.from("email_automations").select("*");
     const configs = new Map<string, Config>((configRows || []).map((c: Config) => [c.key, c]));

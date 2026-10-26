@@ -380,44 +380,23 @@
   // actual source of truth for payouts is referral_payouts.
   var REFERRALS = [];
   function refreshAdminReferrals() {
-    if (!window.coldSupabase) return Promise.resolve();
-    return window.coldSupabase.from('profiles').select('id, username, email, referral_code').limit(20000).then(function (res) {
-      if (res.error) { console.error('[admin] failed to load referrals:', res.error.message); return; }
-      var rows = res.data || [];
-      var referrers = rows.filter(function (p) { return p.referral_code; });
-      return window.coldSupabase.from('orders')
-        .select('referrer_id, ref_product_slug, status, order_items(product_slug, unit_price_usd, qty)')
-        .not('referrer_id', 'is', null).limit(20000).then(function (orderRes) {
-        var refOrders = orderRes.data || [];
-        return window.coldSupabase.from('referral_payouts').select('user_id, amount_usd, status').limit(20000).then(function (payRes) {
-          var paidByUser = {};
-          (payRes.data || []).forEach(function (pay) {
-            if (pay.status !== 'paid') return;
-            paidByUser[pay.user_id] = (paidByUser[pay.user_id] || 0) + Number(pay.amount_usd || 0);
-          });
-          REFERRALS = referrers.map(function (r) {
-            var sales = 0;
-            var earnedUSD = 0;
-            refOrders.forEach(function (o) {
-              if (o.referrer_id !== r.id || o.status !== 'paid') return;
-              var match = (o.order_items || []).filter(function (it) { return it.product_slug === o.ref_product_slug; })[0];
-              if (!match) return;
-              sales++;
-              earnedUSD += Number(match.unit_price_usd || 0) * match.qty * 0.2;
-            });
-            return {
-              ownerId: r.id,
-              code: r.referral_code,
-              owner: r.username || (r.email ? r.email.split('@')[0] : 'user'),
-              sales: sales,
-              earnedUSD: Math.round(earnedUSD * 100) / 100,
-              paidUSD: Math.round((paidByUser[r.id] || 0) * 100) / 100
-            };
-          });
-          if (curPanel === 'analytics') renderAnalytics();
-          if (curPanel === 'marketing') renderMarketing();
-        });
+    if(!window.coldSupabase)return Promise.resolve();
+    return Promise.all([
+      window.coldSupabase.from('profiles').select('id,username,email,referral_code').limit(20000),
+      window.coldSupabase.from('referral_order_earnings').select('referrer_id,currency,amount').limit(20000),
+      window.coldSupabase.from('referral_payouts').select('user_id,source_currency,amount_usd,amount_robux,status').eq('status','paid').limit(20000)
+    ]).then(function(results){
+      if(results.some(function(r){return r.error;}))return;
+      REFERRALS=(results[0].data||[]).filter(function(p){return p.referral_code;}).map(function(p){
+        var earns=(results[1].data||[]).filter(function(r){return r.referrer_id===p.id;});
+        var paid=(results[2].data||[]).filter(function(r){return r.user_id===p.id;});
+        return {ownerId:p.id,code:p.referral_code,owner:p.username||p.email||'user',sales:earns.length,
+          earnedUSD:earns.filter(function(r){return r.currency.indexOf('robux')<0;}).reduce(function(s,r){return s+Number(r.amount);},0),
+          earnedRobux:earns.filter(function(r){return r.currency.indexOf('robux')>=0;}).reduce(function(s,r){return s+Number(r.amount);},0),
+          paidUSD:paid.filter(function(r){return r.source_currency.indexOf('robux')<0;}).reduce(function(s,r){return s+Number(r.amount_usd||0);},0),
+          paidRobux:paid.filter(function(r){return r.source_currency.indexOf('robux')>=0;}).reduce(function(s,r){return s+Number(r.amount_robux||0);},0)};
       });
+      if(curPanel==='analytics')renderAnalytics();if(curPanel==='marketing')renderMarketing();
     });
   }
 
@@ -433,7 +412,7 @@
           var prof = byId[p.user_id];
           return Object.assign({ owner: prof ? (prof.username || prof.email || 'user') : 'user' }, p);
         });
-        if (curPanel === 'analytics') renderPayouts();
+        if (curPanel === 'analytics' || curPanel === 'marketing') renderPayouts();
         if (curPanel === 'home') renderHome();
       }
       if (!userIds.length) { apply({}); return; }
@@ -451,45 +430,50 @@
   // already earned and awaiting fulfillment, not yet a null cost just
   // because it isn't a bank transfer.
   function referralsOwedInfo() {
-    var requested = PAYOUTS.filter(function (p) { return p.status === 'requested'; });
-    var usdTotal = requested.reduce(function (sum, p) {
-      return sum + (p.method === 'robux' ? (p.amount_robux || 0) * DEVEX_USD_PER_ROBUX : (p.amount_usd || 0));
-    }, 0);
-    var names = requested.map(function (p) { return p.owner; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; });
-    return { usdTotal: usdTotal, count: requested.length, names: names };
+    var requested=PAYOUTS.filter(function(p){return p.status==='requested'||p.status==='changes_requested';});
+    return {usdTotal:requested.filter(function(p){return p.source_currency.indexOf('robux')<0;}).reduce(function(s,p){return s+Number(p.amount_usd||0);},0),
+      robuxTotal:requested.filter(function(p){return p.source_currency.indexOf('robux')>=0;}).reduce(function(s,p){return s+Number(p.amount_robux||0);},0),count:requested.length,
+      names:requested.map(function(p){return p.owner;}).filter(function(v,i,a){return a.indexOf(v)===i;})};
   }
   function renderPayouts() {
-    var el = $('admPayoutsBody'); if (!el) return;
-    el.innerHTML = PAYOUTS.map(function (p) {
-      var amount = p.method === 'robux' ? (Math.round(p.amount_robux || 0) + ' R$') : usd(p.amount_usd || 0);
-      var method = p.method === 'usd' ? 'USD' : p.method === 'robux' ? 'Robux' : 'Store credit';
-      var status = p.status === 'paid' ? '<span class="dt-badge ok">Paid</span>' : p.status === 'denied' ? '<span class="dt-badge err">Denied</span>' : '<span class="dt-badge warn">Requested</span>';
-      var actions = p.status === 'requested' && can('admin')
-        ? '<button class="btn btn-ghost adm-btn-sm adm-payout-paid" type="button">Mark paid</button><button class="btn btn-ghost adm-btn-sm adm-payout-deny" type="button">Deny</button>'
-        : '';
-      return '<tr data-id="' + p.id + '"><td>' + fmtDateTime(new Date(p.requested_at)) + '</td><td>' + esc(p.owner) + '</td><td>' + method + '</td><td>' + amount + '</td><td>' + status + '</td><td class="adm-row-actions">' + actions + '</td></tr>';
-    }).join('') || '<tr><td colspan="6" class="adm-empty">No payout requests yet.</td></tr>';
+    var el=$('admPayoutsBody');if(!el)return;
+    el.innerHTML=PAYOUTS.map(function(p){
+      var rb=p.source_currency.indexOf('robux')>=0;
+      var amount=rb?'R$ '+Number(p.amount_robux||0).toLocaleString():usd(p.amount_usd||0)+' USD';
+      var method=p.method==='usd'?'PayPal':p.method==='robux'?'Robux gamepass':'Store credit';
+      var status=p.status==='paid'?'Completed':p.status==='denied'?'Denied':p.status==='changes_requested'?'Changes requested':'Requested';
+      var tone=p.status==='paid'?'ok':p.status==='denied'?'err':'warn';
+      var destination=p.method==='usd'?'<p class="ref-detail-note">'+esc(p.paypal_email||'PayPal email missing')+'</p>':p.method==='robux'?'<p class="ref-detail-note">'+(p.gamepass_url&&/^https:\/\/www\.roblox\.com\/game-pass\/[0-9]+\/?$/.test(p.gamepass_url)?'<a href="'+esc(p.gamepass_url)+'" target="_blank" rel="noopener">Open gamepass</a>':'Gamepass link missing')+'</p>':'';
+      var pending=p.status==='requested'||p.status==='changes_requested';
+      var actions=pending&&can('admin')?((p.status==='requested'?'<button class="btn btn-ghost adm-btn-sm adm-payout-paid" type="button">'+(p.method==='store_credit'?'Issue credit':'Mark paid')+'</button>':'')+'<button class="btn btn-ghost adm-btn-sm adm-payout-changes" type="button">Request changes</button><button class="btn btn-ghost adm-btn-sm adm-payout-deny" type="button">Deny</button>'):'';
+      var note=p.change_reason||p.note||p.transfer_reference||'';
+      var due=new Date(new Date(p.updated_at||p.requested_at).getTime()+72*3600000);
+      return '<tr data-id="'+esc(p.id)+'"><td>'+fmtDateTime(new Date(p.requested_at))+(pending?'<p class="ref-detail-note">Around 72 hours. Target: '+fmtDateTime(due)+'</p>':'')+'</td><td>'+esc(p.owner)+(p.is_test?'<p class="ref-detail-note">Sandbox test</p>':'')+'</td><td>'+method+destination+'<p class="ref-detail-note">From '+esc(p.source_currency.replace('store_','store-credit '))+' earnings</p></td><td>'+amount+'</td><td><span class="dt-badge '+tone+'">'+status+'</span>'+(note?'<p class="ref-detail-note">'+esc(note)+'</p>':'')+'</td><td class="adm-row-actions">'+actions+'</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="adm-empty">No payout requests yet.</td></tr>';
   }
-  function callManageReferralPayout(id, action) {
-    return invokeAdminFn('admin-manage-referral-payout', { id: id, action: action }, 'Could not update payout.');
-  }
-  var payoutsBody = $('admPayoutsBody');
-  if (payoutsBody) payoutsBody.addEventListener('click', async function (e) {
-    var tr = e.target.closest('tr'); if (!tr) return;
-    var id = tr.getAttribute('data-id');
-    var p = PAYOUTS.filter(function (x) { return x.id === id; })[0]; if (!p) return;
-    if (!can('admin')) return;
-    if (e.target.classList.contains('adm-payout-paid')) {
-      if (!(await dialogConfirm('Mark this payout as sent to ' + p.owner + '?', { title: 'Mark payout as paid', acceptLabel: 'Mark paid' }))) return;
-      callManageReferralPayout(id, 'mark_paid')
-        .then(function () { logAudit('Marked referral payout to ' + p.owner + ' as paid'); return Promise.all([refreshPayouts(), refreshAdminReferrals()]); })
-        .catch(function (err) { alert(err.message || 'Could not update payout.'); });
-    } else if (e.target.classList.contains('adm-payout-deny')) {
-      if (!(await dialogConfirm('Deny this payout request from ' + p.owner + '?', { title: 'Deny payout', acceptLabel: 'Deny payout' }))) return;
-      callManageReferralPayout(id, 'deny')
-        .then(function () { logAudit('Denied referral payout request from ' + p.owner); return refreshPayouts(); })
-        .catch(function (err) { alert(err.message || 'Could not update payout.'); });
-    }
+  var payoutsBody=$('admPayoutsBody');
+  if(payoutsBody)payoutsBody.addEventListener('click',async function(e){
+    var button=e.target.closest('button');var tr=e.target.closest('tr');if(!tr||!button||button.disabled||!can('admin'))return;
+    var p=PAYOUTS.filter(function(p){return p.id===tr.getAttribute('data-id');})[0];if(!p)return;
+    var action,note='',reference='';
+    if(button.classList.contains('adm-payout-changes')){
+      action='request_changes';note=await dialogPrompt('Tell '+p.owner+' exactly what to correct. We will email this message and keep the amount reserved.','',{title:'Request payment changes',inputLabel:'What needs correcting?',acceptLabel:'Request changes'});
+      if(note===null)return;if(note.trim().length<5){alert('Please explain what needs correcting.');return;}
+    }else if(button.classList.contains('adm-payout-deny')){
+      action='deny';note=await dialogPrompt('Explain why this request is denied. The user receives this explanation by email.','',{title:'Deny payout',inputLabel:'Reason',acceptLabel:'Deny request'});if(note===null)return;if(note.trim().length<5){alert('Please enter a reason.');return;}
+    }else if(button.classList.contains('adm-payout-paid')){
+      action='mark_paid';
+      if(p.method==='store_credit'){
+        if(!(await dialogConfirm('Issue this store credit to '+p.owner+'? It will become spendable at checkout.',{title:'Issue store credit',acceptLabel:'Issue credit'})))return;
+      }else{
+        reference=await dialogPrompt('Only complete this after sending the PayPal payment or purchasing the gamepass. This button records the payment; it does not send money.','',{title:'Record completed payout',inputLabel:'Payment transaction reference',acceptLabel:'Mark completed'});
+        if(reference===null)return;if(reference.trim().length<3){alert('Enter the payment transaction reference.');return;}
+      }
+    }else return;
+    button.disabled=true;
+    invokeAdminFn('admin-manage-referral-payout',{id:p.id,action:action,note:note,reference:reference},'Could not update payout.').then(function(){
+      logAudit('Referral payout '+p.id+': '+action);return Promise.all([refreshPayouts(),refreshAdminReferrals()]);
+    }).catch(function(err){alert(err.message||'Could not update payout.');}).finally(function(){button.disabled=false;});
   });
 
   // Real data from public.orders/order_items, read via the signed-in
@@ -1657,14 +1641,14 @@
       statTile('Live sessions', LIVE_SESSIONS, 'active in the last 5 min', ''),
       bbbOrdersTile(),
       statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
-      statTile('Referrals owed', aud(owed.usdTotal), owed.count ? (owed.count + ' request' + (owed.count === 1 ? '' : 's') + ' pending') : 'Nothing pending', '', { panel: 'analytics', title: owed.names.length ? 'Requested by: ' + owed.names.join(', ') : '' })
+      statTile('Referrals owed', usd(owed.usdTotal)+' USD + R$ '+owed.robuxTotal, owed.count ? (owed.count + ' request' + (owed.count === 1 ? '' : 's') + ' pending') : 'Nothing pending', '', { panel: 'marketing', title: owed.names.length ? 'Requested by: ' + owed.names.join(', ') : '' })
     ].join('');
 
     var todo = [];
     var newReviews = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length;
     if (newReviews) todo.push({ text: newReviews + ' new review' + (newReviews > 1 ? 's' : '') + ' to look at', panel: 'reviews', badge: 'warn' });
     var pendingPayouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
-    if (pendingPayouts) todo.push({ text: pendingPayouts + ' referral payout request' + (pendingPayouts > 1 ? 's' : '') + ' pending', panel: 'analytics', badge: 'warn' });
+    if (pendingPayouts) todo.push({ text: pendingPayouts + ' referral payout request' + (pendingPayouts > 1 ? 's' : '') + ' pending', panel: 'marketing', badge: 'warn' });
     mpTodoLines().forEach(function (t) { todo.push(t); });
     if (UNRELEASED_FILES.length) todo.push({ text: 'You have ' + UNRELEASED_FILES.length + ' product' + (UNRELEASED_FILES.length > 1 ? 's' : '') + ' to release', panel: 'unreleased', badge: 'warn' });
     if (ROBLOX_COOKIE_BROKEN) todo.push({ text: 'Robux fallback cookie is broken - group-transaction verification won\'t work until it\'s refreshed', panel: 'sitemgmt', badge: 'err' });
@@ -2422,7 +2406,7 @@
       $('admMktStats').innerHTML = [
         statTile('Discord members', DISCORD_STATS.memberCount != null ? DISCORD_STATS.memberCount.toLocaleString('en-US') : '–', DISCORD_STATS.onlineCount != null ? (DISCORD_STATS.onlineCount.toLocaleString('en-US') + ' online') : '', ''),
         statTile('Referral sales', sales.toLocaleString('en-US'), null, ''),
-        statTile('Owed to affiliates', usd(owed), null, '')
+        statTile('Owed to affiliates', usd(owed) + ' USD + R$ ' + REFERRALS.reduce(function(s,r){return s+Math.max(0,(r.earnedRobux||0)-(r.paidRobux||0));},0).toLocaleString(), null, '')
       ].join('');
     }
 
@@ -2487,9 +2471,9 @@
 
     if ($('admReferralBody')) {
       $('admReferralBody').innerHTML = REFERRALS.map(function (r) {
-        return '<tr><td class="dt-mono">' + esc(r.code) + '</td><td>' + esc(r.owner) + '</td><td>' + r.sales + '</td><td>' + usd(r.earnedUSD) + '</td></tr>';
+        return '<tr><td class="dt-mono">' + esc(r.code) + '</td><td>' + esc(r.owner) + '</td><td>' + r.sales + '</td><td>' + usd(r.earnedUSD) + ' USD + R$ ' + Number(r.earnedRobux||0).toLocaleString() + '</td></tr>';
       }).join('') || '<tr><td colspan="4" class="adm-empty">No referral codes yet.</td></tr>';
-      if ($('admAffiliateOwed')) $('admAffiliateOwed').textContent = usd(owed);
+      if ($('admAffiliateOwed')) $('admAffiliateOwed').textContent = usd(owed)+' USD + R$ '+Math.max(0,REFERRALS.reduce(function(s,r){return s+r.earnedRobux-r.paidRobux;},0));
       renderPayouts();
     }
   }

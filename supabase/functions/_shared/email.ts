@@ -71,7 +71,7 @@ export function unsubscribeHeaders(unsubscribeUrl: string): Record<string, strin
 }
 
 /** Sends one email immediately. `headers` for bulk sends - see unsubscribeHeaders(). */
-export async function sendSingle(to: string, subject: string, html: string, headers?: Record<string, string>): Promise<SendResult> {
+export async function sendSingle(to: string, subject: string, html: string, headers?: Record<string, string>, idempotencyKey?: string): Promise<SendResult> {
   const key = apiKey();
   if (!key) return { ok: false, error: "Email sending is not configured yet.", code: "NOT_CONFIGURED" };
 
@@ -80,7 +80,7 @@ export async function sendSingle(to: string, subject: string, html: string, head
 
   const res = await fetch(`${RESEND_API_BASE}/emails`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {

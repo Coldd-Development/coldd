@@ -1,3 +1,4 @@
+import { sendOrderReceipt } from "../_shared/email.ts";
 // supabase/functions/create-robux-order/index.ts
 //
 // Deploy with:
@@ -69,16 +70,17 @@ Deno.serve(async (req: Request) => {
       if (!profile?.is_admin) return json({ ok: false, error: "coldd is temporarily down for maintenance. Please check back shortly." }, 503);
     }
 
+    const body = await req.json().catch(() => ({}));
     const { data: robloxAcct } = await admin
       .from("roblox_accounts")
       .select("roblox_id")
       .eq("user_id", userData.user.id)
       .maybeSingle();
-    if (!robloxAcct) {
+    if (!robloxAcct && !body.useStoreCredit) {
       return json({ ok: false, error: "Link your Roblox account first.", code: "NOT_LINKED" }, 400);
     }
 
-    const body = await req.json().catch(() => ({}));
+
     const allItems = Array.isArray(body.items) ? body.items : [];
     // Items flagged addonOnly are add-ons for a product the buyer already owns: no product line to price.
     const items = allItems.filter((i: { addonOnly?: boolean }) => !i?.addonOnly);
@@ -203,7 +205,7 @@ Deno.serve(async (req: Request) => {
         total_robux: finalTotalRobux + addonsRobux,
         coupon_code: appliedCouponCode,
         sale_event_slug: saleEventSlug,
-        roblox_buyer_id: robloxAcct.roblox_id,
+        roblox_buyer_id: robloxAcct?.roblox_id || null,
         campaign_code: campaignCode,
         marketing_opt_in: marketingOptIn,
         referrer_id: productReferral?.referrerId ?? null,
@@ -221,6 +223,7 @@ Deno.serve(async (req: Request) => {
         title: li.title,
         licence: li.licence || "standard",
         unit_price_usd: li.unitPriceUsd,
+        unit_price_robux: li.unitRobux,
         qty: li.qty,
       })),
     );
@@ -233,6 +236,16 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "Could not record your add-ons." }, 500);
     }
 
+    if(body.useStoreCredit) {
+      const {data:credit,error:creditError}=await admin.rpc("spend_store_credit",{p_user_id:userData.user.id,p_order_id:order.id,p_currency:"robux"});
+      if(creditError||!credit?.ok) {
+        await admin.from("orders").update({status:"canceled"}).eq("id",order.id);
+        return json({ok:false,error:credit?.error||"Could not apply store credit."},400);
+      }
+      await sendOrderReceipt(admin,order.id,userData.user.email).catch(console.error);
+      return json({ok:true,url:"https://coldd.dev/success?order_id="+order.id});
+    }
+
     // One pass for the whole order, priced to the exact (post-discount)
     // total - not one pass per product. The buyer makes a single Roblox
     // purchase regardless of how many items are in the cart.
@@ -241,7 +254,7 @@ Deno.serve(async (req: Request) => {
     // user.inventory-item:read scope; silently skipped if not granted).
     const buyerToken = await getValidRobloxToken(admin, userData.user.id).catch(() => null);
     const leased = await leasePassForOrder(
-      admin, order.id, finalTotalRobux + addonsRobux, robloxAcct.roblox_id, buyerToken?.accessToken,
+      admin, order.id, finalTotalRobux + addonsRobux, robloxAcct!.roblox_id, buyerToken?.accessToken,
     );
     if (!leased.ok) {
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
