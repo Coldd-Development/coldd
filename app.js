@@ -2483,6 +2483,7 @@
             var params = new URLSearchParams(location.search);
             if (curCat === 'all') params.delete('cat'); else params.set('cat', curCat);
             if (onResell) params.set('resell', '1'); else params.delete('resell');
+            if (onFree) params.set('free', '1'); else params.delete('free');
             history.replaceState(null, '', base + (params.toString() ? '?' + params.toString() : ''));
           } catch (_) {}
         }
@@ -2555,7 +2556,7 @@
         window.addEventListener('currencychange', function () { products.forEach(syncCardPricing); if (window.__stampSaleBadges) window.__stampSaleBadges(grid); });
 
         if (saleBox) saleBox.addEventListener('change', function () { onSale = saleBox.checked; refilter(true); });
-        if (freeBox) freeBox.addEventListener('change', function () { onFree = freeBox.checked; refilter(true); });
+        if (freeBox) freeBox.addEventListener('change', function () { onFree = freeBox.checked; syncFilterUrl(); refilter(true); });
         if (resellBox) resellBox.addEventListener('change', function () { onResell = resellBox.checked; syncFilterUrl(); refilter(true); });
 
         function closeSort() { if (sortField) sortField.classList.remove('open'); if (sortMenu) sortMenu.hidden = true; if (sortBtn) sortBtn.setAttribute('aria-expanded', 'false'); }
