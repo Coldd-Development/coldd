@@ -525,6 +525,7 @@
       stripePaymentIntentId: row.stripe_payment_intent_id,
       stripeCheckoutSessionId: row.stripe_checkout_session_id,
       paymentProvider: row.payment_provider || null,
+      isTest: !!row.is_test,
       paypalOrderId: row.paypal_order_id || null,
       paypalCaptureId: row.paypal_capture_id || null,
       cryptoProvider: row.crypto_provider || null,
@@ -1224,10 +1225,10 @@
   // inflated the order count over what Recent Orders shows and pulled AOV /
   // conversion toward zero. Grants still appear in full in the Orders panel.
   function completedInRange() {
-    return ordersInRange().filter(function (o) { return o.status === 'completed' && o.source !== 'granted'; });
+    return ordersInRange().filter(function (o) { return !o.isTest && o.status === 'completed' && o.source !== 'granted'; });
   }
   function completedInWindow(start, end) {
-    return ORDERS.filter(function (o) { var d = new Date(o.date); return o.status === 'completed' && o.source !== 'granted' && d >= start && d < end; });
+    return ORDERS.filter(function (o) { var d = new Date(o.date); return !o.isTest && o.status === 'completed' && o.source !== 'granted' && d >= start && d < end; });
   }
   // Real USD and real Robux totals (not the USD-equivalent record-keeping
   // figure robux orders also carry) - for revenue stat tiles, not display
@@ -1299,7 +1300,7 @@
       var d = daysAgo(i);
       var key = d.toDateString();
       var v = 0;
-      ORDERS.forEach(function (o) { if (o.status === 'completed' && new Date(o.date).toDateString() === key) v += o.total; });
+      ORDERS.forEach(function (o) { if (!o.isTest && o.status === 'completed' && new Date(o.date).toDateString() === key) v += o.total; });
       out.push({ label: fmtDate(d), v: Math.round(v * 100) / 100, tip: usd(v) });
     }
     return out;
@@ -1343,7 +1344,7 @@
   function repeatCustomerStats() {
     var byUser = {};
     ORDERS.forEach(function (o) {
-      if (o.status === 'completed' && o.source !== 'granted' && o.userId) byUser[o.userId] = (byUser[o.userId] || 0) + 1;
+      if (!o.isTest && o.status === 'completed' && o.source !== 'granted' && o.userId) byUser[o.userId] = (byUser[o.userId] || 0) + 1;
     });
     var ids = Object.keys(byUser);
     var repeat = ids.filter(function (id) { return byUser[id] >= 2; }).length;
@@ -1352,7 +1353,7 @@
   function refundStats() {
     var inr = ordersInRange().filter(function (o) { return o.source !== 'granted'; });
     var refunded = inr.filter(function (o) { return o.status === 'refunded'; });
-    var completed = inr.filter(function (o) { return o.status === 'completed'; });
+    var completed = inr.filter(function (o) { return !o.isTest && o.status === 'completed'; });
     var denom = completed.length + refunded.length;
     return {
       count: refunded.length,
@@ -1367,7 +1368,7 @@
       var d = daysAgo(i), key = d.toDateString();
       var rev = 0, n = 0;
       ORDERS.forEach(function (o) {
-        if (o.status === 'completed' && o.source !== 'granted' && new Date(o.date).toDateString() === key) { rev += Number(o.total) || 0; n++; }
+        if (!o.isTest && o.status === 'completed' && o.source !== 'granted' && new Date(o.date).toDateString() === key) { rev += Number(o.total) || 0; n++; }
       });
       var v = n ? rev / n : 0;
       out.push({ label: fmtDate(d), v: Math.round(v * 100) / 100, tip: usd(v) + (n ? ' · ' + n + ' order' + (n === 1 ? '' : 's') : '') });
@@ -1679,7 +1680,7 @@
     var out = [];
     if (opts.channel !== 'bbb') ORDERS.forEach(function (o) {
       if (o.status === 'failed') return;
-      if (opts.completedOnly && (o.status !== 'completed' || o.source === 'granted')) return;
+      if (opts.completedOnly && (o.isTest || o.status !== 'completed' || o.source === 'granted')) return;
       out.push({ ch: 'site', date: o.date, o: o });
     });
     if (opts.channel !== 'site' && BBB.configured === true) {
@@ -6093,7 +6094,7 @@
   function orderRowMenuHtml(o) {
     var items = ['<button type="button" class="adm-row-menu-item" data-action="view">View details</button>'];
     if (o.status === 'pending' && can('support')) items.push('<button type="button" class="adm-row-menu-item" data-action="complete">Mark completed</button>');
-    if (o.status === 'completed' && can('support')) {
+    if (!o.isTest && o.status === 'completed' && can('support')) {
       items.push('<button type="button" class="adm-row-menu-item" data-action="refund">Refund</button>');
       items.push('<button type="button" class="adm-row-menu-item danger" data-action="revoke">Revoke license</button>');
     }
@@ -6135,6 +6136,7 @@
       // free-comp badge, so shown alongside it rather than in place of it.
       var giftBadge = o.purchasedByUserId ? ' <span class="dt-badge warn" title="Bought as a gift for a different account">Gift</span>' : '';
       var statusHtml = o.source === 'granted' ? '<span class="dt-badge info">Gifted</span>' : statusBadge(o.status);
+      if(o.isTest)statusHtml+=' <span class="dt-badge warn">Sandbox test</span>';
       return '<div class="dash-row" data-id="' + esc(o.id) + '">' +
         '<span class="dr-thumb" style="background-image:url(\'' + img + '\')"></span>' +
         '<div class="dr-main">' +
@@ -6249,7 +6251,7 @@
     var canAct = can('support');
     var actions = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;">';
     if (o.status === 'pending' && canAct) actions += '<button class="btn btn-ghost adm-btn-sm" type="button" id="admOdComplete">Mark completed</button>';
-    if (o.status === 'completed' && canAct) {
+    if (!o.isTest && o.status === 'completed' && canAct) {
       actions += '<button class="btn btn-ghost adm-btn-sm" type="button" id="admOdRefund">Refund</button>';
       actions += '<button class="btn btn-ghost adm-btn-sm" type="button" id="admOdRevoke" style="color:#ff6b6b;">Revoke license</button>';
     }
@@ -6691,7 +6693,7 @@
      USERS PANEL (+ manual product grants)
      ================================================================ */
   function userSpend(userId) {
-    return ORDERS.filter(function (o) { return o.userId === userId && o.status === 'completed'; }).reduce(function (s, o) { return s + o.total; }, 0);
+    return ORDERS.filter(function (o) { return o.userId === userId && !o.isTest && o.status === 'completed'; }).reduce(function (s, o) { return s + o.total; }, 0);
   }
   // Completed only, matching userSpend above - counting every attempt
   // (including abandoned/pending ones that were never actually paid) made
@@ -6699,7 +6701,7 @@
   // "11 orders, $0.00 spent", which reads as broken/fake data even though
   // each number was individually accurate. The full total/pending/completed
   // breakdown is still available in the View more detail modal.
-  function userOrderCount(userId) { return ORDERS.filter(function (o) { return o.userId === userId && o.status === 'completed'; }).length; }
+  function userOrderCount(userId) { return ORDERS.filter(function (o) { return o.userId === userId && !o.isTest && o.status === 'completed'; }).length; }
   // Cross-references the grant form's current user+product picks against
   // real paid orders, so an admin granting a duplicate finds out before
   // clicking Grant rather than after - flagged directly ("make a little
@@ -6713,7 +6715,7 @@
     if (!userId || !productIds.length) { warn.hidden = true; return; }
     var owned = productIds.filter(function (slug) {
       return ORDERS.some(function (o) {
-        return o.userId === userId && o.status === 'completed' &&
+        return o.userId === userId && !o.isTest && o.status === 'completed' &&
           (o.items || []).some(function (it) { return it.product_slug === slug; });
       });
     }).map(function (slug) { var p = findProduct(slug); return p ? p.title : slug; });
@@ -6819,7 +6821,7 @@
     var userOrders = ORDERS.filter(function (o) { return o.userId === u.id; })
       .slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
     set('admUdOrdersTotal', String(userOrders.length));
-    set('admUdOrdersPaid', String(userOrders.filter(function (o) { return o.status === 'completed'; }).length));
+    set('admUdOrdersPaid', String(userOrders.filter(function (o) { return !o.isTest && o.status === 'completed'; }).length));
     set('admUdOrdersPending', String(userOrders.filter(function (o) { return o.status === 'pending'; }).length));
     set('admUdSpent', usd(userSpend(u.id)));
 
@@ -6830,7 +6832,7 @@
     var ordersListEl = $('admUdOrdersList');
     if (ordersListEl) {
       ordersListEl.innerHTML = userOrders.length ? userOrders.map(function (o) {
-        var badgeClass = o.status === 'completed' ? 'ok' : o.status === 'pending' ? 'warn' : 'err';
+        var badgeClass = !o.isTest && o.status === 'completed' ? 'ok' : o.status === 'pending' ? 'warn' : 'err';
         var amount = o.currency === 'robux' ? (o.totalRobux ? o.totalRobux.toLocaleString('en-US') + ' R$' : usd(o.total)) : usd(o.total);
         return '<div class="adm-ud-order-row">' +
           '<span class="adm-ud-order-date">' + fmtDate(new Date(o.date)) + '</span>' +
@@ -6875,7 +6877,7 @@
   // Revoking is per order, the same action the Orders panel already has (the order becomes "revoked").
   function renderUserLicences(u, userOrders) {
     var box = $('admUdLicences'); if (!box) return;
-    var paid = userOrders.filter(function (o) { return o.status === 'completed'; });
+    var paid = userOrders.filter(function (o) { return !o.isTest && o.status === 'completed'; });
     if (!paid.length) { box.innerHTML = '<p class="adm-empty">No active licences.</p>'; return; }
     box.innerHTML = paid.map(function (o) {
       var items = (o.items && o.items.length ? o.items : [{ title: o.title, licence: o.licence }]);
