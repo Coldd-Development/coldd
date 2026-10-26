@@ -167,7 +167,7 @@ Deno.serve(async (req: Request) => {
         roblox_verification_method: "pool_sale",
       })
       .eq("id", orderId)
-      .neq("status", "paid")
+      .eq("status", "pending")
       .select("id")
       .maybeSingle();
 

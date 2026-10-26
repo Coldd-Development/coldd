@@ -55,6 +55,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
       const session = event.data.object as Stripe.Checkout.Session;
+      if(event.type==="checkout.session.completed"&&session.payment_status==="unpaid")return new Response(JSON.stringify({received:true,pending:true}),{status:200});
       const orderId = session.metadata?.order_id;
       const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
 
@@ -68,7 +69,7 @@ Deno.serve(async (req: Request) => {
           .from("orders")
           .update({ status: "paid", stripe_payment_intent_id: paymentIntentId, receipt_email: session.customer_details?.email || session.customer_email || null, paid_at: new Date().toISOString() })
           .eq("id", orderId)
-          .neq("status", "paid")
+          .eq("status", "pending")
           .select("coupon_code, user_id, purchased_by_user_id, marketing_opt_in")
           .single();
         if (error && error.code !== "PGRST116") throw error;
@@ -101,7 +102,8 @@ Deno.serve(async (req: Request) => {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.order_id;
       if (orderId) {
-        await admin.from("orders").update({ status: "failed" }).eq("id", orderId).in("status", ["pending"]);
+        const {error}=await admin.from("orders").update({ status: "failed" }).eq("id", orderId).eq("status","pending");
+        if(error)throw error;
       }
     }
   } catch (err) {

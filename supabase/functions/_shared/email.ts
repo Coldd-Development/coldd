@@ -243,7 +243,7 @@ export async function buildOrderReceipt(
 ): Promise<{ ok: true; to: string; subject: string; html: string } | { ok: false; error: string; code?: string }> {
   const { data: order, error: orderErr } = await admin
     .from("orders")
-    .select("id, user_id, purchased_by_user_id, receipt_email, total_usd, total_robux, currency, stripe_charge_currency, stripe_charge_amount, created_at")
+    .select("id, user_id, purchased_by_user_id, receipt_email, total_usd, total_robux, currency, stripe_charge_currency, stripe_charge_amount, store_credit_applied, payment_provider, is_test, created_at")
     .eq("id", orderId)
     .single();
   if (orderErr || !order) return { ok: false, error: "Order not found for receipt." };
@@ -295,15 +295,23 @@ export async function buildOrderReceipt(
 
   const total = String(order.currency).toUpperCase() === "ROBUX" ? `${Number(order.total_robux || 0).toLocaleString("en-US")} Robux` : `${Number(order.total_usd).toFixed(2)} USD`;
   const shortId = String(order.id).slice(0, 8).toUpperCase();
+  const creditUsed=Number(order.store_credit_applied||0);
+  const nativeRobux=String(order.currency).toLowerCase()==="robux";
+  const formatNative=(n:number)=>nativeRobux?`${n.toLocaleString("en-US")} Robux`:`${n.toFixed(2)} USD`;
+  const remaining=Math.max(0,Number(nativeRobux?order.total_robux:order.total_usd)-creditUsed);
+  const externalPaid=order.payment_provider==="stripe"&&order.stripe_charge_currency?`${Number(order.stripe_charge_amount||0).toFixed(2)} ${String(order.stripe_charge_currency).toUpperCase()}`:formatNative(remaining);
+  const creditRows=creditUsed>0?`<tr><td style="padding-top:12px;color:#aab2c0;">Store credit used</td><td align="right" style="padding-top:12px;">${formatNative(creditUsed)}</td></tr><tr><td style="padding-top:12px;color:#aab2c0;">${nativeRobux?'Gamepass payment':'Additional payment'}</td><td align="right" style="padding-top:12px;">${externalPaid}</td></tr>`:"";
 
   const body = `
 ${emailHeading(order.purchased_by_user_id ? "Gift order confirmed" : "Order confirmed")}
+${order.is_test?'<p style="color:#ff8178;">Sandbox order. This is a test transaction.</p>':''}
 <p style="margin:0 0 24px;">${order.purchased_by_user_id ? 'Your gift order is confirmed. The files are available in the recipient&#39;s account.' : 'Your order is confirmed. Open your downloads to get the files.'}</p>
 ${itemsHtml}
 ${ticketNote}
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
-<tr><td class="receipt-meta" style="padding-right:18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#aab2c0;">Order #${shortId} &middot; Total charged</td>
+<tr><td class="receipt-meta" style="padding-right:18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#aab2c0;">Order #${shortId} &middot; ${creditUsed>0?'Order total':'Total paid'}</td>
 <td class="receipt-amount" align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;color:#ffffff;">${total}</td></tr>
+${creditRows}
 </table>
 ${order.purchased_by_user_id ? ctaButtonHtml("https://coldd.dev/dashboard?panel=purchases", "View your gift purchase") : order.user_id ? ctaButtonHtml("https://coldd.dev/dashboard?panel=owned", "Open your downloads") : ""}
 ${order.user_id ? "" : `<p style="margin:20px 0 0;font-size:12px;color:#aab2c0;">Bought as a guest - create an account with this email any time to see this order and re-download later.</p>`}

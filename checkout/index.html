@@ -177,7 +177,7 @@
               <span class="co-pay-amt" data-pay-amt="robux"></span>
             </button>
           </div>
-          <div class="co-check" id="coCreditWrap"><label><input type="checkbox" id="coUseCredit" /> Use my store credit for this entire order</label><p class="ref-detail-note">Sign in first. Credit must cover the full total and match the currency: choose Card for USD credit or Robux for Robux credit. We do not convert currencies.</p></div>
+          <div class="co-check" id="coCreditWrap"><label><input type="checkbox" id="coUseCredit" /> Put store credit toward this purchase</label><p class="ref-detail-note" id="coCreditAvailable" role="status">Sign in to check your store credit.</p><div class="auth-field" id="coCreditAmountWrap" hidden><label for="coCreditAmount">Credit to use</label><input type="number" id="coCreditAmount" min="0.01" step="0.01" placeholder="Use as much as available" /><small>Leave blank to use as much as possible. Pay the remainder by Card for USD credit or gamepass for Robux credit. We do not convert credit currencies.</small></div><p class="ref-detail-note" id="coCreditMinimumNotice" hidden>We reduced the credit applied to leave the minimum card payment. The unused credit stays in your balance.</p></div>
           <!-- Local Stripe payment methods, beyond the four tiles above.
                Visible regardless of which method is currently selected -
                picking a tile switches to Stripe and restricts that session
@@ -266,7 +266,9 @@
                  $0" row implies tax might apply and then always says it does
                  not, which is a question raised and never answered. -->
             <div class="co-line" id="coTaxLine" hidden><span>Tax</span><span id="coTax">$0</span></div>
-            <div class="co-line co-grand"><span>Total</span><span id="coTotal">$0</span></div>
+            <div class="co-line co-grand"><span>Order total</span><span id="coTotal">$0</span></div>
+            <div class="co-line co-disc" id="coCreditLine" hidden><span>Store credit</span><span id="coCreditApplied">$0</span></div>
+            <div class="co-line co-grand" id="coDueLine" hidden><span>Remaining to pay</span><span id="coAmountDue">$0</span></div>
             <!-- The settle line under the payment methods now states what is
                  actually charged, in context and next to the choice it affects.
                  Repeating it here said the same thing twice. -->
@@ -546,7 +548,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261026-payouts" data-then="/app.js?v=20261026-payouts"></script>
+  <script src="/catalog.js?v=20261026-credit" data-then="/app.js?v=20261026-credit"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

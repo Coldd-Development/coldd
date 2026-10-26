@@ -3434,7 +3434,7 @@
             var pp = isResellOpt ? resellUsd : cur.priceNum;
             el.textContent = (cur.robuxDisabled || isResellOpt) ? fiat(pp) : (window.__money ? window.__money(pp) : fiat(pp));
           });
-          if (pdReferEarn) pdReferEarn.textContent = 'earn up to ' + fiat(Math.round(cur.priceNum * 0.2 * 100) / 100) + ' USD on USD purchases';
+          if (pdReferEarn) pdReferEarn.textContent = 'earn up to $' + (Math.round(cur.priceNum * 0.2 * 100) / 100).toFixed(2) + ' USD on USD purchases';
           renderAddonsBlock();
         }
         // ---- Add-ons: optional extras for this product, chosen before adding to the cart. ----
@@ -5099,7 +5099,7 @@
         document.getElementById('refMethodHelp').textContent=method==='robux'
           ? 'Set your gamepass price to the amount requested and keep it on sale. This is the gamepass purchase price; Roblox deducts its fee and may hold the proceeds as pending Robux.'
           : method==='usd' ? 'We send USD manually to your saved PayPal payout email. Check that the address belongs to your PayPal account.'
-          : 'Store credit keeps the same currency as these earnings. Once approved, it can pay for an entire order at checkout.';
+          : 'Store credit keeps the same currency as these earnings. Once approved, put any amount toward a purchase and pay the remainder in the same currency.';
       }
       function refSelectSource() {
         if(!refSource||!refMethod) return;
@@ -5128,7 +5128,7 @@
           if(!refEditing){document.getElementById('refPaypalEmail').value=details.paypal_email||'';document.getElementById('refGamepassUrl').value=details.gamepass_url||'';}
           document.getElementById('refCreditBalance').textContent='Store credit ready to spend: '+refFmtUsd(res.credit&&res.credit.usd)+' and '+refFmtRobux(res.credit&&res.credit.robux)+'.';
           var rows=res.recentSales||[];
-          document.getElementById('refActivityBody').innerHTML=rows.length?rows.map(function(r){return '<tr><td>'+refEsc(r.product)+'</td><td>'+refFmtDate(r.date)+'</td><td>'+refNative(r.currency,r.earned)+'</td></tr>';}).join(''):'<tr><td colspan="3" class="adm-empty">No referral sales yet.</td></tr>';
+          document.getElementById('refActivityBody').innerHTML=rows.length?rows.map(function(r){return '<tr><td>'+refEsc(r.product)+'</td><td>'+refFmtDate(r.date)+'</td><td>'+refNative(r.currency,r.earned)+(r.currency.indexOf('store_')===0?' store credit':'')+'</td></tr>';}).join(''):'<tr><td colspan="3" class="adm-empty">No referral sales yet.</td></tr>';
           var payouts=res.payouts||[];
           document.getElementById('refPayoutBody').innerHTML=payouts.length?payouts.map(function(p){
             var status=p.status==='paid'?'Completed':p.status==='denied'?'Denied':p.status==='changes_requested'?'Update details':'Requested';
@@ -5219,7 +5219,7 @@
             var link = '/product/' + encodeURIComponent(p.id) + '?ref=' + encodeURIComponent(refCode);
             return '<div class="dash-row"><span class="dr-thumb" style="background-image:url(\'' + esc(p.image) + '\')"></span>' +
               '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div>' +
-              '<div class="dr-sub">' + esc(p.cat || '') + (p.cat ? ' · ' : '') + 'Up to ' + fmt(earn) + ' USD per USD sale, after discounts</div></div>' +
+              '<div class="dr-sub">' + esc(p.cat || '') + (p.cat ? ' · ' : '') + 'Up to $' + earn.toFixed(2) + ' USD per USD sale, after discounts</div></div>' +
               '<div class="dr-actions"><button class="btn btn-primary ref-prod-copy" type="button" data-link="' + esc(link) + '">Copy link</button></div></div>';
           }).join('');
           refProdBody.querySelectorAll('.ref-prod-copy').forEach(function (b) {
@@ -6446,6 +6446,7 @@
           itemsEl.appendChild(row);
         });
       }
+      var coCreditWallet=null,creditCancelStarted=false;
       function renderTotals() {
         var sub = subtotal();
         var disc = computeDiscount(sub);
@@ -6498,6 +6499,22 @@
         var setupNote = document.getElementById('coSetupNote');
         if (setupNote) setupNote.hidden = !hasSetupAddon();
         renderPayAmounts(total + addonsU);
+        var creditOn=document.getElementById('coUseCredit'),creditInput=document.getElementById('coCreditAmount');
+        var creditCurrency=rr?'robux':'usd',orderTotal=rr?rr.finalTotal+addonsR:Math.round((total+addonsU)*100)/100;
+        var wallet=coCreditWallet||{},available=Number(wallet[creditCurrency]||0),useCredit=creditOn&&creditOn.checked&&(payMethod==='stripe'||payMethod==='robux');
+        var requested=creditInput&&creditInput.value!==''?Number(creditInput.value):available;
+        var applied=useCredit?Math.max(0,Math.min(available,orderTotal,Number.isFinite(requested)?requested:0)):0;
+        var remainderAdjusted=creditCurrency==='usd'&&orderTotal-applied>0&&orderTotal-applied<0.50;if(remainderAdjusted)applied=Math.max(0,orderTotal-0.50);
+        var minimumNote=document.getElementById('coCreditMinimumNotice');if(minimumNote)minimumNote.hidden=!(useCredit&&remainderAdjusted);
+        var due=creditCurrency==='robux'?orderTotal-applied:Math.round((orderTotal-applied)*100)/100;
+        var nativeAmount=function(n){return creditCurrency==='robux'?'R$ '+Math.round(n).toLocaleString('en-US'):fiatMoney(n);};
+        var availableEl=document.getElementById('coCreditAvailable');if(availableEl)availableEl.textContent=loggedIn?(coCreditWallet?'Available: '+(creditCurrency==='robux'?'R$ '+available.toLocaleString('en-US'):'$'+available.toFixed(2)+' USD')+'. Credit is reserved during checkout; failed or expired checkouts return it.':'Checking your store credit...'):'Sign in to use store credit.';
+        var amountWrap=document.getElementById('coCreditAmountWrap');if(amountWrap)amountWrap.hidden=!useCredit;
+        if(creditInput){creditInput.step=creditCurrency==='robux'?'1':'0.01';creditInput.min=creditCurrency==='robux'?'1':'0.01';creditInput.max=String(Math.min(available,orderTotal));creditInput.disabled=!useCredit;}
+        var creditLine=document.getElementById('coCreditLine'),dueLine=document.getElementById('coDueLine');if(creditLine)creditLine.hidden=!useCredit;if(dueLine)dueLine.hidden=!useCredit;
+        set('coCreditApplied','-'+nativeAmount(applied));set('coAmountDue',nativeAmount(due));
+        if(useCredit){var tile=document.querySelector('[data-pay-amt="'+payMethod+'"]');if(tile)tile.textContent=nativeAmount(due);var settle=document.getElementById('coPaySettle');if(settle)settle.hidden=true;}
+
         return total;
       }
 
@@ -6726,6 +6743,10 @@
           var session = res && res.data ? res.data.session : null;
           loggedIn = !!session;
           applySessionUI();
+          var canceledCreditId=new URLSearchParams(location.search).get('credit_cancel_order');
+          if(loggedIn&&canceledCreditId&&!creditCancelStarted){creditCancelStarted=true;window.coldAuth.invokeFn('cancel-credit-checkout',{orderId:canceledCreditId}).then(function(){var url=new URL(location.href);url.searchParams.delete('credit_cancel_order');history.replaceState(null,'',url.pathname+url.search);return window.coldAuth.invokeFn('get-store-credit',{});}).then(function(data){coCreditWallet=data.credit;renderTotals();if(msg){msg.className='co-msg show';msg.textContent='Checkout canceled. Your reserved store credit has been returned.';}}).catch(function(err){if(msg){msg.className='co-msg err show';msg.textContent=err.message;}});}
+          if(loggedIn&&window.coldAuth)window.coldAuth.invokeFn('get-store-credit',{}).then(function(data){coCreditWallet=data.credit;renderTotals();}).catch(function(){coCreditWallet=null;var el=document.getElementById('coCreditAvailable');if(el)el.textContent='Could not load store credit. Reload to try again.';});
+          else{coCreditWallet={usd:0,robux:0};renderTotals();}
         }).catch(function () { loggedIn = false; applySessionUI(); });
       }
       refreshSession();
@@ -6872,7 +6893,7 @@
           // happens server-side against the buyer's live inventory when
           // Place order is clicked; only THAT failing (see startRobuxOrder)
           // means a re-link is actually necessary.
-          if (!res || !res.linked) {
+          if ((!res || !res.linked) && !(document.getElementById('coUseCredit')||{}).checked) {
             linkBlock.hidden = false;
             updateRobuxLinkCopy(false);
             return;
@@ -7057,6 +7078,8 @@
         pollRobuxOrder();
       });
 
+      var creditToggle=document.getElementById('coUseCredit'),creditAmount=document.getElementById('coCreditAmount');
+      if(creditToggle)creditToggle.addEventListener('change',function(){renderTotals();if(payMethod==='robux')renderRobuxPanel();});if(creditAmount)creditAmount.addEventListener('input',renderTotals);
       var payMethod = 'stripe';
       // Set by a "More payment methods" tile click; cleared whenever the
       // method selection changes so a stale local method never survives a
@@ -7073,6 +7096,7 @@
           if (isMatch) picked = b;
         });
         var method = picked ? picked.getAttribute('data-method') : 'stripe';
+        if((method==='robux')!==(payMethod==='robux')){var creditInput=document.getElementById('coCreditAmount');if(creditInput)creditInput.value='';}
         var creditWrap=document.getElementById('coCreditWrap');if(creditWrap){creditWrap.hidden=method!=='stripe'&&method!=='robux';if(creditWrap.hidden)document.getElementById('coUseCredit').checked=false;}
         payMethod = method;
         document.querySelectorAll('.co-pay-panel').forEach(function (p) {
@@ -7265,7 +7289,7 @@
           // hasInventoryScope isn't trusted as a hard requirement
           // client-side. create-robux-order's own live check is what
           // actually enforces this, below.
-          if (!res || !res.linked) {
+          if ((!res || !res.linked) && !(document.getElementById('coUseCredit')||{}).checked) {
             renderRobuxPanel();
             if (msg) { msg.className = 'co-msg err show'; msg.textContent = 'Link your Roblox account first.'; }
             return;
@@ -7297,7 +7321,8 @@
           placeBtn.setAttribute('data-busy', '1');
           placeBtn.disabled = true; placeBtn.textContent = 'Preparing your order…';
           if (msg) { msg.className = 'co-msg'; msg.textContent = ''; }
-          var robuxOrderBody = { items: robuxItems };
+          var robuxOrderBody = { items: robuxItems,useStoreCredit:!!(document.getElementById('coUseCredit')||{}).checked };
+          var creditValue=(document.getElementById('coCreditAmount')||{}).value;if(creditValue)robuxOrderBody.storeCreditAmount=Number(creditValue);
           if (window.coldAuth.getCampaignCode()) robuxOrderBody.campaignCode = window.coldAuth.getCampaignCode();
           var robuxRefAttr = window.coldAuth.getReferralAttribution();
           if (robuxRefAttr) { robuxOrderBody.refCode = robuxRefAttr.code; robuxOrderBody.refSlug = robuxRefAttr.slug; }
@@ -7308,6 +7333,7 @@
           if (giftToggle && giftToggle.checked && giftRecipientUserId) robuxOrderBody.giftRecipientUserId = giftRecipientUserId;
           if (coMktToggle && coMktToggle.checked) robuxOrderBody.marketingOptIn = true;
           window.coldAuth.invokeFn('create-robux-order', robuxOrderBody).then(function (data) {
+            if(data.url){deleteCartSnapshot();location.href=data.url;return;}
             robuxOrderId = data.orderId;
             robuxOrderItems = data.items;
             robuxOrderSignature = signature;
@@ -7587,6 +7613,7 @@
       // from the field the error is even about.
       function validateBeforeOrder() {
         var tos = document.getElementById('coTos'), resellWrap = document.getElementById('coResellWrap'), resell = document.getElementById('coResell');
+        var creditAmount=document.getElementById('coCreditAmount');if(creditAmount&&!creditAmount.disabled&&!creditAmount.reportValidity())return false;
         var ok = true, agreeMsgs = [], scrollEl = null;
         if (tos && !tos.checked) { ok = false; agreeMsgs.push('accept the Terms of Service'); scrollEl = scrollEl || tos.closest('.co-check'); }
         if (resellWrap && !resellWrap.hidden && resell && !resell.checked) { ok = false; agreeMsgs.push('accept the Resell Licence Terms'); scrollEl = scrollEl || resellWrap; }
@@ -7655,7 +7682,7 @@
       });
 
       function proceedToOrder() {
-        if (payMethod === 'robux' && !(document.getElementById('coUseCredit') || {}).checked) { startRobuxOrder(); return; }
+        if (payMethod === 'robux') { startRobuxOrder(); return; }
 
         var prevText = placeBtn.textContent;
         placeBtn.setAttribute('data-busy', '1');
@@ -7664,6 +7691,7 @@
 
         var checkoutBody = { items: cartToItems() };
         checkoutBody.useStoreCredit=!!(document.getElementById('coUseCredit')||{}).checked && (payMethod==='stripe'||payMethod==='robux');
+        var creditValue=(document.getElementById('coCreditAmount')||{}).value;if(checkoutBody.useStoreCredit&&creditValue)checkoutBody.storeCreditAmount=Number(creditValue);
         if (appliedCoupon) checkoutBody.couponCode = appliedCoupon.code;
         if (window.coldAuth && window.coldAuth.getCampaignCode()) checkoutBody.campaignCode = window.coldAuth.getCampaignCode();
         var checkoutRefAttr = window.coldAuth && window.coldAuth.getReferralAttribution();

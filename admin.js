@@ -383,14 +383,14 @@
     if(!window.coldSupabase)return Promise.resolve();
     return Promise.all([
       window.coldSupabase.from('profiles').select('id,username,email,referral_code').limit(20000),
-      window.coldSupabase.from('referral_order_earnings').select('referrer_id,currency,amount').limit(20000),
+      window.coldSupabase.from('referral_order_earnings').select('order_id,referrer_id,currency,amount').limit(20000),
       window.coldSupabase.from('referral_payouts').select('user_id,source_currency,amount_usd,amount_robux,status').eq('status','paid').limit(20000)
     ]).then(function(results){
       if(results.some(function(r){return r.error;}))return;
       REFERRALS=(results[0].data||[]).filter(function(p){return p.referral_code;}).map(function(p){
         var earns=(results[1].data||[]).filter(function(r){return r.referrer_id===p.id;});
         var paid=(results[2].data||[]).filter(function(r){return r.user_id===p.id;});
-        return {ownerId:p.id,code:p.referral_code,owner:p.username||p.email||'user',sales:earns.length,
+        return {ownerId:p.id,code:p.referral_code,owner:p.username||p.email||'user',sales:new Set(earns.map(function(r){return r.order_id;})).size,
           earnedUSD:earns.filter(function(r){return r.currency.indexOf('robux')<0;}).reduce(function(s,r){return s+Number(r.amount);},0),
           earnedRobux:earns.filter(function(r){return r.currency.indexOf('robux')>=0;}).reduce(function(s,r){return s+Number(r.amount);},0),
           paidUSD:paid.filter(function(r){return r.source_currency.indexOf('robux')<0;}).reduce(function(s,r){return s+Number(r.amount_usd||0);},0),
@@ -526,6 +526,7 @@
       stripeCheckoutSessionId: row.stripe_checkout_session_id,
       paymentProvider: row.payment_provider || null,
       isTest: !!row.is_test,
+      storeCreditApplied:Number(row.store_credit_applied||0),
       paypalOrderId: row.paypal_order_id || null,
       paypalCaptureId: row.paypal_capture_id || null,
       cryptoProvider: row.crypto_provider || null,
@@ -6217,6 +6218,7 @@
   function paymentInfoRows(o) {
     var rows = [];
     if (o.paymentProvider) rows.push(['Payment provider', esc(o.paymentProvider)]);
+    if(o.storeCreditApplied>0){var rb=o.currency==='robux';rows.push(['Store credit used',rb?'R$ '+o.storeCreditApplied.toLocaleString():usd(o.storeCreditApplied)+' USD']);rows.push(['Remaining payment',rb?'R$ '+Math.max(0,o.totalRobux-o.storeCreditApplied).toLocaleString():usd(Math.max(0,o.total-o.storeCreditApplied))+' USD']);}
     if (o.stripePaymentIntentId) rows.push(['Stripe payment intent', '<span class="dt-mono">' + esc(o.stripePaymentIntentId) + '</span>']);
     if (o.stripeCheckoutSessionId) rows.push(['Stripe checkout session', '<span class="dt-mono">' + esc(o.stripeCheckoutSessionId) + '</span>']);
     if (o.paypalOrderId) rows.push(['PayPal order ID', '<span class="dt-mono">' + esc(o.paypalOrderId) + '</span>']);

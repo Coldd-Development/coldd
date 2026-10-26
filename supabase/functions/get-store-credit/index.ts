@@ -1,0 +1,2 @@
+import {referralContext,reply} from "../_shared/referral_api.ts";
+Deno.serve(async req=>{try{const ctx=await referralContext(req);if(ctx.response)return ctx.response;const {data,error}=await ctx.admin!.rpc("store_credit_balances",{p_user_id:ctx.user!.id});if(error)throw error;return reply({ok:true,credit:data});}catch(error){console.error("[store-credit]",error);return reply({ok:false,error:"Could not load store credit. Please retry."},500);}});

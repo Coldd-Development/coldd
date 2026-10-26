@@ -218,6 +218,7 @@ Deno.serve(async (req: Request) => {
         user_id: giftRecipientId || (user ? user.id : null),
         purchased_by_user_id: giftRecipientId ? user!.id : null,
         status: "pending",
+        payment_provider: "stripe",
         subtotal_usd: Math.round((subtotal + addonsUsd) * 100) / 100,
         discount_usd: discount,
         total_usd: total,
@@ -252,15 +253,13 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "Could not record your add-ons." }, 500);
     }
 
+    let creditApplied=0;
     if (body.useStoreCredit) {
-      if (!user) { await admin.from("orders").update({status:"canceled"}).eq("id",order.id); return json({ ok:false, error:"Please sign in to use store credit." },401); }
-      const {data:credit,error:creditError}=await admin.rpc("spend_store_credit",{p_user_id:user.id,p_order_id:order.id,p_currency:"usd"});
-      if(creditError || !credit?.ok) {
-        await admin.from("orders").update({status:"canceled"}).eq("id",order.id);
-        return json({ok:false,error:credit?.error||"Could not apply store credit."},400);
-      }
-      await sendOrderReceipt(admin,order.id,user.email).catch(console.error);
-      return json({ok:true,url:siteUrl+"/success?order_id="+order.id});
+      if (!user) { await admin.from("orders").update({status:"canceled"}).eq("id",order.id); return json({ok:false,error:"Please sign in to use store credit."},401); }
+      const {data:credit,error:creditError}=await admin.rpc("apply_store_credit",{p_user_id:user.id,p_order_id:order.id,p_currency:"usd",p_amount:body.storeCreditAmount??null,p_min_remainder:0.50});
+      if(creditError||!credit?.ok){await admin.from("orders").update({status:"canceled"}).eq("id",order.id);return json({ok:false,error:credit?.error||"Could not apply store credit."},400);}
+      creditApplied=Number(credit.applied);
+      if(credit.paid){await sendOrderReceipt(admin,order.id,user.email).catch(console.error);return json({ok:true,url:siteUrl+"/success?order_id="+order.id});}
     }
 
     // Guest orders (no account) carry a one-time claim token in the success
@@ -293,16 +292,16 @@ Deno.serve(async (req: Request) => {
       const convert = (amountUsd: number) => usdTo(amountUsd, currency);
       const lineUnitAmounts = await Promise.all(lines.map((li) => convert(li.unitPrice)));
       const addonUnitAmounts = await Promise.all(addons.map((a) => convert(a.unitUsd)));
-      const chargedTotal = await convert(total);
+      const chargedTotal = await convert(total-creditApplied);
 
       let discounts: { coupon: string }[] | undefined;
-      if (discount > 0) {
-        const convertedDiscount = await convert(discount);
+      if (discount + creditApplied > 0) {
+        const convertedDiscount = await convert(discount+creditApplied);
         const stripeCoupon = await stripe.coupons.create({
           amount_off: Math.round(convertedDiscount * 100),
           currency,
           duration: "once",
-          name: appliedCouponCode ?? undefined,
+          name: creditApplied>0?(appliedCouponCode?appliedCouponCode+" + store credit":"Store credit"):appliedCouponCode??undefined,
         });
         discounts = [{ coupon: stripeCoupon.id }];
       }
@@ -317,6 +316,7 @@ Deno.serve(async (req: Request) => {
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
+        ...(creditApplied>0?{expires_at:Math.floor(Date.now()/1000)+1860}:{}),
         ...(user?.email ? { customer_email: user.email } : {}),
         ...(user ? { client_reference_id: user.id } : {}),
         ...(paymentMethodTypes ? { payment_method_types: paymentMethodTypes } : {}),
@@ -337,17 +337,19 @@ Deno.serve(async (req: Request) => {
         }))),
         ...(discounts ? { discounts } : {}),
         success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}${isGuest ? `&t=${claimToken}` : ""}`,
-        cancel_url: `${siteUrl}/checkout`,
+        cancel_url: creditApplied>0?`${siteUrl}/checkout?credit_cancel_order=${order.id}`:`${siteUrl}/checkout`,
         metadata: { order_id: order.id },
       });
 
-      await admin.from("orders")
+      const {error:saveError}=await admin.from("orders")
         .update({
           stripe_checkout_session_id: session.id,
           stripe_charge_amount: chargedTotal,
           stripe_charge_currency: currency,
         })
         .eq("id", order.id);
+
+      if(saveError){await stripe.checkout.sessions.expire(session.id);throw saveError;}
 
       // usage_count is incremented by stripe-webhook once the order actually
       // pays, not here - incrementing at session-creation time would count

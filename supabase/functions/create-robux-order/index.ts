@@ -236,15 +236,14 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "Could not record your add-ons." }, 500);
     }
 
-    if(body.useStoreCredit) {
-      const {data:credit,error:creditError}=await admin.rpc("spend_store_credit",{p_user_id:userData.user.id,p_order_id:order.id,p_currency:"robux"});
-      if(creditError||!credit?.ok) {
-        await admin.from("orders").update({status:"canceled"}).eq("id",order.id);
-        return json({ok:false,error:credit?.error||"Could not apply store credit."},400);
-      }
-      await sendOrderReceipt(admin,order.id,userData.user.email).catch(console.error);
-      return json({ok:true,url:"https://coldd.dev/success?order_id="+order.id});
+    let creditApplied=0;
+    if(body.useStoreCredit){
+      const {data:credit,error:creditError}=await admin.rpc("apply_store_credit",{p_user_id:userData.user.id,p_order_id:order.id,p_currency:"robux",p_amount:body.storeCreditAmount??null,p_min_remainder:1});
+      if(creditError||!credit?.ok){await admin.from("orders").update({status:"canceled"}).eq("id",order.id);return json({ok:false,error:credit?.error||"Could not apply store credit."},400);}
+      creditApplied=Number(credit.applied);
+      if(credit.paid){await sendOrderReceipt(admin,order.id,userData.user.email).catch(console.error);return json({ok:true,url:"https://coldd.dev/success?order_id="+order.id});}
     }
+    if(!robloxAcct){await admin.from("orders").update({status:"canceled"}).eq("id",order.id);return json({ok:false,error:"Link your Roblox account to pay the remaining Robux.",code:"NOT_LINKED"},400);}
 
     // One pass for the whole order, priced to the exact (post-discount)
     // total - not one pass per product. The buyer makes a single Roblox
@@ -254,7 +253,7 @@ Deno.serve(async (req: Request) => {
     // user.inventory-item:read scope; silently skipped if not granted).
     const buyerToken = await getValidRobloxToken(admin, userData.user.id).catch(() => null);
     const leased = await leasePassForOrder(
-      admin, order.id, finalTotalRobux + addonsRobux, robloxAcct!.roblox_id, buyerToken?.accessToken,
+      admin, order.id, finalTotalRobux + addonsRobux-creditApplied, robloxAcct.roblox_id, buyerToken?.accessToken,
     );
     if (!leased.ok) {
       await admin.from("orders").update({ status: "canceled" }).eq("id", order.id);
@@ -268,7 +267,8 @@ Deno.serve(async (req: Request) => {
     return json({
       ok: true,
       orderId: order.id,
-      totalRobux: finalTotalRobux + addonsRobux,
+      totalRobux: finalTotalRobux + addonsRobux-creditApplied,
+      creditApplied,
       // The single pass to buy. priceRobux is what we actually set on Roblox,
       // which verification checks against - it is not merely the display total.
       gamePassId: leased.pass.gamepassId,
