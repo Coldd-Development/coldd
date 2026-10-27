@@ -16,3 +16,7 @@ Repo: C:\Users\User\coldd (coldd.dev, auto-deploys on `git push` to main via Hes
 ## User-side tasks to remind them of
 - NOWPayments: finish account verification, enable coins (Settings > Coins), set primary balance to a stablecoin, link Switchere for AUD bank payouts, enable 2FA.
 - Old account's pending invoices (pre-2026-10-27) will still complete there but their webhooks will now FAIL signature checks against the new IPN secret.
+
+## Update (end of Claude session)
+- Live checkout verified: crypto button has no co-pay-disabled class and no badge.
+- Invoice creation NOT yet verified: create-crypto-charge returned 503 "coldd is temporarily down for maintenance" for a guest call, because the site is in maintenance mode (site_status row). Do not toggle it without the user. Test either as a signed-in admin/tester-access user, or ask the user to switch to open mode, then rerun step 2 above.
