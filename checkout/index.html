@@ -149,11 +149,7 @@
               </span>
               <span class="co-pay-amt" data-pay-amt="paypal"></span>
             </button>
-            <!-- Disabled until RelayPay verification clears - see
-                 crypto.ts/activeProvider. Remove co-pay-disabled and the
-                 badge span below (restoring data-pay-amt="crypto") once
-                 that's live. -->
-            <button type="button" class="co-pay-btn co-pay-btn--crypto co-pay-disabled" data-key="crypto" data-method="crypto" role="radio" aria-checked="false" aria-disabled="true">
+            <button type="button" class="co-pay-btn co-pay-btn--crypto" data-key="crypto" data-method="crypto" role="radio" aria-checked="false">
               <!-- Bitcoin's own mark - path lifted from Simple Icons, the
                    most universally recognized shorthand for "crypto" even
                    though this method also accepts ETH/USDC/etc. -->
@@ -162,7 +158,7 @@
                 <span class="co-pay-name">Crypto</span>
                 <span class="co-pay-sub">Bitcoin, Ethereum, USDC and more</span>
               </span>
-              <span class="co-pay-inactive-badge">COMING SOON</span>
+              <span class="co-pay-amt" data-pay-amt="crypto"></span>
             </button>
             <button type="button" class="co-pay-btn co-pay-btn--robux" data-key="robux" data-method="robux" role="radio" aria-checked="false">
               <!-- Roblox's own Robux icon, lifted directly from their live
