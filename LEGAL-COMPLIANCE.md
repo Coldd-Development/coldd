@@ -38,7 +38,7 @@ Each of these handles personal data for you and should have a signed or accepted
 - Supabase (database, auth, storage; EU region)
 - Resend (email)
 - Stripe, PayPal (payments)
-- RelayPay (crypto payments)
+- NOWPayments (crypto payments; confirm applicable data processing terms and international transfer safeguards)
 - Cloudflare (CDN / proxy)
 - Your web host (the Hestia server). Confirm the country it runs in and state it in Privacy section 4 if it is outside Australia.
 - Google, Discord, Roblox (sign-in providers; their own terms apply)
