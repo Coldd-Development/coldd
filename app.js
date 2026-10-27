@@ -6788,7 +6788,7 @@
           applySessionUI();
           var canceledCreditId=new URLSearchParams(location.search).get('credit_cancel_order');
           if(loggedIn&&canceledCreditId&&!creditCancelStarted){creditCancelStarted=true;window.coldAuth.invokeFn('cancel-credit-checkout',{orderId:canceledCreditId}).then(function(){var url=new URL(location.href);url.searchParams.delete('credit_cancel_order');history.replaceState(null,'',url.pathname+url.search);return window.coldAuth.invokeFn('get-store-credit',{});}).then(function(data){coCreditWallet=data.credit;renderTotals();if(msg){msg.className='co-msg show';msg.textContent='Checkout canceled. Your reserved store credit has been returned.';}}).catch(function(err){if(msg){msg.className='co-msg err show';msg.textContent=err.message;}});}
-          if(loggedIn&&window.coldAuth)window.coldAuth.invokeFn('get-store-credit',{}).then(function(data){coCreditWallet=data.credit;renderTotals();}).catch(function(){coCreditWallet=null;var el=document.getElementById('coCreditAvailable');if(el)el.textContent='Could not load store credit. Reload to try again.';});
+          if(loggedIn&&window.coldAuth)window.coldAuth.invokeFn('get-store-credit',{}).then(function(data){coCreditWallet=data.credit;var autoCredit=document.getElementById('coUseCredit');if(autoCredit)autoCredit.checked=(payMethod==='stripe'||payMethod==='robux')&&(Number(coCreditWallet.usd||0)>0||Number(coCreditWallet.robux||0)>0);renderTotals();}).catch(function(){coCreditWallet=null;var el=document.getElementById('coCreditAvailable');if(el)el.textContent='Could not load store credit. Reload to try again.';});
           else{coCreditWallet={usd:0,robux:0};renderTotals();}
         }).catch(function () { loggedIn = false; applySessionUI(); });
       }
@@ -7140,7 +7140,7 @@
         });
         var method = picked ? picked.getAttribute('data-method') : 'stripe';
         if((method==='robux')!==(payMethod==='robux')){var creditInput=document.getElementById('coCreditAmount');if(creditInput)creditInput.value='';}
-        var creditWrap=document.getElementById('coCreditWrap');if(creditWrap){creditWrap.hidden=method!=='stripe'&&method!=='robux';if(creditWrap.hidden)document.getElementById('coUseCredit').checked=false;}
+        var creditWrap=document.getElementById('coCreditWrap');if(creditWrap){creditWrap.hidden=method!=='stripe'&&method!=='robux';document.getElementById('coUseCredit').checked=!creditWrap.hidden&&!!coCreditWallet&&(Number(coCreditWallet.usd||0)>0||Number(coCreditWallet.robux||0)>0);}
         payMethod = method;
         document.querySelectorAll('.co-pay-panel').forEach(function (p) {
           p.hidden = p.getAttribute('data-method-panel') !== method;

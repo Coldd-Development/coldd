@@ -173,7 +173,7 @@
               <span class="co-pay-amt" data-pay-amt="robux"></span>
             </button>
           </div>
-          <div class="co-check" id="coCreditWrap"><label><input type="checkbox" id="coUseCredit" /> Put store credit toward this purchase</label><p class="ref-detail-note" id="coCreditAvailable" role="status">Sign in to check your store credit.</p><div class="auth-field" id="coCreditAmountWrap" hidden><label for="coCreditAmount">Credit to use</label><input type="number" id="coCreditAmount" min="0.01" step="0.01" placeholder="Use as much as available" /><small>Leave blank to use as much as possible. Pay the remainder by Card for USD credit or gamepass for Robux credit. We do not convert credit currencies.</small></div><p class="ref-detail-note" id="coCreditMinimumNotice" hidden>We reduced the credit applied to leave the minimum card payment. The unused credit stays in your balance.</p></div>
+          <div class="co-check" id="coCreditWrap"><label hidden><input type="checkbox" id="coUseCredit" /> Put store credit toward this purchase</label><p class="ref-detail-note" id="coCreditAvailable" role="status" hidden>Sign in to check your store credit.</p><div class="auth-field" id="coCreditAmountWrap" hidden><label for="coCreditAmount">Credit to use</label><input type="number" id="coCreditAmount" min="0.01" step="0.01" placeholder="Use as much as available" /><small>Leave blank to use as much as possible. Pay the remainder by Card for USD credit or gamepass for Robux credit. We do not convert credit currencies.</small></div><p class="ref-detail-note" id="coCreditMinimumNotice" hidden>We reduced the credit applied to leave the minimum card payment. The unused credit stays in your balance.</p></div>
           <!-- Local Stripe payment methods, beyond the four tiles above.
                Visible regardless of which method is currently selected -
                picking a tile switches to Stripe and restricts that session
@@ -191,7 +191,7 @@
             <p class="co-hint">You'll complete your purchase in a secure checkout via Stripe</p>
           </div>
           <div id="coPayCryptoPanel" class="co-pay-panel" data-method-panel="crypto" hidden>
-            <p class="co-hint">You'll pick a coin and get a payment address on the next page. Crypto confirms on the network, so your order completes once the payment is confirmed, usually within a few minutes. You can safely close the tab; we'll finish it either way.</p>
+            <p class="co-hint">You'll pick a coin and get a payment address on the next page.</p>
             <div id="coCryptoGuestBlock" hidden>
               <p class="co-hint">Our crypto processor requires a name and email for the payment receipt.</p>
               <div class="co-coupon"><input maxlength="120" type="text" id="coCryptoGuestName" placeholder="Full name" aria-label="Full name" autocomplete="name" /></div>
