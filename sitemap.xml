@@ -1267,12 +1267,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/scripted-economy-airline-seats</loc>
-    <lastmod>2026-10-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://coldd.dev/product/billboard-pack</loc>
     <lastmod>2026-10-27</lastmod>
     <changefreq>weekly</changefreq>
@@ -1291,14 +1285,68 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/scripted-economy-airline-seats</loc>
+    <lastmod>2026-10-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/zoltraak-anime-combat-vfx</loc>
     <lastmod>2026-10-08</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/car-shelter</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/punch-animation-pack-r6-r15</loc>
     <lastmod>2026-10-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/parking-entrance-gate-scripted</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/small-bridge-ramp</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/urban-bus-stop</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/scripted-traffic-lights</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/m7-apple-technology-pack</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/cell-tower-pack</loc>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/modern-gamepass-boards</loc>
+    <lastmod>2026-10-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
