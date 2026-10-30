@@ -3807,6 +3807,149 @@
     return p;
   }
 
+  /* ---- GIF thumbnail video previews ----------------------------------------
+     The storefront plays a GIF thumbnail as video (catalog.js): <base>.jpg poster,
+     <base>.sm.mp4 (640px, cards) and <base>.mp4 (full size, product page), stored next to
+     the GIF. They are made here, in the admin's browser (WebCodecs decodes the GIF and
+     encodes H.264; mp4-muxer packs the file), as soon as a GIF thumbnail is uploaded, and
+     again when a product whose GIF has none is opened. Each run counts as an upload, so
+     the product can't be saved until its previews exist. Without browser support the GIF
+     simply plays as before. */
+  var GIF_MEDIA = /^https:\/\/cdn\.coldd\.dev\/(media\/.+)\.gif$/i;
+  var gifPreviewRuns = {};
+  var muxerLoad = null;
+  function gifPreviewSupported() {
+    return 'ImageDecoder' in window && 'VideoEncoder' in window && 'VideoFrame' in window && 'OffscreenCanvas' in window;
+  }
+  function loadMuxer() {
+    if (window.Mp4Muxer) return Promise.resolve(window.Mp4Muxer);
+    if (!muxerLoad) muxerLoad = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = '/vendor/mp4-muxer-5.2.1.js';
+      s.onload = function () { window.Mp4Muxer ? resolve(window.Mp4Muxer) : reject(new Error('Video packer failed to load.')); };
+      s.onerror = function () { muxerLoad = null; reject(new Error('Video packer failed to load.')); };
+      document.head.appendChild(s);
+    });
+    return muxerLoad;
+  }
+  // Decodes the GIF once and encodes both videos and the poster from the same frames.
+  async function encodeGifPreviews(blob, ctl, onFrame) {
+    var M = await loadMuxer();
+    var dec = new ImageDecoder({ data: await blob.arrayBuffer(), type: 'image/gif' });
+    await dec.tracks.ready;
+    await dec.completed;
+    var count = dec.tracks.selectedTrack.frameCount;
+    var probe = (await dec.decode({ frameIndex: 0 })).image;
+    var W = probe.displayWidth, H = probe.displayHeight;
+    probe.close();
+    function even(n) { return Math.max(2, n - (n % 2)); }
+    var fw = even(Math.min(W, 1920)), fh = even(Math.round(H * fw / W));
+    var sw = even(Math.min(640, fw)), sh = even(Math.round(fh * sw / fw));
+    function track(w, h, bitrate) {
+      var muxer = new M.Muxer({ target: new M.ArrayBufferTarget(), video: { codec: 'avc', width: w, height: h }, fastStart: 'in-memory' });
+      var t = { w: w, h: h, muxer: muxer, failed: null, canvas: new OffscreenCanvas(w, h) };
+      t.ctx = t.canvas.getContext('2d');
+      t.enc = new VideoEncoder({ output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: function (e) { t.failed = e; } });
+      t.enc.configure({ codec: w * h > 921600 ? 'avc1.640033' : 'avc1.64001f', width: w, height: h, bitrate: bitrate, bitrateMode: 'variable', framerate: 50, latencyMode: 'quality', avc: { format: 'avc' } });
+      return t;
+    }
+    var full = track(fw, fh, 10e6), small = track(sw, sh, 2.5e6);
+    var posterAt = Math.floor(count * 0.45), poster = null, ts = 0;
+    try {
+      for (var i = 0; i < count; i++) {
+        if (ctl.cancelled) throw uploadCancelledError();
+        var img = (await dec.decode({ frameIndex: i })).image;
+        // Browsers play GIF delays under 2cs as 10cs; match that so the video runs at the GIF's speed.
+        var dur = img.duration && img.duration >= 20000 ? img.duration : 100000;
+        for (var t of [full, small]) {
+          if (t.failed) throw t.failed;
+          t.ctx.fillStyle = '#000'; t.ctx.fillRect(0, 0, t.w, t.h);
+          t.ctx.drawImage(img, 0, 0, t.w, t.h);
+          var vf = new VideoFrame(t.canvas, { timestamp: ts, duration: dur });
+          t.enc.encode(vf, { keyFrame: i % 100 === 0 });
+          vf.close();
+          while (t.enc.encodeQueueSize > 6) await new Promise(function (r) { setTimeout(r, 4); });
+        }
+        if (i === posterAt) poster = await small.canvas.convertToBlob({ type: 'image/jpeg', quality: 0.86 });
+        img.close();
+        ts += dur;
+        onFrame(i + 1, count);
+      }
+      var out = {};
+      for (var key of ['full', 'small']) {
+        var tr = key === 'full' ? full : small;
+        await tr.enc.flush();
+        if (tr.failed) throw tr.failed;
+        tr.muxer.finalize();
+        out[key] = new Blob([tr.muxer.target.buffer], { type: 'video/mp4' });
+      }
+      out.poster = poster;
+      return out;
+    } finally {
+      [full, small].forEach(function (t) { if (t.enc.state !== 'closed') t.enc.close(); });
+      dec.close();
+    }
+  }
+  // blob: the GIF (null = fetch it from the site, same origin as cdn.coldd.dev's files).
+  function makeGifPreviews(gifUrl, blob, label) {
+    var m = GIF_MEDIA.exec(gifUrl || '');
+    if (!m || !gifPreviewSupported()) return Promise.resolve(false);
+    if (gifPreviewRuns[gifUrl]) return gifPreviewRuns[gifUrl];
+    var info = { name: 'Video preview: ' + (label || m[1].split('/').pop() + '.gif'), size: 0 };
+    var tracker = uploadTrack(info);
+    var ctl = { cancelled: false, xhr: null };
+    ctl.cancel = function () { ctl.cancelled = true; if (ctl.xhr) try { ctl.xhr.abort(); } catch (_) {} };
+    tracker.onCancel(ctl.cancel);
+    ACTIVE_UPLOADS.push(ctl);
+    tracker.indeterminate('Reading GIF…');
+    var run = (blob ? Promise.resolve(blob) : fetch('/' + m[1] + '.gif').then(function (r) {
+      if (!r.ok) throw new Error('Could not read the GIF (' + r.status + ').');
+      return r.blob();
+    })).then(function (gif) {
+      return encodeGifPreviews(gif, ctl, function (done, total) {
+        tracker.indeterminate(done < total ? 'Encoding video… ' + Math.floor(done * 100 / total) + '%' : 'Uploading previews…');
+      });
+    }).then(function (files) {
+      info.size = files.poster.size + files.small.size + files.full.size;
+      var parts = [['jpg', files.poster, 'image/jpeg'], ['sm', files.small, 'video/mp4'], ['full', files.full, 'video/mp4']];
+      return parts.reduce(function (p, part) {
+        return p.then(function () {
+          if (ctl.cancelled) throw uploadCancelledError();
+          return invokeAdminFn('admin-get-upload-url', { kind: 'gifCompanion', of: gifUrl, variant: part[0] }, 'Could not prepare upload.').then(function (d) {
+            var fd = new FormData();
+            fd.append('file', part[1], d.path.split('/').pop());
+            return xhrPost(d.uploadUrl, fd, null, ctl).then(function (r) {
+              return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'Upload failed (' + r.status + ').'); });
+            });
+          });
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      tracker.done();
+      return true;
+    }, function (err) {
+      if (ctl.cancelled) { tracker.cancelled(); return false; }
+      console.warn('[admin] GIF video preview failed:', err);
+      tracker.fail('Preview not made (the GIF still shows): ' + ((err && err.message) || 'error'));
+      return false;
+    }).then(function (ok) {
+      var i = ACTIVE_UPLOADS.indexOf(ctl); if (i !== -1) ACTIVE_UPLOADS.splice(i, 1);
+      delete gifPreviewRuns[gifUrl];
+      return ok;
+    });
+    gifPreviewRuns[gifUrl] = run;
+    return run;
+  }
+  // For a product opened in the editor: make the previews if its GIF has none yet. The
+  // check uses a one-off URL so it can never leave a cached "missing" answer behind.
+  function ensureGifPreviews(gifUrl, label) {
+    var m = GIF_MEDIA.exec(gifUrl || '');
+    if (!m || !gifPreviewSupported() || gifPreviewRuns[gifUrl]) return;
+    fetch('/' + m[1] + '.sm.mp4?check=' + Date.now(), { method: 'HEAD' }).then(function (r) {
+      if (r.status === 404) makeGifPreviews(gifUrl, null, label);
+    }).catch(function () {});
+  }
+
   // The placeholder is the products table's column default, so a product that
   // has never had a real upload still reads as having a file. Say so plainly
   // rather than leaving the admin to guess.
@@ -4104,6 +4247,8 @@
     uploadToStorage('thumbnail', file).then(function (r) {
       $('admEditThumbUrl').value = r.publicUrl;
       updateThumbPreview();
+      // A GIF thumbnail gets its video previews straight away (see makeGifPreviews).
+      if (/\.gif$/i.test(r.publicUrl || '')) makeGifPreviews(r.publicUrl, file, file.name);
     }).catch(function () { /* admToast already reported it */ });
   }
   function addGalleryFiles(files) {
@@ -4171,6 +4316,7 @@
   function openProductEdit(id, opts) {
     var p = findProduct(id); if (!p) return;
     pendingStoragePath = null;
+    ensureGifPreviews(p.image, p.title + ' thumbnail');
     $('admEditId').value = p.id;
     $('admEditTitleInput').value = p.title;
     $('admEditPrice').value = p.price;

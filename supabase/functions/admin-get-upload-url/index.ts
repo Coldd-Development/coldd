@@ -67,6 +67,28 @@ Deno.serve(async (req: Request) => {
     if (profileErr || !profile?.is_admin) return json({ ok: false, error: "Admin access required." }, 403);
 
     const body = await req.json().catch(() => ({}));
+
+    // { kind: "gifCompanion", of: <GIF thumbnail URL>, variant: "jpg" | "sm" | "full" }
+    // The admin panel turns every GIF thumbnail into a poster + two videos (made in the
+    // browser, see admin.js makeGifCompanions) stored next to the GIF, which the storefront
+    // plays instead of the GIF (catalog.js). Only those three names next to a CDN GIF.
+    if (body.kind === "gifCompanion") {
+      if (!cdnEnabled()) return json({ ok: false, error: "Video previews need the CDN." }, 400);
+      const prefix = cdnPublicUrl("media/");
+      const of = String(body.of || "");
+      const m = of.startsWith(prefix) ? /^(media\/[a-z0-9][a-z0-9._\-/]*)\.gif$/.exec(of.slice(prefix.length - "media/".length)) : null;
+      const suffix = ({ jpg: ".jpg", sm: ".sm.mp4", full: ".mp4" } as Record<string, string>)[String(body.variant)];
+      if (!m || !suffix || m[1].includes("..")) return json({ ok: false, error: "Not a CDN GIF thumbnail." }, 400);
+      const cdnPath = m[1] + suffix;
+      return json({
+        ok: true,
+        driver: "cdn",
+        path: cdnPath,
+        uploadUrl: await cdnSignedUrl("upload", cdnPath, { maxBytes: 100 * 1024 * 1024, overwrite: true }),
+        publicUrl: cdnPublicUrl(cdnPath),
+      });
+    }
+
     const kind = ["gallery", "productFile", "unreleasedFile", "legalDoc", "addonFile"].includes(body.kind) ? body.kind : "thumbnail";
     const filename = safeName(String(body.filename || "file"));
 
