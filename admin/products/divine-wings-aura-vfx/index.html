@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>document.documentElement.classList.add('js');try{var t=localStorage.getItem('coldd_theme');if(t==='light'||(t==='system'&&matchMedia('(prefers-color-scheme: light)').matches))document.documentElement.setAttribute('data-theme','light');}catch(e){}try{if(localStorage.getItem('coldd_auth')==='in')document.documentElement.classList.add('auth-in');}catch(e){}</script>
+  <script>try{var _gp=location.pathname.replace(/\/+$/,'')||'/';if(localStorage.getItem('coldd_site_mode')==='maintenance'&&!/^\/(signin|signup|forgot|reset|callback|roblox-callback|lock|admin)(\/|$)/.test(_gp)){var _gd=document.documentElement;_gd.style.visibility='hidden';window.__coldGateHold=setTimeout(function(){try{_gd.style.visibility=''}catch(e){}},10000);}}catch(e){}</script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - coldd Development</title>
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <!-- meta:start -->
+  <meta name="description" content="Internal administration for coldd Development." />
+  <meta name="robots" content="noindex, follow" />
+  <meta name="theme-color" content="#15161b" />
+  <!-- meta:end -->
+
+
+  <link rel="stylesheet" href="/styles.css?v=20261026-credit" />
+</head>
+<body class="adm-body">
+  <div class="backdrop"></div>
+  <div class="scrim"></div>
+
+  <div class="adm-gate" id="admGate" hidden>
+    <div class="adm-gate-card glass">
+      <img class="logo" src="/logo.png" alt="coldd" />
+      <h1>Staff access only</h1>
+      <p>This dashboard is restricted to whitelisted coldd staff. If you believe this is a mistake, reach out in Discord.</p>
+      <a class="btn btn-primary" href="/">Back to site</a>
+    </div>
+  </div>
+
+  <div id="admShell" hidden>
+    <header class="nav" id="nav">
+      <div class="nav-inner">
+        <a class="brand" href="/" aria-label="coldd home">
+          <img class="logo" src="/logo.png" alt="coldd" />
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <span class="nav-set">
+            <a href="/">Home</a><a href="/shop" id="shopLink">Shop</a><a href="/about" id="aboutLink">About Us</a>
+          </span>
+          <span class="nav-search-wrap">
+            <button class="nav-search" id="searchBtn" type="button" aria-label="Search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
+            <input maxlength="120" class="nav-search-input" id="searchInput" type="text" placeholder="Start your search" aria-label="Search" />
+          </span>
+        </nav>
+        <div class="nav-cta">
+          <div class="nav-notif" id="notifWrap" hidden>
+            <button class="nav-account" id="notifBtn" type="button" aria-label="Notifications">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 4.5 1.2 6.6 2.1 7.7.5.6.1 1.3-.6 1.3H4.5c-.7 0-1.1-.7-.6-1.3C4.8 14.6 6 12.5 6 8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              <span class="notif-badge" id="notifBadge" hidden>0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel" hidden>
+              <div class="notif-panel-head"><h3>Notifications</h3><button type="button" class="notif-mark-all" id="notifMarkAll">Mark all read</button></div>
+              <div class="notif-list" id="notifList"></div>
+            </div>
+          </div>
+          <button class="nav-account" id="accountBtn" type="button" aria-label="Account / sign in">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          </button>
+
+          <a class="btn btn-primary" href="https://discord.gg/coldd" target="_blank" rel="noopener">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+            <span class="txt">Join</span>
+          </a>
+          <button class="menu-btn" aria-label="Menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <div class="nav-mega" id="navMega" aria-hidden="true">
+      <div class="nav-mega-inner glass">
+        <div class="nav-mega-main">
+          <div class="nav-mega-tabs" role="tablist" aria-label="Shop platform">
+            <button class="nmt-tab active" type="button" data-platform="roblox" role="tab" aria-selected="true">Roblox</button>
+          </div>
+          <div class="nav-mega-cats" data-platform-panel="roblox">
+            <a href="/shop?cat=game-templates">Games &amp; Templates</a>
+            <a href="/shop?cat=maps">Maps</a>
+            <a href="/shop?cat=scripts-ui">Scripts &amp; UI</a>
+            <a href="/shop?cat=graphics">Graphics</a>
+            <a href="/shop?cat=buildings">Buildings</a>
+            <a href="/shop?cat=assets">Assets</a>
+            <a href="/shop?cat=uniforms-gear">Uniforms &amp; Gear</a>
+            <a href="/shop?cat=boats">Boats</a>
+            <a href="/shop?cat=weapons">Weapons</a>
+            <a href="/shop?cat=vehicles">Vehicles</a>
+            <a href="/shop?cat=animations-vfx">Animations &amp; VFX</a>
+          </div>
+        </div>
+        <a class="nav-mega-feature" href="/shop?sort=newest" id="navMegaFeature" data-href-roblox="/shop?sort=newest" data-img-roblox="/new-release.jpg">
+          <span class="nmf-img" style="background-image:url('/new-release.jpg')"></span>
+          <span class="nmf-tag">New</span>
+          <span class="nmf-title">New Releases</span>
+          <span class="nmf-go has-arrow">Browse all</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="search-panel" id="searchPanel" aria-hidden="true">
+      <div class="search-panel-inner glass">
+        <div class="search-list" id="searchList"></div>
+      </div>
+    </div>
+
+    <main class="page adm-page">
+      <div class="wrap dash">
+        <aside class="dash-side glass">
+          <nav class="dash-nav">
+            <a href="/admin/" data-panel="home" class="active"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a>
+            <a href="/admin/analytics/" data-panel="analytics"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg><span>Analytics</span></a>
+            <a href="/admin/marketing/" data-panel="marketing"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l4 4V6L7 10H4a1 1 0 0 0-1 1Z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6.5a8 8 0 0 1 0 11"/></svg><span>Marketing</span></a>
+            <a href="/admin/products/" data-panel="products"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span>Products</span></a>
+            <a href="/admin/marketplaces/" data-panel="marketplaces"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg><span>Marketplaces</span></a>
+            <a href="/admin/orders/" data-panel="orders"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></a>
+            <a href="/admin/resellers/" data-panel="resellers"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Resellers</span></a>
+            <a href="/admin/reviews/" data-panel="reviews"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9 9 8z"/></svg><span>Reviews</span></a>
+            <a href="/admin/sales/" data-panel="sales"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H4a1 1 0 0 0-1 1v4a2.5 2.5 0 0 1 0 5v4a1 1 0 0 0 1 1h5"/><path d="M15 19h5a1 1 0 0 0 1-1v-4a2.5 2.5 0 0 1 0-5V5a1 1 0 0 0-1-1h-5"/><path d="M9 5v14M9 8h.01M9 12h.01M9 16h.01"/></svg><span>Sales &amp; Discounts</span></a>
+            <a href="/admin/content/" data-panel="content"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg><span>Blog &amp; Tutorials</span></a>
+            <a href="/admin/sitemgmt/" data-panel="sitemgmt"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>Site Management</span></a>
+          </nav>
+          <a class="dash-admin-link" href="/dashboard"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg> Account Settings</a>
+        </aside>
+
+        <div class="dash-main">
+
+          <section class="dash-panel" id="adm-panel-home">
+            <div class="dash-head adm-head-row">
+              <div><h1>Dashboard</h1><p>A snapshot of coldd right now.</p></div>
+              <div class="adm-range" role="group" aria-label="Date range" id="admHomeRange">
+                <button type="button" data-range="1">24h</button>
+                <button type="button" data-range="7">7D</button>
+                <button type="button" data-range="30" class="active">30D</button>
+                <button type="button" data-range="0">All</button>
+              </div>
+            </div>
+            <div class="dash-stats adm-stats-4" id="admHomeStatsTop"></div>
+            <div class="dash-stats adm-stats-4" id="admHomeStatsSecondary" style="margin-top:14px;"></div>
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>To do</h2></div>
+              <div class="dash-rows" id="admHomeTodo"></div>
+            </div>
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Recent orders</h2><a href="#" data-panel="orders">View all</a></div>
+              <div class="dash-rows" id="admHomeRecent"></div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-analytics" hidden>
+            <div class="dash-head adm-head-row">
+              <div><h1>Analytics</h1><p>Every figure below recalculates for the selected range.</p></div>
+              <div class="adm-range" role="group" aria-label="Date range">
+                <button type="button" data-range="1">24h</button>
+                <button type="button" data-range="7">7D</button>
+                <button type="button" data-range="30" class="active">30D</button>
+                <button type="button" data-range="90">90D</button>
+                <button type="button" data-range="0">All</button>
+              </div>
+            </div>
+
+            <div class="dash-stats" id="admAnStats"></div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Revenue analytics</h2><span class="adm-sub">Daily figures with a moving-average trend line. Site and BuiltByBit.</span></div></div>
+              <div id="admRevChart"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Revenue breakdown</h2><span class="adm-sub">Payment mix, order value and customer mix over the selected range.</span></div></div>
+              <div id="admRevBreakdown"></div>
+            </div>
+
+            <div class="adm-two-col">
+              <div class="dash-card glass">
+                <div class="dash-card-head"><div><h2>Best sellers</h2><span class="adm-sub">Site and BuiltByBit combined.</span></div></div>
+                <div class="dash-rows" id="admBestSellers"></div>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><div><h2>Revenue by category</h2><span class="adm-sub">Site and BuiltByBit combined.</span></div></div>
+                <div id="admCatChart"></div>
+                <div class="adm-catlist" id="admCatList"></div>
+              </div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Recent orders</h2><span class="adm-sub" id="admAnRecentOrdersSub"></span></div><a href="#" data-panel="orders">View all</a></div>
+              <div class="dash-rows" id="admAnRecentOrders"></div>
+            </div>
+
+            <div class="dash-card glass" id="admRobuxCard">
+              <div class="dash-card-head"><div><h2>Group Robux revenue</h2><span class="adm-sub">Robux received after Roblox's 30% cut.</span></div></div>
+              <div id="admRobux"></div>
+            </div>
+
+            <div class="dash-card glass" id="admBbbCard">
+              <div class="dash-card-head adm-bbb-head">
+                <div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit stats</h2><span class="adm-sub" id="admBbbSub"></span></div>
+                <div class="adm-bbb-tools">
+                  <div class="adm-mp-filter" id="admBbbRange" role="group" aria-label="BuiltByBit date range">
+                    <button type="button" data-bbb-range="7">7D</button>
+                    <button type="button" data-bbb-range="30">30D</button>
+                    <button type="button" data-bbb-range="90">90D</button>
+                    <button type="button" data-bbb-range="0">All</button>
+                  </div>
+                  <button type="button" class="btn btn-ghost adm-btn-sm" id="admBbbSync">Sync now</button>
+                </div>
+              </div>
+              <div id="admBbbBody"></div>
+            </div>
+
+            <div class="dash-card glass" id="admBbbAnalyticsCard">
+              <div class="dash-card-head"><div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit</h2><span class="adm-sub" id="admBbbAnalyticsSub"></span></div></div>
+              <div id="admBbbAnalytics"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Traffic analytics</h2></div>
+              <div class="dash-stats adm-stats-3" id="admTrafficStats"></div>
+              <div id="admTrafficChart"></div>
+              <div class="adm-mini-head">Top pages · last 120 days</div>
+              <div class="dash-tablewrap">
+                <table class="dash-table"><thead><tr><th>Page</th><th>Views</th><th>Sessions</th></tr></thead>
+                <tbody id="admTopPagesBody"></tbody></table>
+              </div>
+              <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admTopPagesMore" hidden>Show all pages</button>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Conversion funnel</h2><span class="adm-sub">How far sessions get, step by step.</span></div></div>
+              <div id="admFunnel"></div>
+            </div>
+
+            <div class="adm-two-col">
+              <div class="dash-card glass dash-tablewrap">
+                <div class="dash-card-head"><div><h2>Top searches</h2><span class="adm-sub">No results = searches that found nothing, i.e. products people want that we do not list.</span></div></div>
+                <table class="dash-table">
+                  <thead><tr><th>Query</th><th>Searches</th><th title="Searches that returned no products">No results</th></tr></thead>
+                  <tbody id="admSearchBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass dash-tablewrap">
+                <div class="dash-card-head"><div><h2>How did you hear about us</h2><span class="adm-sub">One-question survey on the thank-you page.</span></div></div>
+                <table class="dash-table">
+                  <thead><tr><th>Source</th><th>Answers</th><th>Share</th></tr></thead>
+                  <tbody id="admHowHeardBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="dash-card glass dash-tablewrap">
+              <div class="dash-card-head"><h2>Abandoned carts</h2><span class="adm-sub">Value at risk: <strong id="admAbandonedTotal"></strong></span></div>
+              <table class="dash-table">
+                <thead><tr><th>Date</th><th>Item</th><th>Value</th><th>Customer</th><th>Recovery email</th></tr></thead>
+                <tbody id="admAbandonedBody"></tbody>
+              </table>
+              <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admAbandonedMore" hidden>Show all carts</button>
+            </div>
+
+            <div class="dash-card glass dash-tablewrap">
+              <div class="dash-card-head"><h2>Coupon usage &amp; redemption</h2></div>
+              <div class="dash-stats adm-stats-3" id="admCouponTotals"></div>
+              <table class="dash-table">
+                <thead><tr><th>Code</th><th>Status</th><th>Uses</th><th>Discount given</th><th>Revenue influenced</th></tr></thead>
+                <tbody id="admCouponAnBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-marketing" hidden>
+            <div class="dash-head adm-head-row">
+              <div><h1>Marketing</h1><p>Audience, channels, referrals and email. Store performance lives in Analytics.</p></div>
+              <div class="adm-range" role="group" aria-label="Date range">
+                <button type="button" data-range="1">24h</button>
+                <button type="button" data-range="7">7D</button>
+                <button type="button" data-range="30" class="active">30D</button>
+                <button type="button" data-range="90">90D</button>
+                <button type="button" data-range="0">All</button>
+              </div>
+            </div>
+
+            <div class="dash-stats" id="admMktStats"></div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Audience overview</h2><span class="adm-sub">Every connected channel combined, over the selected range.</span></div></div>
+              <div id="admAudienceOverview"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Channels</h2><span class="adm-sub">Connect a channel to pull its numbers in automatically.</span></div>
+              <div id="admMktChannels"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Campaigns</h2><span class="adm-sub">Trackable links for partners, sponsors, and anywhere else you're promoting coldd.</span></div></div>
+              <form class="adm-form" id="admCampaignCreateForm" style="flex-wrap:wrap;">
+                <input type="text" id="admCampaignCode" class="adm-input adm-input-sm" placeholder="Code, e.g. partner" required maxlength="60" />
+                <input maxlength="120" type="text" id="admCampaignLabel" class="adm-input" placeholder="Label, e.g. Partner program" required style="flex:1;min-width:180px;" />
+                <input maxlength="300" type="text" id="admCampaignDestination" class="adm-input adm-input-sm" placeholder="Page (default /)" style="min-width:140px;" />
+                <button class="btn btn-primary adm-btn-sm" type="submit">+ Add campaign</button>
+              </form>
+              <p class="adm-note" style="margin-top:6px;">Page is where the link should send people, e.g. <code>/</code>, <code>/shop</code>, or <code>/product/all-brawl-full-game</code>. Leave blank for the homepage.</p>
+              <div class="adm-edit-msg" id="admCampaignCreateMsg"></div>
+              <div class="dash-tablewrap" style="margin-top:14px;">
+                <table class="dash-table">
+                  <thead><tr><th>Link</th><th>Clicks</th><th>Conversions</th><th>Rate</th><th>Revenue</th><th>Status</th><th></th></tr></thead>
+                  <tbody id="admCampaignsBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Advertisements</h2><span class="adm-sub">Discord ad delivery via AdBlox.</span></div><div style="display:flex;gap:8px;"><button class="btn btn-ghost adm-btn-sm" id="admAdbloxRefresh" type="button"><span class="btn-label">Refresh</span><span class="btn-spinner" hidden></span></button><a class="btn btn-ghost adm-btn-sm" href="https://adblox.xyz/dashboard/ads" target="_blank" rel="noopener">Edit Advertisements</a></div></div>
+              <div class="dash-stats" id="admAdbloxStats"></div>
+              <div class="adm-edit-msg" id="admAdbloxMsg"></div>
+
+              <details class="adm-collapse" open style="margin-top:20px;">
+                <summary class="dash-card-head"><div><h2>Top servers</h2><span class="adm-sub">Last 30 days, by ads sent.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="dash-tablewrap adm-collapse-body">
+                  <table class="dash-table">
+                    <thead><tr><th>Server</th><th>Sent</th><th>Failed</th><th>Last sent</th></tr></thead>
+                    <tbody id="admAdbloxServersBody"></tbody>
+                  </table>
+                </div>
+              </details>
+
+              <details class="adm-collapse" open style="margin-top:20px;">
+                <summary class="dash-card-head"><div><h2>Ad activity log</h2><span class="adm-sub">Most recent sends.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="dash-tablewrap adm-collapse-body">
+                  <table class="dash-table">
+                    <thead><tr><th>Time</th><th>Ad</th><th>Server</th><th>Channel</th><th>Status</th></tr></thead>
+                    <tbody id="admAdbloxLogsBody"></tbody>
+                  </table>
+                  <button class="btn btn-ghost adm-btn-sm" id="admAdbloxLoadMore" type="button" hidden style="margin-top:12px;">Load more</button>
+                </div>
+              </details>
+            </div>
+
+            <div class="dash-card glass dash-tablewrap">
+              <div class="dash-card-head"><h2>Referral link tracking</h2><span class="adm-sub">Total currently owed to affiliates: <strong id="admAffiliateOwed"></strong></span></div>
+              <p class="adm-sub" style="margin:-4px 0 12px;">Per-product only - a link only earns 20% on the exact product it points to, not the rest of that order.</p>
+              <table class="dash-table">
+                <thead><tr><th>Code</th><th>Owner</th><th>Sales</th><th>Earned</th></tr></thead>
+                <tbody id="admReferralBody"></tbody>
+              </table>
+            </div>
+
+            <div class="dash-card glass dash-tablewrap">
+              <div class="dash-card-head"><h2>Referral payout requests</h2><span class="adm-sub">Reviewed and sent manually - nothing here is automated.</span></div>
+              <table class="dash-table">
+                <thead><tr><th>Requested</th><th>User</th><th>Method</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+                <tbody id="admPayoutsBody"></tbody>
+              </table>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Email marketing</h2><span class="adm-sub">Sent via Resend from noreply@coldd.dev.</span></div>
+              <div id="admEmailConfigWarning"></div>
+              <div class="dash-stats" id="admEmailStats"></div>
+
+              <details class="adm-collapse" style="margin-top:22px;">
+                <summary class="dash-card-head"><div><h2>Subscriber list</h2><span class="adm-sub">Every account with an email address. Campaigns skip anyone Unsubscribed or Banned.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="adm-collapse-body">
+              <div class="adm-form" style="flex-wrap:wrap;gap:8px;">
+                <input maxlength="200" type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
+                <button class="btn btn-ghost adm-btn-sm" id="admEmailListCopyBtn" type="button">Copy sendable addresses</button>
+              </div>
+              <div class="dash-tablewrap" style="margin-top:12px;">
+                <table class="dash-table">
+                  <thead><tr><th>Email</th><th>Status</th><th>Joined</th></tr></thead>
+                  <tbody id="admEmailListBody"></tbody>
+                </table>
+              </div>
+              <p class="adm-note" id="admEmailListNote" style="margin-top:8px;"></p>
+                </div>
+              </details>
+
+              <div class="dash-card-head" style="margin-top:22px;"><div><h2>Templates</h2><span class="adm-sub">Reusable subject + body. Saved to the account, not this browser.</span></div></div>
+              <div class="adm-form" id="admTemplateBar" style="flex-wrap:wrap;gap:8px;">
+                <div class="adm-dd" id="admTemplateDD" style="flex:1;min-width:200px;">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val placeholder">No saved templates</span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Saved templates" hidden></div>
+                </div>
+                <input type="hidden" id="admTemplateSel" />
+                <button class="btn btn-ghost adm-btn-sm" id="admTemplateLoadBtn" type="button">Load</button>
+                <button class="btn btn-ghost adm-btn-sm" id="admTemplateDelBtn" type="button">Delete</button>
+                <button class="btn btn-tinted adm-btn-sm" id="admTemplateSaveBtn" type="button">Save current as template</button>
+              </div>
+              <div class="adm-edit-msg" id="admTemplateMsg"></div>
+
+              <div class="dash-card-head" style="margin-top:22px;"><h2>New campaign</h2></div>
+              <form class="adm-form" id="admCampaignForm" style="flex-direction:column;align-items:stretch;gap:10px;">
+                <div id="admCampaignAudienceWrap" hidden>
+                  <div class="bt-switch adm-campaign-audience" style="margin-bottom:6px;" role="tablist" aria-label="Audience">
+                    <button class="bt-opt active" type="button" data-audience="marketing" role="tab" aria-selected="true">Marketing</button>
+                    <button class="bt-opt" type="button" data-audience="announcement" role="tab" aria-selected="false">Announcement</button>
+                  </div>
+                  <p class="adm-note" id="admCampaignAudienceHint" style="margin:0 0 4px;">Goes to opted-in subscribers only.</p>
+                </div>
+                <label class="adm-field"><span>Subject</span><input maxlength="200" type="text" id="admCampaignSubject" class="adm-input" placeholder="What's new at coldd" required /></label>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+                  <div class="bt-switch adm-campaign-mode" style="margin-bottom:0;" role="tablist" aria-label="Body format">
+                    <button class="bt-opt active" type="button" data-mode="simple" role="tab" aria-selected="true">Simple text</button>
+                    <button class="bt-opt" type="button" data-mode="html" role="tab" aria-selected="false">Raw HTML</button>
+                  </div>
+                  <button class="btn btn-ghost adm-btn-sm" id="admCampaignPreviewBtn" type="button" aria-expanded="false">Preview</button>
+                </div>
+                <label class="adm-field"><span id="admCampaignBodyLabel">Body</span><textarea maxlength="20000" id="admCampaignBody" class="adm-input adm-textarea" rows="8" placeholder="Write your email. Blank lines start a new paragraph, **text** for bold." required></textarea></label>
+                <div class="adm-campaign-preview" id="admCampaignPreviewWrap" hidden>
+                  <div class="adm-campaign-preview-head">Preview - how this renders in an inbox</div>
+                  <iframe class="adm-campaign-preview-frame" id="admCampaignPreviewFrame" title="Email preview" sandbox=""></iframe>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                  <input maxlength="254" type="email" id="admCampaignTestEmail" class="adm-input" placeholder="test@example.com" style="max-width:220px;" />
+                  <button class="btn btn-ghost adm-btn-sm" id="admCampaignTestBtn" type="button">Send test</button>
+                  <span style="flex:1;"></span>
+                  <button class="btn btn-primary adm-btn-sm" id="admCampaignSendBtn" type="submit"><span class="btn-label">Send to opted-in subscribers</span><span class="btn-spinner" hidden></span></button>
+                </div>
+                <div class="adm-edit-msg" id="admCampaignMsg"></div>
+              </form>
+
+              <div class="dash-card-head" style="margin-top:22px;"><h2>Sent campaigns</h2></div>
+              <div class="dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>Date</th><th>Subject</th><th>Status</th><th>Sent</th><th>Failed</th><th>Opened</th><th>Clicked</th></tr></thead>
+                  <tbody id="admEmailCampaignsBody"></tbody>
+                </table>
+              </div>
+
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><div><h2>Broadcast notification</h2><span class="adm-sub">Sends an in-app "bell" notification to everyone at once. Not email - it shows next time they load the site.</span></div></div>
+              <form class="adm-form" id="admBroadcastForm" style="flex-direction:column;align-items:stretch;gap:10px;">
+                <div style="display:flex;gap:14px;flex-wrap:wrap;">
+                  <div>
+                    <span class="adm-field-label">Audience</span>
+                    <div class="bt-switch" id="admBroadcastAudience" role="tablist" aria-label="Audience" style="margin:4px 0 0;">
+                      <button class="bt-opt active" type="button" data-audience="all" role="tab" aria-selected="true">All accounts</button>
+                      <button class="bt-opt" type="button" data-audience="customers" role="tab" aria-selected="false">Customers only</button>
+                    </div>
+                  </div>
+                  <div>
+                    <span class="adm-field-label">Type</span>
+                    <div class="bt-switch" id="admBroadcastKind" role="tablist" aria-label="Type" style="margin:4px 0 0;">
+                      <button class="bt-opt active" type="button" data-kind="general" role="tab" aria-selected="true">General</button>
+                      <button class="bt-opt" type="button" data-kind="sale" role="tab" aria-selected="false">Sale alert</button>
+                    </div>
+                  </div>
+                </div>
+                <p class="adm-note" id="admBroadcastKindHint" style="margin:0;">Goes to every account in the audience.</p>
+                <label class="adm-field"><span>Title</span><input type="text" id="admBroadcastTitle" class="adm-input" placeholder="Store-wide sale is live" maxlength="120" required /></label>
+                <label class="adm-field"><span>Message (optional)</span><textarea id="admBroadcastBody" class="adm-input adm-textarea" rows="3" maxlength="400" placeholder="Up to 40% off everything until Sunday."></textarea></label>
+                <label class="adm-field"><span>Link (optional)</span><input maxlength="200" type="text" id="admBroadcastUrl" class="adm-input" placeholder="/shop?sort=deals" /></label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <span style="flex:1;"></span>
+                  <button class="btn btn-primary adm-btn-sm" id="admBroadcastSendBtn" type="submit"><span class="btn-label">Send broadcast</span><span class="btn-spinner" hidden></span></button>
+                </div>
+                <div class="adm-edit-msg" id="admBroadcastMsg"></div>
+              </form>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Lifecycle automations</h2><span class="adm-sub">Runs every 30 minutes. Off by default - nothing sends until you turn each one on.</span></div>
+              <div id="admAutomationsBody"></div>
+            </div>
+          </section>
+
+          <div class="pay-overlay" id="admBroadcastConfirmOverlay" hidden>
+            <div class="pay-modal glass" style="max-width:440px;text-align:left;">
+              <h3 class="pay-title">Send this broadcast?</h3>
+              <p class="pay-sub" id="admBroadcastConfirmSummary"></p>
+              <p class="adm-note" id="admBroadcastConfirmWarn" style="margin:0 0 14px;"></p>
+              <p class="adm-note" style="margin:0 0 6px;">Type this code to confirm:</p>
+              <p class="dt-mono" id="admBroadcastConfirmCode" style="font-size:16px;letter-spacing:2px;margin:0 0 8px;" oncontextmenu="return false"></p>
+              <input maxlength="200" type="text" id="admBroadcastConfirmInput" class="adm-input" autocomplete="off" placeholder="Type the code" style="margin-bottom:12px;" />
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary adm-btn-sm" id="admBroadcastConfirmGo" type="button" disabled><span class="btn-label">Send now</span><span class="btn-spinner" hidden></span></button>
+                <button class="btn btn-ghost adm-btn-sm" id="admBroadcastConfirmCancel" type="button">Cancel</button>
+              </div>
+              <div class="adm-edit-msg" id="admBroadcastConfirmMsg"></div>
+            </div>
+          </div>
+
+          <section class="dash-panel" id="adm-panel-products" hidden>
+            <div class="dash-head"><h1>Product management</h1><p>Edit pricing and visibility, or add admin-only listings.</p></div>
+            <div class="adm-toolbar">
+              <input maxlength="200" type="text" id="admProdSearch" class="adm-input" placeholder="Search by product name…" />
+              <div class="adm-dd adm-dd-inline" id="admProdSortDD">
+                <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="adm-dd-val"></span>
+                  <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="adm-dd-menu" role="listbox" aria-label="Sort products" hidden></div>
+              </div>
+              <span style="flex:1;"></span>
+              <button class="btn btn-ghost adm-btn-sm" type="button" id="admOpenUnreleasedPanel"><span>Unreleased files</span><span id="admUnreleasedCount" class="adm-sub" hidden></span></button>
+              <button class="btn btn-ghost adm-btn-sm" type="button" id="admOpenUpdatePanel">Push Update</button>
+              <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenCreatePanel">+ Create Product</button>
+            </div>
+            <div class="dash-card glass dash-tablewrap">
+              <table class="dash-table adm-table-tight">
+                <thead><tr><th>Thumbnail</th><th>Product Name</th><th>Category</th><th>Rating</th><th>Purchases</th><th></th></tr></thead>
+                <tbody id="admProdBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-unreleased" hidden>
+            <div class="dash-head">
+              <a href="#" class="dt-link lnk-back" data-panel="products">Back to Products</a>
+              <h1>Unreleased files</h1>
+              <p>A place to drop files you don't want to lose, until they're ready to become real products.</p>
+            </div>
+            <div class="dash-card glass">
+              <div class="adm-dropzone" id="admUnreleasedDrop">
+                <input type="file" id="admUnreleasedInput" multiple hidden />
+                <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                <p><strong>Click to upload</strong> or drag and drop</p>
+                <p class="adm-dropzone-hint">Any file type - multiple allowed</p>
+              </div>
+              <div class="adm-file-list" id="admUnreleasedList"></div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-product-edit" hidden>
+            <button type="button" class="btn btn-primary adm-sticky-save" id="admEditStickySave"><span class="btn-label">Save changes</span><span class="btn-spinner" hidden></span></button>
+            <div class="dash-head">
+              <a href="#" class="dt-link lnk-back" data-panel="products">Back to Products</a>
+              <h1 id="admEditHeading">Edit product</h1>
+                          </div>
+            <form id="admEditForm">
+              <input type="hidden" id="admEditId" />
+
+              <div class="dash-card glass" id="admMpUploadCard">
+                <div class="adm-mp-checks" id="admMpUploadChecks">
+                  <span class="adm-mp-lead">Uploaded on</span>
+                  <label class="adm-mp-check mk-builtbybit"><input type="checkbox" data-mp="builtbybit" /><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" /><span>BuiltByBit</span></label>
+                  <label class="adm-mp-check mk-clearlydev"><input type="checkbox" data-mp="clearlydev" /><img class="adm-mp-logo" src="/mp-logos/clearlydev.png" alt="" width="22" height="22" /><span>ClearlyDev</span></label>
+                  <label class="adm-mp-check mk-parcel"><input type="checkbox" data-mp="parcel" /><img class="adm-mp-logo" src="/mp-logos/parcel.png" alt="" width="22" height="22" /><span>Parcel</span></label>
+                  <label class="adm-mp-check mk-creatorstore"><input type="checkbox" data-mp="creatorstore" /><img class="adm-mp-logo" src="/mp-logos/creatorstore.png" alt="" width="22" height="22" /><span>Creator Store</span></label>
+                </div>
+              </div>
+
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2>Details</h2></div>
+                <input type="hidden" id="admEditPlatform" value="Roblox" />
+                <div class="adm-edit-grid">
+                  <label class="adm-field adm-field-wide"><span>Title</span><input maxlength="120" type="text" id="admEditTitleInput" class="adm-input" required /></label>
+                  <label class="adm-field"><span>Category</span>
+                    <div class="adm-dd" id="admEditCatDD">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val placeholder">Select category</span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Category" hidden></div>
+                    </div>
+                    <input type="hidden" id="admEditCat" />
+                  </label>
+                  <label class="adm-field"><span>Subcategories</span>
+                    <div class="adm-dd" id="admEditSubcatDD">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val placeholder">None</span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Subcategory" hidden></div>
+                    </div>
+                    <input type="hidden" id="admEditSubcat" />
+                  </label>
+                  <label class="adm-field"><span>Price (USD)</span><input type="number" min="0" step="0.01" id="admEditPrice" class="adm-input" required /></label>
+                  <label class="adm-field">
+                    <span>Price (Robux)</span>
+                    <input type="number" min="0" step="1" id="admEditRobuxPrice" class="adm-input" />
+                  </label>
+                  <label class="adm-field-check adm-field-wide" style="margin-top:0;"><input type="checkbox" id="admEditResell" /> <span>Resell licence available</span></label>
+                  <label class="adm-field-check adm-field-wide" style="margin-top:0;"><input type="checkbox" id="admEditNoRobux" /> <span>Disable Robux pricing</span></label>
+                  <small class="adm-sub adm-field-wide" id="admEditResellBar" hidden>Not available: this product's license type is Resell Rights, which doesn't allow us to sell resell licenses. Add Resell+ in the Legal section to allow them.</small>
+                  <label class="adm-field" id="admEditResellPriceWrap" hidden>
+                    <span>Resell licence price (USD)</span><input type="number" min="0" step="0.01" id="admEditResellPrice" class="adm-input" />
+                  </label>
+                  <label class="adm-field" id="admEditResellRobuxPriceWrap" hidden style="display:none !important">
+                    <span>Resell licence price (Robux)</span><input type="number" min="0" step="1" id="admEditResellRobuxPrice" class="adm-input" />
+                  </label>
+                </div>
+
+                <label class="adm-field adm-field-wide" style="margin-top:20px;"><span>Summary</span><input type="text" id="admEditSubtext" class="adm-input" maxlength="100" /></label>
+                <div class="adm-field adm-field-wide" style="margin-top:16px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admEditBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea maxlength="20000" id="admEditLongDesc" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></div>
+
+                <label class="adm-field-check" style="margin-top:20px;"><input type="checkbox" id="admEditPrivate" /> <span>Hide in catalog</span></label>
+                <label class="adm-field-check"><input type="checkbox" id="admEditPriority" /> <span>Priority placements</span></label>
+                <span id="admEditWasPriceWrap" hidden><input type="hidden" id="admEditWasPrice" /></span>
+              </div>
+
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2>Media</h2></div>
+
+                <div class="adm-field">
+                  <span>Thumbnail image</span>
+                  <div class="adm-dropzone" id="admEditThumbDrop">
+                    <input type="file" id="admEditThumbInput" accept=".gif,.png,.jpg,.jpeg,.zip,.mp4" hidden />
+                    <div class="adm-dropzone-empty" id="admEditThumbEmpty">
+                      <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                      <p><strong>Click to upload</strong> or drag and drop</p>
+                    </div>
+                    <div class="adm-dropzone-preview" id="admEditThumbPreviewWrap" hidden>
+                      <img id="admEditThumbPreview" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" />
+                      <button type="button" class="adm-icon-btn adm-dropzone-remove" id="admEditThumbRemove"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+                    </div>
+                  </div>
+                  <input type="hidden" id="admEditThumbUrl" />
+                </div>
+
+                <div class="adm-field" style="margin-top:20px;">
+                  <span>Gallery images</span>
+                  <div class="adm-dropzone adm-dropzone-sm" id="admEditGalleryDrop">
+                    <input type="file" id="admEditGalleryInput" accept=".gif,.png,.jpg,.jpeg,.zip,.mp4" multiple hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop files</p>
+                  </div>
+                  <div class="adm-gallery-grid" id="admEditGalleryList"></div>
+                </div>
+
+                <label class="adm-field" style="margin-top:20px;max-width:420px;"><span>YouTube demo link</span><input maxlength="2048" type="url" id="admEditVideoUrl" class="adm-input" placeholder="https://youtube.com/watch?v=…" /></label>
+                <label class="adm-field" style="margin-top:14px;max-width:420px;"><span>Roblox test link (optional)</span><input maxlength="2048" type="url" id="admEditTestUrl" class="adm-input" placeholder="https://www.roblox.com/games/…" /></label>
+                <p class="adm-hint">Adds a "Can I test this game out in Roblox?" answer to this product's FAQ. Leave blank to hide it.</p>
+
+                <div class="adm-field" style="margin-top:20px;">
+                  <span>Product file</span>
+                  <div class="adm-dropzone" id="admEditFileDrop">
+                    <input type="file" id="admEditFileInput" accept=".zip,.rbxm,.rbxl" hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop</p>
+                  </div>
+                  <div class="adm-filecard" id="admEditFileNote" hidden></div>
+                  <input type="hidden" id="admEditTechFileName" />
+                </div>
+
+                <!-- Per-product add-ons: optional extras sold alongside this product (a setup service, an
+                     unwatermarked thumbnail, ...). Each row has its own price; the file is what the buyer
+                     receives after purchase. Rows are built by admin.js. -->
+                <div class="adm-field adm-addons" id="admAddons" style="margin-top:20px;">
+                  <span>Add-ons</span>
+                  <div class="adm-addon-cols" aria-hidden="true"><span>Title</span><span>Description</span><span>USD price</span><span>Robux price</span><span>File (optional)</span><span></span></div>
+                  <div class="adm-addon-list" id="admAddonList"></div>
+                  <p class="adm-hint adm-addon-empty" id="admAddonEmpty">No add-ons on this product.</p>
+                  <div><button type="button" class="btn btn-ghost adm-btn-sm" id="admAddonAdd">Add add-on</button></div>
+                  <p class="adm-hint">Optional extras buyers can add to this product. Pick a template from the title field to fill in the rest, then edit anything. An add-on with "setup" in its title asks the buyer to open a Discord ticket after they pay.</p>
+                </div>
+              </div>
+
+              <!-- Format/size are read automatically off the uploaded file (see
+                   admEditTechFormat/admEditTechSize below) - no separate card to
+                   look at or fill in, just the hidden fields the save payload reads. -->
+              <input maxlength="200" type="text" id="admEditTechFormat" hidden />
+              <input maxlength="200" type="text" id="admEditTechSize" hidden />
+
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2>Legal</h2><button type="button" class="btn btn-ghost adm-btn-sm" id="admLegalDownloadBtn" hidden><span class="btn-label">Download legal info (.docx)</span><span class="btn-spinner" hidden></span></button></div>
+
+                <div class="adm-field" style="margin-top:16px;">
+                  <span>License types <span class="adm-sub">(pick all that apply)</span></span>
+                  <div class="adm-dd" id="admLegalLicenseTypeDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val placeholder">Select license types</span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="License types" hidden></div>
+                  </div>
+                  <input type="hidden" id="admLegalLicenseType" />
+                  <small class="adm-sub" id="admLegalLicenseTypeHelp"></small>
+                </div>
+
+                <div id="admLegalRevShare" hidden>
+                  <div class="adm-edit-grid" style="margin-top:16px;">
+                    <label class="adm-field"><span>Revenue share owed to the owner (%)</span><input type="number" min="0" max="100" step="0.01" id="admLegalRevSharePct" class="adm-input" placeholder="e.g. 20" /></label>
+                    <label class="adm-field"><span>Payment platform</span><input type="text" id="admLegalRevSharePlatform" class="adm-input" maxlength="60" placeholder="e.g. PayPal" /></label>
+                    <label class="adm-field adm-field-wide"><span>Payment link</span><input type="text" id="admLegalRevShareLink" class="adm-input" maxlength="300" placeholder="Their payment link or address" /></label>
+                  </div>
+                  <small class="adm-sub">The person being paid is the licenser listed under Licenser contact details below. Nothing is paid automatically yet; this is recorded so a payout tracker can use it later.</small>
+                </div>
+
+                <label class="adm-field adm-field-wide" style="margin-top:16px;"><span>Terms of Service</span><textarea maxlength="20000" id="admLegalTos" class="adm-input adm-textarea adm-autogrow" rows="4"></textarea></label>
+
+                <div class="adm-field" style="margin-top:20px;">
+                  <span>Proof of license</span>
+                  <div class="adm-dropzone adm-dropzone-sm" id="admLegalProofDrop">
+                    <input type="file" id="admLegalProofInput" multiple accept=".zip,.mp4,.png,.jpg,.jpeg,.pdf" hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop files</p>
+                  </div>
+                  <div class="adm-file-list" id="admLegalProofList"></div>
+                </div>
+
+                <div class="adm-field" style="margin-top:20px;">
+                  <span>Proof of development</span>
+                  <div class="adm-dropzone adm-dropzone-sm" id="admLegalDevProofDrop">
+                    <input type="file" id="admLegalDevProofInput" multiple accept=".zip,.mp4,.png,.jpg,.jpeg,.pdf" hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop files</p>
+                  </div>
+                  <div class="adm-file-list" id="admLegalDevProofList"></div>
+                </div>
+
+                <div class="adm-field" style="margin-top:20px;">
+                  <span>Licenser contact details</span>
+                  <div class="adm-contact-list" id="admLegalContactList"></div>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admLegalContactAdd" style="margin-top:10px;">+ Add contact</button>
+                </div>
+
+                <input type="hidden" id="admLegalCostAmount" value="0" />
+                <input type="hidden" id="admLegalCostCurrency" value="usd" />
+                <div class="adm-edit-grid" style="margin-top:20px;">
+                  <label class="adm-field"><span>Date license was purchased</span><input type="date" id="admLegalPurchasedAt" class="adm-input" /></label>
+                  <label class="adm-field"><span>Maximum discount (%)</span><input type="number" min="0" max="100" step="1" id="admLegalMaxDiscount" class="adm-input" placeholder="0 = no cap" /></label>
+                </div>
+
+                <div class="adm-edit-grid" style="margin-top:20px;">
+                  <label class="adm-field"><span>Minimum regular price (USD)</span><input type="number" min="0" step="0.01" id="admLegalMinRegularUsd" class="adm-input" autocomplete="off" placeholder="0 = no minimum" /></label>
+                  <label class="adm-field"><span>Minimum regular price (Robux)</span><input type="number" min="0" step="1" id="admLegalMinRegularRobux" class="adm-input" autocomplete="off" placeholder="0 = no minimum" /></label>
+                </div>
+
+                <div class="adm-edit-grid" style="margin-top:20px;">
+                  <label class="adm-field"><span>Minimum sale price (USD)</span><input type="number" min="0" step="0.01" id="admLegalMinUsd" class="adm-input" autocomplete="off" /></label>
+                  <label class="adm-field"><span>Minimum sale price (Robux)</span><input type="number" min="0" step="1" id="admLegalMinRobux" class="adm-input" autocomplete="off" /></label>
+                </div>
+
+                <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admLegalCannotBeFree" /> <span>Cannot be given away for free</span></label>
+                <label class="adm-field-check"><input type="checkbox" id="admLegalDisallowSales" /> <span>Disallow from all sales</span></label>
+              </div>
+
+              <div class="adm-edit-actions">
+                <button class="btn btn-primary" type="submit" id="admEditSaveBtn">Save changes</button>
+                <button class="btn btn-ghost" type="button" id="admEditDeleteBtn" hidden>Delete product</button>
+              </div>
+              <div class="adm-edit-msg" id="admEditMsg"></div>
+            </form>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-product-update" hidden>
+            <div class="dash-head">
+              <a href="#" class="dt-link lnk-back" data-panel="products">Back to Products</a>
+              <h1>Push product update</h1>
+            </div>
+            <div class="dash-card glass">
+              <div class="adm-field" id="admUpdSearchField">
+                <span>Select product</span>
+                <input maxlength="200" type="text" id="admUpdSearch" class="adm-input" placeholder="Search by product name…" autocomplete="off" />
+                <div class="adm-upd-results" id="admUpdResults"></div>
+              </div>
+
+              <div id="admUpdSelected" hidden>
+                <div class="adm-upd-selected-card">
+                  <span class="dr-thumb" id="admUpdThumb"></span>
+                  <span id="admUpdSelectedName"></span>
+                  <button type="button" class="dt-link adm-upd-change" id="admUpdChange">Change product</button>
+                </div>
+
+                <label class="adm-field-check" style="margin-top:18px;"><input type="checkbox" id="admUpdSilent" /> <span>Silent update (file only)</span></label>
+
+                <div class="adm-edit-grid" id="admUpdVersionGrid" style="margin-top:18px;">
+                  <label class="adm-field"><span>Version number</span><input maxlength="200" type="text" id="admUpdVersion" class="adm-input" placeholder="v1.1" /></label>
+                  <label class="adm-field adm-field-wide"><span>Changelog</span><textarea maxlength="20000" id="admUpdChangelog" class="adm-input adm-textarea" rows="4" placeholder="What changed in this version?"></textarea></label>
+                </div>
+
+                <div class="adm-field" style="margin-top:18px;">
+                  <span>File</span>
+                  <div class="adm-dropzone" id="admUpdFileDrop">
+                    <input type="file" id="admUpdFileInput" accept=".zip,.rbxm,.rbxl" hidden />
+                    <svg class="adm-dropzone-ic" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    <p><strong>Click to upload</strong> or drag and drop</p>
+                  </div>
+                  <div class="adm-filecard" id="admUpdFileNote" hidden></div>
+                </div>
+
+                <div class="adm-field adm-field-wide" id="admUpdDescField" style="margin-top:18px;"><div class="adm-field-headrow"><span>Description</span><button type="button" class="adm-mini-btn" id="admUpdBullets" title="Turn the selected lines into bullet points (click again to undo)">• Bullets</button></div><textarea maxlength="20000" id="admUpdDescInput" class="adm-input adm-textarea adm-autogrow" rows="6"></textarea></div>
+
+                <div class="adm-mp-checks" id="admUpdMpChecks" style="margin-top:20px;"></div>
+
+                <div class="adm-edit-actions">
+                  <button class="btn btn-primary" type="button" id="admUpdSubmit">Push update</button>
+                </div>
+                <div class="adm-edit-msg" id="admUpdMsg"></div>
+
+                <div class="adm-upd-history" id="admUpdHistory"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-marketplaces" hidden>
+            <div class="dash-head"><h1>Marketplaces</h1><p>What still needs doing on BuiltByBit, ClearlyDev, Parcel and Creator Store.</p></div>
+            <div class="dash-stats adm-stats-4" id="admMpStats"></div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Add a task</h2></div>
+              <form class="adm-mp-add" id="admMpAddForm">
+                <div class="adm-dd" id="admMpProductDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val placeholder">Product</span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Product" hidden></div>
+                </div>
+                <input type="hidden" id="admMpProduct" />
+                <div class="adm-dd" id="admMpMarketDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val placeholder">Marketplace</span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Marketplace" hidden></div>
+                </div>
+                <input type="hidden" id="admMpMarket" />
+                <input type="text" id="admMpTaskTitle" class="adm-input" placeholder="Enter task..." maxlength="200" autocomplete="off" />
+                <button class="btn btn-primary adm-btn-sm" type="submit">Add task</button>
+              </form>
+              <div class="adm-edit-msg" id="admMpMsg"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>To do</h2><div class="adm-mp-filter" id="admMpFilter" role="group" aria-label="Marketplace filter"></div></div>
+              <div id="admMpTasks"></div>
+            </div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Recently completed</h2></div>
+              <div id="admMpDoneLog"></div>
+            </div>
+
+          </section>
+
+          <section class="dash-panel" id="adm-panel-orders" hidden>
+            <div class="dash-head"><h1>Order management</h1><p>Every order from the storefront and BuiltByBit, newest first.</p></div>
+            <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
+            <div class="dash-filter-row">
+              <label class="dash-filter-field"><span>Status</span>
+                <div class="adm-dd adm-dd-inline" id="admOrderStatusFilterDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Order status" hidden></div>
+                </div>
+              </label>
+              <label class="dash-filter-field"><span>Channel</span>
+                <div class="adm-mp-filter" id="admOrderChannel" role="group" aria-label="Order channel">
+                  <button type="button" data-ch="all" class="active">All</button>
+                  <button type="button" data-ch="site">Website</button>
+                  <button type="button" data-ch="bbb">BuiltByBit</button>
+                </div>
+              </label>
+            </div>
+            <div class="dash-card glass">
+              <div class="dash-rows" id="admOrdersBody"><p class="dash-empty-note">Loading…</p></div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-order-detail" hidden>
+            <div class="dash-head"><a href="#" data-panel="orders" class="lnk-back">Back to orders</a></div>
+            <div id="admOrderDetailBody"></div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-resellers" hidden>
+            <div class="dash-head"><h1>Resellers</h1><p>Every resell licence sold, whether or not the seller has filled in their info yet. Rows still waiting on seller info are listed first.</p></div>
+            <div class="adm-toolbar">
+              <input maxlength="200" type="text" id="admResellerSearch" class="adm-input" placeholder="Search by email, name, or product…" />
+              <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenResellerCreate">+ Add reseller</button>
+              <span class="adm-sub" id="admResellerCount"></span>
+            </div>
+            <div class="dash-card glass">
+              <div class="dash-rows" id="admResellersBody"><p class="dash-empty-note">Loading…</p></div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-reseller-edit" hidden>
+            <div class="dash-head">
+              <a href="#" class="dt-link lnk-back" data-panel="resellers">Back to Resellers</a>
+              <h1 id="admResellerEditHeading">Add reseller</h1>
+              <p>Onboard an existing reseller, or edit one's details.</p>
+            </div>
+            <form id="admResellerForm">
+              <input type="hidden" id="admResellerId" />
+              <div class="dash-card glass">
+                <div class="adm-edit-grid">
+                  <label class="adm-field"><span>Display name (optional)</span><input maxlength="120" type="text" id="admResellerName" class="adm-input" /></label>
+                  <label class="adm-field"><span>Product</span>
+                    <div class="adm-dd" id="admResellerProductDD">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val">None</span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Product" hidden></div>
+                    </div>
+                    <input type="hidden" id="admResellerProductId" />
+                  </label>
+                  <label class="adm-field"><span>Status</span>
+                    <div class="adm-dd" id="admResellerStatusDD">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val">Active</span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Status" hidden></div>
+                    </div>
+                    <input type="hidden" id="admResellerStatus" value="active" />
+                  </label>
+                  <div class="adm-field adm-field-wide rs-field" style="margin:0;">
+                    <span>Contact method</span>
+                    <div class="bt-switch adm-rs-contact-switch" id="admResellerContactSwitch" role="tablist" style="margin-bottom:8px;">
+                      <button class="bt-opt active" type="button" data-ctype="email" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>Email</button>
+                      <button class="bt-opt" type="button" data-ctype="discord" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>Discord</button>
+                    </div>
+                    <input maxlength="200" type="text" id="admResellerContact" class="rs-input" placeholder="you@example.com" autocomplete="off" />
+                  </div>
+                  <div class="adm-field adm-field-wide rs-field" style="margin:0;">
+                    <span>Where they sell</span>
+                    <div id="admResellerLocations"></div>
+                    <button type="button" class="btn btn-tinted rs-add-loc" id="admResellerAddLoc">+ Add another location</button>
+                  </div>
+                  <label class="adm-field adm-field-wide"><span>Notes</span><textarea maxlength="20000" id="admResellerNotes" class="adm-input adm-textarea" rows="3"></textarea></label>
+                </div>
+                <div class="adm-edit-actions">
+                  <button class="btn btn-primary" type="submit" id="admResellerSaveBtn"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
+                </div>
+                <div class="adm-edit-msg" id="admResellerMsg"></div>
+              </div>
+            </form>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-reviews" hidden>
+            <div class="dash-head"><h1>Review moderation</h1><p>Reviews go public immediately - hide the ones that shouldn't be, and reply to any that need a response.</p></div>
+            <div class="adm-toolbar">
+              <div class="adm-dd adm-dd-inline" id="admReviewFilterDD">
+                <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="adm-dd-val"></span>
+                  <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="adm-dd-menu" role="listbox" aria-label="Review status" hidden></div>
+              </div>
+            </div>
+            <div id="admReviewsList"></div>
+
+            <div class="dash-card glass">
+              <div class="dash-card-head"><h2>Import a review</h2></div>
+              <p class="adm-note">For reviews left on other platforms (BuiltByBit, Discord, etc.) that you want shown on the product page - published immediately, no moderation queue.</p>
+              <form class="adm-form" id="admImportReviewForm" style="flex-wrap:wrap;position:relative;">
+                <div style="position:relative;flex:1;min-width:220px;">
+                  <input maxlength="200" type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
+                  <div id="admImportReviewProductResults" class="adm-dd-menu" style="position:absolute;top:100%;left:0;right:0;z-index:20;" hidden></div>
+                </div>
+                <input type="hidden" id="admImportReviewProductSlug" />
+                <div class="adm-dd adm-dd-inline" id="admImportReviewStarsDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Stars" hidden></div>
+                </div>
+                <input type="hidden" id="admImportReviewStars" value="5" />
+                <input maxlength="120" type="text" id="admImportReviewName" class="adm-input adm-input-sm" placeholder="Reviewer name" required />
+                <input type="text" id="admImportReviewByline" class="adm-input adm-input-sm" placeholder="Role or company (optional)" maxlength="80" />
+                <div class="adm-dd adm-dd-inline" id="admImportReviewPlatformDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Review platform" hidden></div>
+                </div>
+                <input type="hidden" id="admImportReviewPlatform" value="BuiltByBit" />
+                <textarea maxlength="20000" id="admImportReviewText" class="adm-input adm-textarea" rows="3" placeholder="Review text" required></textarea>
+                <button class="btn btn-primary adm-btn-sm" type="submit">Import review</button>
+              </form>
+              <div class="co-msg" id="admImportReviewMsg"></div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-sales" hidden>
+            <div class="dash-head"><h1>Sales &amp; discounts</h1><p>Run sitewide sale events or create discount codes.</p></div>
+
+            <div class="adm-tabs" id="admSalesTypeToggle" style="margin-bottom:22px;">
+              <button type="button" class="adm-tab adm-sales-type-btn active" data-type="events">Sale Events</button>
+              <button type="button" class="adm-tab adm-sales-type-btn" data-type="codes">Discount Codes</button>
+              <button type="button" class="adm-tab adm-sales-type-btn" data-type="bundles">Bundle Deals</button>
+              <button type="button" class="adm-tab adm-sales-type-btn" data-type="homepage">Homepage</button>
+            </div>
+
+            <div id="admSalesEventsView">
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>Title</th><th>Discount</th><th>Scope</th><th>Dates</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admEventsBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2 id="admEventFormTitle">Create sale event</h2></div>
+                <form class="adm-form" id="admEventForm" style="flex-wrap:wrap;">
+                  <input type="hidden" id="admEventEditId" />
+                  <input maxlength="120" type="text" id="admEventTitle" class="adm-input" placeholder="Internal title" required />
+                  <input maxlength="200" type="text" id="admEventMessage" class="adm-input" placeholder="Banner message shown to customers" required style="flex:1;min-width:260px;" />
+                  <input type="number" id="admEventPercent" class="adm-input adm-input-sm" placeholder="% off" min="1" max="90" required />
+                  <div class="adm-dd" id="admEventScopeDD" style="max-width:220px;">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Scope" hidden></div>
+                  </div>
+                  <input type="hidden" id="admEventScope" value="sitewide" />
+                  <label class="adm-field" style="max-width:220px;"><span>Start date</span><input type="date" id="admEventStart" class="adm-input" required /></label>
+                  <label class="adm-field" style="max-width:220px;"><span>End date</span><input type="date" id="admEventEnd" class="adm-input" required /></label>
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admEventSubmitBtn">Create event</button>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admEventCancelBtn" hidden>Cancel edit</button>
+                </form>
+              </div>
+            </div>
+
+            <div id="admDiscountCodesView" hidden>
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>Code</th><th>Discount</th><th>Scope</th><th>Expires</th><th>Uses</th><th>Discount given</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admCouponsBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2 id="admCouponFormTitle">Create discount code</h2></div>
+                <form class="adm-form" id="admAddCouponForm" style="flex-wrap:wrap;">
+                  <input type="hidden" id="admCouponEditId" />
+                  <input maxlength="64" type="text" id="admNewCouponCode" class="adm-input adm-input-sm" placeholder="CODE" required />
+                  <div class="adm-dd" id="admNewCouponTypeDD" style="max-width:130px;">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Discount type" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewCouponType" value="pct" />
+                  <input type="number" id="admNewCouponVal" class="adm-input adm-input-sm" placeholder="Value" min="0" step="1" required />
+                  <input type="number" id="admNewCouponLimit" class="adm-input adm-input-sm" placeholder="Use limit (optional)" min="0" step="1" />
+                  <label class="adm-field" style="max-width:220px;"><span>Expires (optional)</span><input type="date" id="admNewCouponExpiry" class="adm-input" /></label>
+                  <div class="adm-dd" id="admCouponScopeDD" style="max-width:220px;">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Scope" hidden></div>
+                  </div>
+                  <input type="hidden" id="admCouponScope" value="sitewide" />
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admCouponSubmitBtn">Create discount code</button>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admCouponCancelBtn" hidden>Cancel edit</button>
+                </form>
+              </div>
+            </div>
+
+            <div id="admBundleDealsView" hidden>
+              <div class="dash-card glass dash-tablewrap">
+                <div class="dash-card-head adm-head-actions">
+                  <div><h2>Bundles</h2><span class="adm-sub">Products sold together at a discount. The discount applies on its own once every product in the bundle is in the cart, and never takes a product below its price limits.</span></div>
+                  <button class="btn btn-primary adm-btn-sm" type="button" id="admBundleNew">New bundle</button>
+                </div>
+                <table class="dash-table">
+                  <thead><tr><th>Bundle</th><th>Products</th><th>Discount</th><th>Price</th><th>Status</th><th></th></tr></thead>
+                  <tbody id="admCuratedBundlesBody"></tbody>
+                </table>
+              </div>
+
+              <div class="dash-card glass" id="admBundleEditor" hidden>
+                <div class="dash-card-head"><h2 id="admBundleFormTitle">New bundle</h2></div>
+                <form id="admBundleForm" novalidate>
+                  <input type="hidden" id="admBundleToken" />
+                  <div class="adm-edit-grid">
+                    <label class="adm-field adm-field-wide"><span>Title</span><input maxlength="80" type="text" id="admBundleTitle" class="adm-input" required /></label>
+                    <div class="adm-tpl adm-field-wide" id="admBundleTitleTpl" hidden></div>
+                    <label class="adm-field adm-field-wide"><span>Description (optional)</span><textarea maxlength="300" rows="2" id="admBundleDesc" class="adm-input adm-textarea"></textarea></label>
+                    <div class="adm-tpl adm-field-wide" id="admBundleDescTpl" hidden></div>
+                    <div class="adm-field adm-field-wide">
+                      <span>Products (2 to 8, all Roblox or all Minecraft)</span>
+                      <div class="adm-dd" id="admBundleProductsDD">
+                        <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="adm-dd-val placeholder">Select products</span>
+                          <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="adm-dd-menu" role="listbox" aria-label="Products in this bundle" hidden></div>
+                      </div>
+                      <input type="hidden" id="admBundleProducts" />
+                    </div>
+                    <div class="adm-field">
+                      <span>Cover image</span>
+                      <div class="adm-dd" id="admBundleCoverDD">
+                        <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="adm-dd-val placeholder">Most popular product (automatic)</span>
+                          <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="adm-dd-menu" role="listbox" aria-label="Cover product" hidden></div>
+                      </div>
+                      <input type="hidden" id="admBundleCover" />
+                    </div>
+                    <label class="adm-field"><span>Discount (%)</span><input type="number" id="admBundleDiscount" class="adm-input" min="1" max="60" step="1" required /></label>
+                  </div>
+                  <div class="adm-bundle-limit" id="admBundleLimit" hidden></div>
+                  <div class="adm-bundle-preview" id="admBundlePreview" hidden></div>
+                  <label class="adm-field-check"><input type="checkbox" id="admBundleActive" checked /> <span>Active (shown on the site and discounting)</span></label>
+                  <div class="adm-form-actions">
+                    <button class="btn btn-primary" type="submit" id="admBundleSubmitBtn">Save bundle</button>
+                    <button class="btn btn-ghost" type="button" id="admBundleCancelBtn">Cancel</button>
+                  </div>
+                  <div class="adm-edit-msg" id="admBundleMsg"></div>
+                </form>
+              </div>
+
+              <div class="dash-card glass">
+                <div class="dash-card-head adm-head-actions">
+                  <div><h2>Suggested bundles</h2><span class="adm-sub">Matched from each product's genre and keywords, most relevant first. A set that can't be discounted without breaking a product's price limits is never suggested.</span></div>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admBundleSuggestRefresh">Refresh</button>
+                </div>
+                <div class="adm-sugg-list" id="admBundleSuggestions"><p class="adm-hint">Open this tab to load suggestions.</p></div>
+              </div>
+
+              <div class="dash-card glass dash-tablewrap">
+                <div class="dash-card-head"><h2>Auto-minted bundle deals</h2><span class="adm-sub">Created by the post-purchase "Build more for less" upsell and the wishlist reminder email, not by hand.</span></div>
+                <table class="dash-table">
+                  <thead><tr><th>Products</th><th>Item / Bundle</th><th>Source</th><th>Minted</th><th>Expires</th></tr></thead>
+                  <tbody id="admBundleDealsBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="admHomepageView" hidden>
+              <div class="dash-card glass dash-tablewrap">
+                <div class="dash-card-head"><h2>Featured products</h2><span class="adm-sub">Shown on the homepage's "Featured products" section, in this order.</span></div>
+                <table class="dash-table">
+                  <thead><tr><th>Order</th><th>Title</th><th>Price</th><th></th></tr></thead>
+                  <tbody id="admFeaturedBody"></tbody>
+                </table>
+                <form class="adm-form" id="admFeaturedAddForm" style="flex-wrap:wrap;margin-top:14px;">
+                  <div class="adm-dd adm-dd-inline" id="admFeaturedAddDD" style="min-width:260px;">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Product to feature" hidden></div>
+                  </div>
+                  <input type="hidden" id="admFeaturedAddId" required />
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admFeaturedAddBtn">Add to featured</button>
+                </form>
+                <div class="adm-edit-msg" id="admFeaturedMsg"></div>
+              </div>
+              <div class="dash-card glass dash-tablewrap">
+                <div class="adm-wd-head">
+                  <div class="adm-wd-title"><h2>This week's deals</h2><p class="adm-sub">Picked automatically every Monday by a revenue-maximizing algorithm. Never above <span id="admWeeklyMaxPctLabel">40</span>% off and never below a product's minimum sale price. See "How this works" below.</p></div>
+                  <div class="adm-wd-actions">
+                    <button class="btn btn-tinted adm-btn-sm" id="admWeeklyDealsRunNow" type="button"><span class="btn-label">Run now</span><span class="btn-spinner" hidden></span></button>
+                    <button class="btn btn-ghost adm-btn-sm" id="admWeeklyDealsRevertAll" type="button">Revert all</button>
+                  </div>
+                </div>
+                <div class="adm-wd-settings">
+                  <label class="adm-wd-set"><span>Max discount</span><span class="adm-wd-inp"><input type="number" min="1" max="90" step="1" id="admWeeklyMaxPct" class="adm-input" /><em>%</em></span></label>
+                  <label class="adm-wd-set"><span>Discount step</span><span class="adm-wd-inp"><input type="number" min="1" max="90" step="1" id="admWeeklyStepPct" class="adm-input" /><em>%</em></span></label>
+                  <button class="btn btn-primary adm-btn-sm" id="admWeeklySettingsSave" type="button"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
+                  <div class="adm-edit-msg adm-wd-msg" id="admWeeklyDealsMsg"></div>
+                </div>
+                <table class="dash-table adm-wd-table">
+                  <thead><tr><th>Product</th><th>Was</th><th>Now</th><th>Off</th><th>Source</th><th></th></tr></thead>
+                  <tbody id="admWeeklyDealsBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass dash-tablewrap" id="admWeeklyExcludedCard" hidden>
+                <div class="dash-card-head"><h2>Excluded from weekly deals</h2></div>
+                <table class="dash-table">
+                  <thead><tr><th>Title</th><th>Price</th><th></th></tr></thead>
+                  <tbody id="admWeeklyExcludedBody"></tbody>
+                </table>
+              </div>
+              <details class="adm-collapse" style="margin-top:20px;">
+                <summary class="dash-card-head"><h2>How this works</h2><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <div class="adm-collapse-body">
+                  <p class="adm-note"><strong>Which products.</strong> Every Monday at 00:00 UTC each eligible product gets a demand score blended from real signals: BuiltByBit sales of the same listing and of similar listings (recent sales count more), product page views on this site over the last 14 days, and paid units on this site over the last 30 days. The weights re-balance over whichever signals have data, so site sales take over as they build up. The runaway best seller is held back (it sells without help), anything discounted in the last two weeks is rotated out, and no more than two products come from one category. Products marked "Disallow from all sales" or excluded below are skipped.</p>
+                  <p class="adm-note" style="margin-top:10px;"><strong>How deep.</strong> Each deal is logged. The next run records the views and sales it earned, and the algorithm learns which discount depth earns the most revenue per visitor: it samples each depth's conversion rate from your own results and picks the depth with the best expected revenue (price after discount x conversion). With no results yet it tries the depths evenly, and it settles on the winner as data comes in. Depths come from the Max discount and Discount step above and never go past a product's minimum sale price or its own max discount.</p>
+                  <p class="adm-note" style="margin-top:10px;">It writes the discount using the same "Was price" field the product editor already uses for a manual sale, so it never conflicts with a sale you set by hand. It only ever touches products it discounted itself, and always restores the exact original price on revert or at the next run.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-content" hidden>
+            <div class="dash-head"><h1>Blog &amp; Tutorials</h1><p>Write, edit, and publish articles and tutorials.</p></div>
+            <div class="adm-tabs" id="admContentTypeToggle" style="margin-bottom:22px;">
+              <button type="button" class="adm-tab adm-content-type-btn active" data-type="posts">Blog Posts</button>
+              <button type="button" class="adm-tab adm-content-type-btn" data-type="tutorials">Tutorials</button>
+              <button type="button" class="adm-tab adm-content-type-btn" data-type="releases">Releases</button>
+            </div>
+
+            <div id="admContentPostsView">
+              <div class="adm-toolbar">
+                <input maxlength="200" type="text" id="admPostSearch" class="adm-input" placeholder="Search posts…" />
+              </div>
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table adm-table-tight">
+                  <thead><tr><th>Title</th><th>Category</th><th>Author</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admPostBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2 id="admPostFormTitle">Add post</h2></div>
+                <form class="adm-form" id="admAddPostForm">
+                  <input type="hidden" id="admPostEditId" value="" />
+                  <input maxlength="120" type="text" id="admNewPostTitle" class="adm-input" placeholder="Title" required />
+                  <div class="adm-dd adm-dd-inline" id="admNewPostCategoryDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Category" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewPostCategory" value="Devlog" />
+                  <input maxlength="200" type="text" id="admNewPostAuthor" class="adm-input adm-input-sm" placeholder="Author" required />
+                  <input type="date" id="admNewPostDate" class="adm-input adm-input-sm" required />
+                  <input type="number" id="admNewPostRead" class="adm-input adm-input-sm" placeholder="Read mins (auto)" min="1" step="1" readonly title="Computed automatically from the body length" />
+                  <input maxlength="200" type="text" id="admNewPostCover" class="adm-input adm-input-sm" placeholder="Cover image, e.g. banner.jpg" />
+                  <input maxlength="200" type="text" id="admNewPostDek" class="adm-input adm-textarea" placeholder="One-line summary (dek)" required />
+                  <textarea maxlength="20000" id="admNewPostBody" class="adm-input adm-textarea" rows="6" placeholder="Body - blank line for new paragraph, ## Heading, - list item, **bold**" required></textarea>
+                  <label class="adm-check"><input type="checkbox" id="admNewPostPublished" checked /> Published</label>
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admPostFormSubmit">Add post</button>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admPostFormCancel" hidden>Cancel edit</button>
+                </form>
+              </div>
+            </div>
+
+            <div id="admContentTutorialsView" hidden>
+              <div class="adm-toolbar">
+                <input maxlength="200" type="text" id="admTutSearch" class="adm-input" placeholder="Search tutorials…" />
+              </div>
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table adm-table-tight">
+                  <thead><tr><th>Title</th><th>Track</th><th>Difficulty</th><th>Platform</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admTutBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2 id="admTutFormTitle">Add tutorial</h2></div>
+                <form class="adm-form" id="admAddTutForm">
+                  <input type="hidden" id="admTutEditId" value="" />
+                  <input maxlength="120" type="text" id="admNewTutTitle" class="adm-input" placeholder="Title" required />
+                  <div class="adm-dd adm-dd-inline" id="admNewTutTrackDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Track" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewTutTrack" value="Scripting" />
+                  <div class="adm-dd adm-dd-inline" id="admNewTutDifficultyDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Difficulty" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewTutDifficulty" value="Beginner" />
+                  <div class="adm-dd adm-dd-inline" id="admNewTutPlatformDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewTutPlatform" value="Roblox" />
+                  <input type="number" id="admNewTutOrder" class="adm-input adm-input-sm" placeholder="Order" min="1" step="1" required />
+                  <input type="number" id="admNewTutMins" class="adm-input adm-input-sm" placeholder="Est. mins (auto)" min="1" step="1" readonly title="Computed automatically from the body length" />
+                  <input maxlength="200" type="text" id="admNewTutCover" class="adm-input adm-input-sm" placeholder="Cover image, e.g. scripts.jpg" />
+                  <input maxlength="2048" type="url" id="admNewTutVideo" class="adm-input adm-input-sm" placeholder="YouTube URL (optional)" />
+                  <input maxlength="200" type="text" id="admNewTutSummary" class="adm-input adm-textarea" placeholder="One-line summary" required />
+                  <textarea maxlength="20000" id="admNewTutBody" class="adm-input adm-textarea" rows="6" placeholder="Body - blank line for new paragraph, ## Heading, - list item, **bold**" required></textarea>
+                  <label class="adm-check"><input type="checkbox" id="admNewTutPublished" checked /> Published</label>
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admTutFormSubmit">Add tutorial</button>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admTutFormCancel" hidden>Cancel edit</button>
+                </form>
+              </div>
+            </div>
+
+            <div id="admContentReleasesView" hidden>
+              <p class="adm-note">New releases are created automatically whenever a product is added or its price/version changes - add one by hand here for anything else worth announcing (studio news, etc).</p>
+              <div class="adm-toolbar">
+                <input maxlength="200" type="text" id="admRelSearch" class="adm-input" placeholder="Search releases…" />
+              </div>
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table adm-table-tight">
+                  <thead><tr><th>Version</th><th>Kind</th><th>Title</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admRelBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2 id="admRelFormTitle">Add release</h2></div>
+                <form class="adm-form" id="admAddRelForm">
+                  <input type="hidden" id="admRelEditId" value="" />
+                  <input maxlength="200" type="text" id="admNewRelVersion" class="adm-input adm-input-sm" placeholder="Version, e.g. v2.6.0 (optional)" />
+                  <div class="adm-dd adm-dd-inline" id="admNewRelKindDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Kind" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewRelKind" value="Feature" />
+                  <input maxlength="120" type="text" id="admNewRelTitle" class="adm-input" placeholder="Title" required />
+                  <input type="date" id="admNewRelDate" class="adm-input adm-input-sm" required />
+                  <input maxlength="200" type="text" id="admNewRelAffects" class="adm-input adm-input-sm" placeholder="Affects (product ids, comma-separated)" />
+                  <textarea maxlength="20000" id="admNewRelSummary" class="adm-input adm-textarea" rows="3" placeholder="Summary" required></textarea>
+                  <label class="adm-check"><input type="checkbox" id="admNewRelPublished" checked /> Published</label>
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admRelFormSubmit">Add release</button>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admRelFormCancel" hidden>Cancel edit</button>
+                </form>
+              </div>
+            </div>
+          </section>
+
+          <section class="dash-panel" id="adm-panel-sitemgmt" hidden>
+            <div class="dash-head"><h1>Site Management</h1><p>Site access, Robux gamepass containers, staff access, users, and the audit log.</p></div>
+            <div class="adm-tabs" id="admSiteMgmtToggle" style="margin-bottom:22px;">
+              <button type="button" class="adm-tab adm-sitemgmt-btn active" data-view="access">Site Access</button>
+              <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="roblox">Roblox</button>
+              <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="staff">Staff &amp; Whitelist</button>
+              <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="users">Users</button>
+              <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="audit">Audit Log</button>
+            </div>
+
+            <div id="admSiteMgmtAccessView">
+              <div class="dash-card glass" style="max-width:640px;">
+                <div class="dash-card-head">
+                  <h2>Site status</h2>
+                  <span class="dt-badge ok" id="admSiteCurrentStatus">Loading…</span>
+                </div>
+                <p class="adm-hint" id="admSiteStatusHint">Whether coldd.dev is reachable by anyone other than staff right now.</p>
+                <div class="adm-tabs" id="admSiteModeToggle" style="margin:18px 0 4px;">
+                  <button type="button" class="adm-tab adm-site-mode-btn active" data-mode="open">Open</button>
+                  <button type="button" class="adm-tab adm-site-mode-btn" data-mode="maintenance">Maintenance</button>
+                </div>
+                <p class="adm-hint" id="admSiteModeHint">Open: the storefront, checkout, and dashboard all work normally for every visitor.</p>
+                <div id="admSiteMaintFields" hidden style="margin-top:14px;padding-top:16px;border-top:1px solid var(--hairline);">
+                  <label class="adm-field"><span>Maintenance message</span><input maxlength="200" type="text" id="admSiteMaintMsg" class="adm-input" placeholder="We'll be back soon." /></label>
+                  <label class="adm-field" style="margin-top:10px;max-width:260px;"><span>Ends at (optional)</span><input type="datetime-local" id="admSiteMaintEnds" class="adm-input" /></label>
+                  <p class="adm-hint" style="margin-top:8px;">Shown on the maintenance page if set - purely informational, the site doesn't reopen on its own when this time passes.</p>
+                  <div class="adm-field" style="margin-top:14px;">
+                    <span>Tester access</span>
+                    <div class="adm-dd adm-dd-inline" id="admSiteTesterDD" style="max-width:340px;">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val placeholder">Select testers</span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Tester access" hidden></div>
+                    </div>
+                    <input type="hidden" id="admSiteMaintAllowIds" />
+                  </div>
+                  <p class="adm-hint" style="margin-top:6px;">Non-staff accounts that can still browse and buy while the site is in maintenance - for testing. Select none to disable. Staff always bypass.</p>
+                </div>
+                <button class="btn btn-primary adm-btn-sm" id="admSiteSaveBtn" type="button" style="margin-top:18px;"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
+                <div class="adm-edit-msg" id="admSiteMsg"></div>
+              </div>
+            </div>
+
+            <div id="admSiteMgmtRobloxView" hidden>
+              <div class="dt-badge err" id="admRobloxCookieWarning" hidden style="margin-bottom:16px;"></div>
+
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2>Robux checkout pool</h2></div>
+                <p class="adm-hint">One shared pool of gamepasses is leased out per order (priced to that order's exact total) instead of every product owning its own pass. This grows automatically when a checkout finds the pool empty - seeding it ahead of time just avoids the first buyer of the day paying that extra latency. Passes named <code>coldd order pass …</code> are managed here. To use one in the game yourself, just <strong>rename it</strong> off that auto-name - the next checkout that would draw it drops it from the pool automatically. <strong>Retire</strong> does the same on demand (and takes it off sale on Roblox).</p>
+                <div class="adm-stat-row" id="admRobloxPoolStats" style="display:flex;gap:22px;margin:12px 0;flex-wrap:wrap;">
+                  <div><strong id="admRoboxPoolTotal">–</strong><div class="adm-hint" style="margin:0;">Total passes</div></div>
+                  <div><strong id="admRoboxPoolFree">–</strong><div class="adm-hint" style="margin:0;">Free now</div></div>
+                  <div><strong id="admRoboxPoolLeased">–</strong><div class="adm-hint" style="margin:0;">Leased now</div></div>
+                </div>
+                <form class="adm-form" id="admRobloxPoolSeedForm" style="flex-wrap:wrap;">
+                  <input type="number" id="admRobloxPoolSeedCount" class="adm-input" style="max-width:100px;" min="1" max="25" value="10" />
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admRobloxPoolSeedBtn"><span class="btn-label">Seed passes</span><span class="btn-spinner" hidden></span></button>
+                </form>
+                <div class="adm-edit-msg" id="admRobloxPoolMsg"></div>
+                <div class="dash-tablewrap" style="margin-top:14px;">
+                  <table class="dash-table">
+                    <thead><tr><th>Gamepass ID</th><th>Universe</th><th>State</th><th>Lease price</th><th>Lease expires</th><th></th></tr></thead>
+                    <tbody id="admRobloxPoolBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>Universe ID</th><th>Label</th><th>Gamepasses</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admRobloxContainersBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2 id="admRobloxContainerFormTitle">Add container game</h2></div>
+                <p class="adm-hint">Create an empty experience in Roblox Studio first, add it to your Open Cloud API key's <code>game-passes</code> permission list at <a href="https://create.roblox.com/dashboard/credentials" target="_blank" rel="noopener">create.roblox.com/dashboard/credentials</a>, then register its Universe ID here.</p>
+                <form class="adm-form" id="admRobloxContainerForm" style="flex-wrap:wrap;">
+                  <input type="hidden" id="admRobloxContainerEditId" />
+                  <input maxlength="200" type="text" id="admRobloxContainerUniverseId" class="adm-input" placeholder="Universe ID" required />
+                  <input maxlength="120" type="text" id="admRobloxContainerLabel" class="adm-input" placeholder="Label (optional)" style="flex:1;min-width:200px;" />
+                  <button class="btn btn-primary adm-btn-sm" type="submit" id="admRobloxContainerSubmitBtn">Add container</button>
+                  <button class="btn btn-ghost adm-btn-sm" type="button" id="admRobloxContainerCancelBtn" hidden>Cancel edit</button>
+                </form>
+                <div class="adm-edit-msg" id="admRobloxContainerMsg"></div>
+              </div>
+            </div>
+
+            <div id="admSiteMgmtStaffView" hidden>
+              <p class="adm-note">Access is granted by role on the account's real profile - not a separate list. Only owners can grant or change staff access.</p>
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+                  <tbody id="admStaffBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2>Grant staff access</h2></div>
+                <p class="adm-note">The account must have signed in to coldd at least once already.</p>
+                <form class="adm-form" id="admAddStaffForm">
+                  <input maxlength="254" type="email" id="admNewStaffEmail" class="adm-input" placeholder="Email" required />
+                  <div class="adm-dd adm-dd-inline" id="admNewStaffRoleDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Role" hidden></div>
+                  </div>
+                  <input type="hidden" id="admNewStaffRole" value="support" />
+                  <button class="btn btn-primary adm-btn-sm" type="submit">Grant access</button>
+                </form>
+                <div class="co-msg" id="admStaffMsg"></div>
+              </div>
+            </div>
+
+            <div id="admSiteMgmtUsersView" hidden>
+              <div class="adm-toolbar">
+                <input maxlength="200" type="text" id="admUserSearch" class="adm-input" placeholder="Search username, email, Discord or Roblox ID…" />
+              </div>
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>Name</th><th>Email</th><th>Joined</th><th>Orders</th><th>Spent</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="admUsersBody"></tbody>
+                </table>
+              </div>
+              <div class="dash-card glass">
+                <div class="dash-card-head"><h2>Manual product grant</h2></div>
+                <form class="adm-form" id="admGrantForm">
+                  <div class="adm-dd adm-dd-inline" id="admGrantUserDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val placeholder">Select user</span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="User" hidden></div>
+                  </div>
+                  <input type="hidden" id="admGrantUser" />
+                  <div class="adm-dd adm-dd-inline" id="admGrantProductDD">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val placeholder">Select product</span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Product" hidden></div>
+                  </div>
+                  <input type="hidden" id="admGrantProduct" />
+                  <button class="btn btn-primary adm-btn-sm" type="submit">Grant access</button>
+                  <span class="adm-note" id="admGrantMsg"></span>
+                  <div class="adm-note-warn" id="admGrantOwnedWarn" hidden></div>
+                </form>
+              </div>
+            </div>
+
+            <div id="admSiteMgmtAuditView" hidden>
+              <!-- Shown only when writes are failing, i.e. the table from
+                   supabase/admin_audit_log.sql has not been created. Without it
+                   the log silently degrades to this browser tab. -->
+              <div class="adm-audit-warn" id="admAuditWarn" hidden></div>
+
+              <div class="adm-toolbar">
+                <input maxlength="200" type="text" id="admAuditSearch" class="adm-input" placeholder="Search actions, error codes, functions…" />
+                <div class="adm-dd adm-dd-inline" id="admAuditTypeDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Filter by type" hidden></div>
+                </div>
+                <input type="hidden" id="admAuditType" value="" />
+                <div class="adm-dd adm-dd-inline" id="admAuditActorDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Filter by staff member" hidden></div>
+                </div>
+                <input type="hidden" id="admAuditActor" value="" />
+                <span class="adm-sub" id="admAuditCount"></span>
+              </div>
+
+              <div class="dash-card glass dash-tablewrap">
+                <table class="dash-table">
+                  <thead><tr><th>When</th><th>Staff / Code</th><th>Action</th></tr></thead>
+                  <tbody id="admAuditBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="pay-overlay" id="admEmailInfoOverlay" hidden>
+    <div class="pay-modal glass" role="dialog" aria-modal="true" aria-labelledby="admEmailInfoTitle" style="width:620px;max-width:96vw;">
+      <button class="pm-x" id="admEmailInfoClose" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h3 class="pay-title" id="admEmailInfoTitle">Address</h3>
+      <p class="pay-sub" id="admEmailInfoSub"></p>
+      <div class="adm-mini-head">Consent &amp; source</div>
+      <div id="admEmailInfoConsent" class="adm-kv-list"></div>
+      <div class="adm-mini-head">Email performance</div>
+      <div id="admEmailInfoStats"></div>
+      <div id="admEmailInfoHistory" style="max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <div class="pay-overlay" id="admCampaignDetailOverlay" hidden>
+    <div class="pay-modal glass" role="dialog" aria-modal="true" aria-labelledby="admCampaignDetailTitle" style="max-width:560px;">
+      <button class="pm-x" id="admCampaignDetailClose" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h3 class="pay-title" id="admCampaignDetailTitle">Campaign details</h3>
+      <p class="pay-sub" id="admCampaignDetailSub"></p>
+      <div class="dash-stats" id="admCampaignDetailStats" style="margin-bottom:16px;"></div>
+      <div class="dash-tablewrap" style="max-height:320px;overflow-y:auto;">
+        <table class="dash-table">
+          <thead><tr><th>Date</th><th>Buyer</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody id="admCampaignDetailBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="pay-overlay" id="admCampaignConfirmOverlay" hidden>
+    <div class="pay-modal glass" role="dialog" aria-modal="true" aria-labelledby="admCampaignConfirmTitle" style="max-width:460px;">
+      <button class="pm-x" id="admCampaignConfirmClose" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h3 class="pay-title" id="admCampaignConfirmTitle">Send this campaign?</h3>
+      <p class="adm-campaign-confirm-count" id="admCampaignConfirmCount"></p>
+      <p class="pay-sub" id="admCampaignConfirmSummary" style="margin:10px 0 0;"></p>
+      <p class="adm-campaign-confirm-warn" id="admCampaignConfirmWarn" hidden></p>
+      <p class="adm-note" style="margin:18px 0 8px;">Type the code below to confirm - it can't be pasted, you have to type it out.</p>
+      <div class="dt-mono adm-campaign-confirm-code" id="admCampaignConfirmCode" style="user-select:none;">- - - -</div>
+      <input maxlength="64" type="text" id="admCampaignConfirmInput" class="adm-input" placeholder="Type the code" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:10px;" />
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-primary" id="admCampaignConfirmGo" type="button" disabled>Send now</button>
+        <button class="btn btn-ghost" id="admCampaignConfirmCancel" type="button">Cancel</button>
+      </div>
+      <div class="adm-edit-msg" id="admCampaignConfirmMsg"></div>
+    </div>
+  </div>
+
+  <div class="pay-overlay" id="admErrOverlay" hidden>
+    <div class="pay-modal glass" role="dialog" aria-modal="true" aria-labelledby="admErrTitle" style="max-width:640px;">
+      <button class="pm-x" id="admErrClose" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h3 class="pay-title" id="admErrTitle">Error report <span class="adm-err-code" id="admErrCode"></span></h3>
+      <p class="pay-sub"><span id="admErrKind"></span> · <span id="admErrWhen"></span></p>
+      <div class="adm-err-detail-grid">
+        <div><span class="adm-err-detail-label">Message</span><p class="adm-err-detail-val" id="admErrMsg"></p></div>
+        <div><span class="adm-err-detail-label">Page</span><p class="adm-err-detail-val" id="admErrUrl"></p></div>
+        <div><span class="adm-err-detail-label">User</span><p class="adm-err-detail-val" id="admErrUser"></p></div>
+        <div><span class="adm-err-detail-label">Browser</span><p class="adm-err-detail-val" id="admErrUA"></p></div>
+      </div>
+      <div id="admErrContextWrap" hidden>
+        <span class="adm-err-detail-label">Context</span>
+        <pre class="adm-err-pre" id="admErrContext"></pre>
+      </div>
+      <div id="admErrStackWrap" hidden>
+        <span class="adm-err-detail-label">Stack</span>
+        <pre class="adm-err-pre" id="admErrStack"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="pay-overlay" id="admUserDetailOverlay" hidden>
+    <div class="pay-modal glass" role="dialog" aria-modal="true" aria-labelledby="admUserDetailTitle" style="width:760px; max-width:96vw;">
+      <button class="pm-x" id="admUserDetailClose" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h3 class="pay-title" id="admUserDetailTitle">Account details</h3>
+      <p class="pay-sub" id="admUserDetailSub"></p>
+      <div class="adm-err-detail-grid">
+        <div><span class="adm-err-detail-label">Account ID</span><p class="adm-err-detail-val" id="admUdId"></p></div>
+        <div><span class="adm-err-detail-label">Email</span><p class="adm-err-detail-val" id="admUdEmail"></p></div>
+        <div><span class="adm-err-detail-label">Joined</span><p class="adm-err-detail-val" id="admUdJoined"></p></div>
+        <div><span class="adm-err-detail-label">Role</span><p class="adm-err-detail-val" id="admUdRole"></p></div>
+        <div><span class="adm-err-detail-label">Status</span><p class="adm-err-detail-val" id="admUdStatus"></p></div>
+        <div><span class="adm-err-detail-label">Email verified</span><p class="adm-err-detail-val" id="admUdVerified"></p></div>
+        <div><span class="adm-err-detail-label">Discord</span><p class="adm-err-detail-val" id="admUdDiscord"></p></div>
+        <div><span class="adm-err-detail-label">Roblox</span><p class="adm-err-detail-val" id="admUdRoblox"></p></div>
+        <div><span class="adm-err-detail-label">Marketing emails</span><p class="adm-err-detail-val" id="admUdMarketing"></p></div>
+        <div><span class="adm-err-detail-label">Referral code</span><p class="adm-err-detail-val" id="admUdRefCode"></p></div>
+        <div><span class="adm-err-detail-label">Total orders</span><p class="adm-err-detail-val" id="admUdOrdersTotal"></p></div>
+        <div><span class="adm-err-detail-label">Completed orders</span><p class="adm-err-detail-val" id="admUdOrdersPaid"></p></div>
+        <div><span class="adm-err-detail-label">Pending orders</span><p class="adm-err-detail-val" id="admUdOrdersPending"></p></div>
+        <div><span class="adm-err-detail-label">Total spent</span><p class="adm-err-detail-val" id="admUdSpent"></p></div>
+      </div>
+      <div class="adm-ud-section">
+        <span class="adm-err-detail-label">Order history</span>
+        <div class="adm-ud-orders" id="admUdOrdersList"></div>
+      </div>
+      <div class="adm-ud-section" id="admUdCartSection" hidden>
+        <span class="adm-err-detail-label">Cart activity</span>
+        <div id="admUdCartActivity"></div>
+      </div>
+      <div class="adm-ud-section">
+        <span class="adm-err-detail-label">Licences owned</span>
+        <div id="admUdLicences"></div>
+      </div>
+      <div class="adm-ud-section" id="admUdToolsSection" hidden>
+        <span class="adm-err-detail-label">Account tools</span>
+        <div class="adm-ud-tools">
+          <label class="adm-field"><span>Username</span><div class="adm-ud-inline"><input maxlength="32" id="admUdUsername" class="adm-input" type="text" autocomplete="off" /><button type="button" class="btn btn-tinted adm-btn-sm" id="admUdSaveUsername">Save</button></div></label>
+          <label class="adm-field"><span>New password</span><div class="adm-ud-inline"><input maxlength="72" id="admUdPassword" class="adm-input" type="text" autocomplete="off" placeholder="8 to 72 characters" /><button type="button" class="btn btn-tinted adm-btn-sm" id="admUdSetPassword">Set password</button></div></label>
+          <div class="adm-ud-btnrow">
+            <button type="button" class="btn btn-ghost adm-btn-sm" id="admUdClearAvatar">Remove profile picture</button>
+            <button type="button" class="btn btn-ghost adm-btn-sm" id="admUdAddReseller">Add as reseller</button>
+          </div>
+          <div class="adm-edit-msg" id="admUdToolsMsg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pay-overlay" id="admRemoveAcctOverlay" hidden>
+    <div class="pay-modal glass" role="dialog" aria-modal="true" aria-labelledby="admRemoveAcctTitle" style="max-width:440px;">
+      <button class="pm-x" id="admRemoveAcctClose" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h3 class="pay-title" id="admRemoveAcctTitle">Remove account</h3>
+      <p class="pay-sub" id="admRemoveAcctSub"></p>
+      <label class="adm-field">
+        <span>Type REMOVE to confirm</span>
+        <input maxlength="200" class="adm-input" id="admRemoveAcctInput" type="text" autocomplete="off" placeholder="REMOVE" />
+      </label>
+      <span class="auth-err" id="admRemoveAcctMsg"></span>
+      <div class="adm-edit-actions" style="margin-top:18px;">
+        <button class="btn btn-primary adm-btn-sm" id="admRemoveAcctConfirm" type="button" disabled>Remove account</button>
+        <button class="btn btn-ghost adm-btn-sm" id="admRemoveAcctCancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="/supabase-init.js?v=20261014d"></script>
+  <script src="/site-gate.js?v=20261008c"></script>
+  <script src="/catalog.js?v=20261030-upl" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261030-credit"></script>
+</body>
+</html>
