@@ -14,6 +14,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyUser } from "../_shared/notify.ts";
+import { storedFileExists } from "../_shared/files.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 
@@ -270,6 +271,41 @@ Deno.serve(async (req: Request) => {
     // Add-ons are validated up front so a bad row never half-saves the product.
     const addonsParsed = parseAddons(body.addons, platform === "Roblox" && !body.robuxDisabled);
     if (!addonsParsed.ok) return json({ ok: false, error: addonsParsed.error }, 400);
+
+    // Every file this save newly points at must really be in storage, so a product can never
+    // be saved pointing at a file that isn't there (an interrupted upload, a stale tab).
+    // Paths already on file are not re-checked; the daily file check covers those.
+    {
+      const onFile = new Set<string>();
+      if (id) {
+        const [{ data: pp }, { data: pl }, { data: pa }] = await Promise.all([
+          admin.from("products").select("storage_path").eq("id", id).maybeSingle(),
+          admin.from("product_legal").select("proof_files, dev_proof_files").eq("product_id", id).maybeSingle(),
+          admin.from("product_addons").select("storage_path").eq("product_id", id),
+        ]);
+        if (pp?.storage_path) onFile.add(pp.storage_path);
+        for (const f of [...(Array.isArray(pl?.proof_files) ? pl.proof_files : []), ...(Array.isArray(pl?.dev_proof_files) ? pl.dev_proof_files : [])]) {
+          if (f && typeof f === "object" && f.path) onFile.add(String(f.path));
+        }
+        for (const a of pa ?? []) if (a.storage_path) onFile.add(a.storage_path);
+      }
+      const incoming: { label: string; path: string }[] = [];
+      if (typeof body.storagePath === "string" && body.storagePath && body.storagePath !== "_shared/placeholder.zip") {
+        incoming.push({ label: "The product file", path: body.storagePath });
+      }
+      for (const f of [...(Array.isArray(legalIn.proofFiles) ? legalIn.proofFiles : []), ...(Array.isArray(legalIn.devProofFiles) ? legalIn.devProofFiles : [])]) {
+        const p = f && typeof f === "object" ? (f as { path?: unknown }).path : null;
+        if (typeof p === "string" && p) incoming.push({ label: String((f as { name?: unknown }).name || "A legal file"), path: p });
+      }
+      for (const a of addonsParsed.addons) {
+        if (a.storagePath && !a.removeFile) incoming.push({ label: `The "${a.title}" add-on file`, path: a.storagePath });
+      }
+      for (const f of incoming.filter((x) => !onFile.has(x.path))) {
+        const ok = await storedFileExists(admin, f.path);
+        if (ok === false) return json({ ok: false, error: `${f.label} is not in storage (the upload did not finish). Upload it again, then save.` }, 400);
+        if (ok === null) return json({ ok: false, error: "File storage is not answering, so the files could not be checked. Try saving again in a minute." }, 503);
+      }
+    }
 
     // Enforce product_legal against the price an admin is trying to set by
     // hand - the same limits every automatic discount path already

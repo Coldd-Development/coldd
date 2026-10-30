@@ -17,6 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cdnEnabled, cdnPublicUrl, cdnSignedUrl, withCdnPrefix } from "../_shared/cdn.ts";
+import { recordUpload } from "../_shared/files.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const MEDIA_BUCKET = "product-media";
@@ -102,10 +103,21 @@ Deno.serve(async (req: Request) => {
         return `${productSlug}/${subdir}/${unique}-${filename}`;
       })();
 
+    // Every upload goes in the ledger before the browser sends the file, so its real path is on
+    // record even if the product meant to point at it is never saved (see _shared/files.ts).
+    const ledger = (storedPath: string) => recordUpload(admin, {
+      storedPath,
+      kind,
+      productSlug: kind === "unreleasedFile" ? null : safeName(String(body.productSlug || "untitled")),
+      originalName: String(body.filename || "file"),
+      uploadedBy: userData.user.id,
+    });
+
     // Public media (thumbnails/gallery) goes to the CDN host when configured;
     // private files always stay in Supabase Storage.
     if (bucket === MEDIA_BUCKET && cdnEnabled()) {
       const cdnPath = `media/${path}`; // NOT products/: the *.coldd.dev/product* Worker route would swallow it
+      await ledger(cdnPublicUrl(cdnPath));
       return json({
         ok: true,
         driver: "cdn",
@@ -121,6 +133,7 @@ Deno.serve(async (req: Request) => {
     // browser sends it in chunks (offset/last query params) so file size isn't
     // capped by PHP's per-request limits.
     if (bucket === FILES_BUCKET && cdnEnabled()) {
+      await ledger(withCdnPrefix(path));
       return json({
         ok: true,
         driver: "cdn",
@@ -135,6 +148,7 @@ Deno.serve(async (req: Request) => {
       .from(bucket)
       .createSignedUploadUrl(path);
     if (signErr || !signed) return json({ ok: false, error: "Could not create upload URL." }, 500);
+    await ledger(bucket === MEDIA_BUCKET ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}` : path);
 
     return json({
       ok: true,

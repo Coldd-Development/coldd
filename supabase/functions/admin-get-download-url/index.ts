@@ -16,6 +16,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { downloadName, signPrivateDownload } from "../_shared/download.ts";
+import { auditStoredFiles } from "../_shared/files.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const SIGNED_URL_TTL_SECONDS = 120;
@@ -67,50 +68,10 @@ Deno.serve(async (req: Request) => {
 
     // { audit: true }: checks that every stored file a product points at (product file,
     // add-on files, legal proof files) really exists, by signing a link and asking for
-    // its first byte. Returns only the ones that are missing or unopenable.
+    // its first byte. Returns only the ones that are missing or unopenable, with any
+    // file the upload ledger can recover for an entry that lost its path.
     if (body.audit === true) {
-      const [{ data: prods }, { data: legal }, { data: addons }] = await Promise.all([
-        admin.from("products").select("id, slug, storage_path"),
-        admin.from("product_legal").select("product_id, proof_files, dev_proof_files"),
-        admin.from("product_addons").select("product_id, title, storage_path"),
-      ]);
-      const slugOf = new Map((prods ?? []).map((p: { id: string; slug: string }) => [p.id, p.slug]));
-      type Job = { slug: string; kind: string; name: string; path: string | null };
-      const jobs: Job[] = [];
-      for (const p of prods ?? []) {
-        if (p.storage_path && p.storage_path !== "_shared/placeholder.zip") jobs.push({ slug: p.slug, kind: "product file", name: p.storage_path, path: p.storage_path });
-      }
-      for (const a of addons ?? []) {
-        if (a.storage_path) jobs.push({ slug: slugOf.get(a.product_id) ?? a.product_id, kind: "add-on", name: a.title, path: a.storage_path });
-      }
-      for (const l of legal ?? []) {
-        for (const [kind, list] of [["proof of license", l.proof_files], ["proof of development", l.dev_proof_files]] as const) {
-          for (const f of Array.isArray(list) ? list : []) {
-            const path = f && typeof f === "object" ? (f.path || null) : null;
-            const name = typeof f === "string" ? f : String(f?.name ?? "");
-            jobs.push({ slug: slugOf.get(l.product_id) ?? l.product_id, kind, name, path });
-          }
-        }
-      }
-      const problems: (Job & { problem: string })[] = [];
-      let next = 0;
-      const worker = async () => {
-        while (next < jobs.length) {
-          const j = jobs[next++];
-          if (!j.path) { problems.push({ ...j, problem: "no stored path" }); continue; }
-          try {
-            const url = await signPrivateDownload(admin, j.path, undefined, 120);
-            if (!url) { problems.push({ ...j, problem: "could not sign" }); continue; }
-            const r = await fetch(url, { headers: { Range: "bytes=0-0" } });
-            await r.body?.cancel();
-            if (r.status !== 200 && r.status !== 206) problems.push({ ...j, problem: "HTTP " + r.status });
-          } catch (e) {
-            problems.push({ ...j, problem: String((e as Error)?.message || e) });
-          }
-        }
-      };
-      await Promise.all(Array.from({ length: 12 }, worker));
-      return json({ ok: true, checked: jobs.length, problems });
+      return json({ ok: true, ...(await auditStoredFiles(admin)) });
     }
 
     if (rawPath) {
