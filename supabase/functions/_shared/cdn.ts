@@ -1,6 +1,6 @@
 // supabase/functions/_shared/cdn.ts
 //
-// Talks to cdn/upload.php + cdn/download.php on the Ultimate Hosting account.
+// Talks to upload.php (repo root) + cdn/download.php on the Ultimate Hosting account.
 // Inert until CDN_UPLOAD_URL, CDN_DOWNLOAD_URL (optional), CDN_UPLOAD_SECRET
 // and CDN_PUBLIC_URL are set as Supabase secrets - callers fall back to
 // Supabase Storage when cdnEnabled() is false, so nothing breaks before setup.

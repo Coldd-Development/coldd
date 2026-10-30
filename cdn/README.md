@@ -25,7 +25,8 @@ PHP is only allowed to read `public_html`, `private` and `tmp` (open_basedir), s
 
 | File | Goes in |
 |---|---|
-| `upload.php`, `download.php` | `web/coldd.dev/public_html/` |
+| `download.php` | `web/coldd.dev/public_html/` (copied by hand) |
+| `upload.php`, `cdn-list.php` | `web/coldd.dev/public_html/`, deployed automatically by git push (they live at the repo root) |
 | `cdn-lib.php`, `cdn-config.php`, `storagebox_key`, `storagebox_key.pub` | `web/coldd.dev/private/` |
 
 The Hestia File Manager does not overwrite: rename the old file first (e.g. `upload.php` -> `upload.v2.txt`), then upload.

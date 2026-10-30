@@ -1,5 +1,6 @@
 <?php
-// cdn/upload.php - deploy to the cdn.coldd.dev web root (public_html/upload.php).
+// upload.php - lives at the repo root so the site deploy (git push) puts it in public_html,
+// which is also the cdn.coldd.dev web root. It used to sit in cdn/ and was copied by hand.
 //
 // Receives files straight from the browser, for two kinds of storage:
 //   vis=pub   public images (thumbnails, gallery, avatars) -> Storage Box + a copy in public_html/<path>
