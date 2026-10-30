@@ -3853,7 +3853,8 @@
       t.enc.configure({ codec: w * h > 921600 ? 'avc1.640033' : 'avc1.64001f', width: w, height: h, bitrate: bitrate, bitrateMode: 'variable', framerate: 50, latencyMode: 'quality', avc: { format: 'avc' } });
       return t;
     }
-    var full = track(fw, fh, 10e6), small = track(sw, sh, 2.5e6);
+    // About 10 Mbps at 1080p, scaled with size (VFX has a lot of fine motion).
+    var full = track(fw, fh, Math.min(12e6, Math.max(3e6, fw * fh * 5))), small = track(sw, sh, 2.5e6);
     var posterAt = Math.floor(count * 0.45), poster = null, ts = 0;
     try {
       for (var i = 0; i < count; i++) {
