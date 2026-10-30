@@ -20,6 +20,8 @@
   // full-size one. A GIF with no companions (poster 404) is left exactly as it was.
   (function () {
     var GIF = /^(https:\/\/cdn\.coldd\.dev\/media\/.+)\.gif$/i;
+    // Versioned so a poster requested before it existed (a 404 the CDN cached) never sticks.
+    var POSTER = '.jpg?p=1';
     var still = (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ||
       !!(navigator.connection && navigator.connection.saveData);
     var missing = {};
@@ -45,7 +47,7 @@
       v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
       v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
       v.preload = 'auto';
-      v.poster = s.base + '.jpg';
+      v.poster = s.base + POSTER;
       v.addEventListener('error', function () { missing[s.base] = true; backToGif(el); });
       v.src = s.base + (el.tagName === 'IMG' ? '.mp4' : '.sm.mp4');
       s.v = v;
@@ -67,20 +69,20 @@
       if (el.tagName === 'IMG' && el.id !== 'pdImg') return; // only the product page's main image is an <img>
       var url = given || (el.tagName === 'IMG' ? el.getAttribute('src') : bgOf(el));
       var s = el.__gv;
-      if (s && url === s.base + '.jpg') return;
+      if (s && url === s.base + POSTER) return;
       if (s && url === s.gif) {
         // The page set the same GIF again (a re-render): keep the video, put the poster back.
-        if (el.tagName === 'IMG') el.src = s.base + '.jpg'; else el.style.backgroundImage = "url('" + s.base + ".jpg')";
+        if (el.tagName === 'IMG') el.src = s.base + POSTER; else el.style.backgroundImage = "url('" + s.base + POSTER + "')";
         return;
       }
       if (s) { if (io) io.unobserve(el); dropVideo(el); el.__gv = null; }
       var base = baseOf(url);
       if (!base || missing[base]) return;
       el.__gv = s = { base: base, gif: url, v: null };
-      if (el.tagName === 'IMG') el.src = base + '.jpg'; else el.style.backgroundImage = "url('" + base + ".jpg')";
+      if (el.tagName === 'IMG') el.src = base + POSTER; else el.style.backgroundImage = "url('" + base + POSTER + "')";
       var probe = new Image();
       probe.onerror = function () { missing[base] = true; if (el.__gv === s) backToGif(el); };
-      probe.src = base + '.jpg';
+      probe.src = base + POSTER;
       if (el.tagName === 'IMG' || !io) addVideo(el); else io.observe(el);
     }
     // Setting an <img> src starts its download at once, so the product page hands its main
