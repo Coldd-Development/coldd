@@ -32,7 +32,28 @@
 
     function bgOf(el) { var m = /url\(["']?([^"')]+)["']?\)/.exec(el.style.backgroundImage || ''); return m ? m[1] : ''; }
     function baseOf(url) { var m = GIF.exec(url || ''); return m ? m[1] : null; }
-    function dropVideo(el) { var s = el.__gv; if (s && s.v) { s.v.pause(); s.v.removeAttribute('src'); s.v.load(); s.v.remove(); s.v = null; } }
+    // The video itself is never put on the page: browsers such as Opera GX add their own
+    // pop-out button and media controls to any visible playing <video>. It plays detached and
+    // each new frame is drawn onto a <canvas>, which is what the visitor sees.
+    var playing = [];
+    var drawing = false;
+    function drawLoop() {
+      for (var i = 0; i < playing.length; i++) {
+        var s = playing[i], v = s.v;
+        if (v.readyState < 2 || v.currentTime === s.drawnAt) continue;
+        if (s.c.width !== v.videoWidth) { s.c.width = v.videoWidth; s.c.height = v.videoHeight; }
+        s.ctx.drawImage(v, 0, 0, s.c.width, s.c.height);
+        s.drawnAt = v.currentTime;
+      }
+      if (playing.length) requestAnimationFrame(drawLoop); else drawing = false;
+    }
+    function dropVideo(el) {
+      var s = el.__gv; if (!s || !s.v) return;
+      s.v.pause(); s.v.removeAttribute('src'); s.v.load();
+      s.c.remove();
+      var i = playing.indexOf(s); if (i !== -1) playing.splice(i, 1);
+      s.v = s.c = s.ctx = null; s.drawnAt = -1;
+    }
     function backToGif(el) {
       var s = el.__gv; if (!s) return;
       if (io) io.unobserve(el);
@@ -43,22 +64,27 @@
     function addVideo(el) {
       var s = el.__gv; if (!s || s.v || still) return;
       var v = document.createElement('video');
-      v.className = 'gifv';
-      v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
-      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+      v.muted = true; v.loop = true; v.playsInline = true;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+      v.disablePictureInPicture = true; v.disableRemotePlayback = true;
       v.preload = 'auto';
-      v.poster = s.base + POSTER;
       v.addEventListener('error', function () { missing[s.base] = true; backToGif(el); });
       v.src = s.base + (el.tagName === 'IMG' ? '.mp4' : '.sm.mp4');
-      s.v = v;
+      // Transparent until its first frame, so the poster underneath shows meanwhile.
+      var c = document.createElement('canvas');
+      c.className = 'gifv'; c.width = 2; c.height = 2;
+      c.setAttribute('aria-hidden', 'true');
+      s.v = v; s.c = c; s.ctx = c.getContext('2d'); s.drawnAt = -1;
       if (el.tagName === 'IMG') {
-        el.parentNode && el.parentNode.insertBefore(v, el.nextSibling);
+        el.parentNode && el.parentNode.insertBefore(c, el.nextSibling);
       } else {
-        // The video sits behind the element's own content (badges, labels) but over its background.
+        // The canvas sits behind the element's own content (badges, labels) but over its background.
         if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
         el.style.isolation = 'isolate';
-        el.insertBefore(v, el.firstChild);
+        el.insertBefore(c, el.firstChild);
       }
+      playing.push(s);
+      if (!drawing) { drawing = true; requestAnimationFrame(drawLoop); }
       var p = v.play(); if (p && p.catch) p.catch(function () {});
     }
     var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (entries) {
