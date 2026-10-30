@@ -3404,7 +3404,8 @@
           // alt was never set here, so the primary product visual on every
           // product page announced nothing to a screen reader.
           if (pdImg) {
-            pdImg.src = src || '';
+            // GIF covers play as a full-quality video instead (see catalog.js).
+            if (window.__gifvSetImg) window.__gifvSetImg(pdImg, src || ''); else pdImg.src = src || '';
             pdImg.alt = cur && cur.title ? cur.title : '';
           }
           pdThumbs && pdThumbs.querySelectorAll('.pd-thumb').forEach(function (t) {

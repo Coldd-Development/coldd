@@ -63,11 +63,16 @@
       entries.forEach(function (e) { if (e.isIntersecting) addVideo(e.target); else dropVideo(e.target); });
     }, { rootMargin: '150px 0px' }) : null;
 
-    function upgrade(el) {
+    function upgrade(el, given) {
       if (el.tagName === 'IMG' && el.id !== 'pdImg') return; // only the product page's main image is an <img>
-      var url = el.tagName === 'IMG' ? el.getAttribute('src') : bgOf(el);
+      var url = given || (el.tagName === 'IMG' ? el.getAttribute('src') : bgOf(el));
       var s = el.__gv;
-      if (s && (url === s.base + '.jpg' || url === s.gif)) return;
+      if (s && url === s.base + '.jpg') return;
+      if (s && url === s.gif) {
+        // The page set the same GIF again (a re-render): keep the video, put the poster back.
+        if (el.tagName === 'IMG') el.src = s.base + '.jpg'; else el.style.backgroundImage = "url('" + s.base + ".jpg')";
+        return;
+      }
       if (s) { if (io) io.unobserve(el); dropVideo(el); el.__gv = null; }
       var base = baseOf(url);
       if (!base || missing[base]) return;
@@ -78,6 +83,14 @@
       probe.src = base + '.jpg';
       if (el.tagName === 'IMG' || !io) addVideo(el); else io.observe(el);
     }
+    // Setting an <img> src starts its download at once, so the product page hands its main
+    // image here instead: a GIF with companions never gets assigned at all.
+    window.__gifvSetImg = function (img, src) {
+      var base = baseOf(src);
+      if (base && !missing[base]) { upgrade(img, src); return; }
+      if (img.__gv) { dropVideo(img); img.__gv = null; }
+      img.src = src || '';
+    };
     function scan(root) {
       if (root.nodeType !== 1) return;
       if ((root.getAttribute('style') || '').indexOf('.gif') >= 0 || (root.id === 'pdImg' && /\.gif$/i.test(root.getAttribute('src') || ''))) upgrade(root);
