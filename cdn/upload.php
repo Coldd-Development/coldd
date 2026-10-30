@@ -14,7 +14,6 @@
 //        private files may be sent in chunks: &offset=N&last=0|1 (offset must equal bytes so far)
 //   POST ?action=delete&path=..&exp=..&vis=..&sig=..
 //   POST ?action=selftest&path=selftest/ping.txt&exp=..&vis=priv&sig=..   (signed) checks the Storage Box link
-//   POST ?action=list&path=<folder>|root&exp=..&max=0&ow=0&vis=..&sig=..   (signed) names in a box folder
 //   GET  ?action=ping   -> {"ok":true,...}
 
 declare(strict_types=1);
@@ -70,39 +69,6 @@ $sig  = (string)($_GET['sig'] ?? '');
 if ($exp < time()) out(['ok' => false, 'error' => 'Upload link expired. Please try again.'], 403);
 $expected = hash_hmac('sha256', implode('|', ['v2', $action, $path, $exp, $max, $ow, $vis]), $secret);
 if (!hash_equals($expected, $sig)) out(['ok' => false, 'error' => 'Invalid upload token.'], 403);
-
-// ---- Folder listing (signed, read-only) ----
-// path = folder under private/ or public/ ('root' = the top folder). Used to find files that
-// were stored but never recorded in the database (e.g. an upload that finished after a save).
-// The root listing also reports unfinished chunked uploads waiting in the temp folder.
-if ($action === 'list') {
-    if ($path !== 'root' && (!preg_match('#^[a-z0-9][a-z0-9._\-/]{0,240}$#', $path) || str_contains($path, '..') || str_contains($path, '/.'))) {
-        out(['ok' => false, 'error' => 'Bad path.'], 400);
-    }
-    if (!$useBox) out(['ok' => false, 'error' => 'No box section in config.'], 400);
-    $rel = ($vis === 'priv' ? 'private' : 'public') . ($path === 'root' ? '' : '/' . $path);
-    $ch = box_handle(rtrim(box_url($rel), '/') . '/');
-    curl_setopt_array($ch, [CURLOPT_DIRLISTONLY => true, CURLOPT_TIMEOUT => 60]);
-    $body = curl_exec($ch);
-    $err = $body === false ? curl_error($ch) . ' (' . curl_errno($ch) . ')' : null;
-    curl_close($ch);
-    if ($err !== null) out(['ok' => false, 'error' => $err], 404);
-    $names = [];
-    foreach (explode("\n", (string)$body) as $n) {
-        $n = trim($n);
-        if ($n !== '' && $n !== '.' && $n !== '..') $names[] = $n;
-    }
-    sort($names);
-    $res = ['ok' => true, 'path' => $path, 'names' => $names];
-    if ($path === 'root' && $vis === 'priv') {
-        $parts = [];
-        foreach ((array)@scandir($tmpRoot) as $n) {
-            if (is_string($n) && str_ends_with($n, '.part')) $parts[] = ['name' => $n, 'size' => (int)@filesize($tmpRoot . '/' . $n), 'mtime' => date('c', (int)@filemtime($tmpRoot . '/' . $n))];
-        }
-        $res['unfinished'] = $parts;
-    }
-    out($res);
-}
 
 // Path rules: lowercase, no traversal, no dotfiles.
 if (!preg_match('#^[a-z0-9][a-z0-9._\-/]{0,240}$#', $path) || str_contains($path, '..') || str_contains($path, '//') || str_contains($path, '/.')) {
