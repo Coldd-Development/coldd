@@ -10,6 +10,92 @@
     return '/' + p;
   };
 
+  // ---- GIF thumbnails play as video ------------------------------------------
+  // VFX thumbnails are full-HD 50fps GIFs (10-100 MB each). A catalogue page used to
+  // download and decode every one at once, even off screen, which stalled the page.
+  // Each CDN GIF has three companions next to it (made from the original recording):
+  //   <base>.jpg (poster), <base>.sm.mp4 (640px, cards), <base>.mp4 (full size, product page).
+  // Any element whose inline background is such a GIF shows the poster at once and plays
+  // the small video only while it is on screen; the product page's main image plays the
+  // full-size one. A GIF with no companions (poster 404) is left exactly as it was.
+  (function () {
+    var GIF = /^(https:\/\/cdn\.coldd\.dev\/media\/.+)\.gif$/i;
+    var still = (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ||
+      !!(navigator.connection && navigator.connection.saveData);
+    var missing = {};
+    var st = document.createElement('style');
+    st.textContent = '.gifv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;pointer-events:none;border-radius:inherit}' +
+      '.pd-main .gifv{z-index:0}';
+    (document.head || document.documentElement).appendChild(st);
+
+    function bgOf(el) { var m = /url\(["']?([^"')]+)["']?\)/.exec(el.style.backgroundImage || ''); return m ? m[1] : ''; }
+    function baseOf(url) { var m = GIF.exec(url || ''); return m ? m[1] : null; }
+    function dropVideo(el) { var s = el.__gv; if (s && s.v) { s.v.pause(); s.v.removeAttribute('src'); s.v.load(); s.v.remove(); s.v = null; } }
+    function backToGif(el) {
+      var s = el.__gv; if (!s) return;
+      if (io) io.unobserve(el);
+      dropVideo(el);
+      el.__gv = null;
+      if (el.tagName === 'IMG') el.src = s.gif; else el.style.backgroundImage = "url('" + s.gif + "')";
+    }
+    function addVideo(el) {
+      var s = el.__gv; if (!s || s.v || still) return;
+      var v = document.createElement('video');
+      v.className = 'gifv';
+      v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+      v.preload = 'auto';
+      v.poster = s.base + '.jpg';
+      v.addEventListener('error', function () { missing[s.base] = true; backToGif(el); });
+      v.src = s.base + (el.tagName === 'IMG' ? '.mp4' : '.sm.mp4');
+      s.v = v;
+      if (el.tagName === 'IMG') {
+        el.parentNode && el.parentNode.insertBefore(v, el.nextSibling);
+      } else {
+        // The video sits behind the element's own content (badges, labels) but over its background.
+        if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        el.style.isolation = 'isolate';
+        el.insertBefore(v, el.firstChild);
+      }
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+    }
+    var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) addVideo(e.target); else dropVideo(e.target); });
+    }, { rootMargin: '150px 0px' }) : null;
+
+    function upgrade(el) {
+      if (el.tagName === 'IMG' && el.id !== 'pdImg') return; // only the product page's main image is an <img>
+      var url = el.tagName === 'IMG' ? el.getAttribute('src') : bgOf(el);
+      var s = el.__gv;
+      if (s && (url === s.base + '.jpg' || url === s.gif)) return;
+      if (s) { if (io) io.unobserve(el); dropVideo(el); el.__gv = null; }
+      var base = baseOf(url);
+      if (!base || missing[base]) return;
+      el.__gv = s = { base: base, gif: url, v: null };
+      if (el.tagName === 'IMG') el.src = base + '.jpg'; else el.style.backgroundImage = "url('" + base + ".jpg')";
+      var probe = new Image();
+      probe.onerror = function () { missing[base] = true; if (el.__gv === s) backToGif(el); };
+      probe.src = base + '.jpg';
+      if (el.tagName === 'IMG' || !io) addVideo(el); else io.observe(el);
+    }
+    function scan(root) {
+      if (root.nodeType !== 1) return;
+      if ((root.getAttribute('style') || '').indexOf('.gif') >= 0 || (root.id === 'pdImg' && /\.gif$/i.test(root.getAttribute('src') || ''))) upgrade(root);
+      var list = root.querySelectorAll('[style*=".gif"]');
+      for (var i = 0; i < list.length; i++) upgrade(list[i]);
+      var pd = root.querySelector && root.querySelector('#pdImg');
+      if (pd) upgrade(pd);
+    }
+    new MutationObserver(function (muts) {
+      muts.forEach(function (m) {
+        if (m.type === 'attributes') { if (m.target.__gv || (m.target.getAttribute(m.attributeName) || '').indexOf('.gif') >= 0) upgrade(m.target); }
+        else m.addedNodes.forEach(scan);
+      });
+    }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'src'] });
+    if (document.body) scan(document.body);
+    else document.addEventListener('DOMContentLoaded', function () { scan(document.body); });
+  })();
+
   // ---- SEO for the query-driven detail pages -------------------------------
   // /product, /post and /tutorial are single shells that render whichever
   // record the query string names. The static <head> therefore describes the
