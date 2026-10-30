@@ -242,6 +242,24 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "Resell licences can't be sold on a Resell Rights product. Turn them off, or add Resell+ to the license types." }, 400);
     }
 
+    // A legal file row with no stored path can never be opened. The editor used to save
+    // rows that were still uploading; refuse any NEW pathless row (rows already on file
+    // that way are kept until the admin removes them).
+    if (Array.isArray(legalIn.proofFiles) || Array.isArray(legalIn.devProofFiles)) {
+      const pathless = (list: unknown) => (Array.isArray(list) ? list : [])
+        .filter((f) => !f || typeof f !== "object" || !(f as { path?: unknown }).path)
+        .map((f) => typeof f === "string" ? f : String((f as { name?: unknown } | null)?.name ?? ""));
+      let onFile: string[] = [];
+      if (id) {
+        const { data: prev } = await admin.from("product_legal").select("proof_files, dev_proof_files").eq("product_id", id).maybeSingle();
+        onFile = [...pathless(prev?.proof_files), ...pathless(prev?.dev_proof_files)];
+      }
+      const fresh = [...pathless(legalIn.proofFiles), ...pathless(legalIn.devProofFiles)].filter((n) => !onFile.includes(n));
+      if (fresh.length) {
+        return json({ ok: false, error: `${fresh[0]} hasn't finished uploading. Wait for it to finish, or remove it, then save again.` }, 400);
+      }
+    }
+
     const platform = body.platform === "Minecraft" ? "Minecraft" : "Roblox";
     const price = Math.max(0, Number(body.price) || 0);
     // Only a real "was" price if it's actually higher than the current one -

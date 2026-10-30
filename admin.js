@@ -3628,19 +3628,24 @@
       '<div class="adm-up-main"><div class="adm-up-top"><span class="adm-up-name"></span><span class="adm-up-pct">0%</span></div>' +
       '<div class="adm-up-bar"><span class="adm-up-fill"></span></div>' +
       '<div class="adm-up-sub">Preparing…</div></div>' +
-      '<button type="button" class="adm-up-x" aria-label="Dismiss" hidden>×</button>';
+      '<button type="button" class="adm-up-x" aria-label="Cancel upload" title="Cancel upload">×</button>';
     card.querySelector('.adm-up-name').textContent = file.name;
     var fill = card.querySelector('.adm-up-fill'), pctEl = card.querySelector('.adm-up-pct'), sub = card.querySelector('.adm-up-sub'), x = card.querySelector('.adm-up-x');
     upTray().appendChild(card);
     void card.offsetWidth; card.classList.add('in'); upTraySync();
-    var t0 = Date.now(), closed = false;
+    var t0 = Date.now(), closed = false, finished = false, onCancel = null;
     function close() {
       if (closed) return; closed = true;
       card.classList.remove('in'); card.classList.add('out');
       setTimeout(function () { card.remove(); upTraySync(); }, 260);
     }
-    x.addEventListener('click', close);
+    // While the upload runs, × cancels it; once it has finished or failed, × just dismisses the card.
+    x.addEventListener('click', function () {
+      if (!finished && onCancel) onCancel();
+      close();
+    });
     return {
+      onCancel: function (fn) { onCancel = fn; },
       // sent / total in bytes. Without a real byte count (storage that can't report it) the bar just animates.
       progress: function (sent, total) {
         if (closed) return;
@@ -3653,27 +3658,45 @@
       },
       indeterminate: function (msg) { card.classList.add('indeterminate'); sub.textContent = msg || 'Uploading…'; pctEl.textContent = ''; },
       done: function () {
+        finished = true; x.hidden = true;
         if (closed) return;
         card.classList.remove('indeterminate'); card.classList.add('ok');
         fill.style.width = '100%'; pctEl.textContent = '✓'; sub.textContent = formatFileSize(file.size) + ' uploaded';
         setTimeout(close, 1800);
       },
       fail: function (msg) {
+        finished = true;
         if (closed) return;
         card.classList.remove('indeterminate'); card.classList.add('err');
-        pctEl.textContent = '!'; sub.textContent = msg || 'Upload failed'; x.hidden = false;
-      }
+        pctEl.textContent = '!'; sub.textContent = msg || 'Upload failed'; x.title = 'Dismiss'; x.setAttribute('aria-label', 'Dismiss');
+      },
+      cancelled: function () { finished = true; close(); }
     };
   }
+  // Every upload still running. Saving waits on this being empty: a file row
+  // saved mid-upload has no stored path yet, and that empty path used to be
+  // written to the product for good ("no stored file to open").
+  var ACTIVE_UPLOADS = [];
+  function uploadCancelledError() { var e = new Error('Upload cancelled.'); e.cancelled = true; return e; }
+  function uploadsBusyMsg() {
+    var n = ACTIVE_UPLOADS.length;
+    return n ? (n === 1 ? '1 file is' : n + ' files are') + ' still uploading. Wait for ' + (n === 1 ? 'it' : 'them') + ' to finish, or cancel, before saving.' : '';
+  }
+  window.addEventListener('beforeunload', function (e) {
+    if (!ACTIVE_UPLOADS.length) return;
+    e.preventDefault(); e.returnValue = '';
+  });
   // POST with upload progress (fetch can't report it). Resolves {status, ok, json()} like the pieces of a
   // fetch Response the callers below already use.
-  function xhrPost(url, body, onProgress) {
+  function xhrPost(url, body, onProgress, ctl) {
     return new Promise(function (resolve, reject) {
+      if (ctl && ctl.cancelled) { reject(uploadCancelledError()); return; }
       var xhr = new XMLHttpRequest();
+      if (ctl) ctl.xhr = xhr;
       xhr.open('POST', url);
       xhr.upload.onprogress = function (e) { if (e.lengthComputable && onProgress) onProgress(e.loaded, e.total); };
       xhr.onerror = function () { reject(new TypeError('network')); };
-      xhr.onabort = function () { reject(new TypeError('aborted')); };
+      xhr.onabort = function () { reject(ctl && ctl.cancelled ? uploadCancelledError() : new TypeError('aborted')); };
       xhr.onload = function () {
         var text = xhr.responseText;
         resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, json: function () { try { return Promise.resolve(JSON.parse(text)); } catch (e) { return Promise.reject(e); } } });
@@ -3681,14 +3704,33 @@
       xhr.send(body);
     });
   }
+  // The returned promise carries .cancel(), which stops the upload and rejects
+  // it with err.cancelled set.
   function uploadToStorageRaw(kind, file, slugOverride) {
     var tracker = uploadTrack(file);
-    return uploadToStorageRaw2(kind, file, slugOverride, tracker).then(function (r) { tracker.done(); return r; }, function (err) {
+    var ctl = { cancelled: false, xhr: null };
+    ctl.cancel = function () {
+      if (ctl.cancelled) return;
+      ctl.cancelled = true;
+      if (ctl.xhr) try { ctl.xhr.abort(); } catch (_) {}
+    };
+    tracker.onCancel(ctl.cancel);
+    ACTIVE_UPLOADS.push(ctl);
+    function settle() { var i = ACTIVE_UPLOADS.indexOf(ctl); if (i !== -1) ACTIVE_UPLOADS.splice(i, 1); }
+    var p = uploadToStorageRaw2(kind, file, slugOverride, tracker, ctl).then(function (r) {
+      // Supabase Storage uploads can't be aborted mid-flight; a cancel still drops the result.
+      if (ctl.cancelled) throw uploadCancelledError();
+      settle(); tracker.done(); return r;
+    }).catch(function (err) {
+      settle();
+      if (ctl.cancelled) { tracker.cancelled(); throw uploadCancelledError(); }
       tracker.fail((err && err.message) || 'Upload failed');
       throw err;
     });
+    p.cancel = ctl.cancel;
+    return p;
   }
-  function uploadToStorageRaw2(kind, file, slugOverride, tracker) {
+  function uploadToStorageRaw2(kind, file, slugOverride, tracker, ctl) {
     var typeMsg = uploadAllowedMsg(kind, file);
     if (typeMsg) return Promise.reject(new Error(typeMsg));
     var slug = slugOverride || $('admEditId').value;
@@ -3714,13 +3756,14 @@
           var body = new FormData();
           body.append('file', file.slice(offset, end), 'chunk');
           var last = end >= file.size ? 1 : 0;
-          return xhrPost(d.uploadUrl + '&offset=' + offset + '&last=' + last, body, function (loaded) { tracker.progress(offset + Math.min(end - offset, loaded), file.size); }).then(function (r) {
+          return xhrPost(d.uploadUrl + '&offset=' + offset + '&last=' + last, body, function (loaded) { tracker.progress(offset + Math.min(end - offset, loaded), file.size); }, ctl).then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (j) {
               if (r.status === 409 && typeof j.have === 'number' && j.have > offset && j.have < file.size) return sendChunk(j.have, 3); // earlier attempt had landed; resume after it
               if (!r.ok || !j.ok) { var e = new Error(j.error || 'Upload failed (' + r.status + ').'); e.fatal = r.status >= 400 && r.status < 500; throw e; }
               return last ? null : sendChunk(end, 3);
             });
           }).catch(function (e) {
+            if (ctl.cancelled) throw uploadCancelledError();
             if (!e.fatal && tries > 1) return sendChunk(offset, tries - 1);
             throw new Error(e.fatal ? e.message : 'File storage is temporarily unavailable. Please try again shortly.');
           });
@@ -3732,12 +3775,12 @@
         var fd = new FormData();
         fd.append('file', file);
         tracker.progress(0, file.size);
-        return xhrPost(d.uploadUrl, fd, function (loaded, total) { tracker.progress(Math.min(file.size, loaded), file.size); }).then(function (r) {
+        return xhrPost(d.uploadUrl, fd, function (loaded, total) { tracker.progress(Math.min(file.size, loaded), file.size); }, ctl).then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (j) {
             if (!r.ok || !j.ok) throw new Error(j.error || 'Upload failed (' + r.status + ').');
             return { path: d.path, publicUrl: d.publicUrl };
           });
-        }, function () { throw new Error('Image storage is temporarily unavailable. Please try again shortly.'); });
+        }, function (e) { if (e && e.cancelled) throw e; throw new Error('Image storage is temporarily unavailable. Please try again shortly.'); });
       }
       tracker.indeterminate('Uploading ' + formatFileSize(file.size) + '…');
       return window.coldSupabase.storage.from(d.bucket).uploadToSignedUrl(d.path, d.token, file).then(function (upRes) {
@@ -3750,14 +3793,18 @@
   // Every upload reports back with the same corner toast as "Product created":
   // green and auto-dismissing on success, red and sticky (click to dismiss) on failure.
   function uploadToStorage(kind, file, slugOverride) {
-    return uploadToStorageRaw(kind, file, slugOverride).then(function (r) {
+    var raw = uploadToStorageRaw(kind, file, slugOverride);
+    var p = raw.then(function (r) {
       admToast('Uploaded ' + file.name, true);
       return r;
     }, function (err) {
-      admToast(file.name + ' failed to upload: ' + ((err && err.message) || 'try again'), false);
+      if (err && err.cancelled) admToast('Cancelled ' + file.name, true);
+      else admToast(file.name + ' failed to upload: ' + ((err && err.message) || 'try again'), false);
       if (err && typeof err === 'object') err.toasted = true;
       throw err;
     });
+    p.cancel = raw.cancel;
+    return p;
   }
 
   // The placeholder is the products table's column default, so a product that
@@ -4000,6 +4047,11 @@
       var ext = fileExtOf(name);
       var kind = /^(mp4|webm|mov|m4v)$/.test(ext) ? 'video' : /^(png|jpe?g|gif|webp)$/.test(ext) ? 'image' : /^(mp3|wav|ogg|m4a)$/.test(ext) ? 'audio' : 'file';
       var acts = '';
+      if (f && f.uploading) {
+        return '<div class="adm-file-item adm-file-card"><span class="adm-filecard-ic">' + esc(ext) + '</span>' +
+          '<span class="adm-file-name">' + esc(name) + ' <span class="adm-sub">Uploading…</span></span>' +
+          '<button type="button" class="adm-mp-del ' + removeClass + '" data-i="' + i + '">Cancel</button></div>';
+      }
       if (path) {
         if (kind !== 'file') acts += '<button type="button" class="adm-mp-done" data-fl="view" data-kind="' + kind + '" data-path="' + esc(path) + '">' + (kind === 'image' ? 'View' : 'Play') + '</button>';
         acts += '<button type="button" class="adm-mp-done" data-fl="download" data-path="' + esc(path) + '">Download</button>';
@@ -4208,16 +4260,25 @@
     var f = files[0]; if (!f) return;
     var fileNote = $('admEditFileNote');
     var dot = f.name.lastIndexOf('.');
-    $('admEditTechFormat').value = dot >= 0 ? f.name.slice(dot).toLowerCase() : '';
-    $('admEditTechSize').value = formatFileSize(f.size);
-    $('admEditTechFileName').value = f.name;
-    FILE_REMOVED.edit = false;
-    fileNoteMsg(fileNote, 'Uploading ' + f.name + '…');
+    var wasPending = pendingStoragePath, wasRemoved = FILE_REMOVED.edit;
+    fileNoteMsg(fileNote, 'Uploading ' + f.name + '… (× on the upload card cancels it)');
     uploadToStorage('productFile', f).then(function (r) {
+      // The file details only change once the file is really stored, so they can
+      // never describe a file the product doesn't have.
+      $('admEditTechFormat').value = dot >= 0 ? f.name.slice(dot).toLowerCase() : '';
+      $('admEditTechSize').value = formatFileSize(f.size);
+      $('admEditTechFileName').value = f.name;
+      FILE_REMOVED.edit = false;
       pendingStoragePath = r.path;
       setFileNote(fileNote, null, f.name);
     }).catch(function (err) {
-      pendingStoragePath = null;
+      if (err && err.cancelled) {
+        // Back to whatever was attached before this upload started.
+        pendingStoragePath = wasPending; FILE_REMOVED.edit = wasRemoved;
+        var cur = findProduct($('admEditId').value);
+        setFileNote(fileNote, cur && cur.storagePath, wasPending && wasPending !== PLACEHOLDER_PATH ? $('admEditTechFileName').value : null);
+        return;
+      }
       fileNoteMsg(fileNote, 'Upload failed: ' + (err.message || 'try again') + '.', true);
     });
   });
@@ -4573,13 +4634,19 @@
   // product is reopened. A placeholder row shows immediately so a slow
   // upload doesn't look like nothing happened; it gets its real path once
   // the upload resolves, or is removed on failure.
+  // A row shows as "Uploading…" with a Cancel button until its file has a stored
+  // path; the save button refuses to run while any upload is in flight.
+  var LEGAL_UPLOADS = new WeakMap();
   function addLegalFiles(list, files, rerender) {
     Array.prototype.forEach.call(files, function (f) {
-      var row = { name: f.name, path: null };
+      var row = { name: f.name, path: null, uploading: true };
       list.push(row);
       rerender();
-      uploadToStorage('legalDoc', f).then(function (r) {
+      var up = uploadToStorage('legalDoc', f);
+      LEGAL_UPLOADS.set(row, up);
+      up.then(function (r) {
         row.path = r.path;
+        delete row.uploading;
         rerender();
       }).catch(function (err) {
         var idx = list.indexOf(row);
@@ -4588,13 +4655,25 @@
       });
     });
   }
+  function removeLegalFile(list, i) {
+    var row = list[i]; if (!row) return;
+    var up = LEGAL_UPLOADS.get(row);
+    if (row.uploading && up) up.cancel();
+    list.splice(i, 1);
+  }
+  // Rows still uploading are never saved (the submit handler waits for them).
+  // Older rows with no stored file are kept, still flagged, until removed by hand.
+  function savedLegalFiles(list) {
+    return list.filter(function (f) { return f && !f.uploading; })
+      .map(function (f) { return typeof f === 'string' ? f : { name: f.name, path: f.path || null }; });
+  }
   wireDropzone($('admLegalProofDrop'), $('admLegalProofInput'), function (files) {
     addLegalFiles(editProofFiles, files, renderProofList);
   });
   var proofList = $('admLegalProofList');
   if (proofList) proofList.addEventListener('click', function (e) {
     var btn = e.target.closest('.adm-proof-remove'); if (!btn) return;
-    editProofFiles.splice(+btn.getAttribute('data-i'), 1);
+    removeLegalFile(editProofFiles, +btn.getAttribute('data-i'));
     renderProofList();
   });
 
@@ -4604,7 +4683,7 @@
   var devProofList = $('admLegalDevProofList');
   if (devProofList) devProofList.addEventListener('click', function (e) {
     var btn = e.target.closest('.adm-dev-proof-remove'); if (!btn) return;
-    editDevProofFiles.splice(+btn.getAttribute('data-i'), 1);
+    removeLegalFile(editDevProofFiles, +btn.getAttribute('data-i'));
     renderDevProofList();
   });
 
@@ -4718,8 +4797,8 @@
         revenueSharePct: licenseTypesValue().indexOf('revenue_share') >= 0 ? (parseFloat($('admLegalRevSharePct').value) || 0) : null,
         revenueSharePaymentPlatform: licenseTypesValue().indexOf('revenue_share') >= 0 ? $('admLegalRevSharePlatform').value.trim() : '',
         revenueSharePaymentLink: licenseTypesValue().indexOf('revenue_share') >= 0 ? $('admLegalRevShareLink').value.trim() : '',
-        proofFiles: editProofFiles.slice(),
-        devProofFiles: editDevProofFiles.slice(),
+        proofFiles: savedLegalFiles(editProofFiles),
+        devProofFiles: savedLegalFiles(editDevProofFiles),
         contacts: editContacts.filter(function (c) { return c.label || c.value; }),
         licenseCost: Math.max(0, parseFloat($('admLegalCostAmount').value) || 0),
         licenseCostCurrency: $('admLegalCostCurrency').value,
@@ -4825,7 +4904,7 @@
     var isCreate = !id;
     var platform = $('admEditPlatform').value;
     var msg = $('admEditMsg');
-    var legalSaveErr = productLegalSaveError() || addonsSaveError();
+    var legalSaveErr = uploadsBusyMsg() || productLegalSaveError() || addonsSaveError();
     if (legalSaveErr) { if (msg) msg.textContent = legalSaveErr; admToast(legalSaveErr, false); return; }
     var realSaveBtn = $('admEditSaveBtn');
     var stickySave = $('admEditStickySave');
@@ -4894,6 +4973,10 @@
       pendingStoragePath = null;
       return refreshProducts();
     }).then(function () {
+      // The file card still said "Uploaded, saves with the product" (no Download) until a page refresh.
+      FILE_REMOVED.edit = false;
+      var saved = findProduct(id);
+      setFileNote($('admEditFileNote'), saved && saved.storagePath);
       if (saveBtn) saveBtn.disabled = false;
       if (msg) msg.textContent = 'Saved.';
       admToast('Changes saved', true);
@@ -5071,15 +5154,21 @@
   wireDropzone($('admUpdFileDrop'), $('admUpdFileInput'), function (files) {
     var f = files[0]; if (!f || !updSelectedId) return;
     var note = $('admUpdFileNote');
-    FILE_REMOVED.upd = false;
-    fileNoteMsg(note, 'Uploading ' + f.name + '…');
+    var wasPath = updPendingPath, wasTech = updPendingTech, wasRemoved = FILE_REMOVED.upd;
+    fileNoteMsg(note, 'Uploading ' + f.name + '… (× on the upload card cancels it)');
     uploadToStorage('productFile', f, updSelectedId).then(function (r) {
       var dot = f.name.lastIndexOf('.');
+      FILE_REMOVED.upd = false;
       updPendingPath = r.path;
       updPendingTech = { format: dot >= 0 ? f.name.slice(dot).toLowerCase() : '', size: formatFileSize(f.size), fileName: f.name };
       setFileNote(note, null, f.name);
     }).catch(function (err) {
-      updPendingPath = null; updPendingTech = null;
+      if (err && err.cancelled) {
+        updPendingPath = wasPath; updPendingTech = wasTech; FILE_REMOVED.upd = wasRemoved;
+        var cur = findProduct(updSelectedId);
+        setFileNote(note, cur && cur.storagePath, wasPath && wasPath !== PLACEHOLDER_PATH && wasTech ? wasTech.fileName : null);
+        return;
+      }
       fileNoteMsg(note, 'Upload failed: ' + (err.message || 'try again') + '.', true);
     });
   });
@@ -5090,6 +5179,8 @@
     if (!updSelectedId) return;
     var p = findProduct(updSelectedId); if (!p) return;
     var msg = $('admUpdMsg');
+    var busy = uploadsBusyMsg();
+    if (busy) { if (msg) msg.textContent = busy; admToast(busy, false); return; }
     var silent = updSilent();
     var overrides = {};
     var label;
