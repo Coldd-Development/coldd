@@ -2413,14 +2413,15 @@
           var stack = behind.map(function (x, k) {
             return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + x.image + '\')"></span>';
           }).join('');
-          var fiat = window.__fiat || function (n) { return '$' + n; };
           // The standard product card (pill, price row, Buy now / Add to cart), so bundles sit in
-          // the shop like any other product. Clicking anywhere else opens the bundle popup.
+          // the shop like any other product, with the stacked covers in the thumbnail (most popular
+          // product in front). Clicking anywhere else opens the bundle popup.
           return '<article class="product bundle-tile" data-token="' + bEsc(v.token) + '">' +
-            '<div class="p-thumb" style="background-image:url(\'' + v.image + '\')"><span class="p-off">-' + Math.round(v.pct) + '%</span></div>' +
+            '<div class="p-thumb bundle-thumb"><span class="p-off">-' + Math.round(v.pct) + '%</span>' +
+              '<div class="pd-bundle-art">' + stack + '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')"></span></div></div>' +
             '<div class="p-body">' +
               '<h3 class="p-name">' + bEsc(v.title) + '</h3>' +
-              '<div class="p-price-row"><span class="p-was">' + fiat(v.listUsd) + '</span><span class="p-price">' + fiat(v.priceUsd) + '</span></div>' +
+              '<div class="p-price-row"><span class="p-was">' + window.__bundleMoney(v, 'list') + '</span><span class="p-price">' + window.__bundleMoney(v, 'price') + '</span></div>' +
               '<p class="p-sum">' + bEsc(v.desc) + '</p>' +
               '<div class="p-actions"><button class="p-buy" type="button">Buy now</button>' +
               '<button class="p-add" type="button">Add to cart</button></div>' +
@@ -2438,7 +2439,6 @@
         function closeBundleModal() { if (bundleModal) bundleModal.hidden = true; document.removeEventListener('keydown', bundleModalKey); }
         function bundleModalKey(e) { if (e.key === 'Escape') closeBundleModal(); }
         function openBundleModal(v) {
-          var fiat = window.__fiat || function (n) { return '$' + n; };
           if (!bundleModal) {
             bundleModal = document.createElement('div');
             bundleModal.className = 'pay-overlay bundle-overlay';
@@ -2458,13 +2458,12 @@
               '<div class="bm-head"><span class="p-off">-' + Math.round(v.pct) + '%</span><h2 class="pay-title" id="bmTitle">' + bEsc(v.title) + '</h2></div>' +
               (v.desc ? '<p class="pay-sub">' + bEsc(v.desc) + '</p>' : '') +
               '<div class="bm-list">' + v.prods.map(function (x) {
-                var now = Math.round(x.priceNum * (1 - v.pct / 100) * 100) / 100;
                 return '<a class="bm-item" href="/product/' + encodeURIComponent(x.id) + '/">' +
                   '<span class="bm-thumb" style="background-image:url(\'' + x.image + '\')"></span>' +
                   '<span class="bm-name">' + bEsc(x.title) + '</span>' +
-                  '<span class="p-price-row"><span class="p-was">' + fiat(x.priceNum) + '</span><span class="p-price">' + fiat(now) + '</span></span></a>';
+                  '<span class="p-price-row"><span class="p-was">' + window.__bundleItemMoney(x, 0) + '</span><span class="p-price">' + window.__bundleItemMoney(x, v.pct) + '</span></span></a>';
               }).join('') + '</div>' +
-              '<div class="bm-foot"><div class="p-price-row"><span class="p-was">' + fiat(v.listUsd) + '</span><span class="p-price">' + fiat(v.priceUsd) + '</span></div>' +
+              '<div class="bm-foot"><div class="p-price-row"><span class="p-was">' + window.__bundleMoney(v, 'list') + '</span><span class="p-price">' + window.__bundleMoney(v, 'price') + '</span></div>' +
                 '<div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div></div>' +
             '</div>';
           bundleModal.hidden = false;
@@ -2493,6 +2492,10 @@
           if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' bundle' : ' bundles');
           return list.length;
         }
+        // Re-paint for the other currency, or once popularity data picks a new front cover.
+        ['currencychange', 'coldd:bundles-changed'].forEach(function (ev) {
+          (ev === 'currencychange' ? window : document).addEventListener(ev, function () { if (curCat === 'bundles') paintBundles(); });
+        });
         if (bundlesEl) bundlesEl.addEventListener('click', function (e) {
           const card = e.target.closest('.bundle-tile'); if (!card) return;
           const v = (window.__bundleViews ? window.__bundleViews() : []).filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
@@ -3625,7 +3628,7 @@
               '<div class="pd-bundle-art">' + stack +
                 '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')">' +
                   '<span class="p-off">-' + Math.round(v.pct) + '%</span>' +
-                  '<span class="pd-bundle-price"><b>' + fiat(v.priceUsd) + '</b><s>' + fiat(v.listUsd) + '</s></span>' +
+                  '<span class="pd-bundle-price"><b>' + window.__bundleMoney(v, 'price') + '</b><s>' + window.__bundleMoney(v, 'list') + '</s></span>' +
                 '</span></div>' +
               '<h3 class="pd-bundle-name">' + esc(v.title) + '</h3>' +
               (v.desc ? '<p class="pd-bundle-desc">' + esc(v.desc) + '</p>' : '') +
@@ -4159,7 +4162,8 @@
             priceEl.textContent = rbx != null ? ('R$ ' + Math.round(rbx).toLocaleString('en-US')) : ((p.robuxDisabled && window.__fiat) ? window.__fiat(p.priceNum) : (window.__money ? window.__money(p.priceNum) : ('$' + p.priceNum)));
           });
         }
-        window.addEventListener('currencychange', function () { if (cur) refreshPrice(); syncRelatedPricing(); });
+        window.addEventListener('currencychange', function () { if (cur) { refreshPrice(); renderBundleCards(cur); } syncRelatedPricing(); });
+        document.addEventListener('coldd:bundles-changed', function () { if (cur) renderBundleCards(cur); });
         window.__renderProduct = render;
         if (!window.__singleFile) {
           pv.hidden = false;

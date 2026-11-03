@@ -5040,6 +5040,12 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 @media (min-width: 1400px) { .shop-bundles { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 900px) { .shop-bundles { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 440px) { .shop-bundles { grid-template-columns: 1fr; } }
+/* Shop bundle tile: the stacked covers sit inside the standard card thumbnail. */
+.bundle-thumb { display: flex; align-items: center; justify-content: center; padding: 24px 30px 14px 16px;
+  background: radial-gradient(120% 90% at 50% 100%, var(--bg-3), var(--bg-2)); }
+.bundle-thumb .pd-bundle-art { width: auto; height: 100%; max-width: 100%; aspect-ratio: 16 / 9; margin: 0; transition: transform .2s ease; }
+.bundle-tile:hover .bundle-thumb .pd-bundle-art { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .bundle-thumb .pd-bundle-art { transition: none; } }
 /* Bundle popup (shop Bundles category): the products inside, each at its bundle price. */
 .bundle-modal { width: 560px; max-height: 88vh; overflow-y: auto; padding: 26px; }
 .bm-x { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-ctl);

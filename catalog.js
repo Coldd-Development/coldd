@@ -743,20 +743,62 @@
   // only describe that to the shopper; the discount that is charged is always the
   // server's. Prices round per product, exactly as the server does.
   function round2(n) { return Math.round(n * 100) / 100; }
-  function popularity(p) { return (Number(p.reviews) || 0) * 10 + (Number(p.rating) || 0); }
+  // Same signal as the shop's "Popular" sort (views rank), then BuiltByBit sales, then reviews.
+  // window.__DEMAND arrives after the catalog (see loadBundleDemand) and bundle views re-render.
+  function popularity(p) {
+    var d = (window.__DEMAND || {})[p.id] || {};
+    return (Number(d.views) || 0) * 1e6 + (Number(d.bbb) || 0) * 1e3 + (Number(p.reviews) || 0) * 10 + (Number(p.rating) || 0);
+  }
+  function loadBundleDemand() {
+    if (!(window.__BUNDLES || []).length || !window.coldSupabase) return;
+    try { var cached = JSON.parse(sessionStorage.getItem('coldd_demand') || 'null'); if (cached) { window.__DEMAND = cached; return; } } catch (e) {}
+    window.coldSupabase.rpc('catalog_demand_signals', {}).then(function (r) {
+      var map = {};
+      (r.data || []).forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0 }; });
+      window.__DEMAND = map;
+      try { sessionStorage.setItem('coldd_demand', JSON.stringify(map)); } catch (e) {}
+      document.dispatchEvent(new CustomEvent('coldd:bundles-changed'));
+    }, function () {});
+  }
   window.__bundleView = function (b) {
     var by = {};
     (window.__CATALOG || []).forEach(function (p) { by[p.id] = p; });
     var prods = (b.slugs || []).map(function (s) { return by[s]; }).filter(Boolean);
     if (prods.length < 2 || prods.length !== (b.slugs || []).length) return null; // a member is hidden or gone
     var pct = Number(b.bundle_pct) || 0;
-    var cover = null;
-    prods.forEach(function (p) { if (p.id === b.cover_slug) cover = p; });
-    if (!cover) cover = prods.slice().sort(function (x, y) { return popularity(y) - popularity(x); })[0];
-    var listUsd = 0, priceUsd = 0;
-    prods.forEach(function (p) { listUsd += p.priceNum; priceUsd += round2(p.priceNum * (1 - pct / 100)); });
+    // The most popular product is the cover; the admin-picked cover only breaks a tie (or
+    // stands in while there is no popularity data).
+    var cover = prods.slice().sort(function (x, y) {
+      return (popularity(y) - popularity(x)) || ((y.id === b.cover_slug) - (x.id === b.cover_slug));
+    })[0];
+    var listUsd = 0, priceUsd = 0, listRbx = 0, priceRbx = 0;
+    prods.forEach(function (p) {
+      listUsd += p.priceNum; priceUsd += round2(p.priceNum * (1 - pct / 100));
+      listRbx += bundleItemRobux(p, 0) || 0; priceRbx += bundleItemRobux(p, pct) || 0;
+    });
+    // Robux totals only when every product has a Robux price (same rule as the cart).
+    var rbxOk = prods.every(function (p) { return bundleItemRobux(p, 0) != null; });
     return { b: b, token: b.token, title: b.title, desc: b.description || '', pct: pct, prods: prods, cover: cover,
-             image: b.image || cover.image, listUsd: round2(listUsd), priceUsd: round2(priceUsd) };
+             image: b.image || cover.image, listUsd: round2(listUsd), priceUsd: round2(priceUsd),
+             listRbx: rbxOk ? listRbx : null, priceRbx: rbxOk ? priceRbx : null };
+  };
+  function bundleItemRobux(p, pct) {
+    if (p.robuxDisabled || !(p.robuxPrice > 0)) return null;
+    return pct > 0 ? Math.round(p.robuxPrice * (1 - pct / 100)) : p.robuxPrice;
+  }
+  function inRobuxView() { return window.__currencyMode && window.__currencyMode() === 'robux'; }
+  // Bundle and per-product bundle prices in the currency the shopper is viewing.
+  window.__bundleMoney = function (v, which) {
+    var rbx = which === 'list' ? v.listRbx : v.priceRbx;
+    if (inRobuxView() && rbx != null) return 'R$ ' + Math.round(rbx).toLocaleString('en-US');
+    var usd = which === 'list' ? v.listUsd : v.priceUsd;
+    return window.__fiat ? window.__fiat(usd) : '$' + usd;
+  };
+  window.__bundleItemMoney = function (p, pct) {
+    var rbx = bundleItemRobux(p, pct);
+    if (inRobuxView() && rbx != null) return 'R$ ' + rbx.toLocaleString('en-US');
+    var usd = pct > 0 ? round2(p.priceNum * (1 - pct / 100)) : p.priceNum;
+    return window.__fiat ? window.__fiat(usd) : '$' + usd;
   };
   window.__bundleViews = function () {
     return (window.__BUNDLES || []).map(window.__bundleView).filter(Boolean);
@@ -825,6 +867,7 @@
     .then(function (results) {
       var prodRes = results[0], revRes = results[1], contentRes = results[2], bundleRes = results[3], addonRes = results[4];
       window.__BUNDLES = (bundleRes && !bundleRes.error && bundleRes.data) ? bundleRes.data : [];
+      loadBundleDemand();
       if (prodRes.error) { fail(prodRes.error); return; }
       window.__CATALOG = (prodRes.data || []).map(toCard);
       window.__CATALOG_OK = true; // distinguishes a real (possibly empty) catalog from a failed fetch
