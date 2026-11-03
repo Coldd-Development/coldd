@@ -2414,17 +2414,62 @@
             return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + x.image + '\')"></span>';
           }).join('');
           var fiat = window.__fiat || function (n) { return '$' + n; };
-          return '<article class="pd-bundle-card" data-token="' + bEsc(v.token) + '">' +
-            '<div class="pd-bundle-art">' + stack +
-              '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')">' +
-                '<span class="pd-bundle-off">' + Math.round(v.pct) + '% off</span>' +
-                '<span class="pd-bundle-price"><b>' + fiat(v.priceUsd) + '</b><s>' + fiat(v.listUsd) + '</s></span>' +
-              '</span></div>' +
-            '<h3 class="pd-bundle-name">' + bEsc(v.title) + '</h3>' +
-            (v.desc ? '<p class="pd-bundle-desc">' + bEsc(v.desc) + '</p>' : '') +
-            '<p class="pd-bundle-incl">Includes ' + v.prods.map(function (x) { return bEsc(x.title); }).join(', ') + '</p>' +
-            '<button class="btn btn-primary pd-bundle-add" type="button">Add bundle to cart</button>' +
-            '</article>';
+          // The standard product card (pill, price row, Buy now / Add to cart), so bundles sit in
+          // the shop like any other product. Clicking anywhere else opens the bundle popup.
+          return '<article class="product bundle-tile" data-token="' + bEsc(v.token) + '">' +
+            '<div class="p-thumb" style="background-image:url(\'' + v.image + '\')"><span class="p-off">-' + Math.round(v.pct) + '%</span></div>' +
+            '<div class="p-body">' +
+              '<h3 class="p-name">' + bEsc(v.title) + '</h3>' +
+              '<div class="p-price-row"><span class="p-was">' + fiat(v.listUsd) + '</span><span class="p-price">' + fiat(v.priceUsd) + '</span></div>' +
+              '<p class="p-sum">' + bEsc(v.desc) + '</p>' +
+              '<div class="p-actions"><button class="p-buy" type="button">Buy now</button>' +
+              '<button class="p-add" type="button">Add to cart</button></div>' +
+            '</div></article>';
+        }
+        function addBundleToCart(v) {
+          v.prods.forEach(function (x) {
+            if (window.__coldOwned && window.__coldOwned.has(x.id)) return; // never re-sell something they already own
+            if (window.__cartAdd) window.__cartAdd({ id: x.id, title: x.title, price: x.priceNum, image: x.image, tag: x.cat || '' });
+          });
+        }
+        // Bundle popup: what's inside, each product at its bundle price with the full price crossed
+        // out, linking to its page in this tab.
+        var bundleModal = null;
+        function closeBundleModal() { if (bundleModal) bundleModal.hidden = true; document.removeEventListener('keydown', bundleModalKey); }
+        function bundleModalKey(e) { if (e.key === 'Escape') closeBundleModal(); }
+        function openBundleModal(v) {
+          var fiat = window.__fiat || function (n) { return '$' + n; };
+          if (!bundleModal) {
+            bundleModal = document.createElement('div');
+            bundleModal.className = 'pay-overlay bundle-overlay';
+            bundleModal.hidden = true;
+            document.body.appendChild(bundleModal);
+            bundleModal.addEventListener('click', function (e) {
+              if (e.target === bundleModal || e.target.closest('.bm-x')) return closeBundleModal();
+              var cur = bundleModal._v; if (!cur) return;
+              if (e.target.closest('.p-buy')) { addBundleToCart(cur); location.href = '/checkout'; }
+              else if (e.target.closest('.p-add')) { addBundleToCart(cur); closeBundleModal(); if (window.__openCart) window.__openCart(); }
+            });
+          }
+          bundleModal._v = v;
+          bundleModal.innerHTML =
+            '<div class="pay-modal bundle-modal" role="dialog" aria-modal="true" aria-labelledby="bmTitle">' +
+              '<button class="bm-x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>' +
+              '<div class="bm-head"><span class="p-off">-' + Math.round(v.pct) + '%</span><h2 class="pay-title" id="bmTitle">' + bEsc(v.title) + '</h2></div>' +
+              (v.desc ? '<p class="pay-sub">' + bEsc(v.desc) + '</p>' : '') +
+              '<div class="bm-list">' + v.prods.map(function (x) {
+                var now = Math.round(x.priceNum * (1 - v.pct / 100) * 100) / 100;
+                return '<a class="bm-item" href="/product/' + encodeURIComponent(x.id) + '/">' +
+                  '<span class="bm-thumb" style="background-image:url(\'' + x.image + '\')"></span>' +
+                  '<span class="bm-name">' + bEsc(x.title) + '</span>' +
+                  '<span class="p-price-row"><span class="p-was">' + fiat(x.priceNum) + '</span><span class="p-price">' + fiat(now) + '</span></span></a>';
+              }).join('') + '</div>' +
+              '<div class="bm-foot"><div class="p-price-row"><span class="p-was">' + fiat(v.listUsd) + '</span><span class="p-price">' + fiat(v.priceUsd) + '</span></div>' +
+                '<div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div></div>' +
+            '</div>';
+          bundleModal.hidden = false;
+          document.addEventListener('keydown', bundleModalKey);
+          var x = bundleModal.querySelector('.bm-x'); if (x) x.focus();
         }
         function bundlesForShop() {
           return (window.__bundleViews ? window.__bundleViews() : []).filter(function (v) {
@@ -2449,14 +2494,12 @@
           return list.length;
         }
         if (bundlesEl) bundlesEl.addEventListener('click', function (e) {
-          const card = e.target.closest('.pd-bundle-card'); if (!card) return;
+          const card = e.target.closest('.bundle-tile'); if (!card) return;
           const v = (window.__bundleViews ? window.__bundleViews() : []).filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
           if (!v) return;
-          v.prods.forEach(function (x) {
-            if (window.__coldOwned && window.__coldOwned.has(x.id)) return; // never re-sell something they already own
-            if (window.__cartAdd) window.__cartAdd({ id: x.id, title: x.title, price: x.priceNum, image: x.image, tag: x.cat || '' });
-          });
-          if (window.__openCart) window.__openCart();
+          if (e.target.closest('.p-buy')) { addBundleToCart(v); location.href = '/checkout'; }
+          else if (e.target.closest('.p-add')) { addBundleToCart(v); if (window.__openCart) window.__openCart(); }
+          else openBundleModal(v);
         });
 
         function refilter(resetPage) {
@@ -3193,7 +3236,7 @@
       document.addEventListener('click', function (e) {
         if (e.target.closest('.cart-drawer') || e.target.closest('.search-panel')) return;
         var card = e.target.closest('.product');
-        if (!card) return;
+        if (!card || card.classList.contains('bundle-tile')) return; // bundle tiles have their own handler
         e.preventDefault();
         if (card.getAttribute('data-free') === 'yes' || Number(card.getAttribute('data-price')) <= 0) { window.open('https://discord.gg/coldd', '_blank', 'noopener'); return; }
         if (e.target.closest('.p-buy')) { add(readCard(card)); location.href = '/checkout'; }
@@ -3581,7 +3624,7 @@
             return '<article class="pd-bundle-card" data-token="' + esc(v.token) + '">' +
               '<div class="pd-bundle-art">' + stack +
                 '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')">' +
-                  '<span class="pd-bundle-off">' + Math.round(v.pct) + '% off</span>' +
+                  '<span class="p-off">-' + Math.round(v.pct) + '%</span>' +
                   '<span class="pd-bundle-price"><b>' + fiat(v.priceUsd) + '</b><s>' + fiat(v.listUsd) + '</s></span>' +
                 '</span></div>' +
               '<h3 class="pd-bundle-name">' + esc(v.title) + '</h3>' +

@@ -7468,7 +7468,7 @@
         '<div class="pd-bundle-card"><div class="pd-bundle-art">' +
         behind.map(function (x, k) { return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + esc(x.image) + '\')"></span>'; }).join('') +
         '<span class="pd-bundle-cover" style="background-image:url(\'' + esc(cover.image) + '\')">' +
-          '<span class="pd-bundle-off">' + (pct > 0 ? Math.round(pct) + '% off' : 'Bundle') + '</span>' +
+          '<span class="p-off">' + (pct > 0 ? '-' + Math.round(pct) + '%' : 'Bundle') + '</span>' +
           '<span class="pd-bundle-price"><b>' + usd(pr.sale) + '</b><s>' + usd(pr.list) + '</s></span></span></div>' +
         '<h3 class="pd-bundle-name">' + esc($('admBundleTitle').value || 'Bundle title') + '</h3>' +
         ($('admBundleDesc').value ? '<p class="pd-bundle-desc">' + esc($('admBundleDesc').value) + '</p>' : '') + '</div>';
