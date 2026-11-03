@@ -5463,11 +5463,24 @@
   function mpLabel(key) { var m = MP_TASK_TARGETS.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
   function mpStatus(dbId, key) { var l = MP_LISTINGS[dbId]; return (l && l[key]) || 'pending'; }
 
+  // The API returns at most 1000 rows per request whatever .limit() asks for, so read every
+  // page. Past 1000 listing rows the rest were silently dropped and showed as "Upload".
+  function fetchAllRows(build) {
+    var PAGE = 1000, all = [];
+    function next(from) {
+      return build().range(from, from + PAGE - 1).then(function (res) {
+        if (res.error) return res;
+        all = all.concat(res.data || []);
+        return (res.data || []).length === PAGE ? next(from + PAGE) : { data: all, error: null };
+      });
+    }
+    return next(0);
+  }
   function refreshMarketplaces() {
     if (!window.coldSupabase) return Promise.resolve();
     return Promise.all([
-      window.coldSupabase.from('marketplace_listings').select('product_id, marketplace, status').limit(5000),
-      window.coldSupabase.from('marketplace_tasks').select('id, product_id, marketplace, title, done, created_at, done_at, done_by_name').order('created_at', { ascending: false }).limit(5000)
+      fetchAllRows(function () { return window.coldSupabase.from('marketplace_listings').select('product_id, marketplace, status').order('product_id').order('marketplace'); }),
+      fetchAllRows(function () { return window.coldSupabase.from('marketplace_tasks').select('id, product_id, marketplace, title, done, created_at, done_at, done_by_name').order('created_at', { ascending: false }).order('id'); })
     ]).then(function (r) {
       if (r[0].error || r[1].error) { console.error('[admin] marketplaces:', (r[0].error || r[1].error).message); return; }
       MP_LISTINGS = {};
