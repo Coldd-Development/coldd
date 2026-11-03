@@ -397,148 +397,12 @@
                 <div class="fc-cats">
               <button class="fc-cat active" data-cat="all"><span>All</span></button>
               <button class="fc-cat fc-cat-bundles" data-cat="bundles"><span>Bundles</span></button>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="game-templates"><span>Finished Games &amp; Templates</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="game-templates" data-subcat="finished-games">Finished Games</button>
-                  <button class="fc-sub" data-cat="game-templates" data-subcat="game-templates">Game Templates</button>
+              <template id="shopCategoryTemplate">
+                <div class="fc-cat-group">
+                  <button class="fc-cat"><span></span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                  <div class="fc-subs" hidden></div>
                 </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="maps"><span>Maps</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="maps" data-subcat="cities-towns">Cities &amp; Towns</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="houses-estates">Houses &amp; Estates</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="military-combat">Military &amp; Combat</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="government-politics">Government &amp; Politics</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="nature-terrain">Nature &amp; Terrain</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="scpf">SCPF</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="sci-fi">Sci-Fi</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="airports-aviation">Airports &amp; Aviation</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="medieval">Medieval</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="lobby-spawns">Lobby &amp; Spawns</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="cafes-retail">Cafes &amp; Retail</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="ugc-showcase-homestores">UGC Showcase &amp; Homestores</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="low-poly">Low Poly</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="simulator">Simulator</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="stud-style">Stud-Style</button>
-                  <button class="fc-sub" data-cat="maps" data-subcat="anime-fantasy">Anime &amp; Fantasy</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="scripts-ui"><span>Scripts &amp; UI</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="scripted-systems">Scripted Systems</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="admin-management">Admin &amp; Management</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="non-scripted-ui">Non-Scripted UI</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="ui-packs">UI Packs</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="roleplay">Roleplay</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="combat">Combat</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="economy">Economy</button>
-                  <button class="fc-sub" data-cat="scripts-ui" data-subcat="anime-fantasy">Anime &amp; Fantasy</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="graphics"><span>Graphics</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="graphics" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="graphics" data-subcat="scpf">SCPF</button>
-                  <button class="fc-sub" data-cat="graphics" data-subcat="logos">Logos</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="buildings"><span>Buildings</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="filler">Filler Buildings</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="anime-fantasy">Anime &amp; Fantasy</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="furnished">Furnished Buildings</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="interior-only">Interior Only</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="roleplay">Roleplay</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="building-packs">Building Packs</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="houses-residential">Houses &amp; Residential</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="government">Government &amp; Politics</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="medieval">Medieval</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="scpf">SCPF</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="sci-fi">Sci-Fi</button>
-                  <button class="fc-sub" data-cat="buildings" data-subcat="stores-commercial">Stores &amp; Commercial</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="assets"><span>Assets</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="assets" data-subcat="asset-packs">Asset Packs</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="realistic">Realistic</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="roleplay">Roleplay</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="medieval">Medieval</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="sci-fi">Sci-Fi</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="low-poly">Low Poly</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="aviation">Aviation</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="scpf">SCPF</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="furniture">Furniture</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="nature">Nature</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="stud-style">Stud-Style</button>
-                  <button class="fc-sub" data-cat="assets" data-subcat="anime-fantasy">Anime &amp; Fantasy</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="uniforms-gear"><span>Uniforms &amp; Gear</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="2d-uniforms">2D Uniforms</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="3d-gear">3D Gear</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="military-government">Military &amp; Government</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="roleplay">Roleplay</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="aviation">Aviation</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="morphs">Morphs</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="sci-fi">Sci Fi</button>
-                  <button class="fc-sub" data-cat="uniforms-gear" data-subcat="medieval">Medieval</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="boats"><span>Boats</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="boats" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="boats" data-subcat="civilian">Civilian</button>
-                  <button class="fc-sub" data-cat="boats" data-subcat="commercial">Commercial</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="weapons"><span>Weapons</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="weapons" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="weapons" data-subcat="medieval">Medieval</button>
-                  <button class="fc-sub" data-cat="weapons" data-subcat="scripted">Scripted</button>
-                  <button class="fc-sub" data-cat="weapons" data-subcat="firearms">Firearms</button>
-                  <button class="fc-sub" data-cat="weapons" data-subcat="melees">Melees</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="vehicles"><span>Vehicles</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="vehicles" data-subcat="scripted">Scripted Vehicles</button>
-                  <button class="fc-sub" data-cat="vehicles" data-subcat="military">Military</button>
-                  <button class="fc-sub" data-cat="vehicles" data-subcat="civilian">Civilian</button>
-                  <button class="fc-sub" data-cat="vehicles" data-subcat="trains-locomotives">Trains &amp; Locomotives</button>
-                  <button class="fc-sub" data-cat="vehicles" data-subcat="emergency-services">Emergency Services</button>
-                  <button class="fc-sub" data-cat="vehicles" data-subcat="sci-fi">Sci-Fi</button>
-                </div>
-              </div>
-              <div class="fc-cat-group">
-                <button class="fc-cat" data-cat="animations-vfx"><span>Animations &amp; VFX</span><svg class="fc-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
-                <div class="fc-subs" hidden>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="vfx">VFX</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="animations">Animations</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="vfx-packs">VFX Packs</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="combat">Combat VFX</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="auras">Aura VFX</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="rng-vfx">RNG VFX</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="anime-vfx">Anime VFX</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="animation-packs">Animation Packs</button>
-                  <button class="fc-sub" data-cat="animations-vfx" data-subcat="combat-animations">Combat Animations</button>
-                </div>
-              </div>
+              </template>
               </div>
             </div>
           </div>
@@ -753,7 +617,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261031-canvas" data-then="/app.js?v=20261027-shop-filters-2"></script>
+  <script src="/catalog-loader.php?v=shared-filters-1" data-then="/app.js?v=20261027-shop-filters-2"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

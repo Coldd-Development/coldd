@@ -3549,23 +3549,12 @@
 
   /* ---- Product edit panel ---- */
   var ADM_ICON_TRASH = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
-  var CATEGORIES_BY_PLATFORM = {
-    Roblox: ['Finished Games & Templates', 'Maps', 'Scripts & UI', 'Graphics', 'Buildings', 'Assets', 'Uniforms & Gear', 'Boats', 'Weapons', 'Vehicles', 'Animations & VFX']
-  };
-  // Mirrors the sidebar subcategory filter tree on the shop page.
-  var SUBCATS_BY_CAT = {
-    'Finished Games & Templates': [['finished-games', 'Finished Games'], ['game-templates', 'Game Templates']],
-    'Maps': [['cities-towns', 'Cities & Towns'], ['houses-estates', 'Houses & Estates'], ['military-combat', 'Military & Combat'], ['government-politics', 'Government & Politics'], ['nature-terrain', 'Nature & Terrain'], ['scpf', 'SCPF'], ['sci-fi', 'Sci-Fi'], ['airports-aviation', 'Airports & Aviation'], ['medieval', 'Medieval'], ['lobby-spawns', 'Lobby & Spawns'], ['cafes-retail', 'Cafes & Retail'], ['ugc-showcase-homestores', 'UGC Showcase & Homestores'], ['low-poly', 'Low Poly'], ['simulator', 'Simulator'], ['stud-style', 'Stud-Style'], ['anime-fantasy', 'Anime & Fantasy']],
-    'Scripts & UI': [['scripted-systems', 'Scripted Systems'], ['admin-management', 'Admin & Management'], ['non-scripted-ui', 'Non-Scripted UI'], ['ui-packs', 'UI Packs'], ['roleplay', 'Roleplay'], ['military', 'Military'], ['combat', 'Combat'], ['economy', 'Economy'], ['anime-fantasy', 'Anime & Fantasy']],
-    'Graphics': [['military', 'Military'], ['scpf', 'SCPF'], ['logos', 'Logos']],
-    'Buildings': [['filler', 'Filler Buildings'], ['anime-fantasy', 'Anime & Fantasy'], ['furnished', 'Furnished Buildings'], ['interior-only', 'Interior Only'], ['roleplay', 'Roleplay'], ['building-packs', 'Building Packs'], ['military', 'Military'], ['houses-residential', 'Houses & Residential'], ['government', 'Government & Politics'], ['medieval', 'Medieval'], ['scpf', 'SCPF'], ['sci-fi', 'Sci-Fi'], ['stores-commercial', 'Stores & Commercial']],
-    'Assets': [['asset-packs', 'Asset Packs'], ['realistic', 'Realistic'], ['roleplay', 'Roleplay'], ['military', 'Military'], ['medieval', 'Medieval'], ['sci-fi', 'Sci-Fi'], ['low-poly', 'Low Poly'], ['aviation', 'Aviation'], ['scpf', 'SCPF'], ['furniture', 'Furniture'], ['nature', 'Nature'], ['stud-style', 'Stud-Style'], ['anime-fantasy', 'Anime & Fantasy']],
-    'Uniforms & Gear': [['2d-uniforms', '2D Uniforms'], ['3d-gear', '3D Gear'], ['military-government', 'Military & Government'], ['roleplay', 'Roleplay'], ['aviation', 'Aviation'], ['morphs', 'Morphs'], ['sci-fi', 'Sci Fi'], ['medieval', 'Medieval']],
-    'Boats': [['military', 'Military'], ['civilian', 'Civilian'], ['commercial', 'Commercial']],
-    'Weapons': [['military', 'Military'], ['medieval', 'Medieval'], ['scripted', 'Scripted'], ['firearms', 'Firearms'], ['melees', 'Melees']],
-    'Vehicles': [['scripted', 'Scripted Vehicles'], ['military', 'Military'], ['civilian', 'Civilian'], ['trains-locomotives', 'Trains & Locomotives'], ['emergency-services', 'Emergency Services'], ['sci-fi', 'Sci-Fi']],
-    'Animations & VFX': [['vfx', 'VFX'], ['animations', 'Animations'], ['vfx-packs', 'VFX Packs'], ['combat', 'Combat VFX'], ['auras', 'Aura VFX'], ['rng-vfx', 'RNG VFX'], ['anime-vfx', 'Anime VFX'], ['animation-packs', 'Animation Packs'], ['combat-animations', 'Combat Animations']]
-  };
+  var CATEGORIES_BY_PLATFORM = {};
+  window.__CATEGORIES.forEach(function (category) {
+    var platform = category.platform;
+    if (!CATEGORIES_BY_PLATFORM[platform]) CATEGORIES_BY_PLATFORM[platform] = [];
+    CATEGORIES_BY_PLATFORM[platform].push(category.label);
+  });
   var editContacts = [];
   var editProofFiles = [];
   var editDevProofFiles = [];
@@ -4120,7 +4109,7 @@
 
   var subcatDropdown = makeDropdown($('admEditSubcatDD'), { valueInput: $('admEditSubcat'), placeholder: 'Select subcategories', searchable: true, multi: true });
   function populateSubcatSelect(cat, selected) {
-    var subs = SUBCATS_BY_CAT[cat] || [];
+    var subs = Object.entries(window.__SUBCAT_LABELS[cat] || {});
     var opts = subs.map(function (s) { return { value: s[0], label: s[1] }; });
     // A product can sit in several sub-categories: "selected" is a
     // comma-separated list. Keep any stored value that is no longer in the list
@@ -5021,7 +5010,7 @@
       need(revPct > 0 && revPct <= 100, 'Revenue share percentage (1 to 100)', $('admLegalRevSharePct'));
     }
     if (!priv) {
-      need(!!$('admEditSubcat').value || !(SUBCATS_BY_CAT[cat] || []).length, 'Subcategory', $('admEditSubcatDD'));
+      need(!!$('admEditSubcat').value || !Object.keys(window.__SUBCAT_LABELS[cat] || {}).length, 'Subcategory', $('admEditSubcatDD'));
       need(parseFloat($('admEditPrice').value) > 0 || !$('admLegalCannotBeFree').checked && $('admEditPrice').value !== '', 'USD price', $('admEditPrice'));
       if ($('admEditPlatform').value === 'Roblox' && !noRobuxOn()) need(parseFloat($('admEditRobuxPrice').value) > 0 || (!$('admLegalCannotBeFree').checked && $('admEditRobuxPrice').value !== ''), 'Robux price', $('admEditRobuxPrice'));
       if ($('admEditResell').checked) {

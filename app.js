@@ -1669,6 +1669,25 @@
         if (!grid) return;
         const chips = shop.querySelector('.filters');
         const sideCats = shop.querySelector('.fc-cats');
+        const categoryTemplate = shop.querySelector('#shopCategoryTemplate');
+        if (sideCats && categoryTemplate) {
+          window.__CATEGORIES.filter(category => category.platform === 'Roblox').forEach(function (category) {
+            const group = categoryTemplate.content.firstElementChild.cloneNode(true);
+            const heading = group.querySelector('.fc-cat');
+            heading.dataset.cat = category.slug;
+            heading.querySelector('span').textContent = category.label;
+            const subs = group.querySelector('.fc-subs');
+            Object.entries(window.__SUBCAT_LABELS[category.label] || {}).forEach(function ([slug, label]) {
+              const button = document.createElement('button');
+              button.className = 'fc-sub';
+              button.dataset.cat = category.slug;
+              button.dataset.subcat = slug;
+              button.textContent = label;
+              subs.appendChild(button);
+            });
+            sideCats.appendChild(group);
+          });
+        }
         const searchEl = shop.querySelector('.shop-search');
         const prMin = shop.querySelector('.pr-min');
         const prMax = shop.querySelector('.pr-max');

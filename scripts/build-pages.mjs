@@ -51,7 +51,7 @@ writeFileSync(join(OUT, "_headers"), `/*
 // until the next regen + deploy. app.js reads the slug from the path, so any
 // slug without its own file falls back to the generic shell (status 200).
 // Existing static shells still win; this only catches unknown slugs.
-writeFileSync(join(OUT, "_redirects"), "/product/* /product/ 200\n");
+writeFileSync(join(OUT, "_redirects"), "/catalog-loader.php /catalog.js 200\n/product/* /product/ 200\n");
 
 for (const must of ["index.html", "404.html", "styles.css", "app.js", "robots.txt"]) {
   if (!existsSync(join(OUT, must))) { console.error(`build: missing ${must}`); process.exit(1); }
