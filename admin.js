@@ -3761,15 +3761,43 @@
         return sendChunk(0, 3).then(function () { return { path: d.path, publicUrl: d.publicUrl }; });
       }
       if (d.driver === 'cdn') {
-        var fd = new FormData();
-        fd.append('file', file);
-        tracker.progress(0, file.size);
-        return xhrPost(d.uploadUrl, fd, function (loaded, total) { tracker.progress(Math.min(file.size, loaded), file.size); }, ctl).then(function (r) {
-          return r.json().catch(function () { return {}; }).then(function (j) {
-            if (!r.ok || !j.ok) throw new Error(j.error || 'Upload failed (' + r.status + ').');
-            return { path: d.path, publicUrl: d.publicUrl };
+        // The upload server saves the image, then copies it to the Storage Box. When that copy is
+        // slow, Cloudflare can drop the response even though the file was stored, so a dropped or
+        // 5xx response is retried. "Already exists" on a retry means an earlier try landed; that
+        // counts as done once the image is confirmed live (the path is unique to this upload).
+        var done = function () { return { path: d.path, publicUrl: d.publicUrl }; };
+        var landed = function () {
+          // An <img> load, not fetch: media on the CDN carries no CORS header.
+          if (!d.publicUrl || !/\.(png|jpe?g|gif|webp|avif)$/i.test(d.publicUrl)) return Promise.resolve(false);
+          return new Promise(function (res) {
+            var img = new Image();
+            img.onload = function () { res(true); };
+            img.onerror = function () { res(false); };
+            img.src = d.publicUrl + '?check=' + Date.now();
           });
-        }, function (e) { if (e && e.cancelled) throw e; throw new Error('Image storage is temporarily unavailable. Please try again shortly.'); });
+        };
+        var sendImage = function (tries) {
+          var fd = new FormData();
+          fd.append('file', file);
+          tracker.progress(0, file.size);
+          var retry = function (failMsg) {
+            if (ctl.cancelled) throw uploadCancelledError();
+            if (tries <= 1) throw new Error(failMsg);
+            return new Promise(function (res) { setTimeout(res, tries === 3 ? 2000 : 5000); }).then(function () { return sendImage(tries - 1); });
+          };
+          return xhrPost(d.uploadUrl, fd, function (loaded) { tracker.progress(Math.min(file.size, loaded), file.size); }, ctl).then(function (r) {
+            return r.json().catch(function () { return {}; }).then(function (j) {
+              if (r.ok && j.ok) return done();
+              if (r.status === 409 && tries < 3) return landed().then(function (ok) { if (ok) return done(); throw new Error(j.error || 'Upload failed.'); });
+              if (r.status >= 500) return retry(j.error || 'Image storage is temporarily unavailable. Please try again shortly.');
+              throw new Error(j.error || 'Upload failed (' + r.status + ').');
+            });
+          }, function (e) {
+            if (e && e.cancelled) throw e;
+            return retry('Image storage is temporarily unavailable. Please try again shortly.');
+          });
+        };
+        return sendImage(3);
       }
       tracker.indeterminate('Uploading ' + formatFileSize(file.size) + '…');
       return window.coldSupabase.storage.from(d.bucket).uploadToSignedUrl(d.path, d.token, file).then(function (upRes) {
