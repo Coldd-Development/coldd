@@ -5389,6 +5389,20 @@
   ['admEditLongDesc', 'admUpdDescInput', 'admLegalTos'].forEach(function (id) {
     var ta = $(id); if (ta) ta.addEventListener('input', function () { autoGrow(ta); });
   });
+  // Text copied from elsewhere often carries blank lines at the start or end. Trim them on paste
+  // so the text starts on the first line; a box holding only whitespace is replaced outright.
+  document.addEventListener('paste', function (e) {
+    var ta = e.target;
+    if (!ta || ta.tagName !== 'TEXTAREA') return;
+    var text = (e.clipboardData || window.clipboardData || { getData: function () { return ''; } }).getData('text');
+    var trimmed = text.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/(?:\r?\n[ \t]*)+$/, '');
+    var blank = !ta.value.trim();
+    if (trimmed === text && !blank) return; // nothing to fix, let the browser paste
+    e.preventDefault();
+    var start = blank ? 0 : ta.selectionStart, end = blank ? ta.value.length : ta.selectionEnd;
+    ta.setRangeText(trimmed, start, end, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }, true);
   window.addEventListener('resize', autoGrowAll);
   // Bullets use the "- " marker, which is what the product page turns into a
   // bullet list (same as the Aura VFX Asset Pack description).
