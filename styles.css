@@ -5055,6 +5055,23 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 .pd-bundle-desc { margin: 6px 0 0; font-size: 14px; color: var(--fg-2); line-height: 1.45; }
 .pd-bundle-incl { margin: 8px 0 0; font-size: 12px; color: var(--fg-3); line-height: 1.5; max-width: 52ch; }
 .pd-bundle-add { margin-top: 14px; }
+/* In the product page sidebar: a compact card like the other sidebar blocks. The whole card adds
+   the bundle (same click handler as the button), so the cover lifts on hover. */
+.pd-right .pd-bundle { margin-top: 0; padding: 16px 18px 18px; box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 20px 46px -26px var(--ink-75); }
+.pd-right .pd-bundle-h { font-size: 15px; font-weight: 700; letter-spacing: 0; margin-bottom: 14px; color: var(--accent); }
+.pd-right .pd-bundle-list { gap: 18px; }
+.pd-right .pd-bundle-card { padding: 0; border: 0; background: none; cursor: pointer; }
+.pd-right .pd-bundle-art { max-width: none; width: calc(100% - 15px); margin: 13px 15px 12px 0; transition: transform .2s ease; }
+.pd-right .pd-bundle-card:hover .pd-bundle-art { transform: translateY(-2px); }
+.pd-right .pd-bundle-off { top: 8px; left: 8px; padding: 3px 8px; font-size: 12px; }
+.pd-right .pd-bundle-price { right: 8px; bottom: 8px; padding: 3px 9px; gap: 6px; }
+.pd-right .pd-bundle-price b { font-size: 14px; }
+.pd-right .pd-bundle-price s { font-size: 12px; }
+.pd-right .pd-bundle-name { font-size: 15px; letter-spacing: -0.01em; }
+.pd-right .pd-bundle-desc { margin-top: 4px; font-size: 13px; }
+.pd-right .pd-bundle-incl { margin-top: 4px; }
+.pd-right .pd-bundle-add { width: 100%; margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) { .pd-right .pd-bundle-art { transition: none; } }
 
 /* Success page: setup instruction */
 .dl-setup-note { display: flex; align-items: center; gap: 16px; border-color: var(--warn-line); background: var(--warn-tint); }

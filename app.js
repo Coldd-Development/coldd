@@ -2988,7 +2988,7 @@
             box.insertAdjacentHTML('beforeend', '<div class="co-tier-nudge" data-id="' + esc(pick.id) + '">' +
               '<span class="co-tier-nudge-thumb" style="background-image:url(\'' + pick.image + '\')"></span>' +
               '<div class="co-tier-nudge-body"><div class="co-tier-nudge-title">' + esc(pick.title) + '</div>' +
-              '<div class="co-tier-nudge-sub">' + pickPriceStr + ', crosses into ' + res.next.pct + '% off</div></div>' +
+              '<div class="co-tier-nudge-sub">' + pickPriceStr + ' - unlocks ' + res.next.pct + '% off your order</div></div>' +
               '<button class="btn btn-tinted co-tier-nudge-add" type="button">Add</button></div>');
           }
         }
@@ -3555,7 +3555,7 @@
         function renderBundleCards(p) {
           if (!pdBundleWrap || !pdBundleList) return;
           var views = window.__bundlesForProduct ? window.__bundlesForProduct(p.id) : [];
-          if (!views.length) { pdBundleWrap.hidden = true; pdBundleList.innerHTML = ''; return; }
+          if (!views.length) { pdBundleWrap.hidden = true; pdBundleList.innerHTML = ''; fitStickySidebar(); return; }
           pdBundleList.innerHTML = views.map(function (v) {
             // Two more covers peek out behind the main one, like a stack of products.
             var behind = v.prods.filter(function (x) { return x !== v.cover; }).slice(0, 2);
@@ -3570,12 +3570,22 @@
                 '</span></div>' +
               '<h3 class="pd-bundle-name">' + esc(v.title) + '</h3>' +
               (v.desc ? '<p class="pd-bundle-desc">' + esc(v.desc) + '</p>' : '') +
-              '<p class="pd-bundle-incl">Includes ' + v.prods.map(function (x) { return esc(x.title); }).join(', ') + '</p>' +
+              // The sidebar is narrow, so the product list collapses to a count (full list on hover).
+              '<p class="pd-bundle-incl" title="' + esc(v.prods.map(function (x) { return x.title; }).join(', ')) + '">Includes ' + v.prods.length + ' products</p>' +
               '<button class="btn btn-primary pd-bundle-add" type="button">Add bundle to cart</button>' +
               '</article>';
           }).join('');
           pdBundleWrap.hidden = false;
+          fitStickySidebar();
         }
+        // The sidebar is sticky at 92px from the top. When it is taller than the window (a bundle
+        // card makes that common), pin it by its bottom edge instead, so nothing in it is unreachable.
+        var pdRight = document.querySelector('#view-product .pd-right');
+        function fitStickySidebar() {
+          if (!pdRight) return;
+          pdRight.style.top = Math.min(92, window.innerHeight - pdRight.offsetHeight - 16) + 'px';
+        }
+        window.addEventListener('resize', fitStickySidebar, { passive: true });
         if (pdBundleList) pdBundleList.addEventListener('click', function (e) {
           var card = e.target.closest('.pd-bundle-card'); if (!card) return;
           var v = (window.__bundleViews ? window.__bundleViews() : []).filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
