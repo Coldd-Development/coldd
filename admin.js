@@ -5394,7 +5394,8 @@
   document.addEventListener('paste', function (e) {
     var ta = e.target;
     if (!ta || ta.tagName !== 'TEXTAREA') return;
-    var text = (e.clipboardData || window.clipboardData || { getData: function () { return ''; } }).getData('text');
+    var cd = e.clipboardData || window.clipboardData;
+    var text = cd ? (cd.getData('text/plain') || cd.getData('text') || '') : '';
     var trimmed = text.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/(?:\r?\n[ \t]*)+$/, '');
     var blank = !ta.value.trim();
     if (trimmed === text && !blank) return; // nothing to fix, let the browser paste
