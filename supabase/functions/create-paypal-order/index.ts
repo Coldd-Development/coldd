@@ -18,6 +18,7 @@ import { resolveProductReferral } from "../_shared/referrals.ts";
 import { paypalToken, paypalFetch, money, approveLink, paypalEnv } from "../_shared/paypal.ts";
 import { isSiteInMaintenance } from "../_shared/maintenance.ts";
 import { genClaimToken, sha256Hex } from "../_shared/order_access.ts";
+import { sendOrderReceipt } from "../_shared/email.ts";
 import { priceAddons, insertOrderAddons } from "../_shared/addons.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
@@ -164,6 +165,22 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "Could not record your add-ons." }, 500);
     }
 
+    // Store credit is reserved on the order first and PayPal only charges the rest. A pending
+    // order that is canceled or expires gets the credit back (referral_order_safety trigger).
+    let creditApplied = 0;
+    if (body.useStoreCredit) {
+      if (!user) { await admin.from("orders").update({ status: "canceled" }).eq("id", order.id); return json({ ok: false, error: "Please sign in to use store credit." }, 401); }
+      const { data: credit, error: creditError } = await admin.rpc("apply_store_credit", { p_user_id: user.id, p_order_id: order.id, p_currency: "usd", p_amount: body.storeCreditAmount ?? null, p_min_remainder: 0.50 });
+      if (creditError || !credit?.ok) { await admin.from("orders").update({ status: "canceled" }).eq("id", order.id); return json({ ok: false, error: credit?.error || "Could not apply store credit." }, 400); }
+      creditApplied = Number(credit.applied);
+      if (credit.paid) {
+        const { data: buyer } = await admin.auth.admin.getUserById(user.id);
+        if (buyer?.user?.email) await sendOrderReceipt(admin, order.id, buyer.user.email).catch(console.error);
+        return json({ ok: true, url: `${siteUrl}/success?order_id=${order.id}`, orderId: order.id });
+      }
+    }
+    const chargeUsd = Math.round((total - creditApplied) * 100) / 100;
+
     // Guest orders carry a one-time claim token in the return URL (see
     // _shared/order_access.ts); account orders are gated on the buyer's JWT.
     const isGuest = !(giftRecipientId || user);
@@ -183,7 +200,7 @@ Deno.serve(async (req: Request) => {
           // the whole PayPal round trip, so we never have to trust an order id
           // handed back by the browser.
           custom_id: order.id,
-          amount: { currency_code: "USD", value: money(total) },
+          amount: { currency_code: "USD", value: money(chargeUsd) },
           description: `coldd order ${String(order.id).slice(0, 8)}`,
         }],
         application_context: {
@@ -191,7 +208,7 @@ Deno.serve(async (req: Request) => {
           user_action: "PAY_NOW",
           shipping_preference: "NO_SHIPPING", // digital goods only
           return_url: `${siteUrl}/success/?provider=paypal&orderId=${order.id}${isGuest ? `&t=${claimToken}` : ""}`,
-          cancel_url: `${siteUrl}/checkout/?canceled=1`,
+          cancel_url: creditApplied > 0 ? `${siteUrl}/checkout/?credit_cancel_order=${order.id}` : `${siteUrl}/checkout/?canceled=1`,
         },
       }),
     });

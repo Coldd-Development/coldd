@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: order, error: orderErr } = await admin
       .from("orders")
-      .select("id, status, total_usd, coupon_code, paypal_order_id")
+      .select("id, status, total_usd, store_credit_applied, coupon_code, paypal_order_id")
       .eq("id", orderId)
       .maybeSingle();
     if (orderErr || !order) return json({ ok: false, error: "Order not found." }, 404);
@@ -107,7 +107,8 @@ Deno.serve(async (req: Request) => {
     // being fulfilled for the wrong money.
     const paidValue = Number(capture?.amount?.value ?? NaN);
     const paidCurrency = String(capture?.amount?.currency_code ?? "");
-    const expected = Number(order.total_usd);
+    // Store credit reserved on the order is not part of what PayPal charged.
+    const expected = Math.round((Number(order.total_usd) - (Number(order.store_credit_applied) || 0)) * 100) / 100;
     if (!Number.isFinite(paidValue) || paidCurrency !== "USD" || Math.abs(paidValue - expected) > 0.005) {
       console.error("PayPal amount mismatch", { orderId: order.id, paidValue, paidCurrency, expected });
       return json({ ok: false, error: "Payment amount did not match the order." }, 409);
