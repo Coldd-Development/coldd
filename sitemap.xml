@@ -109,6 +109,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/japanese-dojo-house-asset-pack</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/combat-vfx-pack</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>weekly</changefreq>
@@ -169,8 +175,20 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/scpf-meeting-room</loc>
+    <lastmod>2026-11-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/ice-fist-combat-vfx-2</loc>
     <lastmod>2026-10-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/scpf-court-room</loc>
+    <lastmod>2026-11-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -817,13 +835,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/game-of-thrones-kings-landing-asset-pack</loc>
+    <loc>https://coldd.dev/product/gym-asset-pack</loc>
     <lastmod>2026-10-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/gym-asset-pack</loc>
+    <loc>https://coldd.dev/product/game-of-thrones-kings-landing-asset-pack</loc>
     <lastmod>2026-10-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -1453,13 +1471,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/crane</loc>
+    <loc>https://coldd.dev/product/fence-pack</loc>
     <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/fence-pack</loc>
+    <loc>https://coldd.dev/product/crane</loc>
     <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
