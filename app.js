@@ -2752,6 +2752,9 @@
             var bp = Math.round(p.priceNum * (1 - pcts[slug] / 100) * 100) / 100;
             if (bp < i.price) { i.price = bp; i.bundlePct = pcts[slug]; }
           }
+          // The pre-discount price (bundle or sale), shown crossed out next to the line price.
+          var was = p && id.indexOf('--') === -1 ? Math.max(Number(p.was) || 0, p.priceNum) : 0;
+          if (was > i.price) i.was = was; else delete i.was;
           // Add-ons are re-read from the live catalog too (price, title, or gone).
           if (Array.isArray(i.addons) && i.addons.length && window.__ADDONS_OK) {
             i.addons = i.addons.map(function (a) {
@@ -2854,6 +2857,19 @@
         }
         if (window.__robuxOff && window.__robuxOff(item.id) && window.__fiat) return window.__fiat(item.price);
         return money(item.price);
+      }
+      function itemWasMoney(item) {
+        if (!item.was || (Number(item.price) || 0) <= 0) return '';
+        var robuxMode = window.__currencyMode && window.__currencyMode() === 'robux';
+        var txt;
+        if (robuxMode) {
+          var rbxNow = catalogRobuxPrice(item.id, item.licence, item.bundlePct), rbxWas = catalogRobuxPrice(item.id, item.licence);
+          if (rbxNow == null || rbxWas == null || rbxWas <= rbxNow) return '';
+          txt = 'R$ ' + Math.round(rbxWas).toLocaleString('en-US');
+        } else {
+          txt = window.__robuxOff && window.__robuxOff(item.id) && window.__fiat ? window.__fiat(item.was) : money(item.was);
+        }
+        return ' <s class="ci-was">' + txt + '</s>';
       }
       function subtotalMoney() {
         if (window.__currencyMode && window.__currencyMode() === 'robux') {
@@ -3073,7 +3089,7 @@
           row.innerHTML =
             '<span class="ci-thumb" style="background-image:url(\'' + i.image + '\')"></span>' +
             '<div class="ci-info"><div class="ci-title">' + esc(i.title) + (i.licence === 'resell' ? ' <span style="color:var(--accent);font-size:11px;font-weight:700;">· RESELL</span>' : '') + (i.bundlePct ? ' <span class="ci-bundle">Bundle −' + Math.round(i.bundlePct) + '%</span>' : '') + '</div>' +
-            (i.addonOnly ? '' : '<div class="ci-price">' + itemUnitMoney(i) + '</div>') +
+            (i.addonOnly ? '' : '<div class="ci-price">' + itemUnitMoney(i) + itemWasMoney(i) + '</div>') +
             (i.addons || []).map(function (a) {
               return '<div class="ci-addon"><span class="ci-addon-t">+ ' + esc(a.title) + '</span><span class="ci-addon-p">' + addonMoney(a) + '</span>' +
                 '<button class="ci-addon-x" type="button" data-act="rm-addon" data-addon="' + esc(a.id) + '" aria-label="Remove ' + esc(a.title) + '">×</button></div>';
@@ -6253,6 +6269,23 @@
         }
         return fiatMoney(item.price * item.qty);
       }
+      // How far this line sits below its pre-discount price (bundle or sale), in the unit showing.
+      function lineSaving(item) {
+        if (!item.was || item.addonOnly) return 0;
+        if (robuxView() && !(window.__robuxOff && window.__robuxOff(item.id))) {
+          var now = catalogRobuxPrice(item.id, item.licence, item.bundlePct), was = catalogRobuxPrice(item.id, item.licence);
+          return now != null && was != null ? Math.max(0, Math.round((was - now) * item.qty)) : 0;
+        }
+        return Math.max(0, Math.round((item.was - item.price) * item.qty * 100) / 100);
+      }
+      function lineWasMoney(item) {
+        var s = lineSaving(item);
+        if (!(s > 0)) return '';
+        var txt = robuxView() && !(window.__robuxOff && window.__robuxOff(item.id))
+          ? 'R$ ' + Math.round(catalogRobuxPrice(item.id, item.licence) * item.qty).toLocaleString('en-US')
+          : fiatMoney(item.was * item.qty);
+        return '<s class="co-item-was">' + txt + '</s>';
+      }
       // Raw number, not a display string - shared by subtotalMoney() below,
       // the tier ladder, and renderTotals()'s discount/total math. Falls
       // back to the flat rate per item without a real robux_price override,
@@ -6493,7 +6526,7 @@
           }).join('');
           row.innerHTML = '<span class="co-item-thumb" style="background-image:url(\'' + i.image + '\')"></span>' +
             '<div class="co-item-info"><div class="co-item-title">' + esc(i.title) + '</div>' + lic + '</div>' +
-            '<span class="co-item-price">' + (i.addonOnly ? '' : lineMoney(i)) + '</span>' +
+            '<span class="co-item-price">' + (i.addonOnly ? '' : lineWasMoney(i) + lineMoney(i)) + '</span>' +
             '<button class="co-item-x" type="button" aria-label="Remove ' + esc(i.title) + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
           row.querySelector('.co-item-x').addEventListener('click', function () {
             cart = cart.filter(function (x) { return x.id !== i.id; });
@@ -6568,6 +6601,14 @@
         } else {
           set('coTotal', fiatMoney(total + addonsU));
         }
+        // Total saved: bundle and sale prices on the lines plus the order discount. Store credit
+        // is the buyer's own money, so it is not counted. Hidden when there is nothing saved.
+        var saved = cart.reduce(function (n, i) { return n + lineSaving(i); }, 0) + (rr ? rr.discount : disc);
+        var saveLine = document.getElementById('coSaveLine');
+        if (saveLine) {
+          saveLine.hidden = !(saved > 0);
+          set('coSaveAmt', rr ? 'R$ ' + Math.round(saved).toLocaleString('en-US') : fiatMoney(Math.round(saved * 100) / 100));
+        }
         // A setup add-on starts with a support ticket - say so before they pay, not after.
         var setupNote = document.getElementById('coSetupNote');
         if (setupNote) setupNote.hidden = !hasSetupAddon();
@@ -6582,9 +6623,9 @@
         var due=creditCurrency==='robux'?orderTotal-applied:Math.round((orderTotal-applied)*100)/100;
         var nativeAmount=function(n){return creditCurrency==='robux'?'R$ '+Math.round(n).toLocaleString('en-US'):fiatMoney(n);};
         var availableEl=document.getElementById('coCreditAvailable');if(availableEl)availableEl.textContent=loggedIn?(coCreditWallet?'Available: '+(creditCurrency==='robux'?'R$ '+available.toLocaleString('en-US'):'$'+available.toFixed(2)+' USD')+'. Credit is reserved during checkout; failed or expired checkouts return it.':'Checking your store credit...'):'Sign in to use store credit.';
-        var amountWrap=document.getElementById('coCreditAmountWrap');if(amountWrap)amountWrap.hidden=!useCredit;
+        var amountWrap=document.getElementById('coCreditAmountWrap');if(amountWrap)amountWrap.hidden=true;
         if(creditInput){creditInput.step=creditCurrency==='robux'?'1':'0.01';creditInput.min=creditCurrency==='robux'?'1':'0.01';creditInput.max=String(Math.min(available,orderTotal));creditInput.disabled=!useCredit;}
-        var creditLine=document.getElementById('coCreditLine'),dueLine=document.getElementById('coDueLine');if(creditLine)creditLine.hidden=!useCredit;if(dueLine)dueLine.hidden=!useCredit;
+        var creditLine=document.getElementById('coCreditLine'),dueLine=document.getElementById('coDueLine');if(creditLine)creditLine.hidden=!(useCredit&&applied>0);if(dueLine)dueLine.hidden=!(useCredit&&applied>0);
         set('coCreditApplied','-'+nativeAmount(applied));set('coAmountDue',nativeAmount(due));
         if(useCredit){var tile=document.querySelector('[data-pay-amt="'+payMethod+'"]');if(tile)tile.textContent=nativeAmount(due);var settle=document.getElementById('coPaySettle');if(settle)settle.hidden=true;}
 

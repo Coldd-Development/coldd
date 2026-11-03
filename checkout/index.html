@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261104-side-bundle" />
+  <link rel="stylesheet" href="/styles.css?v=20261104-savings" />
 </head>
 <body>
   <div class="backdrop"></div>
@@ -263,6 +263,7 @@
                  not, which is a question raised and never answered. -->
             <div class="co-line" id="coTaxLine" hidden><span>Tax</span><span id="coTax">$0</span></div>
             <div class="co-line co-grand"><span>Order total</span><span id="coTotal">$0</span></div>
+            <div class="co-line co-disc co-save" id="coSaveLine" hidden><span>You save</span><span id="coSaveAmt">$0</span></div>
             <div class="co-line co-disc" id="coCreditLine" hidden><span>Store credit</span><span id="coCreditApplied">$0</span></div>
             <div class="co-line co-grand" id="coDueLine" hidden><span>Remaining to pay</span><span id="coAmountDue">$0</span></div>
             <!-- The settle line under the payment methods now states what is
@@ -544,7 +545,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261104-side-bundle" data-then="/app.js?v=20261026-credit"></script>
+  <script src="/catalog.js?v=20261104-savings" data-then="/app.js?v=20261026-credit"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that
