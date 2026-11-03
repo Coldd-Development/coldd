@@ -7258,7 +7258,7 @@
         });
         var method = picked ? picked.getAttribute('data-method') : 'stripe';
         if((method==='robux')!==(payMethod==='robux')){var creditInput=document.getElementById('coCreditAmount');if(creditInput)creditInput.value='';}
-        var creditWrap=document.getElementById('coCreditWrap');if(creditWrap){creditWrap.hidden=method!=='stripe'&&method!=='robux';document.getElementById('coUseCredit').checked=!creditWrap.hidden&&!!coCreditWallet&&(Number(coCreditWallet.usd||0)>0||Number(coCreditWallet.robux||0)>0);}
+        var creditWrap=document.getElementById('coCreditWrap');if(creditWrap){creditWrap.hidden=false;document.getElementById('coUseCredit').checked=!creditWrap.hidden&&!!coCreditWallet&&(Number(coCreditWallet.usd||0)>0||Number(coCreditWallet.robux||0)>0);}
         payMethod = method;
         document.querySelectorAll('.co-pay-panel').forEach(function (p) {
           p.hidden = p.getAttribute('data-method-panel') !== method;
