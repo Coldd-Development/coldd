@@ -7525,7 +7525,7 @@
       var pct = Math.round(Number($('admBundleDiscount').value) || 0);
       var err = !$('admBundleTitle').value.trim() ? 'Enter a title.'
         : sel.length < 2 ? 'Pick at least 2 products.'
-        : sel.length > 8 ? 'A bundle can have at most 8 products.'
+        : sel.length > 12 ? 'A bundle can have at most 12 products.'
         : !(pct >= 1 && pct <= BUNDLE_MAX_PCT_UI) ? 'Enter a discount between 1% and ' + BUNDLE_MAX_PCT_UI + '%.' : '';
       if (err) { msg.textContent = err; return; }
       var btn = $('admBundleSubmitBtn'); btn.disabled = true; msg.textContent = 'Saving…';

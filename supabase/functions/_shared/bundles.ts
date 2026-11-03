@@ -19,7 +19,7 @@ const ROBUX_PER_USD = 80;
 export const BUNDLE_MIN_PCT = 1;
 export const BUNDLE_MAX_PCT = 60;
 export const BUNDLE_MIN_PRODUCTS = 2;
-export const BUNDLE_MAX_PRODUCTS = 8;
+export const BUNDLE_MAX_PRODUCTS = 12;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
