@@ -2834,6 +2834,9 @@ html.js .ref-method-btn:focus-visible { outline: 2px solid var(--accent); outlin
    how the resell-licence agreement was showing on carts with no resell item.
    Same defect previously hit the tutorials/releases tabs. */
 .co-check[hidden] { display: none; }
+/* The store-credit box only has something to say now and then (credit is applied automatically);
+   with every line inside hidden it was an empty bordered gap above "More payment methods". */
+#coCreditWrap:not(:has(> :not([hidden]))) { display: none; }
 /* accent-color alone tints the browser's OWN checkbox rendering, corners
    and all - shape and rounding stay whatever that browser/OS draws by
    default, unrelated to anything else on the page. A custom checkbox
