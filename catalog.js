@@ -806,6 +806,89 @@
   window.__bundlesForProduct = function (slug) {
     return window.__bundleViews().filter(function (v) { return v.b.slugs.indexOf(slug) >= 0; });
   };
+  // The bundles an admin picked for the homepage's "Bundle & save", in their set order.
+  window.__homeBundleViews = function () {
+    return window.__bundleViews().filter(function (v) { return v.b.home_featured; })
+      .sort(function (a, b) { return (Number(a.b.home_order) || 0) - (Number(b.b.home_order) || 0); });
+  };
+
+  // ---- Bundle card, add-to-cart and popup, shared by the shop's Bundles category and the
+  // homepage's "Bundle & save" so both always look and behave the same. ----
+  function bEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  // The standard product card (pill, price row, Buy now / Add to cart) with the stacked covers in
+  // the thumbnail, most popular product in front. Clicking anywhere else opens the bundle popup.
+  window.__bundleTileHtml = function (v) {
+    var behind = v.prods.filter(function (x) { return x !== v.cover; }).slice(0, 2);
+    var stack = behind.map(function (x, k) {
+      return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + x.image + '\')"></span>';
+    }).join('');
+    return '<article class="product bundle-tile" data-token="' + bEsc(v.token) + '">' +
+      '<div class="p-thumb bundle-thumb"><span class="p-off">-' + Math.round(v.pct) + '%</span>' +
+        '<div class="pd-bundle-art">' + stack + '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')"></span></div></div>' +
+      '<div class="p-body">' +
+        '<h3 class="p-name">' + bEsc(v.title) + '</h3>' +
+        '<div class="p-price-row"><span class="p-was">' + window.__bundleMoney(v, 'list') + '</span><span class="p-price">' + window.__bundleMoney(v, 'price') + '</span></div>' +
+        '<p class="p-sum">' + bEsc(v.desc) + '</p>' +
+        '<div class="p-actions"><button class="p-buy" type="button">Buy now</button>' +
+        '<button class="p-add" type="button">Add to cart</button></div>' +
+      '</div></article>';
+  };
+  window.__addBundleToCart = function (v) {
+    v.prods.forEach(function (x) {
+      if (window.__coldOwned && window.__coldOwned.has(x.id)) return; // never re-sell something they already own
+      if (window.__cartAdd) window.__cartAdd({ id: x.id, title: x.title, price: x.priceNum, image: x.image, tag: x.cat || '' });
+    });
+  };
+  // Bundle popup: what's inside, each product at its bundle price with the full price crossed
+  // out, linking to its page in this tab.
+  var bundleModal = null;
+  function closeBundleModal() { if (bundleModal) bundleModal.hidden = true; document.removeEventListener('keydown', bundleModalKey); }
+  function bundleModalKey(e) { if (e.key === 'Escape') closeBundleModal(); }
+  window.__openBundleModal = function (v) {
+    if (!bundleModal) {
+      bundleModal = document.createElement('div');
+      bundleModal.className = 'pay-overlay bundle-overlay';
+      bundleModal.hidden = true;
+      document.body.appendChild(bundleModal);
+      bundleModal.addEventListener('click', function (e) {
+        if (e.target === bundleModal || e.target.closest('.bm-x')) return closeBundleModal();
+        var cur = bundleModal._v; if (!cur) return;
+        if (e.target.closest('.p-buy')) { window.__addBundleToCart(cur); location.href = '/checkout'; }
+        else if (e.target.closest('.p-add')) { window.__addBundleToCart(cur); closeBundleModal(); if (window.__openCart) window.__openCart(); }
+      });
+    }
+    bundleModal._v = v;
+    bundleModal.innerHTML =
+      '<div class="pay-modal bundle-modal" role="dialog" aria-modal="true" aria-labelledby="bmTitle">' +
+        '<button class="bm-x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>' +
+        '<div class="bm-head"><span class="p-off">-' + Math.round(v.pct) + '%</span><h2 class="pay-title" id="bmTitle">' + bEsc(v.title) + '</h2></div>' +
+        (v.desc ? '<p class="pay-sub">' + bEsc(v.desc) + '</p>' : '') +
+        '<div class="bm-list">' + v.prods.map(function (x) {
+          return '<a class="bm-item" href="/product/' + encodeURIComponent(x.id) + '/">' +
+            '<span class="bm-thumb" style="background-image:url(\'' + x.image + '\')"></span>' +
+            '<span class="bm-name">' + bEsc(x.title) + '</span>' +
+            '<span class="p-price-row"><span class="p-was">' + window.__bundleItemMoney(x, 0) + '</span><span class="p-price">' + window.__bundleItemMoney(x, v.pct) + '</span></span></a>';
+        }).join('') + '</div>' +
+        '<div class="bm-foot"><div class="p-price-row"><span class="p-was">' + window.__bundleMoney(v, 'list') + '</span><span class="p-price">' + window.__bundleMoney(v, 'price') + '</span></div>' +
+          '<div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div></div>' +
+      '</div>';
+    bundleModal.hidden = false;
+    document.addEventListener('keydown', bundleModalKey);
+    var x = bundleModal.querySelector('.bm-x'); if (x) x.focus();
+  };
+  // One click handler for a grid of bundle tiles: Buy now, Add to cart, or open the popup.
+  window.__wireBundleGrid = function (el) {
+    if (!el || el.dataset.bundleWired) return;
+    el.dataset.bundleWired = '1';
+    el.addEventListener('click', function (e) {
+      var card = e.target.closest('.bundle-tile'); if (!card) return;
+      var v = window.__bundleViews().filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
+      if (!v) return;
+      if (e.target.closest('.p-buy')) { window.__addBundleToCart(v); location.href = '/checkout'; }
+      else if (e.target.closest('.p-add')) { window.__addBundleToCart(v); if (window.__openCart) window.__openCart(); }
+      else window.__openBundleModal(v);
+    });
+  };
   // slug -> best bundle % earned by a cart holding these slugs (any licence counts toward
   // completing a bundle; only standard-licence lines are discounted, matching the server).
   window.__bundlePctMap = function (slugs) {
@@ -855,7 +938,7 @@
       .limit(20000),
     contentQuery,
     window.coldSupabase.from('bundle_deals')
-      .select('token, slug, title, description, cover_slug, image, slugs, bundle_pct')
+      .select('token, slug, title, description, cover_slug, image, slugs, bundle_pct, home_featured, home_order')
       .eq('source', 'curated').eq('active', true).order('created_at', { ascending: false }).limit(200),
     // Per-product add-ons. A failure here (or the table not existing yet) must never
     // break the catalog, so it resolves to an empty list instead of rejecting.

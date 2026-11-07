@@ -21,6 +21,7 @@
 //   { action: "upsert", token?, slug?, title, description?, coverSlug?, image?,
 //                       productSlugs: [], discountPct, active? }
 //   { action: "delete", token }
+//   { action: "home", token, featured, order }          -> homepage "Bundle & save" pick
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -77,9 +78,22 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list") {
       const { data } = await admin.from("bundle_deals")
-        .select("token, slug, title, description, cover_slug, image, slugs, bundle_pct, active, created_at")
+        .select("token, slug, title, description, cover_slug, image, slugs, bundle_pct, active, home_featured, home_order, created_at")
         .eq("source", "curated").order("created_at", { ascending: false });
       return json({ ok: true, bundles: data ?? [] });
+    }
+
+    // Homepage "Bundle & save" pick: show/hide a bundle there and set its position.
+    if (action === "home") {
+      const token = String(body.token || "");
+      if (!token) return json({ ok: false, error: "Missing token." }, 400);
+      const featured = !!body.featured;
+      const order = Math.max(0, Math.min(999, Math.round(Number(body.order) || 0)));
+      const { error } = await admin.from("bundle_deals")
+        .update({ home_featured: featured, home_order: featured ? order : 0 })
+        .eq("token", token).eq("source", "curated");
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true });
     }
 
     if (action === "delete") {

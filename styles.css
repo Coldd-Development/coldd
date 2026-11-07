@@ -3373,19 +3373,10 @@ html.js .nr-frame .nr-slide.is-active .nr-cap > :nth-child(3) { animation-delay:
 @media (max-width: 1000px) { .featured-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 460px) { .featured-grid { grid-template-columns: 1fr; } }
 
-.bundle-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-@media (max-width: 720px) { .bundle-grid { grid-template-columns: 1fr; } }
-.bundle-card { display: flex; flex-direction: column; border: 1px solid var(--hairline); border-radius: var(--r-sm);
-  overflow: hidden; background: var(--bg-2); }
-.bundle-thumb { height: 150px; position: relative; background-size: cover; background-position: center; }
-.bundle-off { position: absolute; top: 10px; left: 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
-  color: #fff; background: var(--accent); padding: 3px 8px; border-radius: 6px; }
-.bundle-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.bundle-name { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
-.bundle-meta { font-size: 12.5px; color: var(--fg-2); line-height: 1.5; }
-.bundle-price-row { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
-.bundle-price-row .p-price { font-size: 18px; font-weight: 800; color: var(--price); }
-.bundle-add { margin-top: auto; width: 100%; justify-content: center; }
+/* Homepage "Bundle & save": the shop's bundle cards, laid out like Featured products. */
+.home-bundle-grid { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1000px) { .home-bundle-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 460px) { .home-bundle-grid { grid-template-columns: 1fr; } }
 
 /* ==================== Admin dashboard ==================== */
 /* Flat neutral grey, not the storefront's red banner glow - this is a

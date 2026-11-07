@@ -1142,6 +1142,25 @@
                 <div class="adm-edit-msg" id="admFeaturedMsg"></div>
               </div>
               <div class="dash-card glass dash-tablewrap">
+                <div class="dash-card-head"><h2>Homepage bundles</h2><span class="adm-sub">Shown on the homepage's "Bundle &amp; save" section, in this order (the first 4).</span></div>
+                <table class="dash-table">
+                  <thead><tr><th>Order</th><th>Bundle</th><th>Price</th><th></th></tr></thead>
+                  <tbody id="admHomeBundlesBody"></tbody>
+                </table>
+                <form class="adm-form" id="admHomeBundlesAddForm" style="flex-wrap:wrap;margin-top:14px;">
+                  <div class="adm-dd adm-dd-inline" id="admHomeBundlesAddDD" style="min-width:260px;">
+                    <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="adm-dd-val"></span>
+                      <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="adm-dd-menu" role="listbox" aria-label="Bundle to show on the homepage" hidden></div>
+                  </div>
+                  <input type="hidden" id="admHomeBundlesAddId" required />
+                  <button class="btn btn-primary adm-btn-sm" type="submit">Add to homepage</button>
+                </form>
+                <div class="adm-edit-msg" id="admHomeBundlesMsg"></div>
+              </div>
+              <div class="dash-card glass dash-tablewrap">
                 <div class="adm-wd-head">
                   <div class="adm-wd-title"><h2>This week's deals</h2><p class="adm-sub">Picked automatically every Monday by a revenue-maximizing algorithm. Never above <span id="admWeeklyMaxPctLabel">40</span>% off and never below a product's minimum sale price. See "How this works" below.</p></div>
                   <div class="adm-wd-actions">

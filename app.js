@@ -1582,47 +1582,21 @@
         }
       }
 
-      // Curated bundles (window.__BUNDLES from catalog.js). Each card adds
-      // every product plus the bundle token, so priceItems applies the
-      // bundle discount at checkout.
+      // Homepage "Bundle & save": the bundles an admin picked (admin > Content > Homepage), in
+      // their set order, drawn with the exact card the shop's Bundles category uses.
       var bundlesGrid = document.getElementById('homeBundlesGrid');
       var bundlesSection = document.getElementById('homeBundlesSection');
-      if (bundlesGrid) {
-        var bySlug = {};
-        catalog.forEach(function (p) { bySlug[p.id] = p; });
-        var bundles = (window.__BUNDLES || []).map(function (b) {
-          var prods = (b.slugs || []).map(function (s) { return bySlug[s]; }).filter(Boolean);
-          if (prods.length < 2) return null;
-          var listUsd = prods.reduce(function (sum, p) { return sum + (p.priceNum || 0); }, 0);
-          var priceUsd = Math.round(listUsd * (1 - Number(b.bundle_pct) / 100) * 100) / 100;
-          return { b: b, prods: prods, listUsd: listUsd, priceUsd: priceUsd };
-        }).filter(Boolean);
-        if (bundles.length) {
-          bundlesGrid.innerHTML = bundles.map(function (x) {
-            var m = window.__money || function (n) { return '$' + n; };
-            var img = x.b.image || (x.prods[0] && x.prods[0].image) || '/banner.jpg';
-            return '<article class="bundle-card" data-token="' + escHtml(x.b.token) + '">' +
-              '<div class="bundle-thumb" style="background-image:url(\'' + img + '\')"><span class="bundle-off">-' + Math.round(x.b.bundle_pct) + '%</span></div>' +
-              '<div class="bundle-body">' +
-              '<h3 class="bundle-name">' + escHtml(x.b.title) + '</h3>' +
-              '<p class="bundle-meta">' + x.prods.length + ' products: ' + x.prods.map(function (p) { return escHtml(p.title); }).join(', ') + '</p>' +
-              '<div class="bundle-price-row"><span class="p-was">' + m(x.listUsd) + '</span><span class="p-price">' + m(x.priceUsd) + '</span></div>' +
-              '<button class="btn btn-primary bundle-add" type="button">Add bundle to cart</button>' +
-              '</div></article>';
-          }).join('');
-          bundlesGrid.querySelectorAll('.bundle-card').forEach(function (card) {
-            var x = bundles.filter(function (y) { return y.b.token === card.getAttribute('data-token'); })[0];
-            if (!x) return;
-            card.querySelector('.bundle-add').addEventListener('click', function () {
-              x.prods.forEach(function (p) {
-                if (window.__cartAdd) window.__cartAdd({ id: p.id, title: p.title, price: p.priceNum, image: p.image, tag: p.cat });
-              });
-              try { localStorage.setItem('coldd_bundle_token', x.b.token); } catch (e) {}
-              if (window.__openCart) window.__openCart();
-            });
-          });
-        }
-        bundlesSection.hidden = !bundles.length;
+      if (bundlesGrid && window.__homeBundleViews) {
+        var paintHomeBundles = function () {
+          var picks = window.__homeBundleViews().slice(0, 4);
+          bundlesGrid.innerHTML = picks.map(window.__bundleTileHtml).join('');
+          if (bundlesSection) bundlesSection.hidden = !picks.length;
+        };
+        paintHomeBundles();
+        window.__wireBundleGrid(bundlesGrid);
+        // Re-paint for the other currency, or once popularity data picks a new front cover.
+        window.addEventListener('currencychange', paintHomeBundles);
+        document.addEventListener('coldd:bundles-changed', paintHomeBundles);
       }
     })();
 
@@ -2407,69 +2381,7 @@
         // cover, with the percentage off and the bundle price on it. Only this platform's
         // bundles, and the search box narrows them by title or by a product inside.
         const bundlesEl = document.getElementById('shopBundles');
-        function bEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-        function bundleCardHtml(v) {
-          var behind = v.prods.filter(function (x) { return x !== v.cover; }).slice(0, 2);
-          var stack = behind.map(function (x, k) {
-            return '<span class="pd-bundle-back pd-bundle-back-' + (k + 1) + '" style="background-image:url(\'' + x.image + '\')"></span>';
-          }).join('');
-          // The standard product card (pill, price row, Buy now / Add to cart), so bundles sit in
-          // the shop like any other product, with the stacked covers in the thumbnail (most popular
-          // product in front). Clicking anywhere else opens the bundle popup.
-          return '<article class="product bundle-tile" data-token="' + bEsc(v.token) + '">' +
-            '<div class="p-thumb bundle-thumb"><span class="p-off">-' + Math.round(v.pct) + '%</span>' +
-              '<div class="pd-bundle-art">' + stack + '<span class="pd-bundle-cover" style="background-image:url(\'' + v.image + '\')"></span></div></div>' +
-            '<div class="p-body">' +
-              '<h3 class="p-name">' + bEsc(v.title) + '</h3>' +
-              '<div class="p-price-row"><span class="p-was">' + window.__bundleMoney(v, 'list') + '</span><span class="p-price">' + window.__bundleMoney(v, 'price') + '</span></div>' +
-              '<p class="p-sum">' + bEsc(v.desc) + '</p>' +
-              '<div class="p-actions"><button class="p-buy" type="button">Buy now</button>' +
-              '<button class="p-add" type="button">Add to cart</button></div>' +
-            '</div></article>';
-        }
-        function addBundleToCart(v) {
-          v.prods.forEach(function (x) {
-            if (window.__coldOwned && window.__coldOwned.has(x.id)) return; // never re-sell something they already own
-            if (window.__cartAdd) window.__cartAdd({ id: x.id, title: x.title, price: x.priceNum, image: x.image, tag: x.cat || '' });
-          });
-        }
-        // Bundle popup: what's inside, each product at its bundle price with the full price crossed
-        // out, linking to its page in this tab.
-        var bundleModal = null;
-        function closeBundleModal() { if (bundleModal) bundleModal.hidden = true; document.removeEventListener('keydown', bundleModalKey); }
-        function bundleModalKey(e) { if (e.key === 'Escape') closeBundleModal(); }
-        function openBundleModal(v) {
-          if (!bundleModal) {
-            bundleModal = document.createElement('div');
-            bundleModal.className = 'pay-overlay bundle-overlay';
-            bundleModal.hidden = true;
-            document.body.appendChild(bundleModal);
-            bundleModal.addEventListener('click', function (e) {
-              if (e.target === bundleModal || e.target.closest('.bm-x')) return closeBundleModal();
-              var cur = bundleModal._v; if (!cur) return;
-              if (e.target.closest('.p-buy')) { addBundleToCart(cur); location.href = '/checkout'; }
-              else if (e.target.closest('.p-add')) { addBundleToCart(cur); closeBundleModal(); if (window.__openCart) window.__openCart(); }
-            });
-          }
-          bundleModal._v = v;
-          bundleModal.innerHTML =
-            '<div class="pay-modal bundle-modal" role="dialog" aria-modal="true" aria-labelledby="bmTitle">' +
-              '<button class="bm-x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>' +
-              '<div class="bm-head"><span class="p-off">-' + Math.round(v.pct) + '%</span><h2 class="pay-title" id="bmTitle">' + bEsc(v.title) + '</h2></div>' +
-              (v.desc ? '<p class="pay-sub">' + bEsc(v.desc) + '</p>' : '') +
-              '<div class="bm-list">' + v.prods.map(function (x) {
-                return '<a class="bm-item" href="/product/' + encodeURIComponent(x.id) + '/">' +
-                  '<span class="bm-thumb" style="background-image:url(\'' + x.image + '\')"></span>' +
-                  '<span class="bm-name">' + bEsc(x.title) + '</span>' +
-                  '<span class="p-price-row"><span class="p-was">' + window.__bundleItemMoney(x, 0) + '</span><span class="p-price">' + window.__bundleItemMoney(x, v.pct) + '</span></span></a>';
-              }).join('') + '</div>' +
-              '<div class="bm-foot"><div class="p-price-row"><span class="p-was">' + window.__bundleMoney(v, 'list') + '</span><span class="p-price">' + window.__bundleMoney(v, 'price') + '</span></div>' +
-                '<div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div></div>' +
-            '</div>';
-          bundleModal.hidden = false;
-          document.addEventListener('keydown', bundleModalKey);
-          var x = bundleModal.querySelector('.bm-x'); if (x) x.focus();
-        }
+        function bundleCardHtml(v) { return window.__bundleTileHtml(v); }
         function bundlesForShop() {
           return (window.__bundleViews ? window.__bundleViews() : []).filter(function (v) {
             if (onResell || v.cover.platform !== 'Roblox') return false;
@@ -2496,14 +2408,7 @@
         ['currencychange', 'coldd:bundles-changed'].forEach(function (ev) {
           (ev === 'currencychange' ? window : document).addEventListener(ev, function () { if (curCat === 'bundles') paintBundles(); });
         });
-        if (bundlesEl) bundlesEl.addEventListener('click', function (e) {
-          const card = e.target.closest('.bundle-tile'); if (!card) return;
-          const v = (window.__bundleViews ? window.__bundleViews() : []).filter(function (x) { return x.token === card.getAttribute('data-token'); })[0];
-          if (!v) return;
-          if (e.target.closest('.p-buy')) { addBundleToCart(v); location.href = '/checkout'; }
-          else if (e.target.closest('.p-add')) { addBundleToCart(v); if (window.__openCart) window.__openCart(); }
-          else openBundleModal(v);
-        });
+        if (bundlesEl && window.__wireBundleGrid) window.__wireBundleGrid(bundlesEl);
 
         function refilter(resetPage) {
           if (resetPage) page = 1;

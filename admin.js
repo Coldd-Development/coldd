@@ -7400,7 +7400,7 @@
     $('admDiscountCodesView').hidden = type !== 'codes';
     $('admBundleDealsView').hidden = type !== 'bundles';
     $('admHomepageView').hidden = type !== 'homepage';
-    if (type === 'homepage') { renderHomepageTab(); loadWeeklyDealsSettings(); }
+    if (type === 'homepage') { renderHomepageTab(); loadWeeklyDealsSettings(); loadHomeBundles(); }
     if (type === 'bundles') { renderBundleDeals(); if (window.__admLoadBundlesTab) window.__admLoadBundlesTab(); }
   });
 
@@ -7769,6 +7769,73 @@
     }).catch(function (err) {
       if (msg) msg.textContent = err.message || 'Could not add to featured.';
     });
+  });
+
+  /* Homepage bundles - which curated bundles the homepage's "Bundle & save" shows, and in what
+     order (bundle_deals.home_featured / home_order, set through admin-upsert-bundle's "home" action). */
+  var homeBundles = [];
+  var homeBundlesAddDropdown = makeDropdown($('admHomeBundlesAddDD'), {
+    valueInput: $('admHomeBundlesAddId'), placeholder: 'Select a bundle', searchable: true
+  });
+  function loadHomeBundles() {
+    var body = $('admHomeBundlesBody'); if (!body) return Promise.resolve();
+    if (!homeBundles.length) body.innerHTML = '<tr><td colspan="4" class="adm-empty">Loading…</td></tr>';
+    return invokeAdminFn('admin-upsert-bundle', { action: 'list' }, 'Could not load bundles.').then(function (data) {
+      homeBundles = data.bundles || [];
+      renderHomeBundles();
+    }).catch(function (err) { body.innerHTML = '<tr><td colspan="4" class="adm-empty">' + esc(err.message) + '</td></tr>'; });
+  }
+  function renderHomeBundles() {
+    var body = $('admHomeBundlesBody'); if (!body) return;
+    var picked = homeBundles.filter(function (b) { return b.home_featured; })
+      .sort(function (a, b) { return (a.home_order || 0) - (b.home_order || 0); });
+    body.innerHTML = picked.length ? picked.map(function (b) {
+      var pr = bundlePrices(b.slugs || [], Number(b.bundle_pct) || 0);
+      return '<tr data-token="' + esc(b.token) + '"><td><input type="number" class="adm-input adm-input-sm adm-home-bundle-order" min="0" step="1" value="' + (b.home_order || 0) + '" style="max-width:70px;" /></td>' +
+        '<td>' + esc(b.title || '') + (b.active ? '' : ' <span class="dt-badge">Off, hidden</span>') + '</td>' +
+        '<td><span class="adm-bundle-was">' + usd(pr.list) + '</span> ' + usd(pr.sale) + '</td>' +
+        '<td class="adm-row-actions"><button class="btn btn-ghost adm-btn-sm adm-home-bundle-remove" type="button">Remove</button></td></tr>';
+    }).join('') : '<tr><td colspan="4" class="adm-empty">No bundles on the homepage yet - add one below.</td></tr>';
+    homeBundlesAddDropdown.setOptions(homeBundles.filter(function (b) { return !b.home_featured && b.active; })
+      .sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); })
+      .map(function (b) { return { value: b.token, label: b.title }; }), '');
+  }
+  function setHomeBundle(token, featured, order) {
+    var b = homeBundles.filter(function (x) { return x.token === token; })[0];
+    return invokeAdminFn('admin-upsert-bundle', { action: 'home', token: token, featured: featured, order: order }, 'Could not update the homepage bundles.').then(function () {
+      logAudit('Homepage: ' + (featured ? 'showing' : 'removed') + ' bundle "' + (b ? b.title : token) + '"' + (featured ? ' at position ' + order : '') + ' on the homepage');
+      return loadHomeBundles();
+    });
+  }
+  var homeBundlesBody = $('admHomeBundlesBody');
+  if (homeBundlesBody) {
+    homeBundlesBody.addEventListener('click', function (e) {
+      var btn = e.target.closest('.adm-home-bundle-remove'); if (!btn || !can('admin')) return;
+      btn.disabled = true;
+      setHomeBundle(btn.closest('tr').getAttribute('data-token'), false, 0).catch(function (err) {
+        btn.disabled = false; admToast(err.message || 'Could not remove the bundle', false);
+      });
+    });
+    homeBundlesBody.addEventListener('change', function (e) {
+      var input = e.target.closest('.adm-home-bundle-order'); if (!input || !can('admin')) return;
+      setHomeBundle(input.closest('tr').getAttribute('data-token'), true, Math.max(0, parseInt(input.value, 10) || 0)).catch(function (err) {
+        admToast(err.message || 'Could not update order', false);
+      });
+    });
+  }
+  var homeBundlesAddForm = $('admHomeBundlesAddForm');
+  if (homeBundlesAddForm) homeBundlesAddForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!can('admin')) return;
+    var msg = $('admHomeBundlesMsg');
+    var token = $('admHomeBundlesAddId').value;
+    if (!token) { if (msg) msg.textContent = 'Pick a bundle first.'; return; }
+    var maxOrder = homeBundles.filter(function (x) { return x.home_featured; }).reduce(function (m, x) { return Math.max(m, x.home_order || 0); }, -1);
+    if (msg) msg.textContent = 'Adding…';
+    setHomeBundle(token, true, maxOrder + 1).then(function () {
+      homeBundlesAddDropdown.setValue('');
+      if (msg) msg.textContent = '';
+    }).catch(function (err) { if (msg) msg.textContent = err.message || 'Could not add the bundle.'; });
   });
 
   function weeklyDealsAction(action, productId, btn) {
