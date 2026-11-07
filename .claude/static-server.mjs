@@ -35,6 +35,11 @@ function resolve(urlPath) {
 }
 
 createServer((req, res) => {
+  // Live, catalog-loader.php only redirects to catalog.js (versioned by its hash); PHP can't run here.
+  if ((req.url || '').split('?')[0] === '/catalog-loader.php') {
+    res.writeHead(302, { location: '/catalog.js?v=local', 'cache-control': 'no-store' }).end();
+    return;
+  }
   const file = resolve(req.url || '/');
   if (!file) {
     res.writeHead(403).end('forbidden');
