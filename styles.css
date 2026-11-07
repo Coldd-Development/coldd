@@ -1618,25 +1618,6 @@ body.no-scroll { overflow: hidden; }
   box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 20px 46px -26px var(--ink-75);
 }
 .pd-buycard { border: 1px solid var(--hairline); border-radius: var(--r-sm); padding: 20px; }
-/* Staff-only edit/update strip above the buy card. The two actions are the
-   point of it, so they lead and fill the width; the dismiss is a quiet
-   affordance tucked at the end. Flat, hairline-bordered, no colour. */
-.pd-admin-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
-  padding: 6px; border: 1px solid var(--hairline); border-radius: var(--r-sm);
-  background: rgba(255,255,255,0.03); }
-/* display:flex above is an author rule and beats the browser's UA
-   [hidden]{display:none}, so the attribute alone won't hide the bar. */
-.pd-admin-bar[hidden] { display: none; }
-.pd-admin-acts { display: flex; align-items: stretch; gap: 6px; flex: 1 1 auto; }
-.pd-admin-act { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 9px 12px; border-radius: 9px; font-size: 13px; font-weight: 600;
-  color: var(--fg); text-decoration: none; border: 1px solid var(--hairline);
-  background: rgba(255,255,255,0.04); transition: color .15s, background .15s, border-color .15s; }
-.pd-admin-act svg { opacity: 0.8; flex: 0 0 auto; }
-@media (hover: hover) and (pointer: fine) { .pd-admin-act:hover { background: rgba(255,255,255,0.09); border-color: var(--hairline-strong); } }
-.pd-admin-x { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; border: none;
-  border-radius: 7px; background: none; color: var(--fg-3); cursor: pointer; transition: color .15s, background .15s; }
-@media (hover: hover) and (pointer: fine) { .pd-admin-x:hover { color: var(--fg); background: rgba(255,255,255,0.06); } }
 
 /* Admin product-edit floating save - stays reachable while scrolling a long form */
 .adm-sticky-save { position: fixed; top: 74px; right: 26px; z-index: 60; min-height: 40px; padding: 9px 20px;
@@ -4809,8 +4790,6 @@ body:has(.cart-drawer.open) .mkt-claim-tab { display: none; }
 .adm-mp-check .adm-mp-logo { width: 22px; height: 22px; }
 
 /* Product page admin bar: the Download button is a <button>, match the link buttons */
-button.pd-admin-act { font: inherit; color: inherit; cursor: pointer; }
-button.pd-admin-act:disabled { opacity: .5; cursor: default; }
 
 /* Auto-height description boxes: .adm-textarea gives them flex: 1 1 100%, which inside the column .adm-field overrides the height the script sets */
 .adm-textarea.adm-autogrow { flex: 0 0 auto; }

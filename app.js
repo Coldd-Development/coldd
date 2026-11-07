@@ -3898,41 +3898,6 @@
           if (pdTitle) pdTitle.innerHTML = esc(p.title) + ' <span class="pd-ver">' + version + '</span>';
           if (pdSub) pdSub.textContent = p.desc || '';
 
-          // Admin-only quick links into the admin panel for this exact
-          // product (deep-linked - /admin reads ?product=&action=). The X
-          // dismisses it for this page view only, so an admin can see the
-          // product page exactly as a customer does; it's back on reload.
-          var pdAdminBar = document.getElementById('pdAdminBar');
-          if (pdAdminBar && !pdAdminBar.dataset.wired && window.coldAuth && window.coldAuth.checkIsAdmin) {
-            pdAdminBar.dataset.wired = '1';
-            var xBtn = document.getElementById('pdAdminBarX');
-            if (xBtn) xBtn.addEventListener('click', function () {
-              pdAdminBar.hidden = true;
-            });
-            var eid = encodeURIComponent(p.id);
-            var _dl = document.getElementById('pdAdminDownload');
-            var _au = document.getElementById('pdAdminUpdate');
-            if (_au) _au.href = '/admin?product=' + eid + '&action=update';
-            if (_dl) _dl.onclick = function () {
-              if (_dl.disabled) return;
-              _dl.disabled = true;
-              // Looks the product up by slug (admins can read every row), then
-              // asks the admin download function for a short-lived link.
-              window.coldSupabase.from('products').select('id').eq('slug', p.id).maybeSingle().then(function (r) {
-                if (!r.data) throw new Error('Product not found.');
-                return window.coldSupabase.functions.invoke('admin-get-download-url', { body: { productId: r.data.id } });
-              }).then(function (res) {
-                if (res.error || !res.data || !res.data.url) throw new Error((res.data && res.data.error) || 'No file has been uploaded for this product yet.');
-                window.open(res.data.url, '_blank', 'noopener');
-              }).catch(function (err) { alert(err.message || 'Could not download the file.'); }).then(function () { _dl.disabled = false; });
-            };
-            // Show straight away for a known admin (cached), confirm live.
-            if (window.coldAuth.checkIsAdmin.cached && window.coldAuth.checkIsAdmin.cached()) pdAdminBar.hidden = false;
-            window.coldAuth.checkIsAdmin().then(function (info) {
-              pdAdminBar.hidden = !(info && info.isAdmin);
-            }).catch(function () {});
-          }
-
           var g = gallery(p);
           curGallery = g;
           if (pdThumbs) {
