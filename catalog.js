@@ -1005,32 +1005,60 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 
-/* Big transitions (into the admin panel or the dashboard from elsewhere) fade the page into a blur with a
-   spinner for a beat before navigating, instead of an instant jump. Skipped for reduced-motion users. */
+/* Page-change veil: the page fades into a blur with a spinner while the next page loads.
+   - Every page change (link, script redirect, reload) shows it straight away, with no added delay; the
+     old page stays on screen until the new one is ready, so the blur covers exactly that wait.
+   - Big transitions (into the admin panel or the dashboard from elsewhere) also hold for a beat first.
+   - Callers can show it with a message, e.g. checkout's "Taking you to secure checkout".
+   It can never get stuck: it hides when a "leave this page?" prompt is about to appear, when the page is
+   restored from the back/forward cache, and after a safety timeout if no navigation happened. */
 (function () {
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var veil = null;
+  var veil = null, msgEl = null, safety = null;
   function build() {
     if (veil) return veil;
     veil = document.createElement('div');
     veil.className = 'cold-veil';
     veil.setAttribute('aria-hidden', 'true');
-    veil.innerHTML = '<span class="cold-veil-spin"></span>';
+    veil.innerHTML = '<span class="cold-veil-spin"></span><span class="cold-veil-msg"></span>';
+    msgEl = veil.querySelector('.cold-veil-msg');
     document.body.appendChild(veil);
     return veil;
   }
+  function hide() { clearTimeout(safety); if (veil) veil.classList.remove('on'); }
+  function on(msg, quick, safetyMs) {
+    var v = build();
+    msgEl.textContent = msg || '';
+    v.classList.toggle('has-msg', !!msg);
+    v.classList.toggle('quick', !!quick);
+    void v.offsetWidth;
+    v.classList.add('on');
+    clearTimeout(safety);
+    safety = setTimeout(hide, safetyMs || 12000);
+    // A page that asks "leave this page?" (uploads running, payment pending) must not sit blurred
+    // behind the prompt. Added now, this runs after every other beforeunload handler.
+    window.addEventListener('beforeunload', function (e) { if (e.defaultPrevented || e.returnValue) hide(); }, { once: true });
+  }
+  function isOn() { return !!(veil && veil.classList.contains('on')); }
   window.__coldVeil = {
     // Fade in over 0.5s, hold, then run go(). hold defaults to about a second.
     run: function (go, holdMs) {
       if (reduce) { go(); return; }
-      var v = build();
-      void v.offsetWidth;
-      v.classList.add('on');
+      on('', false);
       setTimeout(go, 500 + (holdMs == null ? 900 : holdMs));
     },
-    hide: function () { if (veil) veil.classList.remove('on'); }
+    // Show now (quick fade), optionally with a line of text. Call hide() if the navigation is called off.
+    show: function (msg, safetyMs) { on(msg, true, safetyMs); },
+    hide: hide
   };
+
   var BIG = /^\/(admin|dashboard)(\/|$)/;
+  var FILE = /\.(zip|rar|7z|rbxm|rbxl|rbxmx|pdf|png|jpe?g|gif|webp|mp4|txt|csv|json|docx?)$/i;
+  function leavesPage(u) {
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    if (FILE.test(u.pathname)) return false;
+    return !(u.origin === location.origin && u.pathname === location.pathname && u.search === location.search);
+  }
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     var a = e.target.closest && e.target.closest('a[href]');
@@ -1044,5 +1072,26 @@
     e.stopImmediatePropagation();
     window.__coldVeil.run(function () { location.href = u.href; });
   }, true);
-  window.addEventListener('pageshow', function (ev) { if (ev.persisted) window.__coldVeil.hide(); });
+
+  if (window.navigation && typeof window.navigation.addEventListener === 'function') {
+    // Navigation API: one hook for links, location.href redirects and form posts alike.
+    window.navigation.addEventListener('navigate', function (e) {
+      if (isOn() || e.hashChange || e.downloadRequest || !e.destination || e.destination.sameDocument) return;
+      var u;
+      try { u = new URL(e.destination.url); } catch (x) { return; }
+      if (e.navigationType !== 'reload' && !leavesPage(u)) return;
+      on('', true);
+    });
+  } else {
+    // Older browsers: same-tab link clicks that nothing else handled (this runs last, on window).
+    window.addEventListener('click', function (e) {
+      if (isOn() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      var a = e.target.closest && e.target.closest('a[href]');
+      if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+      var u;
+      try { u = new URL(a.href, location.href); } catch (x) { return; }
+      if (leavesPage(u)) on('', true);
+    });
+  }
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) hide(); });
 })();

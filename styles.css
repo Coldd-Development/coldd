@@ -4928,10 +4928,14 @@ html[data-theme="light"] .dash-table a:not(.btn):visited, html[data-theme="light
 .adm-ud-btnrow { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* Motion: full-screen veil for big transitions, and panels/cards that ease in when they open */
-.cold-veil { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center;
+.cold-veil { position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;
   background: rgba(6,7,10,0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); opacity: 0; pointer-events: none;
   transition: opacity .5s ease, background .5s ease, backdrop-filter .5s ease, -webkit-backdrop-filter .5s ease; }
 .cold-veil.on { opacity: 1; pointer-events: auto; background: rgba(6,7,10,0.5); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+/* Ordinary page changes fade in fast: the blur covers the load, it never adds to it. */
+.cold-veil.quick { transition-duration: .22s; }
+.cold-veil-msg { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); text-align: center; padding: 0 24px; }
+.cold-veil:not(.has-msg) .cold-veil-msg { display: none; }
 .cold-veil-spin { width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.14); border-top-color: var(--accent);
   animation: cbspin .8s linear infinite; }
 @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

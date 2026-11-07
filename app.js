@@ -7747,6 +7747,10 @@
           : payMethod === 'crypto' ? 'create-crypto-charge'
           : 'create-checkout-session';
 
+        // Blur the page with a clear line while the order is created and the payment page loads.
+        if (window.__coldVeil && checkoutFn !== 'create-robux-order') {
+          window.__coldVeil.show(payMethod === 'paypal' ? 'Taking you to PayPal…' : 'Taking you to secure checkout…', 45000);
+        }
         window.coldSupabase.functions.invoke(checkoutFn, { body: checkoutBody })
           .then(function (res) {
             var data = res && res.data, error = res && res.error;
@@ -7768,6 +7772,7 @@
             location.href = data.url;
           })
           .catch(function (err) {
+            if (window.__coldVeil) window.__coldVeil.hide();
             placeBtn.removeAttribute('data-busy');
             placeBtn.disabled = false; placeBtn.textContent = prevText;
             // create-checkout-session / create-paypal-order / create-crypto-charge
