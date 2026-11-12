@@ -46,7 +46,7 @@ ADMIN_DIR = ROOT / 'admin'
 # admin/index.html itself).
 TOP_LEVEL_SECTIONS = [
     'products', 'sales', 'marketing', 'marketplaces', 'analytics',
-    'orders', 'resellers', 'reviews', 'content', 'sitemgmt',
+    'orders', 'giveaways', 'resellers', 'reviews', 'content', 'sitemgmt',
 ]
 # Single fixed sub-pages under /admin/products/ that aren't per-product.
 PRODUCT_SUBPAGES = ['new', 'unreleased']

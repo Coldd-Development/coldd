@@ -38,6 +38,18 @@
   <script>
     (async function () {
       var msg = document.getElementById('cbMsg');
+      // Same return-path rule as auth.js: a page that started the sign-in
+      // (e.g. /claim) can ask to be sent back to; same-origin paths under an
+      // hour old only, otherwise the dashboard.
+      function afterAuthUrl() {
+        try {
+          var raw = sessionStorage.getItem('coldd_auth_return');
+          sessionStorage.removeItem('coldd_auth_return');
+          var r = raw ? JSON.parse(raw) : null;
+          if (r && typeof r.path === 'string' && /^\/(?![\/\\])\S*$/.test(r.path) && Date.now() - (Number(r.ts) || 0) < 3600000) return r.path;
+        } catch (e) {}
+        return '/dashboard';
+      }
       function fail(text) {
         document.getElementById('cbCard').setAttribute('data-state', 'error');
         msg.textContent = text;
@@ -84,7 +96,7 @@
           try { localStorage.setItem('coldd_auth', 'in'); } catch (e) {}
 
           msg.textContent = 'Signed in as ' + finalBasicName + '. Redirecting…';
-          setTimeout(function () { location.href = '/dashboard'; }, 500);
+          setTimeout(function () { location.href = afterAuthUrl(); }, 500);
           return;
         }
 
@@ -149,7 +161,7 @@
         try { localStorage.setItem('coldd_auth', 'in'); } catch (e) {}
 
         msg.textContent = 'Signed in as ' + finalName + '. Redirecting…';
-        setTimeout(function () { location.href = '/dashboard'; }, 500);
+        setTimeout(function () { location.href = afterAuthUrl(); }, 500);
       } catch (err) {
         console.error('[coldd] callback error:', err);
         fail('Sign-in failed. Redirecting…');

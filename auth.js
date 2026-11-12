@@ -1,4 +1,17 @@
 (function () {
+  // Where to land after signing in. A page that sends someone here to sign
+  // in (e.g. /claim, part-way through a prize claim) leaves its own path in
+  // sessionStorage; anything that isn't a same-origin path, or is over an
+  // hour old, is ignored and the dashboard is used as before.
+  function afterAuthUrl() {
+    try {
+      var raw = sessionStorage.getItem('coldd_auth_return');
+      sessionStorage.removeItem('coldd_auth_return');
+      var r = raw ? JSON.parse(raw) : null;
+      if (r && typeof r.path === 'string' && /^\/(?![\/\\])\S*$/.test(r.path) && Date.now() - (Number(r.ts) || 0) < 3600000) return r.path;
+    } catch (e) {}
+    return '/dashboard';
+  }
   function emailOk(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
   function val(form, name) { var el = form.querySelector('[name="' + name + '"]'); return el ? el.value.trim() : ''; }
   function fieldErr(form, name, msg) {
@@ -239,7 +252,7 @@
           return;
         }
         setLoading(si, false);
-        location.href = '/dashboard';
+        location.href = afterAuthUrl();
       });
     }).catch(function () {
       setLoading(si, false);
@@ -303,7 +316,7 @@
           window.coldSupabase.functions.invoke('marketing-signup', { body: { email: pendingEmail, source: 'signup' } }).catch(function () {});
         } catch (e) {}
       }
-      location.href = '/dashboard';
+      location.href = afterAuthUrl();
     }).catch(function () {
       setLoading(sv, false);
       flash(sv, 'Something went wrong. Please try again.');

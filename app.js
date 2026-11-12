@@ -218,8 +218,9 @@
       var SHOW_DELAY_MS = 20000;
 
       // Never on checkout (mid-purchase is the wrong moment to interrupt
-      // with an unrelated offer) or any account/admin flow.
-      if (/^\/(checkout|dashboard|admin|signin|signup|forgot|reset|lock)(\/|$)/.test(location.pathname)) return;
+      // with an unrelated offer), any account/admin flow, or the prize claim
+      // portal (winners are there to collect a prize, not to be sold to).
+      if (/^\/(checkout|dashboard|admin|signin|signup|forgot|reset|lock|claim)(\/|$)/.test(location.pathname)) return;
 
       var minimized = false;
       try {
@@ -4226,7 +4227,8 @@
         tag: '<path d="M20.6 13.4 12 22l-8-8V4h10l6.6 6.6a2 2 0 0 1 0 2.8Z"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>',
         star: '<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18l-5.9 3 1.2-6.5L2.5 9.4l6.6-.9z"/>',
         download: '<path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
-        spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>'
+        spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+        gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C9.5 3 12 8 12 8s2.5-5 4.5-5a2.5 2.5 0 0 1 0 5"/>'
       };
       function notifMediaHtml(n) {
         var m = (n.url || '').match(/[?&]id=([^&#]+)/);
@@ -4239,7 +4241,8 @@
           }
         }
         var t = (n.title + ' ' + (n.body || '')).toLowerCase();
-        var key = /order|receipt|purchase|payment|invoice/.test(t) ? 'receipt'
+        var key = /^prize claim/.test(t) ? 'gift'
+          : /order|receipt|purchase|payment|invoice/.test(t) ? 'receipt'
           : /sale|deal|discount|% off|drop|price/.test(t) ? 'tag'
           : /review/.test(t) ? 'star'
           : /update|new version|patch|changelog/.test(t) ? 'download'

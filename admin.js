@@ -1492,7 +1492,7 @@
   /* ================================================================
      NAV / PANEL SWITCHING
      ================================================================ */
-  var PANELS = ['home', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
+  var PANELS = ['home', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
   var curPanel = 'home';
 
   /* ---- URL routing ----
@@ -1509,10 +1509,10 @@
   var PANEL_PATH = {
     home: '/admin/', products: '/admin/products/', sales: '/admin/sales/',
     marketing: '/admin/marketing/', marketplaces: '/admin/marketplaces/', analytics: '/admin/analytics/', orders: '/admin/orders/',
-    resellers: '/admin/resellers/', reviews: '/admin/reviews/', content: '/admin/content/',
+    giveaways: '/admin/giveaways/', resellers: '/admin/resellers/', reviews: '/admin/reviews/', content: '/admin/content/',
     sitemgmt: '/admin/sitemgmt/'
   };
-  var PANEL_PARENT = { 'product-edit': 'products', 'product-update': 'products', unreleased: 'products', 'order-detail': 'orders', 'reseller-edit': 'resellers' };
+  var PANEL_PARENT = { 'product-edit': 'products', 'product-update': 'products', unreleased: 'products', 'order-detail': 'orders', 'giveaway-detail': 'giveaways', 'reseller-edit': 'resellers' };
   function urlForPanel(name, extra) {
     if (PANEL_PATH[name]) return PANEL_PATH[name];
     var parent = PANEL_PARENT[name];
@@ -1558,6 +1558,18 @@
       })();
       return;
     }
+    // In-app back/forward to one claim (/admin/giveaways/<ref>/). There's no
+    // static file at that depth, so this only fires on history navigation.
+    if (section === 'giveaways' && sub) {
+      var gwTries = 0;
+      (function waitClaim() {
+        var claim = PRIZE_CLAIMS.filter(function (c) { return c.ref === sub; })[0];
+        if (claim) { viewClaimId = claim.id; showPanel('giveaway-detail', { skipUrl: true, extra: sub }); }
+        else if (gwTries++ < 40 && !PRIZE_CLAIMS_LOADED) setTimeout(waitClaim, 150);
+        else showPanel('giveaways', { skipUrl: true });
+      })();
+      return;
+    }
     showPanel(section, { skipUrl: true });
   }
   window.addEventListener('popstate', function () { routeFromLocation(); });
@@ -1570,6 +1582,8 @@
     else if (name === 'unreleased') renderUnreleasedFiles();
     else if (name === 'orders') renderOrders();
     else if (name === 'order-detail') renderOrderDetail();
+    else if (name === 'giveaways') { renderGiveaways(); if (Date.now() - PRIZE_CLAIMS_AT > 60000) refreshPrizeClaims(); }
+    else if (name === 'giveaway-detail') renderGiveawayDetail();
     else if (name === 'resellers') renderResellers();
     else if (name === 'reviews') renderReviews();
     else if (name === 'sales') { renderEvents(); renderCoupons(); }
@@ -1647,6 +1661,8 @@
     ].join('');
 
     var todo = [];
+    var pendingClaims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
+    if (pendingClaims) todo.push({ text: pendingClaims + ' prize claim' + (pendingClaims > 1 ? 's' : '') + ' awaiting confirmation', panel: 'giveaways', badge: 'warn' });
     var newReviews = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length;
     if (newReviews) todo.push({ text: newReviews + ' new review' + (newReviews > 1 ? 's' : '') + ' to look at', panel: 'reviews', badge: 'warn' });
     var pendingPayouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
@@ -6613,6 +6629,256 @@
   }
 
   /* ================================================================
+     GIVEAWAYS PANEL - prize claims from coldd.dev/claim
+     (claim-prize writes them, admin-prize-claims lists/reviews them)
+     ================================================================ */
+  var PRIZE_CLAIMS = [];
+  var PRIZE_CLAIMS_AT = 0;
+  var PRIZE_CLAIMS_LOADED = false;
+  var PRIZE_CLAIMS_ERR = '';
+  var viewClaimId = null;
+  var gwStatus = 'pending';
+  var gwDeclineOpen = false;
+  var GW_SOURCE = { discord_giveaway: 'Discord Giveaway', discord_event: 'Discord Event', builtbybit: 'BuiltByBit Promotion', other: 'Other' };
+  var GW_PRIZE = { robux: 'Robux', product: 'Product', currency: 'Real currency', other: 'Other' };
+  var GW_STATUS = { pending: ['Awaiting confirmation', 'warn'], fulfilled: ['Prize fulfilled', 'ok'], declined: ['Declined', 'err'] };
+
+  function refreshPrizeClaims() {
+    return invokeAdminFn('admin-prize-claims', { action: 'list' }).then(function (d) {
+      PRIZE_CLAIMS = d.claims || [];
+      PRIZE_CLAIMS_ERR = '';
+    }).catch(function (err) {
+      PRIZE_CLAIMS_ERR = err.message || 'Could not load prize claims.';
+      console.error('[admin] failed to load prize claims:', PRIZE_CLAIMS_ERR);
+    }).then(function () {
+      PRIZE_CLAIMS_LOADED = true;
+      PRIZE_CLAIMS_AT = Date.now();
+      updateGwNavCount();
+      if (curPanel === 'giveaways') renderGiveaways();
+      if (curPanel === 'giveaway-detail') renderGiveawayDetail();
+      if (curPanel === 'home') renderHome();
+    });
+  }
+  function updateGwNavCount() {
+    var el = $('admGwNavCount'); if (!el) return;
+    var n = PRIZE_CLAIMS.filter(function (c) { return c.status === 'pending'; }).length;
+    el.hidden = !n;
+    el.textContent = n > 99 ? '99+' : String(n);
+  }
+  function gwPrizeText(c) {
+    if (c.prize_type === 'product') return c.product_title || 'Product';
+    if (c.prize_type === 'other') return c.prize_other || 'Other prize';
+    if (c.prize_type === 'robux' && c.gamepass_info && c.gamepass_info.price != null) return 'R$ ' + Number(c.gamepass_info.price).toLocaleString('en-US') + ' Robux';
+    return GW_PRIZE[c.prize_type] || 'Prize';
+  }
+  function gwSourceText(c) { return c.source === 'other' ? ('Other: ' + (c.source_other || '')) : (GW_SOURCE[c.source] || c.source); }
+  function gwWinner(c) { return c.verified_discord_name || c.verified_bbb_name || c.account_name || c.account_email || 'Unknown winner'; }
+  function gwBadge(status) { var s = GW_STATUS[status] || GW_STATUS.pending; return '<span class="dt-badge ' + s[1] + '">' + s[0] + '</span>'; }
+
+  function renderGiveaways() {
+    var body = $('admGwBody'); if (!body) return;
+    var counts = { pending: 0, fulfilled: 0, declined: 0 };
+    PRIZE_CLAIMS.forEach(function (c) { if (counts[c.status] != null) counts[c.status]++; });
+    document.querySelectorAll('#admGwTabs .adm-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-status') === gwStatus); });
+    document.querySelectorAll('#admGwTabs .adm-gw-count').forEach(function (s) { var n = counts[s.getAttribute('data-count')] || 0; s.textContent = n ? String(n) : ''; });
+    if (!PRIZE_CLAIMS_LOADED) { body.innerHTML = '<p class="dash-empty-note">Loading…</p>'; return; }
+    if (PRIZE_CLAIMS_ERR && !PRIZE_CLAIMS.length) { body.innerHTML = '<p class="dash-empty-note">' + esc(PRIZE_CLAIMS_ERR) + '</p>'; return; }
+
+    var q = (($('admGwSearch') || {}).value || '').trim().toLowerCase();
+    var rows = PRIZE_CLAIMS.filter(function (c) {
+      if (gwStatus !== 'all' && c.status !== gwStatus) return false;
+      if (!q) return true;
+      return [c.ref, c.account_name, c.account_email, c.verified_discord_name, c.verified_discord_id, c.verified_bbb_name, c.product_title, c.paypal_email, c.gamepass_url, c.source_other, c.prize_other]
+        .some(function (v) { return v && String(v).toLowerCase().indexOf(q) >= 0; });
+    });
+    // Oldest first while waiting (first come, first served); newest first otherwise.
+    rows.sort(function (a, b) { return gwStatus === 'pending' ? String(a.created_at).localeCompare(String(b.created_at)) : String(b.created_at).localeCompare(String(a.created_at)); });
+
+    var empty = { pending: 'No prize claims waiting. Nice.', fulfilled: 'No fulfilled claims yet.', declined: 'No declined claims.', all: 'No prize claims yet.' }[gwStatus];
+    body.innerHTML = rows.map(function (c) {
+      var meta = [c.ref, gwSourceText(c), relTime(c.created_at)];
+      return '<div class="dash-row adm-gw-row" data-id="' + esc(c.id) + '" tabindex="0" role="button" aria-label="Review claim ' + esc(c.ref) + '">' +
+        '<span class="adm-gw-ico gw-' + esc(c.prize_type) + '">' + esc((GW_PRIZE[c.prize_type] || '?').charAt(0)) + '</span>' +
+        '<div class="dr-main">' +
+          '<div class="dr-title">' + esc(gwPrizeText(c)) + ' ' + gwBadge(c.status) + '</div>' +
+          '<div class="dr-prod">' + esc(gwWinner(c)) + (c.account_email && c.account_email !== gwWinner(c) ? ' <span class="adm-sub">' + esc(c.account_email) + '</span>' : '') + '</div>' +
+          '<div class="dr-sub">' + esc(meta.join(' · ')) + '</div>' +
+        '</div>' +
+        '<div class="dr-actions"><button class="btn btn-ghost adm-btn-sm adm-gw-open" type="button">' + (c.status === 'pending' ? 'Review' : 'View') + '</button></div>' +
+        '</div>';
+    }).join('') || '<p class="dash-empty-note">' + empty + '</p>';
+  }
+  (function () {
+    var tabs = $('admGwTabs');
+    if (tabs) tabs.addEventListener('click', function (e) {
+      var b = e.target.closest('.adm-tab'); if (!b) return;
+      gwStatus = b.getAttribute('data-status') || 'pending';
+      renderGiveaways();
+    });
+    var search = $('admGwSearch');
+    if (search) search.addEventListener('input', renderGiveaways);
+    var refresh = $('admGwRefresh');
+    if (refresh) refresh.addEventListener('click', function () {
+      refresh.disabled = true;
+      refreshPrizeClaims().then(function () { refresh.disabled = false; });
+    });
+    var body = $('admGwBody');
+    function openRow(row) {
+      var c = PRIZE_CLAIMS.filter(function (x) { return x.id === row.getAttribute('data-id'); })[0]; if (!c) return;
+      viewClaimId = c.id; gwDeclineOpen = false;
+      showPanel('giveaway-detail', { extra: c.ref });
+    }
+    if (body) {
+      body.addEventListener('click', function (e) { var row = e.target.closest('.adm-gw-row'); if (row) openRow(row); });
+      body.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var row = e.target.closest('.adm-gw-row'); if (row) { e.preventDefault(); openRow(row); }
+      });
+    }
+  })();
+
+  function gwCopyBtn(value) {
+    return ' <button type="button" class="adm-gw-copy" data-copy="' + esc(value) + '">Copy</button>';
+  }
+  function renderGiveawayDetail() {
+    var el = $('admGwDetailBody'); if (!el) return;
+    var c = PRIZE_CLAIMS.filter(function (x) { return x.id === viewClaimId; })[0];
+    if (!c) { el.innerHTML = '<p class="adm-empty">' + (PRIZE_CLAIMS_LOADED ? 'Claim not found.' : 'Loading…') + '</p>'; return; }
+
+    // Prize + payout detail
+    var prize = detailRow('Prize', esc(GW_PRIZE[c.prize_type] || c.prize_type));
+    if (c.prize_type === 'robux') {
+      var gi = c.gamepass_info || {};
+      prize += detailRow('Gamepass', c.gamepass_url ? '<a href="' + esc(c.gamepass_url) + '" target="_blank" rel="noopener">' + esc(c.gamepass_url) + ADM_ICON_EXT + '</a>' + gwCopyBtn(c.gamepass_url) : '-');
+      if (gi.name) prize += detailRow('Gamepass name', esc(gi.name));
+      if (gi.price != null) prize += detailRow('Gamepass price', 'R$ ' + esc(Number(gi.price).toLocaleString('en-US')) + (gi.forSale === false ? ' <span class="dt-badge err">Not on sale</span>' : ''));
+      if (gi.creatorName) prize += detailRow('Gamepass owner', esc(gi.creatorName) + (gi.creatorType ? ' <span class="adm-sub">' + esc(gi.creatorType) + '</span>' : ''));
+      prize += '<p class="adm-note">The winner was told the game must be public with its maturity questionnaire and age rating done, or we can\'t pay them. The price shown was checked when they submitted; open the link to see it now.</p>';
+    } else if (c.prize_type === 'currency') {
+      prize += detailRow('PayPal email', c.paypal_email ? esc(c.paypal_email) + gwCopyBtn(c.paypal_email) : '-');
+    } else if (c.prize_type === 'product') {
+      prize += detailRow('Product', c.product_slug ? '<a href="/product/' + encodeURIComponent(c.product_slug) + '" target="_blank" rel="noopener">' + esc(c.product_title || c.product_slug) + ADM_ICON_EXT + '</a>' : esc(c.product_title || '-'));
+      if (c.order_id) prize += detailRow('Granted', 'Added to their Licenses (order ' + esc(String(c.order_id).slice(0, 8)) + ')');
+    } else {
+      prize += detailRow('What they won', '<span class="adm-gw-pre">' + esc(c.prize_other || '-') + '</span>');
+    }
+
+    // Who won
+    var who = detailRow('coldd account', esc(c.account_name || '-') + (c.account_email ? ' <span class="adm-sub">' + esc(c.account_email) + '</span>' : ''));
+    who += detailRow('Won from', esc(GW_SOURCE[c.source] || c.source));
+    if (c.source === 'other') who += detailRow('Where', '<span class="adm-gw-pre">' + esc(c.source_other || '-') + '</span>');
+    if (c.verified_discord_id) who += detailRow('Discord', esc(c.verified_discord_name || '') + ' <span class="adm-sub">' + esc(c.verified_discord_id) + '</span>' + gwCopyBtn(c.verified_discord_id) + ' <span class="dt-badge ok">Verified</span>');
+    if (c.verified_bbb_id) who += detailRow('BuiltByBit', '<a href="https://builtbybit.com/members/' + encodeURIComponent(c.verified_bbb_id) + '/" target="_blank" rel="noopener">' + esc(c.verified_bbb_name || c.verified_bbb_id) + ADM_ICON_EXT + '</a> <span class="adm-sub">' + esc(c.verified_bbb_id) + '</span> <span class="dt-badge ok">Verified</span>');
+    who += detailRow('Submitted', esc(fmtDateTime(new Date(c.created_at))));
+
+    // Proof
+    var proof = c.proof_url
+      ? '<a class="adm-gw-proof" href="' + esc(c.proof_url) + '" target="_blank" rel="noopener"><img src="' + esc(c.proof_url) + '" alt="Proof screenshot for ' + esc(c.ref) + '" loading="lazy" /></a><p class="adm-note">Click the image to open it full size. The link expires after an hour; reload the panel for a fresh one.</p>'
+      : '<p class="adm-note">The screenshot couldn\'t be loaded. Refresh the list to try again.</p>';
+
+    // Review
+    var review = '';
+    if (c.status === 'pending') {
+      var grantHtml = c.prize_type === 'product'
+        ? '<label class="adm-field-check adm-gw-grant"><input type="checkbox" id="admGwGrant" checked /> <span>Grant ' + esc(c.product_title || 'the product') + ' to their account (adds it to their Licenses)</span></label>'
+        : '';
+      var how = { robux: 'Buy their gamepass first, then mark this fulfilled.', currency: 'Send the PayPal payment first, then mark this fulfilled.', product: 'Fulfilling grants the product straight to their account.', other: 'Sort the prize out with them, then mark this fulfilled.' }[c.prize_type] || '';
+      review =
+        '<p class="adm-note" style="margin-top:0;">' + esc(how) + ' They get a notification either way.</p>' +
+        grantHtml +
+        '<div class="adm-gw-actions">' +
+          '<button class="btn btn-primary adm-btn-sm" type="button" id="admGwFulfil"><span class="btn-label">Mark prize fulfilled</span><span class="btn-spinner" hidden></span></button>' +
+          '<button class="btn btn-ghost adm-btn-sm" type="button" id="admGwDeclineOpen"' + (gwDeclineOpen ? ' hidden' : '') + '>Decline</button>' +
+        '</div>' +
+        '<div class="adm-gw-decline" id="admGwDeclineBox"' + (gwDeclineOpen ? '' : ' hidden') + '>' +
+          '<label class="adm-field adm-field-wide"><span>Reason (the winner sees this)</span><textarea maxlength="1000" id="admGwDeclineReason" class="adm-input adm-textarea" rows="3" placeholder="For example: the screenshot doesn\'t show you as the winner."></textarea></label>' +
+          '<div class="adm-gw-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admGwDecline"><span class="btn-label">Decline claim</span><span class="btn-spinner" hidden></span></button><button class="btn btn-ghost adm-btn-sm" type="button" id="admGwDeclineCancel">Cancel</button></div>' +
+        '</div>';
+    } else {
+      review = detailRow('Status', gwBadge(c.status)) +
+        (c.reviewed_at ? detailRow(c.status === 'fulfilled' ? 'Fulfilled' : 'Declined', esc(fmtDateTime(new Date(c.reviewed_at))) + (c.reviewed_by_name ? ' by ' + esc(c.reviewed_by_name) : '')) : '') +
+        (c.status === 'declined' && c.decline_reason ? detailRow('Reason', '<span class="adm-gw-pre">' + esc(c.decline_reason) + '</span>') : '') +
+        '<div class="adm-gw-actions"><button class="btn btn-ghost adm-btn-sm" type="button" id="admGwReopen">Move back to awaiting confirmation</button></div>' +
+        '<p class="adm-note">Reopening doesn\'t notify the winner or take back a product that was already granted.</p>';
+    }
+
+    el.innerHTML =
+      '<div class="dash-head"><h1>Claim ' + esc(c.ref) + '</h1><p>' + gwBadge(c.status) + ' <span class="adm-sub">' + esc(gwPrizeText(c)) + ' for ' + esc(gwWinner(c)) + '</span></p></div>' +
+      '<div class="adm-gw-grid">' +
+        '<div class="adm-gw-col">' +
+          '<div class="dash-card glass"><div class="dash-card-head"><h2>Prize</h2></div>' + prize + '</div>' +
+          '<div class="dash-card glass"><div class="dash-card-head"><h2>Winner</h2></div>' + who + '</div>' +
+        '</div>' +
+        '<div class="adm-gw-col">' +
+          '<div class="dash-card glass"><div class="dash-card-head"><h2>Proof</h2></div>' + proof + '</div>' +
+          '<div class="dash-card glass"><div class="dash-card-head"><h2>Review</h2></div>' + review + '</div>' +
+        '</div>' +
+      '</div>';
+
+    el.querySelectorAll('.adm-gw-copy').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var v = b.getAttribute('data-copy') || '';
+        (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () { admToast('Copied', true); }).catch(function () { admToast('Could not copy', false); });
+      });
+    });
+
+    function busy(btn, on) { if (!btn) return; btn.disabled = on; btn.classList.toggle('is-loading', on); var s = btn.querySelector('.btn-spinner'); if (s) s.hidden = !on; }
+    function applyResult(updated) {
+      if (updated) PRIZE_CLAIMS = PRIZE_CLAIMS.map(function (x) { return x.id === updated.id ? Object.assign({}, updated, { proof_url: x.proof_url }) : x; });
+      updateGwNavCount();
+      renderGiveawayDetail();
+    }
+
+    var fulfilBtn = $('admGwFulfil');
+    if (fulfilBtn) fulfilBtn.addEventListener('click', async function () {
+      var grantEl = $('admGwGrant');
+      var grant = grantEl ? grantEl.checked : false;
+      var msg = c.prize_type === 'product'
+        ? (grant ? (c.product_title || 'The product') + ' will be added to their Licenses and they\'ll be notified.' : 'They\'ll be notified that the prize was sent. The product will NOT be granted automatically.')
+        : 'Only do this once the ' + (c.prize_type === 'robux' ? 'gamepass has been bought' : c.prize_type === 'currency' ? 'PayPal payment has been sent' : 'prize has been sorted') + '. They\'ll be notified.';
+      if (!(await dialogConfirm(msg, { title: 'Mark ' + c.ref + ' fulfilled', acceptLabel: 'Mark fulfilled' }))) return;
+      busy(fulfilBtn, true);
+      invokeAdminFn('admin-prize-claims', { action: 'fulfil', id: c.id, grant: grant }).then(function (d) {
+        logAudit('Prize claim ' + c.ref + ' fulfilled (' + gwPrizeText(c) + ')' + (d.granted ? ' - product granted' : ''));
+        admToast(d.alreadyOwned ? 'Marked fulfilled. They already owned this product, so nothing new was granted.' : 'Marked fulfilled' + (d.granted ? ' and product granted' : ''), true);
+        applyResult(d.claim);
+      }).catch(function (err) { busy(fulfilBtn, false); alert(err.message || 'Could not mark the claim fulfilled.'); });
+    });
+
+    var declineOpen = $('admGwDeclineOpen');
+    if (declineOpen) declineOpen.addEventListener('click', function () {
+      gwDeclineOpen = true; $('admGwDeclineBox').hidden = false; declineOpen.hidden = true;
+      $('admGwDeclineReason').focus();
+    });
+    var declineCancel = $('admGwDeclineCancel');
+    if (declineCancel) declineCancel.addEventListener('click', function () {
+      gwDeclineOpen = false; $('admGwDeclineBox').hidden = true; if (declineOpen) declineOpen.hidden = false;
+    });
+    var declineBtn = $('admGwDecline');
+    if (declineBtn) declineBtn.addEventListener('click', function () {
+      var reason = ($('admGwDeclineReason').value || '').trim();
+      if (reason.length < 3) { admToast('Add a reason - the winner sees it.', false); $('admGwDeclineReason').focus(); return; }
+      busy(declineBtn, true);
+      invokeAdminFn('admin-prize-claims', { action: 'decline', id: c.id, reason: reason }).then(function (d) {
+        gwDeclineOpen = false;
+        logAudit('Prize claim ' + c.ref + ' declined - ' + reason.slice(0, 120));
+        admToast('Claim declined and the winner notified', true);
+        applyResult(d.claim);
+      }).catch(function (err) { busy(declineBtn, false); alert(err.message || 'Could not decline the claim.'); });
+    });
+
+    var reopenBtn = $('admGwReopen');
+    if (reopenBtn) reopenBtn.addEventListener('click', async function () {
+      if (!(await dialogConfirm('This moves ' + c.ref + ' back to awaiting confirmation. The winner isn\'t notified.', { title: 'Reopen claim', acceptLabel: 'Reopen' }))) return;
+      reopenBtn.disabled = true;
+      invokeAdminFn('admin-prize-claims', { action: 'reopen', id: c.id }).then(function (d) {
+        logAudit('Prize claim ' + c.ref + ' reopened');
+        applyResult(d.claim);
+      }).catch(function (err) { reopenBtn.disabled = false; alert(err.message || 'Could not reopen the claim.'); });
+    });
+  }
+
+  /* ================================================================
      RESELLERS PANEL
      ================================================================ */
   var RESELLERS = [];
@@ -9017,6 +9283,10 @@
   refreshTemplates();
   loadUnreleasedFiles();
   refreshResellers();
+  refreshPrizeClaims();
+  // Keeps the Giveaways nav count and the home to-do current while the
+  // panel sits open in a tab.
+  setInterval(function () { if (!document.hidden) refreshPrizeClaims(); }, 120000);
   refreshEmailConfigStatus();
   refreshAutomations();
   var admAdbloxLoadMoreBtn = $('admAdbloxLoadMore');
