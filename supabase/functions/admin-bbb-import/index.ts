@@ -33,7 +33,7 @@
 // Auth: an admin's session, or the shared x-cron-secret. Secret: BUILTBYBIT_API_TOKEN.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { cdnEnabled, cdnPublicUrl, cdnSignedUrl } from "../_shared/cdn.ts";
+import { cdnDownloadUrl, cdnEnabled, cdnPublicUrl, cdnSignedUrl } from "../_shared/cdn.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
@@ -554,6 +554,64 @@ Deno.serve(async (req: Request) => {
           ref, ok: true, status: "created", slug, price_usd: price, robux_price: row.robux_price, subcat,
           gallery_count: gallery.length, cover: !!image, video: !!row.video, legal, tasks: taskRows.length, warnings,
         });
+      }
+      return json({ ok: true, results });
+    }
+
+    // verify_files: items = [{ slug, size }]. Asks the CDN for the size of each product's stored file.
+    if (action === "verify_files") {
+      const items: Obj[] = Array.isArray(body.items) ? body.items : [];
+      if (!items.length) return json({ ok: false, error: "Send items." }, 400);
+      if (items.length > 200) return json({ ok: false, error: "At most 200 items per call." }, 400);
+      const { data: rows } = await admin.from("products").select("slug, storage_path, tech").in("slug", items.map((i) => String(i.slug)));
+      const bySlug = new Map<string, Obj>(((rows ?? []) as Obj[]).map((r) => [r.slug, r]));
+      const bad: string[] = [];
+      let okCount = 0;
+      for (const it of items) {
+        const slug = String(it.slug);
+        const p = bySlug.get(slug);
+        const sp = String(p?.storage_path ?? "");
+        if (!p || !sp.startsWith("cdn:")) { bad.push(`${slug}: not attached`); continue; }
+        let stored = -1;
+        try {
+          const res = await fetch(await cdnDownloadUrl(sp, String(p.tech?.fileName ?? "file"), 120), { headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(20000) });
+          const range = /\/(\d+)$/.exec(res.headers.get("content-range") ?? "");
+          stored = range ? Number(range[1]) : -1;
+          await res.body?.cancel();
+        } catch { /* stays -1 */ }
+        if (stored === Math.trunc(num(it.size))) okCount++; else bad.push(`${slug}: CDN has ${stored}, expected ${it.size}`);
+      }
+      return json({ ok: true, checked: items.length, verified: okCount, bad });
+    }
+
+    // attach_files: items = [{ slug, path ("cdn:..." as returned by admin-get-upload-url), size, fileName }].
+    // The stored file must exist on the CDN with exactly `size` bytes before it is attached.
+    if (action === "attach_files") {
+      const items: Obj[] = Array.isArray(body.items) ? body.items : [];
+      if (!items.length) return json({ ok: false, error: "Send items." }, 400);
+      if (items.length > 40) return json({ ok: false, error: "At most 40 items per call." }, 400);
+      const results: Obj[] = [];
+      for (const it of items) {
+        const slug = String(it.slug ?? "");
+        const path = String(it.path ?? "");
+        const fileName = String(it.fileName ?? "").slice(0, 200);
+        const size = Math.trunc(num(it.size));
+        if (!slug || !path.startsWith("cdn:") || size <= 0 || !fileName) { results.push({ slug, ok: false, error: "Bad item" }); continue; }
+        let stored = -1;
+        try {
+          const res = await fetch(await cdnDownloadUrl(path, fileName, 120), { headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(20000) });
+          const range = /\/(\d+)$/.exec(res.headers.get("content-range") ?? "");
+          stored = range ? Number(range[1]) : res.ok ? num(res.headers.get("content-length"), -1) : -1;
+          await res.body?.cancel();
+        } catch { /* stays -1 */ }
+        if (stored !== size) { results.push({ slug, ok: false, error: `Stored size ${stored} does not match ${size}` }); continue; }
+        const { data: p } = await admin.from("products").select("id, tech").eq("slug", slug).maybeSingle();
+        if (!p) { results.push({ slug, ok: false, error: "No product with this slug" }); continue; }
+        const dot = fileName.lastIndexOf(".");
+        const kb = size / 1024;
+        const tech = { ...(p.tech ?? {}), format: dot >= 0 ? fileName.slice(dot).toLowerCase() : "", size: kb >= 1024 ? (kb / 1024).toFixed(1) + " MB" : kb >= 1 ? kb.toFixed(1) + " KB" : size + " B", fileName };
+        const { error: upErr } = await admin.from("products").update({ storage_path: path, tech }).eq("id", p.id);
+        results.push(upErr ? { slug, ok: false, error: "Could not save: " + upErr.message } : { slug, ok: true, size });
       }
       return json({ ok: true, results });
     }
