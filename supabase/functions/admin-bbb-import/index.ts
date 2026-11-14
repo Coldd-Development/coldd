@@ -35,6 +35,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cdnDownloadUrl, cdnEnabled, cdnPublicUrl, cdnSignedUrl } from "../_shared/cdn.ts";
 import { storedFileExists } from "../_shared/files.ts";
+import { cleanBullets, cleanSummary } from "../_shared/copy.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
@@ -123,26 +124,8 @@ function plain(src: string): string {
     .replace(/\[(?:\/)?[a-z]+(?:=[^\]]*)?\]/gi, " "))
     .replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{2,}/g, "\n").trim();
 }
-// A first "- " bullet draft of the long description (one bullet per line / list item).
-// Headings ("Product Features:"), links and Discord invites are left out.
-function bullets(text: string): string {
-  const out: string[] = [];
-  for (const raw of text.split("\n")) {
-    const l = raw.replace(/^[\s•\-*▪►➤✓✔✅>]+/u, "").trim();
-    if (l.length < 2) continue;
-    if (/^(product |key |main )?(features?|includes?|included|details|description|specs?|specifications|what'?s included|contents)\s*:?$/i.test(l)) continue;
-    if (/:\s*$/.test(l) && l.length < 40) continue;
-    if (/https?:\/\/|discord\.gg|show ?case\s*>>/i.test(l)) continue;
-    const b = "- " + l.slice(0, 300);
-    if (!out.includes(b)) out.push(b);
-  }
-  return out.join("\n").slice(0, 8000);
-}
-function shortDesc(summary: string, bulletText: string, title: string): string {
-  if (summary) return summary.slice(0, 300);
-  const parts = bulletText.split("\n").map((s) => s.replace(/^- /, "")).slice(0, 3);
-  return (parts.join(", ") || title).slice(0, 300);
-}
+// The "- " bullet draft and the short summary are cleaned in _shared/copy.ts: sentence case,
+// proper nouns and acronyms kept, typos fixed, summary at most 100 characters (the editor's limit).
 
 const YT_RE = /(?:\[media=youtube\]\s*|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^\s\]"'<>]*?&(?:amp;)?)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/|(?:img|i\d?)\.youtube\.com\/vi(?:_webp)?\/|i\.ytimg\.com\/vi(?:_webp)?\/)([A-Za-z0-9_-]{11})/gi;
 const YT_THUMB = /(?:img\.youtube\.com|i\d?\.ytimg\.com|i\d?\.youtube\.com)\/vi/i;
@@ -249,7 +232,7 @@ function listing(r: Obj) {
     version: r.LatestVersion?.version_string ?? null,
     purchases: r.purchases ?? null,
     description_text: text.slice(0, 12000),
-    bullets_draft: bullets(text),
+    bullets_draft: cleanBullets(text, String(r.title ?? "")),
     has_description: !!(bbcode || html),
     has_category: !!r.Category,
   };
@@ -280,7 +263,7 @@ function fromClearly(e: Obj) {
     version: null,
     purchases: null,
     description_text: text.slice(0, 12000),
-    bullets_draft: bullets(text),
+    bullets_draft: cleanBullets(text, String(e.title ?? "")),
     has_description: !!text,
     has_category: true,
   };
@@ -492,7 +475,7 @@ Deno.serve(async (req: Request) => {
           image,
           gallery,
           video: l.video ?? "",
-          description: String(it.description || shortDesc(l.summary, l.bullets_draft, title)).trim().slice(0, 300),
+          description: String(it.description || cleanSummary(l.summary, l.bullets_draft, title)).trim().slice(0, 300),
           long_description: String(it.long_description || l.bullets_draft || "").trim().slice(0, 8000),
           cat: String(it.cat),
           subcat,
