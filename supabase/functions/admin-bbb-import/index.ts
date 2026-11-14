@@ -34,6 +34,7 @@ const IDS_PER_REQUEST = 50;
 const MAX_ITEMS = 25;
 const MAX_GALLERY = 15;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const IMAGE_GAP_MS = 1000;
 const DEVEX_USD_PER_ROBUX = 0.0038; // same as admin.js
 const PLACEHOLDER = "_shared/placeholder.zip";
 // Same labels and pages as window.__CATEGORIES in catalog.js
@@ -94,6 +95,17 @@ function bullets(text: string): string {
 
 const YT_RE = /(?:\[media=youtube\]\s*|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^\s\]"'<>]*?&(?:amp;)?)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/|(?:img|i\d?)\.youtube\.com\/vi(?:_webp)?\/|i\.ytimg\.com\/vi(?:_webp)?\/)([A-Za-z0-9_-]{11})/gi;
 const YT_THUMB = /(?:img\.youtube\.com|i\d?\.ytimg\.com|i\d?\.youtube\.com)\/vi/i;
+const https = (u: string) => u.replace(/^http:\/\//i, "https://");
+// Same image regardless of size preset / query string.
+const imageKey = (u: string) => https(u).replace(/[?#].*$/, "").replace(/\/+$/, "");
+// The API hands out attachment links with a card-size preset; the bare link is the full image.
+const fullSize = (u: string) => {
+  try {
+    const x = new URL(u);
+    x.searchParams.delete("preset");
+    return x.toString().replace(/\?$/, "");
+  } catch { return u; }
+};
 function youtubeIds(src: string): string[] {
   const out: string[] = [];
   for (const m of src.matchAll(YT_RE)) if (!out.includes(m[1])) out.push(m[1]);
@@ -150,8 +162,16 @@ function listing(r: Obj) {
   const bbcode = String(r.Description?.bbcode ?? "");
   const html = String(r.Description?.html ?? "");
   const carousel: string[] = (Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls : [])
-    .filter((u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u));
+    .filter((u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u)).map(https);
   const yt = youtubeIds([bbcode, html, ...carousel].join("\n"));
+  const cover = typeof r.cover_image_url === "string" && r.cover_image_url ? https(r.cover_image_url) : null;
+  // The cover is the product page's first slide already, so the gallery leaves it out.
+  const seen = new Set<string>(cover ? [imageKey(cover)] : []);
+  const gallery = carousel.filter((u) => {
+    if (YT_THUMB.test(u) || seen.has(imageKey(u))) return false;
+    seen.add(imageKey(u));
+    return true;
+  });
   const text = plain(bbcode || html);
   const price = r.ListPrice ? num(r.ListPrice.value) : 0;
   return {
@@ -164,8 +184,8 @@ function listing(r: Obj) {
     list_price: price,
     final_price: r.FinalPrice ? num(r.FinalPrice.value) : null,
     robux_price: robuxFor(price),
-    cover: typeof r.cover_image_url === "string" && r.cover_image_url ? r.cover_image_url : null,
-    gallery: carousel.filter((u) => !YT_THUMB.test(u)),
+    cover,
+    gallery,
     youtube: yt,
     video: yt.length ? `https://www.youtube.com/embed/${yt[0]}` : null,
     version: r.LatestVersion?.version_string ?? null,
@@ -190,15 +210,31 @@ function sniff(b: Uint8Array): { ext: string; mime: string } | null {
 }
 
 // Copies one image the API pointed at onto the CDN and returns its public URL.
-async function copyImage(admin: ReturnType<typeof createClient>, url: string, slug: string, sub: "thumbnails" | "gallery", uploadedBy: string | null) {
+// Image requests are spaced like the API ones: they go to builtbybit.com itself.
+let NEXT_IMAGE_SLOT = 0;
+async function getImage(url: string): Promise<{ bytes: Uint8Array; kind: { ext: string; mime: string } }> {
+  const wait = NEXT_IMAGE_SLOT - Date.now();
+  if (wait > 0) await sleep(wait);
+  NEXT_IMAGE_SLOT = Date.now() + IMAGE_GAP_MS;
   const res = await fetch(url, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(25000) });
-  if (!res.ok) throw new Error(`image returned ${res.status}`);
+  if (!res.ok) { await res.body?.cancel(); throw new Error(`image returned ${res.status}`); }
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (bytes.length > MAX_IMAGE_BYTES) throw new Error("image is over 25 MB");
   const kind = sniff(bytes);
   if (!kind) throw new Error("not a jpg/png/gif/webp/avif image");
-  const last = decodeURIComponent(new URL(url).pathname.split("/").pop() || "image").replace(/\.[a-z0-9]+$/i, "");
-  const base = slugify(last).slice(0, 60) || "image";
+  return { bytes, kind };
+}
+
+// Copies one image the API pointed at onto the CDN (full size when it can) and returns its public URL.
+async function copyImage(admin: ReturnType<typeof createClient>, url: string, slug: string, sub: "thumbnails" | "gallery", uploadedBy: string | null) {
+  const full = fullSize(url);
+  let got: { bytes: Uint8Array; kind: { ext: string; mime: string } };
+  try { got = await getImage(full); }
+  catch (e) { if (full === url) throw e; got = await getImage(url); }
+  const { bytes, kind } = got;
+  // Attachment links end in a slash: /attachments/image_2026-11-02_155721703-png.1609463/
+  const last = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || "image").replace(/\.[a-z0-9]+$/i, "");
+  const base = slugify(last).replace(/-(png|jpe?g|gif|webp|avif)$/, "").slice(0, 60) || "image";
   const cdnPath = `media/${slug}/${sub}/${crypto.randomUUID().slice(0, 8)}-${base}.${kind.ext}`;
   const publicUrl = cdnPublicUrl(cdnPath);
   // Ledger first, same as admin-get-upload-url, so the file is on record even if the save fails.

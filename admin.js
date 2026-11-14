@@ -4374,7 +4374,7 @@
     $('admEditDeleteBtn').hidden = false;
     if ($('admLegalDownloadBtn')) $('admLegalDownloadBtn').hidden = false;
     $('admEditHeading').textContent = 'Edit: ' + p.title;
-    if ($('admMpUploadCard')) $('admMpUploadCard').hidden = true;
+    mpFillUploadChecks(p.dbId);
     $('admEditSaveBtn').textContent = 'Save changes';
     if ($('admEditStickySave')) $('admEditStickySave').querySelector('.btn-label').textContent = 'Save changes';
     $('admEditMsg').textContent = '';
@@ -5148,9 +5148,14 @@
     if (pendingStoragePath) fields.storagePath = pendingStoragePath;
     if (saveBtn) saveBtn.disabled = true;
     if (msg) msg.textContent = 'Saving…';
+    var mpChanges = mpUploadShown && mpUploadShown.dbId === p.dbId ? mpUploadChanges() : [];
     callUpsertProduct(upsertPayloadFor(p, fields)).then(function () {
       logAudit('Updated product "' + fields.title + '"');
       pendingStoragePath = null;
+      if (mpChanges.length) {
+        mpSaveListings(p.dbId, mpChanges);
+        mpChanges.forEach(function (c) { if (mpUploadShown && mpUploadShown.dbId === p.dbId) mpUploadShown.on[c.key] = c.status !== 'pending'; });
+      }
       return refreshProducts();
     }).then(function () {
       // The file card still said "Uploaded, saves with the product" (no Download) until a page refresh.
@@ -5545,6 +5550,8 @@
       MP_LISTINGS = {};
       (r[0].data || []).forEach(function (row) { (MP_LISTINGS[row.product_id] = MP_LISTINGS[row.product_id] || {})[row.marketplace] = row.status; });
       MP_TASKS = r[1].data || [];
+      // The editor opened before the listings arrived: show the real ticks, unless the admin already changed them.
+      if (mpUploadShown && !mpUploadShown.touched) mpFillUploadChecks(mpUploadShown.dbId);
       if (curPanel === 'marketplaces') renderMarketplaces();
       if (curPanel === 'home') renderHome();
     });
@@ -5560,6 +5567,7 @@
     return window.coldSupabase.from('marketplace_listings').upsert(payload, { onConflict: 'product_id,marketplace' }).then(function (res) {
       if (res.error) { console.error('[admin] could not save marketplace listings:', res.error.message); admToast('Could not save the marketplace ticks', false); return; }
       rows.forEach(function (r) { (MP_LISTINGS[dbId] = MP_LISTINGS[dbId] || {})[r.key] = r.status; });
+      if (mpUploadShown && mpUploadShown.dbId === dbId && !mpUploadShown.touched) mpFillUploadChecks(dbId);
       if (curPanel === 'marketplaces') renderMarketplaces();
       if (curPanel === 'home') renderHome();
     });
@@ -5572,8 +5580,32 @@
   }
   function mpResetUploadChecks() {
     Array.prototype.forEach.call(document.querySelectorAll('#admMpUploadChecks input[data-mp]'), function (el) { el.checked = false; });
+    mpUploadShown = null;
     if ($('admMpUploadCard')) $('admMpUploadCard').hidden = false;
   }
+  // On an existing product (draft or published) the same boxes show where it is uploaded:
+  // ticked = anything but 'pending'. Saving writes only the boxes the admin changed since the
+  // editor opened, so a listing that had not loaded yet, or one marked 'needs_update', is
+  // never overwritten by accident.
+  var mpUploadShown = null; // { dbId, on: { key: bool }, touched }
+  function mpFillUploadChecks(dbId) {
+    var on = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#admMpUploadChecks input[data-mp]'), function (el) {
+      var key = el.getAttribute('data-mp');
+      on[key] = mpStatus(dbId, key) !== 'pending';
+      el.checked = on[key];
+    });
+    mpUploadShown = { dbId: dbId, on: on, touched: false };
+    if ($('admMpUploadCard')) $('admMpUploadCard').hidden = false;
+  }
+  function mpUploadChanges() {
+    if (!mpUploadShown) return [];
+    var ticks = mpReadUploadChecks();
+    return Object.keys(ticks).filter(function (k) { return ticks[k] !== !!mpUploadShown.on[k]; })
+      .map(function (k) { return { key: k, status: ticks[k] ? 'live' : 'pending' }; });
+  }
+  var mpUploadChecksBox = $('admMpUploadChecks');
+  if (mpUploadChecksBox) mpUploadChecksBox.addEventListener('change', function () { if (mpUploadShown) mpUploadShown.touched = true; });
 
   // Everything still to do: not uploaded, out of date, or a custom task.
   // Private products are not listed anywhere yet, so they raise nothing.
