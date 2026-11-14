@@ -972,7 +972,8 @@
         licensePurchasedAt: legalRaw.license_purchased_at, minRegularUsd: legalRaw.min_regular_usd, minRegularRobux: legalRaw.min_regular_robux,
         minSaleUsd: legalRaw.min_sale_usd, minSaleRobux: legalRaw.min_sale_robux,
         maxDiscountPct: legalRaw.max_discount_pct,
-        canBeFree: legalRaw.can_be_free, disallowSales: legalRaw.disallow_sales
+        canBeFree: legalRaw.can_be_free, disallowSales: legalRaw.disallow_sales,
+        hasRow: !!legalRaw.product_id
       }),
       versions: row.versions || [],
       siteVersion: row.last_released_version || row.version || '',
@@ -4416,7 +4417,10 @@
     $('admLegalMinUsd').value = legal.minSaleUsd || 0;
     $('admLegalMinRobux').value = legal.minSaleRobux || 0;
     $('admLegalMaxDiscount').value = legal.maxDiscountPct || 0;
-    $('admLegalCannotBeFree').checked = !legal.canBeFree;
+    // A product with no legal record yet shows "Cannot be free" unticked, like a brand-new product;
+    // the box is only ticked when a legal record exists and says so. (It used to show ticked for
+    // every product without a record, which looked like someone had marked it.)
+    $('admLegalCannotBeFree').checked = legal.hasRow ? !legal.canBeFree : false;
     $('admLegalDisallowSales').checked = !!legal.disallowSales;
     setLicenseTypeFields(legal);
 
