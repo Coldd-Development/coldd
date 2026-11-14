@@ -34,6 +34,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cdnDownloadUrl, cdnEnabled, cdnPublicUrl, cdnSignedUrl } from "../_shared/cdn.ts";
+import { storedFileExists } from "../_shared/files.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
@@ -556,6 +557,53 @@ Deno.serve(async (req: Request) => {
         });
       }
       return json({ ok: true, results });
+    }
+
+    // check_stored: re-checks every product file, add-on file and legal proof file, gently (4 at a time,
+    // unknown answers retried). Same checks as the daily file audit, nothing is notified or changed.
+    if (action === "check_stored") {
+      const [{ data: prods }, { data: legal }, { data: addons }] = await Promise.all([
+        admin.from("products").select("id, slug, storage_path").limit(5000),
+        admin.from("product_legal").select("product_id, proof_files, dev_proof_files").limit(5000),
+        admin.from("product_addons").select("product_id, title, storage_path").limit(5000),
+      ]);
+      const slugOf = new Map<string, string>(((prods ?? []) as Obj[]).map((p) => [p.id, p.slug]));
+      const jobs: Array<{ slug: string; kind: string; name: string; path: string }> = [];
+      for (const p of (prods ?? []) as Obj[]) if (p.storage_path && p.storage_path !== PLACEHOLDER) jobs.push({ slug: p.slug, kind: "product file", name: p.slug, path: p.storage_path });
+      for (const a of (addons ?? []) as Obj[]) if (a.storage_path) jobs.push({ slug: slugOf.get(a.product_id) ?? a.product_id, kind: "add-on", name: a.title, path: a.storage_path });
+      for (const l of (legal ?? []) as Obj[]) {
+        for (const [kind, list] of [["proof of license", l.proof_files], ["proof of development", l.dev_proof_files]] as const) {
+          for (const f of Array.isArray(list) ? list : []) {
+            const path = f && typeof f === "object" ? f.path : null;
+            jobs.push({ slug: slugOf.get(l.product_id) ?? l.product_id, kind, name: typeof f === "string" ? f : String(f?.name ?? ""), path: path ? String(path) : "" });
+          }
+        }
+      }
+      const answers = new Map<string, boolean | null>();
+      const allPaths = [...new Set(jobs.map((j) => j.path).filter(Boolean))];
+      const from = Math.max(0, Math.trunc(num(body.from, 0)));
+      const uniquePaths = allPaths.slice(from, from + Math.max(1, Math.trunc(num(body.count, allPaths.length))));
+      const inSlice = new Set(uniquePaths);
+      let idx = 0, timedOut = false;
+      const worker = async () => {
+        while (idx < uniquePaths.length) {
+          if (overBudget(8000)) { timedOut = true; return; }
+          const p = uniquePaths[idx++];
+          let r = await storedFileExists(admin, p);
+          for (let t = 0; r === null && t < 2; t++) { await sleep(1000); r = await storedFileExists(admin, p); }
+          answers.set(p, r);
+        }
+      };
+      await Promise.all(Array.from({ length: 4 }, worker));
+      const missing = jobs.filter((j) => (!j.path && from === 0) || (j.path && answers.get(j.path) === false));
+      const unknown = jobs.filter((j) => j.path && answers.has(j.path) && answers.get(j.path) === null);
+      const unchecked = jobs.filter((j) => j.path && inSlice.has(j.path) && !answers.has(j.path));
+      const brief = (j: { slug: string; kind: string; name: string; path: string }) => `${j.slug} | ${j.kind} | ${j.name} | ${j.path || "(no path)"}`;
+      return json({
+        ok: true, entries: jobs.length, totalUniquePaths: allPaths.length, sliceFrom: from, sliceSize: uniquePaths.length,
+        present: [...answers.values()].filter((v) => v === true).length,
+        missing: missing.map(brief), unknown: unknown.map(brief), unchecked: unchecked.length, timedOut,
+      });
     }
 
     // verify_files: items = [{ slug, size }]. Asks the CDN for the size of each product's stored file.
