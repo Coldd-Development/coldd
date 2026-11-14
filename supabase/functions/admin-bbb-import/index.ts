@@ -3,24 +3,34 @@
 // Deploy with:
 //   supabase functions deploy admin-bbb-import --no-verify-jwt
 //
-// Turns BuiltByBit listings into coldd product drafts through the official v2 API only:
-// GET /v2/resources/creator/resources?resource_ids=..&with=Description,Category. Nothing here
-// loads a BuiltByBit web page; the only other requests are for the image URLs the API returns.
+// Turns marketplace listings into coldd product drafts.
 //
-//   fetch  { resource_ids: [135721, ...] }
-//          The listings as the API returns them (title, summary, description, price, images,
-//          YouTube ids) plus the Robux price, a "- " bullet draft of the long description and
-//          any coldd product that already has the same title. No writes.
-//   import { items: [{ resource_id, cat, subcat?, title?, description?, long_description?, force? }] }
-//          One INACTIVE draft per listing (is_active=false): cover + gallery copied to the CDN
-//          (media/<slug>/thumbnails|gallery), price = BuiltByBit list price, Robux from the DevEx
-//          ladder (same formula as admin.js), YouTube demo as the video, BuiltByBit marked live
-//          on the Marketplaces page, link saved in bbb_imports. A listing that is already in
-//          bbb_imports is skipped; one whose title matches an existing product is skipped unless
-//          force is set. Returns what each draft still needs before it can go live.
+// BuiltByBit comes through the official v2 API only: GET /v2/resources/creator/resources
+// ?resource_ids=..&with=Description,Category. Nothing here loads a BuiltByBit web page; the only
+// other requests are for the image URLs the API returns (spaced 1s apart per call).
+// ClearlyDev has no API, so those items arrive already read (by the admin's browser) in
+// item.external and only their images are downloaded here.
+//
+//   fetch  { resource_ids: [135721, ...], raw?: true }
+//          The BuiltByBit listings as the API returns them plus the Robux price, a "- " bullet
+//          draft of the long description and any coldd product with the same title. No writes.
+//   import { items: [...] } (max 25 per call)
+//          One INACTIVE draft per item (is_active=false): cover + gallery copied to the CDN,
+//          price = marketplace price unless price_usd is given, Robux from the DevEx ladder
+//          (same formula as admin.js), YouTube demo when the description has one.
+//          Item shape:
+//            BuiltByBit: { resource_id, cat, ... }
+//            ClearlyDev: { source: "clearlydev", external: { url, title, price_usd, text, tags, yt[], cover, gallery[] }, cat, ... }
+//            optional:   subcat, title, description, long_description, price_usd (0 = free), force,
+//                        legal_from (slug of a product whose legal data is copied),
+//                        legal_license_types (override on the copy),
+//                        tasks: [{ marketplace, title }]
+//          "Uploaded on" marketplaces are marked live: BuiltByBit for a BuiltByBit link;
+//          BuiltByBit AND ClearlyDev for a ClearlyDev-only link.
+//          A BuiltByBit listing already in bbb_imports is skipped; a title that already exists is
+//          skipped unless force is set.
 //
 // Auth: an admin's session, or the shared x-cron-secret. Secret: BUILTBYBIT_API_TOKEN.
-// Requests to BuiltByBit are spaced (MIN_GAP_MS) and a 429 backs off.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cdnEnabled, cdnPublicUrl, cdnSignedUrl } from "../_shared/cdn.ts";
@@ -34,7 +44,7 @@ const IDS_PER_REQUEST = 50;
 const MAX_ITEMS = 25;
 const MAX_GALLERY = 15;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
-const IMAGE_GAP_MS = 1000;
+const IMAGE_GAP: Record<string, number> = { builtbybit: 1000, clearlydev: 150 };
 const DEVEX_USD_PER_ROBUX = 0.0038; // same as admin.js
 const PLACEHOLDER = "_shared/placeholder.zip";
 // Same labels and pages as window.__CATEGORIES in catalog.js
@@ -43,6 +53,34 @@ const CATEGORIES: Record<string, string> = {
   "Buildings": "/shop", "Assets": "/shop", "Uniforms & Gear": "/shop", "Boats": "/shop", "Weapons": "/shop",
   "Vehicles": "/shop", "Animations & VFX": "/shop",
 };
+const TASK_MARKETS = ["builtbybit", "clearlydev", "parcel", "creatorstore", "site"];
+
+// Subcategory guesses (keys of window.__SUBCAT_LABELS), first matches win, at most 3.
+const SUBCAT_RULES: Record<string, Array<[string, RegExp]>> = {
+  "Buildings": [
+    ["scpf", /\b(scp|foundation|containment|facility)\b/],
+    ["sci-fi", /sci-?fi|futur|colony|cyber|alien|outpost/],
+    ["military", /military|army|barracks|bunker|armory|armoury|hangar|hanger|warehouse|killhouse|soldier/],
+    ["government", /police|sheriff|fire (station|department)|post office|court|city hall|embassy|headquarters|commission|palace|istana|ministry|parliament|government|kpk|park service/],
+    ["medieval", /medieval|castle|\bfort\b|roman|tavern|tower of london|maiden/],
+    ["anime-fantasy", /anime|fantasy|japanese|dojo|temple|pagoda/],
+    ["building-packs", /\bpack\b|\bkit\b|collection|bundle/],
+    ["filler", /filler/],
+    ["interior-only", /interior only|\broom\b|basement|cafeteria|laborator/],
+    ["houses-residential", /house|villa|mansion|flats?\b|apartment|dormitor|cottage|cabin|\bhome\b|residen|loft|tongkonan|bungalow/],
+    ["stores-commercial", /store|shop|market|\bmart\b|cafe|restaurant|dealership|bank|mall|shopping|food|stall|repair|car wash|motel|hotel|office|supermarket|convenience|warteg|burger|pizza|walmart|dollar|clothing|minimarket/],
+    ["roleplay", /roleplay|school|hospital|mosque|clinic|stadium|station/],
+  ],
+};
+function guessSubcat(cat: string, hay: string): string | null {
+  const rules = SUBCAT_RULES[cat];
+  if (!rules) return null;
+  const h = hay.toLowerCase();
+  const out: string[] = [];
+  for (const [key, re] of rules) if (re.test(h) && !out.includes(key)) out.push(key);
+  if (!out.length) out.push("roleplay");
+  return out.slice(0, 3).join(",");
+}
 
 // deno-lint-ignore no-explicit-any
 type Obj = Record<string, any>;
@@ -85,12 +123,24 @@ function plain(src: string): string {
     .replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{2,}/g, "\n").trim();
 }
 // A first "- " bullet draft of the long description (one bullet per line / list item).
+// Headings ("Product Features:"), links and Discord invites are left out.
 function bullets(text: string): string {
-  return text.split("\n")
-    .map((l) => l.replace(/^[\s•\-*▪►➤✓✔✅>]+/u, "").trim())
-    .filter((l) => l.length > 1)
-    .map((l) => "- " + l)
-    .join("\n").slice(0, 8000);
+  const out: string[] = [];
+  for (const raw of text.split("\n")) {
+    const l = raw.replace(/^[\s•\-*▪►➤✓✔✅>]+/u, "").trim();
+    if (l.length < 2) continue;
+    if (/^(product |key |main )?(features?|includes?|included|details|description|specs?|specifications|what'?s included|contents)\s*:?$/i.test(l)) continue;
+    if (/:\s*$/.test(l) && l.length < 40) continue;
+    if (/https?:\/\/|discord\.gg|show ?case\s*>>/i.test(l)) continue;
+    const b = "- " + l.slice(0, 300);
+    if (!out.includes(b)) out.push(b);
+  }
+  return out.join("\n").slice(0, 8000);
+}
+function shortDesc(summary: string, bulletText: string, title: string): string {
+  if (summary) return summary.slice(0, 300);
+  const parts = bulletText.split("\n").map((s) => s.replace(/^- /, "")).slice(0, 3);
+  return (parts.join(", ") || title).slice(0, 300);
 }
 
 const YT_RE = /(?:\[media=youtube\]\s*|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^\s\]"'<>]*?&(?:amp;)?)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/|(?:img|i\d?)\.youtube\.com\/vi(?:_webp)?\/|i\.ytimg\.com\/vi(?:_webp)?\/)([A-Za-z0-9_-]{11})/gi;
@@ -110,6 +160,19 @@ function youtubeIds(src: string): string[] {
   const out: string[] = [];
   for (const m of src.matchAll(YT_RE)) if (!out.includes(m[1])) out.push(m[1]);
   return out;
+}
+// Cover first (it is the product page's first slide already), gallery without it or duplicates.
+function splitImages(coverIn: unknown, galleryIn: unknown[]): { cover: string | null; gallery: string[] } {
+  const cover = typeof coverIn === "string" && coverIn ? https(coverIn) : null;
+  const seen = new Set<string>(cover ? [imageKey(cover)] : []);
+  const gallery = galleryIn
+    .filter((u): u is string => typeof u === "string" && /^https?:\/\//i.test(u)).map(https)
+    .filter((u) => {
+      if (YT_THUMB.test(u) || seen.has(imageKey(u))) return false;
+      seen.add(imageKey(u));
+      return true;
+    });
+  return { cover, gallery };
 }
 
 async function v2(token: string, path: string): Promise<Obj> {
@@ -161,25 +224,19 @@ async function fetchListings(token: string, ids: number[]): Promise<Map<number, 
 function listing(r: Obj) {
   const bbcode = String(r.Description?.bbcode ?? "");
   const html = String(r.Description?.html ?? "");
-  const carousel: string[] = (Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls : [])
-    .filter((u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u)).map(https);
-  const yt = youtubeIds([bbcode, html, ...carousel].join("\n"));
-  const cover = typeof r.cover_image_url === "string" && r.cover_image_url ? https(r.cover_image_url) : null;
-  // The cover is the product page's first slide already, so the gallery leaves it out.
-  const seen = new Set<string>(cover ? [imageKey(cover)] : []);
-  const gallery = carousel.filter((u) => {
-    if (YT_THUMB.test(u) || seen.has(imageKey(u))) return false;
-    seen.add(imageKey(u));
-    return true;
-  });
+  const carousel: unknown[] = Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls : [];
+  const yt = youtubeIds([bbcode, html, ...carousel.filter((u): u is string => typeof u === "string")].join("\n"));
+  const { cover, gallery } = splitImages(r.cover_image_url, carousel);
   const text = plain(bbcode || html);
   const price = r.ListPrice ? num(r.ListPrice.value) : 0;
   return {
+    source: "builtbybit",
     resource_id: num(r.resource_id),
     title: String(r.title ?? "").trim(),
     summary: String(r.summary ?? "").trim(),
     url: r.url ?? null,
     bbb_category: r.Category?.title ?? null,
+    tags: "",
     currency: r.ListPrice?.currency ?? null,
     list_price: price,
     final_price: r.FinalPrice ? num(r.FinalPrice.value) : null,
@@ -197,6 +254,37 @@ function listing(r: Obj) {
   };
 }
 
+// A ClearlyDev page, already read by the admin's browser, in the same shape as listing().
+function fromClearly(e: Obj) {
+  const text = String(e.text ?? "");
+  const yt = (Array.isArray(e.yt) ? e.yt : []).filter((x: unknown) => typeof x === "string" && /^[A-Za-z0-9_-]{11}$/.test(x)) as string[];
+  const { cover, gallery } = splitImages(e.cover, Array.isArray(e.gallery) ? e.gallery : []);
+  const price = Math.max(0, num(e.price_usd ?? e.price));
+  return {
+    source: "clearlydev",
+    resource_id: 0,
+    title: String(e.title ?? "").trim(),
+    summary: "",
+    url: String(e.url ?? ""),
+    bbb_category: null,
+    tags: String(e.tags ?? ""),
+    currency: String(e.currency || "USD"),
+    list_price: price,
+    final_price: price,
+    robux_price: robuxFor(price),
+    cover,
+    gallery,
+    youtube: yt,
+    video: yt.length ? `https://www.youtube.com/embed/${yt[0]}` : null,
+    version: null,
+    purchases: null,
+    description_text: text.slice(0, 12000),
+    bullets_draft: bullets(text),
+    has_description: !!text,
+    has_category: true,
+  };
+}
+
 // Identify the image from its first bytes (upload.php checks the bytes match the extension).
 function sniff(b: Uint8Array): { ext: string; mime: string } | null {
   if (b.length < 12) return null;
@@ -209,42 +297,45 @@ function sniff(b: Uint8Array): { ext: string; mime: string } | null {
   return null;
 }
 
-// Copies one image the API pointed at onto the CDN and returns its public URL.
-// Image requests are spaced like the API ones: they go to builtbybit.com itself.
-let NEXT_IMAGE_SLOT = 0;
-async function getImage(url: string): Promise<{ bytes: Uint8Array; kind: { ext: string; mime: string } }> {
-  const wait = NEXT_IMAGE_SLOT - Date.now();
-  if (wait > 0) await sleep(wait);
-  NEXT_IMAGE_SLOT = Date.now() + IMAGE_GAP_MS;
-  const res = await fetch(url, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(25000) });
-  if (!res.ok) { await res.body?.cancel(); throw new Error(`image returned ${res.status}`); }
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length > MAX_IMAGE_BYTES) throw new Error("image is over 25 MB");
-  const kind = sniff(bytes);
-  if (!kind) throw new Error("not a jpg/png/gif/webp/avif image");
-  return { bytes, kind };
+type Img = { bytes: Uint8Array; kind: { ext: string; mime: string }; base: string };
+// Downloads are spaced per host (BuiltByBit's own image host gets 1s between requests);
+// the CDN uploads that follow run alongside the next download.
+const NEXT_IMAGE_SLOT: Record<string, number> = {};
+async function downloadImage(url: string, host: string): Promise<Img> {
+  const tries = host === "builtbybit" && fullSize(url) !== url ? [fullSize(url), url] : [url];
+  let lastErr: Error = new Error("image failed");
+  for (const u of tries) {
+    const wait = (NEXT_IMAGE_SLOT[host] ?? 0) - Date.now();
+    if (wait > 0) await sleep(wait);
+    NEXT_IMAGE_SLOT[host] = Date.now() + (IMAGE_GAP[host] ?? 500);
+    try {
+      const res = await fetch(u, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(25000) });
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`image returned ${res.status}`); }
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.length > MAX_IMAGE_BYTES) throw new Error("image is over 25 MB");
+      const kind = sniff(bytes);
+      if (!kind) throw new Error("not a jpg/png/gif/webp/avif image");
+      // Attachment links end in a slash: /attachments/image_2026-11-02_155721703-png.1609463/
+      const last = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || "image").replace(/\.[a-z0-9]+$/i, "");
+      const base = slugify(last).replace(/-(png|jpe?g|gif|webp|avif)$/, "").slice(0, 60) || "image";
+      return { bytes, kind, base };
+    } catch (e) { lastErr = e as Error; }
+  }
+  throw lastErr;
 }
 
-// Copies one image the API pointed at onto the CDN (full size when it can) and returns its public URL.
-async function copyImage(admin: ReturnType<typeof createClient>, url: string, slug: string, sub: "thumbnails" | "gallery", uploadedBy: string | null) {
-  const full = fullSize(url);
-  let got: { bytes: Uint8Array; kind: { ext: string; mime: string } };
-  try { got = await getImage(full); }
-  catch (e) { if (full === url) throw e; got = await getImage(url); }
-  const { bytes, kind } = got;
-  // Attachment links end in a slash: /attachments/image_2026-11-02_155721703-png.1609463/
-  const last = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || "image").replace(/\.[a-z0-9]+$/i, "");
-  const base = slugify(last).replace(/-(png|jpe?g|gif|webp|avif)$/, "").slice(0, 60) || "image";
-  const cdnPath = `media/${slug}/${sub}/${crypto.randomUUID().slice(0, 8)}-${base}.${kind.ext}`;
+// deno-lint-ignore no-explicit-any
+async function uploadImage(admin: any, img: Img, slug: string, sub: "thumbnails" | "gallery", uploadedBy: string | null): Promise<string> {
+  const cdnPath = `media/${slug}/${sub}/${crypto.randomUUID().slice(0, 8)}-${img.base}.${img.kind.ext}`;
   const publicUrl = cdnPublicUrl(cdnPath);
   // Ledger first, same as admin-get-upload-url, so the file is on record even if the save fails.
   const { error: ledgerErr } = await admin.from("storage_uploads").upsert({
     stored_path: publicUrl, kind: sub === "thumbnails" ? "thumbnail" : "gallery", product_slug: slug,
-    original_name: `${base}.${kind.ext}`, uploaded_by: uploadedBy,
+    original_name: `${img.base}.${img.kind.ext}`, uploaded_by: uploadedBy,
   }, { onConflict: "stored_path" });
   if (ledgerErr) console.error("[admin-bbb-import] could not record upload:", ledgerErr.message);
   const fd = new FormData();
-  fd.append("file", new Blob([bytes], { type: kind.mime }), `${base}.${kind.ext}`);
+  fd.append("file", new Blob([img.bytes as unknown as BlobPart], { type: img.kind.mime }), `${img.base}.${img.kind.ext}`);
   const up = await fetch(await cdnSignedUrl("upload", cdnPath, { maxBytes: 100 * 1024 * 1024 }), {
     method: "POST", body: fd, signal: AbortSignal.timeout(60000),
   });
@@ -253,7 +344,8 @@ async function copyImage(admin: ReturnType<typeof createClient>, url: string, sl
   return publicUrl;
 }
 
-async function uniqueSlug(admin: ReturnType<typeof createClient>, base: string) {
+// deno-lint-ignore no-explicit-any
+async function uniqueSlug(admin: any, base: string) {
   let slug = base || "product";
   let n = 2;
   for (;;) {
@@ -267,7 +359,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    // deno-lint-ignore no-explicit-any
+    const admin: any = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
 
@@ -309,6 +402,7 @@ Deno.serve(async (req: Request) => {
         const same = byTitle.get(norm(l.title));
         return {
           found: true, ...l,
+          ...(body.raw === true ? { raw: { bbcode: String(r.Description?.bbcode ?? ""), html: String(r.Description?.html ?? ""), carousel: r.carousel_image_urls ?? null, keys: Object.keys(r) } } : {}),
           already_imported: imported.has(id) ? slugById.get(imported.get(id)!) ?? imported.get(id) : null,
           existing_product: same ? { slug: same.slug, is_active: same.is_active } : null,
         };
@@ -320,41 +414,75 @@ Deno.serve(async (req: Request) => {
       const items: Obj[] = Array.isArray(body.items) ? body.items : [];
       if (!items.length) return json({ ok: false, error: "Send items." }, 400);
       if (items.length > MAX_ITEMS) return json({ ok: false, error: `At most ${MAX_ITEMS} items per call.` }, 400);
-      const bad = items.find((it) => !(num(it.resource_id) > 0) || !CATEGORIES[String(it.cat ?? "")]);
-      if (bad) return json({ ok: false, error: `Bad item (resource_id / cat): ${JSON.stringify(bad).slice(0, 200)}` }, 400);
+      const isCd = (it: Obj) => it.source === "clearlydev";
+      const bad = items.find((it) => !CATEGORIES[String(it.cat ?? "")] || (isCd(it) ? !(it.external?.url && it.external?.title) : !(num(it.resource_id) > 0)));
+      if (bad) return json({ ok: false, error: `Bad item (resource_id or external, cat): ${JSON.stringify(bad).slice(0, 200)}` }, 400);
       const useCdn = cdnEnabled();
-      const found = await fetchListings(token, items.map((it) => Math.trunc(num(it.resource_id))));
+      const bbbIds = items.filter((it) => !isCd(it)).map((it) => Math.trunc(num(it.resource_id)));
+      const found = bbbIds.length ? await fetchListings(token, bbbIds) : new Map<number, Obj>();
+      const legalCache = new Map<string, Obj | null>();
+      const getLegal = async (slug: string): Promise<Obj | null> => {
+        if (legalCache.has(slug)) return legalCache.get(slug)!;
+        let row: Obj | null = null;
+        const { data: p } = await admin.from("products").select("id").eq("slug", slug).maybeSingle();
+        if (p) {
+          const { data: l } = await admin.from("product_legal").select("*").eq("product_id", p.id).maybeSingle();
+          if (l) {
+            const copy: Obj = { ...l };
+            delete copy.product_id;
+            delete copy.updated_at;
+            row = copy;
+          }
+        }
+        legalCache.set(slug, row);
+        return row;
+      };
       const results: Obj[] = [];
 
       for (const it of items) {
-        const rid = Math.trunc(num(it.resource_id));
-        if (overBudget(25000)) { results.push({ resource_id: rid, ok: false, status: "not_started", reason: "Out of time, send it again." }); continue; }
-        if (imported.has(rid)) { results.push({ resource_id: rid, ok: false, status: "skipped", reason: "Already imported", slug: slugById.get(imported.get(rid)!) ?? null }); continue; }
-        const r = found.get(rid);
-        if (!r) { results.push({ resource_id: rid, ok: false, status: "not_found", reason: "Not returned by /v2/resources/creator/resources (not ours, or removed)" }); continue; }
-        const l = listing(r);
+        const cd = isCd(it);
+        const rid = cd ? 0 : Math.trunc(num(it.resource_id));
+        const ref = cd ? String(it.external.url) : String(rid);
+        const fail = (status: string, reason: string, extra: Obj = {}) => results.push({ ref, ok: false, status, reason, ...extra });
+        if (overBudget(25000)) { fail("not_started", "Out of time, send it again."); continue; }
+        if (!cd && imported.has(rid)) { fail("skipped", "Already imported", { slug: slugById.get(imported.get(rid)!) ?? null }); continue; }
+        let l: ReturnType<typeof listing>;
+        if (cd) l = fromClearly({ ...it.external, price_usd: it.external.price_usd ?? it.external.price });
+        else {
+          const r = found.get(rid);
+          if (!r) { fail("not_found", "Not returned by /v2/resources/creator/resources (not ours, or removed)"); continue; }
+          l = listing(r);
+        }
         const title = String(it.title || l.title).trim().slice(0, 200);
         const same = byTitle.get(norm(title));
-        if (same && it.force !== true) { results.push({ resource_id: rid, ok: false, status: "skipped", reason: "A product with this title already exists", slug: same.slug }); continue; }
+        if (same && it.force !== true) { fail("skipped", "A product with this title already exists", { slug: same.slug }); continue; }
 
         const slug = await uniqueSlug(admin, slugify(title));
+        const host = cd ? "clearlydev" : "builtbybit";
         const warnings: string[] = [];
-        let image: string | null = null;
-        const gallery: string[] = [];
-        if (!useCdn) warnings.push("CDN is not configured, images left on BuiltByBit's CDN");
-        if (l.cover) {
-          try { image = useCdn ? await copyImage(admin, l.cover, slug, "thumbnails", userId) : l.cover; }
-          catch (e) { warnings.push("Cover did not copy: " + (e as Error).message); }
-        }
-        for (const g of l.gallery.slice(0, MAX_GALLERY)) {
-          if (overBudget(12000)) { warnings.push("Ran short on time, some gallery images were not copied"); break; }
-          try { gallery.push(useCdn ? await copyImage(admin, g, slug, "gallery", userId) : g); }
-          catch (e) { warnings.push("Gallery image did not copy: " + (e as Error).message); }
-        }
+        if (!useCdn) warnings.push("CDN is not configured, images left on the marketplace CDN");
+
+        // Images: downloads run one after another (spaced), uploads overlap with the next download.
+        const jobs: Array<{ sub: "thumbnails" | "gallery"; url: string }> = [];
+        if (l.cover) jobs.push({ sub: "thumbnails", url: l.cover });
+        for (const g of l.gallery.slice(0, MAX_GALLERY)) jobs.push({ sub: "gallery", url: g });
         if (l.gallery.length > MAX_GALLERY) warnings.push(`Only the first ${MAX_GALLERY} of ${l.gallery.length} gallery images were copied`);
-        if (!image && gallery.length) { image = gallery[0]; warnings.push("No cover, used the first gallery image"); }
+        const pending: Array<Promise<{ sub: string; url?: string }>> = [];
+        for (const j of jobs) {
+          if (!useCdn) { pending.push(Promise.resolve({ sub: j.sub, url: j.url })); continue; }
+          if (overBudget(15000)) { warnings.push("Ran short on time, some images were not copied"); break; }
+          try {
+            const img = await downloadImage(j.url, host);
+            pending.push(uploadImage(admin, img, slug, j.sub, userId).then((u) => ({ sub: j.sub, url: u }), (e) => { warnings.push(`${j.sub === "thumbnails" ? "Cover" : "Gallery image"} did not upload: ${(e as Error).message}`); return { sub: j.sub }; }));
+          } catch (e) { warnings.push(`${j.sub === "thumbnails" ? "Cover" : "Gallery image"} did not download: ${(e as Error).message}`); }
+        }
+        const done = await Promise.all(pending);
+        let image: string | null = done.find((d) => d.sub === "thumbnails" && d.url)?.url ?? null;
+        const gallery = done.filter((d) => d.sub === "gallery" && d.url).map((d) => d.url as string);
+        if (!image && gallery.length) { image = gallery.shift()!; warnings.push("No cover, used the first gallery image"); }
 
         const price = it.price_usd != null ? Math.max(0, num(it.price_usd)) : l.list_price;
+        const subcat = String(it.subcat || "").trim() || guessSubcat(String(it.cat), `${title} ${l.tags} ${l.summary}`);
         const row = {
           slug, title,
           price_usd: price,
@@ -363,39 +491,68 @@ Deno.serve(async (req: Request) => {
           image,
           gallery,
           video: l.video ?? "",
-          description: String(it.description || l.summary || "").trim().slice(0, 300),
+          description: String(it.description || shortDesc(l.summary, l.bullets_draft, title)).trim().slice(0, 300),
           long_description: String(it.long_description || l.bullets_draft || "").trim().slice(0, 8000),
           cat: String(it.cat),
-          subcat: String(it.subcat || "").trim() || null,
+          subcat,
           platform: "Roblox",
           page: CATEGORIES[String(it.cat)],
           storage_path: PLACEHOLDER,
           is_active: false,
         };
         const { data: created, error: insErr } = await admin.from("products").insert(row).select("id").single();
-        if (insErr || !created) { results.push({ resource_id: rid, ok: false, status: "error", reason: "Could not create product: " + (insErr?.message ?? "unknown") }); continue; }
-        const { error: linkErr } = await admin.from("bbb_imports").insert({ resource_id: rid, product_id: created.id, bbb_url: l.url, bbb_title: l.title, imported_by: userId });
-        if (linkErr) {
-          await admin.from("products").delete().eq("id", created.id);
-          results.push({ resource_id: rid, ok: false, status: "error", reason: "Could not save the import link: " + linkErr.message });
-          continue;
+        if (insErr || !created) { fail("error", "Could not create product: " + (insErr?.message ?? "unknown"), { warnings }); continue; }
+        if (!cd) {
+          const { error: linkErr } = await admin.from("bbb_imports").insert({ resource_id: rid, product_id: created.id, bbb_url: l.url, bbb_title: l.title, imported_by: userId });
+          if (linkErr) {
+            await admin.from("products").delete().eq("id", created.id);
+            fail("error", "Could not save the import link: " + linkErr.message);
+            continue;
+          }
+          imported.set(rid, created.id);
         }
-        imported.set(rid, created.id);
         byTitle.set(norm(title), { id: created.id, slug, title, is_active: false });
-        await admin.from("marketplace_listings").upsert({ product_id: created.id, marketplace: "builtbybit", status: "live", synced_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "product_id,marketplace" });
 
-        const missing = ["Product file", "Legal (licence type, TOS, proof, price floors)", "Resell (on/off + price)"];
-        if (!row.video) missing.push("YouTube demo");
-        if (!gallery.length) missing.push("Gallery images");
-        if (!image) missing.push("Cover image");
-        if (!row.subcat) missing.push("Subcategory");
-        if (price <= 0) missing.push("Price (free on BuiltByBit)");
-        if (l.currency && l.currency !== "USD") warnings.push(`BuiltByBit price is in ${l.currency}, not USD`);
+        // "Uploaded on": a BuiltByBit link marks BuiltByBit; a ClearlyDev-only link marks both.
+        const now = new Date().toISOString();
+        const markets = cd ? ["builtbybit", "clearlydev"] : ["builtbybit"];
+        const { error: mpErr } = await admin.from("marketplace_listings").upsert(
+          markets.map((m) => ({ product_id: created.id, marketplace: m, status: "live", synced_at: now, updated_at: now })),
+          { onConflict: "product_id,marketplace" },
+        );
+        if (mpErr) warnings.push("Uploaded-on ticks did not save: " + mpErr.message);
+
+        // Legal data copied from another product (same proof file paths: the delete-product
+        // check keeps a file while any other product still points at it).
+        let legal = false;
+        if (it.legal_from) {
+          const src = await getLegal(String(it.legal_from));
+          if (!src) warnings.push(`Legal source "${it.legal_from}" not found`);
+          else {
+            const lrow: Obj = { ...src, product_id: created.id, updated_at: now };
+            if (Array.isArray(it.legal_license_types)) lrow.license_types = it.legal_license_types;
+            const { error: lErr } = await admin.from("product_legal").upsert(lrow);
+            if (lErr) warnings.push("Legal copy failed: " + lErr.message);
+            else {
+              legal = true;
+              if (price <= 0 && !lrow.can_be_free) warnings.push("Free, but the copied legal has can_be_free off");
+              if (price > 0 && num(lrow.min_regular_usd) > price) warnings.push("Price is under the copied minimum regular price");
+            }
+          }
+        }
+
+        const taskRows = (Array.isArray(it.tasks) ? it.tasks : [])
+          .filter((t: Obj) => t && TASK_MARKETS.includes(String(t.marketplace)) && String(t.title || "").trim())
+          .map((t: Obj) => ({ product_id: created.id, marketplace: String(t.marketplace), title: String(t.title).trim().slice(0, 200), created_by: userId }));
+        if (taskRows.length) {
+          const { error: tErr } = await admin.from("marketplace_tasks").insert(taskRows);
+          if (tErr) warnings.push("Tasks did not save: " + tErr.message);
+        }
         if (l.youtube.length > 1) warnings.push(`${l.youtube.length} YouTube videos found, used the first`);
+        if (l.currency && l.currency !== "USD") warnings.push(`Price is in ${l.currency}, not USD`);
         results.push({
-          resource_id: rid, ok: true, status: "created", product_id: created.id, slug, title,
-          price_usd: row.price_usd, robux_price: row.robux_price, cat: row.cat, subcat: row.subcat,
-          image, gallery_count: gallery.length, video: row.video || null, missing, warnings,
+          ref, ok: true, status: "created", slug, price_usd: price, robux_price: row.robux_price, subcat,
+          gallery_count: gallery.length, cover: !!image, video: !!row.video, legal, tasks: taskRows.length, warnings,
         });
       }
       return json({ ok: true, results });
