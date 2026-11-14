@@ -9,8 +9,9 @@
 //
 //   - purchases: GET /v2/resources/creator/purchases is ACCOUNT-WIDE (one request per 100
 //     purchases). Revenue is FinalPrice (what the buyer paid), fee is PlatformFee.
-//   - resources: GET /v2/resources/creator/resources (price, description, images) for the
-//     price / listing checks.
+//   - resources: GET /v2/resources/creator/resources?with=Description,Category (price,
+//     description, category, cover + carousel image urls) for the price / listing checks.
+//     Without the with hints the API leaves Description and Category out.
 //   - funnel: GET /v2/analytics/single (page views, impressions, cart adds, wishlist adds,
 //     purchases, revenue) overall and for each BuiltByBit listing that matches a coldd product.
 //
@@ -211,7 +212,7 @@ Deno.serve(async (req: Request) => {
     try {
       if (force || age(st.resources_at) >= RESOURCES_EVERY_MS) {
         let n = 0;
-        await pages(token, "/v2/resources/creator/resources", "resources", async (rows) => {
+        await pages(token, "/v2/resources/creator/resources?with=Description,Category", "resources", async (rows) => {
           const out = rows.map((r) => ({
             resource_id: num(r.resource_id),
             title: r.title ?? null,
@@ -223,6 +224,7 @@ Deno.serve(async (req: Request) => {
             currency: r.ListPrice?.currency ?? null,
             cover_image_url: r.cover_image_url ?? null,
             carousel_count: Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls.length : 0,
+            carousel_image_urls: Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls.filter((u: unknown) => typeof u === "string") : [],
             category: r.Category?.title ?? null,
             purchases: r.purchases ?? null,
             downloads: r.downloads ?? null,
