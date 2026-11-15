@@ -3272,6 +3272,7 @@ html[data-theme="light"] .hero-h1 .hl.hl-minecraft { color: #2e7d32; }
 .hm1 { right: -26px; top: 20px; transform: rotate(4deg); }
 .hm2 { left: -26px; bottom: 118px; transform: rotate(-5deg); }
 .hm3 { right: -26px; top: 200px; transform: rotate(-3deg); }
+.hm4 { left: -26px; top: 44px; transform: rotate(3deg); }
 .hero-mini span { font-size: 13px; }
 .hero-mini:hover { transform: rotate(0) translateY(-2px); }
 .hero-cap { margin-top: 30px; }
