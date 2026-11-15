@@ -3270,9 +3270,9 @@ html[data-theme="light"] .hero-h1 .hl.hl-minecraft { color: #2e7d32; }
 .hero-mini::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8,9,12,0) 35%, rgba(8,9,12,0.82)); }
 .hero-mini span { position: relative; z-index: 1; padding: 9px 12px; font-size: 12px; font-weight: 600; color: #fff; }
 .hm1 { right: -26px; top: 20px; transform: rotate(4deg); }
-.hm2 { left: -26px; bottom: 118px; transform: rotate(-5deg); }
+.hm2 { left: -26px; top: 200px; transform: rotate(3deg); }
 .hm3 { right: -26px; top: 200px; transform: rotate(-3deg); }
-.hm4 { left: -26px; top: 44px; transform: rotate(3deg); }
+.hm4 { left: -26px; top: 20px; transform: rotate(-4deg); }
 .hero-mini span { font-size: 13px; }
 .hero-mini:hover { transform: rotate(0) translateY(-2px); }
 .hero-cap { margin-top: 30px; }
