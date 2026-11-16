@@ -5348,6 +5348,10 @@ body.adm-uploading .adm-toast { bottom: calc(var(--adm-uptray-h, 0px) + 20px); }
 .claim-notice ul { margin: 0; padding-left: 20px; color: var(--fg-1); font-size: 14px; line-height: 1.6; }
 .claim-notice .cn-foot { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--fg); }
 
+.claim-filter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 210px); gap: 10px; }
+.claim-filter .csel-btn { min-height: 46px; height: 100%; border-radius: 16px; padding: 0 14px; font-size: 14px; }
+.claim-filter .csel-menu { left: auto; right: 0; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 520px) { .claim-filter { grid-template-columns: 1fr; } }
 .claim-search { position: relative; }
 .claim-search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--fg-3); pointer-events: none; }
 .auth-field .claim-search input[type="text"] { padding-left: 42px; }

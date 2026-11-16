@@ -330,10 +330,33 @@
         };
       });
       claimableErr = '';
+      fillCats();
       return CLAIMABLE;
     }).catch(function () { claimableErr = 'Could not load the product list. Refresh the page to try again.'; return []; });
   }
   function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+
+  // Category filter - options come from the claimable list itself, so a
+  // category only shows up if something in it can actually be claimed.
+  function fillCats() {
+    var sel = $('cpProductCat');
+    var cats = [];
+    CLAIMABLE.forEach(function (p) { if (p.cat && cats.indexOf(p.cat) < 0) cats.push(p.cat); });
+    cats.sort(function (a, b) { return a.localeCompare(b); });
+    var keep = sel.value;
+    sel.innerHTML = '<option value="">All categories</option>' +
+      cats.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    sel.value = cats.indexOf(keep) >= 0 ? keep : '';
+    // __coldSelect builds its menu off the options it sees once - drop the
+    // stale one and rebuild off the real category list.
+    if (sel.__csel) {
+      var stale = sel.nextElementSibling;
+      if (stale && stale.classList.contains('csel')) stale.remove();
+      sel.__csel = false;
+      sel.classList.remove('csel-native');
+    }
+    if (window.__coldSelect) window.__coldSelect(sel);
+  }
 
   var PRODUCT_LIMIT = 40;
   function renderProducts() {
@@ -341,7 +364,8 @@
     if (!CLAIMABLE) { listEl.innerHTML = '<p class="claim-sec-sub claim-prod-loading">' + (claimableErr || 'Loading products…') + '</p>'; return; }
     var q = norm($('cpProductSearch').value);
     var tokens = q ? q.split(' ') : [];
-    var hits = CLAIMABLE.filter(function (p) { return tokens.every(function (t) { return p.key.indexOf(t) >= 0; }); });
+    var cat = $('cpProductCat').value;
+    var hits = CLAIMABLE.filter(function (p) { return (!cat || p.cat === cat) && tokens.every(function (t) { return p.key.indexOf(t) >= 0; }); });
     var picked = draft.productSlug ? CLAIMABLE.filter(function (p) { return p.slug === draft.productSlug; })[0] : null;
     if (draft.productSlug && !picked) { delete draft.productSlug; save(); }
     var shown = hits.slice(0, PRODUCT_LIMIT);
@@ -355,12 +379,13 @@
         '<span class="co-radio" aria-hidden="true"></span></button>';
     }).join('');
     listEl.hidden = !shown.length;
-    $('cpProductEmpty').hidden = !(q && !hits.length);
+    $('cpProductEmpty').hidden = !((q || cat) && !hits.length);
     var more = $('cpProductMore');
     more.hidden = hits.length <= PRODUCT_LIMIT;
-    more.textContent = 'Showing ' + PRODUCT_LIMIT + ' of ' + hits.length + ' products. Keep typing to narrow it down.';
+    more.textContent = 'Showing ' + PRODUCT_LIMIT + ' of ' + hits.length + ' products. Search or pick a category to narrow it down.';
   }
   $('cpProductSearch').addEventListener('input', renderProducts);
+  $('cpProductCat').addEventListener('change', function () { $('cpProductList').scrollTop = 0; renderProducts(); });
   $('cpProductSearch').addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
   $('cpProductList').addEventListener('click', function (e) {
     var b = e.target.closest('.claim-prod'); if (!b) return;

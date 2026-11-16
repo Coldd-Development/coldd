@@ -31,7 +31,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261113-claims" />
+  <link rel="stylesheet" href="/styles.css?v=20261116a" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://coldd.dev/"}, {"@type": "ListItem", "position": 2, "name": "Claim a prize", "item": "https://coldd.dev/claim"}]}</script>
   <!-- ld:end -->
@@ -258,9 +258,12 @@
             <div class="claim-prize" data-prize="product" hidden>
               <div class="auth-field">
                 <label for="cpProductSearch">Search products you can claim</label>
+                <div class="claim-filter">
                 <div class="claim-search">
                   <svg class="msym" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
                   <input id="cpProductSearch" type="text" autocomplete="off" maxlength="120" placeholder="Search our products" aria-controls="cpProductList" />
+                </div>
+                <select id="cpProductCat" aria-label="Filter by category"><option value="">All categories</option></select>
                 </div>
               </div>
               <div class="claim-prod-list" id="cpProductList" role="radiogroup" aria-label="Products you can claim"></div>
@@ -488,7 +491,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261113-claims" data-then="/app.js?v=20261026-credit,/claim.js?v=20261113a"></script>
+  <script src="/catalog.js?v=20261113-claims" data-then="/app.js?v=20261026-credit,/claim.js?v=20261116a"></script>
   <script>
     (function () {
       try {
