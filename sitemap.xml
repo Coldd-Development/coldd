@@ -139,13 +139,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/commercial-connected-shophouse</loc>
+    <loc>https://coldd.dev/product/construction-building-pack</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/construction-building-pack</loc>
+    <loc>https://coldd.dev/product/commercial-connected-shophouse</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -471,12 +471,6 @@
   <url>
     <loc>https://coldd.dev/product/rasingan-orb-combat-vfx</loc>
     <lastmod>2026-10-08</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://coldd.dev/product/county-sheriff-office</loc>
-    <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -1999,13 +1993,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/frank-s-car-dealership</loc>
+    <loc>https://coldd.dev/product/general-elections-commission-indonesia</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/general-elections-commission-indonesia</loc>
+    <loc>https://coldd.dev/product/frank-s-car-dealership</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -2179,12 +2173,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/low-poly-buildings-kit</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://coldd.dev/product/luxury-filler-house-2</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
@@ -2203,13 +2191,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/indonesian-farmers-market-citra-6</loc>
+    <loc>https://coldd.dev/product/sci-fi-outpost</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/sci-fi-outpost</loc>
+    <loc>https://coldd.dev/product/indonesian-farmers-market-citra-6</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -2227,7 +2215,7 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/modern-cafe-v2</loc>
+    <loc>https://coldd.dev/product/national-park-service-station</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -2257,12 +2245,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/national-park-service-station</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://coldd.dev/product/alfamart-indonesian-convenience-store</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
@@ -2287,13 +2269,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/alfa-express-minimarket</loc>
+    <loc>https://coldd.dev/product/roman-fort</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/roman-fort</loc>
+    <loc>https://coldd.dev/product/alfa-express-minimarket</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -2413,19 +2395,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/auto-repair-shop</loc>
+    <loc>https://coldd.dev/product/bus-station</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://coldd.dev/product/bank-mega</loc>
-    <lastmod>2026-11-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://coldd.dev/product/bus-station</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -2449,6 +2425,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://coldd.dev/product/auto-repair-shop</loc>
+    <lastmod>2026-11-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://coldd.dev/product/cava-cafe</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
@@ -2461,13 +2443,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/uk-filler-house-pack</loc>
+    <loc>https://coldd.dev/product/underground-military-basement</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://coldd.dev/product/underground-military-basement</loc>
+    <loc>https://coldd.dev/product/uk-filler-house-pack</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -2546,6 +2528,18 @@
   </url>
   <url>
     <loc>https://coldd.dev/product/multi-building-shophouse</loc>
+    <lastmod>2026-11-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/county-sheriff-office</loc>
+    <lastmod>2026-11-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://coldd.dev/product/low-poly-buildings-kit</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
