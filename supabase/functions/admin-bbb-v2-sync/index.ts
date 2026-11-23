@@ -34,7 +34,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
 const PER_PAGE = 100;
-const MIN_GAP_MS = 500;
+// One request a second at most: BuiltByBit answered 2 a second (the funnel analytics) with a
+// 27 s Retry-After on 2026-11-24.
+const MIN_GAP_MS = 1000;
 const MAX_ATTEMPTS = 5;
 const REQUEST_TIMEOUT_MS = 20000;
 const QUICK_BUDGET_MS = 40000;
