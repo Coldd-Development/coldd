@@ -628,15 +628,34 @@
       // Waited on below so the animation always plays with the real number
       // instead of the static fallback baked into the HTML.
       const discordEl = document.getElementById('heroStatDiscord');
-      const discordReady = (discordEl && window.coldSupabase)
-        ? window.coldSupabase.functions.invoke('public-site-stats', { body: {} }).then(function (res) {
-            var count = res && res.data && res.data.discordMemberCount;
-            if (typeof count === 'number') {
-              discordEl.setAttribute('data-target', count);
-              discordEl.setAttribute('data-suffix', '');
-            }
-          }).catch(function () {})
+      // Purchases: the real, live total from every platform (coldd.dev,
+      // BuiltByBit, Creator Store, ClearlyDev, Payhip, Parcel).
+      const purchasesEl = document.getElementById('heroStatPurchases');
+      function applyStats(res) {
+        var d = (res && res.data) || {};
+        if (discordEl && typeof d.discordMemberCount === 'number') {
+          discordEl.setAttribute('data-target', d.discordMemberCount);
+          discordEl.setAttribute('data-suffix', '');
+        }
+        if (purchasesEl && typeof d.purchaseCount === 'number') {
+          purchasesEl.setAttribute('data-target', d.purchaseCount);
+          purchasesEl.setAttribute('data-suffix', '');
+        }
+      }
+      const discordReady = ((discordEl || purchasesEl) && window.coldSupabase)
+        ? window.coldSupabase.functions.invoke('public-site-stats', { body: {} }).then(applyStats).catch(function () {})
         : Promise.resolve();
+      // Live: re-read every minute while the tab is visible; a new sale ticks
+      // the number up in place once the count-up animation has finished.
+      if (purchasesEl && window.coldSupabase) {
+        setInterval(function () {
+          if (document.hidden || !played) return;
+          window.coldSupabase.functions.invoke('public-site-stats', { body: {} }).then(function (res) {
+            applyStats(res);
+            [purchasesEl, discordEl].forEach(function (el) { if (el) setFinal(el); });
+          }).catch(function () {});
+        }, 60000);
+      }
 
       // Reveal the numbers (see styles.css's .hs-loading, which keeps them
       // invisibility:hidden but laid out) the moment both real figures are
@@ -2249,7 +2268,7 @@
         loadCatalogRevenue();
         function loadCatalogDemand() {
           if (!window.coldSupabase) { signalSettled('demand'); return; }
-          window.coldSupabase.rpc('catalog_demand_signals', {}).then(function (r) {
+          (window.__demandP || window.coldSupabase.rpc('catalog_demand_signals', {})).then(function (r) {
             var rows = r.data || [];
             if (!rows.length) return;
             var map = {};

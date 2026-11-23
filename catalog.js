@@ -541,19 +541,14 @@
     window.addEventListener('resize', moveThumb);
   })();
 
-  function loadDependents() {
-    var target = thisScript && thisScript.parentNode ? thisScript.parentNode : document.body;
-    // Each page declares which scripts it needs loaded after the catalog is
-    // ready via data-then="a.js,b.js" on this <script> tag, since different
-    // pages chain different scripts here (app.js alone; blog.js+app.js;
-    // reviews.js+app.js; blog.js+reviews.js+admin.js with no app.js at all).
+  // Each page declares which scripts it needs loaded after the catalog is
+  // ready via data-then="a.js,b.js" on this <script> tag, since different
+  // pages chain different scripts here (app.js alone; blog.js+app.js;
+  // reviews.js+app.js; blog.js+reviews.js+admin.js with no app.js at all).
+  function dependentScripts() {
     var attr = thisScript && thisScript.getAttribute('data-then');
     var scripts = attr ? attr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : ['/app.js'];
-
-    function loadNext(i) {
-      if (i >= scripts.length) return;
-      var s = document.createElement('script');
-      var src = scripts[i];
+    return scripts.map(function (src) {
       // app.js/admin.js are injected after the catalog query. Give the shared
       // runtime an explicit revision here so every page gets behavioural fixes
       // immediately, even where an older HTML shell is still cached.
@@ -565,7 +560,28 @@
         var hadV = /[?&]v=[^&]*/.test(src);
         src = hadV ? src.replace(/([?&])v=[^&]*/, '$1v=' + selfV) : src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=' + selfV;
       }
-      s.src = src;
+      return src;
+    });
+  }
+  // Start downloading them now, so they are ready the moment the data is (the
+  // database is in Frankfurt: waiting for the data first added a whole extra
+  // download on top of it).
+  (function preloadDependents() {
+    try {
+      dependentScripts().forEach(function (src) {
+        var l = document.createElement('link');
+        l.rel = 'preload'; l.as = 'script'; l.href = src;
+        document.head.appendChild(l);
+      });
+    } catch (e) {}
+  })();
+  function loadDependents() {
+    var target = thisScript && thisScript.parentNode ? thisScript.parentNode : document.body;
+    var scripts = dependentScripts();
+    function loadNext(i) {
+      if (i >= scripts.length) return;
+      var s = document.createElement('script');
+      s.src = scripts[i];
       s.onload = function () { loadNext(i + 1); };
       target.appendChild(s);
     }
@@ -655,7 +671,10 @@
       scope: (s.scope === 'platform' || s.scope === 'category') ? s.scope : 'sitewide',
       platform: s.platform || null,
       category: s.category || null,
-      label: s.title || 'Sale'
+      label: s.title || 'Sale',
+      // Products this sale leaves out (marked "do not discount", or whose price
+      // limits it would break); checkout skips the same list.
+      exclude: Array.isArray(s.excludeSlugs) ? s.excludeSlugs : []
     };
   };
   // Whether the active sale covers a given catalog product (a __CATALOG
@@ -663,6 +682,7 @@
   window.__saleCovers = function (p, s) {
     s = s || window.__saleEvent();
     if (!s || !p) return false;
+    if (s.exclude && s.exclude.indexOf(p.id) >= 0) return false;
     if (s.scope === 'platform') return p.platform === s.platform;
     if (s.scope === 'category') return p.platform === s.platform && p.cat === s.category;
     return true;
@@ -752,7 +772,7 @@
   function loadBundleDemand() {
     if (!(window.__BUNDLES || []).length || !window.coldSupabase) return;
     try { var cached = JSON.parse(sessionStorage.getItem('coldd_demand') || 'null'); if (cached) { window.__DEMAND = cached; return; } } catch (e) {}
-    window.coldSupabase.rpc('catalog_demand_signals', {}).then(function (r) {
+    (window.__demandP || window.coldSupabase.rpc('catalog_demand_signals', {})).then(function (r) {
       var map = {};
       (r.data || []).forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0 }; });
       window.__DEMAND = map;
@@ -926,7 +946,32 @@
   var PRODUCT_PUBLIC_COLS = 'id, slug, title, description, long_description, image, gallery, video, cat, subcat, platform, page, tech, price_usd, was_price, robux_price, robux_disabled, test_url, resell_available, resell_price_usd, resell_robux_price, roblox_gamepass_id, roblox_universe_id, version, versions, changelog, last_released_version, featured, featured_order, priority, rating, reviews_count, is_active, weekly_deal, weekly_deal_auto, weekly_deal_excluded, weekly_deal_pct, created_at, updated_at';
   var contentQuery = window.coldSupabase.from('content').select('*').in('type', contentTypes).eq('visible', true).order('created_at', { ascending: false }).limit(20000);
 
-  Promise.all([
+  // Popularity ranking: started together with everything else on pages that use it.
+  if (dataThenAttr.indexOf('app.js') >= 0) {
+    // .then() sends it now: a Supabase query only runs once something reads it.
+    try { window.__demandP = window.coldSupabase.rpc('catalog_demand_signals', {}).then(function (r) { return r; }); } catch (e) {}
+  }
+
+  // The store data from this visitor's previous page (up to 15 minutes old)
+  // draws this page at once; the fresh copy still loads behind it and is kept
+  // for the next page. The database is in Frankfurt, so a fresh read takes 1-2 s
+  // from Australia; without this every page waited for it.
+  var CACHE_KEY = 'coldd_catalog_cache_v1:' + contentTypes.join(',');
+  var CACHE_MAX_AGE = 15 * 60 * 1000;
+  var cached = null;
+  try {
+    var raw = localStorage.getItem(CACHE_KEY);
+    if (raw) { cached = JSON.parse(raw); if (!cached || !cached.r || Date.now() - cached.at > CACHE_MAX_AGE) cached = null; }
+  } catch (e) { cached = null; }
+  function saveCache(results) {
+    if (!results || results.some(function (x) { return !x || x.error; })) return;
+    var save = function () {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), r: results.map(function (x) { return { data: x.data }; }) })); } catch (e) {}
+    };
+    if (window.requestIdleCallback) window.requestIdleCallback(save, { timeout: 3000 }); else setTimeout(save, 500);
+  }
+
+  var fresh = Promise.all([
     // Explicit columns, not '*': products.storage_path (the internal download
     // path) is not readable by the public API, so a '*' select would be refused.
     window.coldSupabase.from('products').select(PRODUCT_PUBLIC_COLS).eq('is_active', true).limit(20000),
@@ -946,7 +991,9 @@
       .select('id, product_id, title, description, price_usd, price_robux, file_name, has_file, sort_order')
       .eq('active', true).order('sort_order', { ascending: true }).limit(2000)
       .then(function (r) { return r; }, function () { return { data: [], error: true }; })
-  ])
+  ]);
+  fresh.then(saveCache, function () {});
+  (cached ? Promise.resolve(cached.r.map(function (x) { return { data: x.data, error: null }; })) : fresh)
     .then(function (results) {
       var prodRes = results[0], revRes = results[1], contentRes = results[2], bundleRes = results[3], addonRes = results[4];
       window.__BUNDLES = (bundleRes && !bundleRes.error && bundleRes.data) ? bundleRes.data : [];

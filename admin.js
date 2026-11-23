@@ -9438,9 +9438,16 @@
   // contractual minimum price, exceed its allowed discount percentage, or
   // discount one explicitly marked as not-for-sale.
   function legalViolations(scopeInfo, discountedPriceFor) {
-    var disallowed = [], belowMin = [], notFreeable = [], overMaxPct = [];
+    var disallowed = [], belowMin = [], notFreeable = [], overMaxPct = [], excludeSlugs = [];
     productsInScope(scopeInfo).forEach(function (p) {
+      // Already free: a discount doesn't change it, so it never blocks or needs leaving out.
+      if (!(p.priceNum > 0)) return;
       var legal = p.legal || {};
+      var n0 = disallowed.length + notFreeable.length + belowMin.length + overMaxPct.length;
+      check(p, legal);
+      if (disallowed.length + notFreeable.length + belowMin.length + overMaxPct.length > n0) excludeSlugs.push(p.id);
+    });
+    function check(p, legal) {
       if (legal.disallowSales) { disallowed.push(p.title); return; }
       var discounted = discountedPriceFor(p.priceNum);
       if (discounted <= 0 && !legal.canBeFree) { notFreeable.push(p.title); return; }
@@ -9449,9 +9456,22 @@
       if (maxPct > 0 && p.priceNum > 0 && discounted < p.priceNum * (1 - maxPct / 100) - 0.001) {
         overMaxPct.push(p.title + ' (max ' + maxPct + '% off)');
       }
-    });
-    return { disallowed: disallowed, belowMin: belowMin, notFreeable: notFreeable, overMaxPct: overMaxPct,
+    }
+    return { disallowed: disallowed, belowMin: belowMin, notFreeable: notFreeable, overMaxPct: overMaxPct, excludeSlugs: excludeSlugs,
       ok: !disallowed.length && !belowMin.length && !notFreeable.length && !overMaxPct.length };
+  }
+  // What a sale or code will leave alone, for the confirm before saving it.
+  function legalLeaveOutMessage(v, isCode) {
+    function list(a) { return a.slice(0, 4).join(', ') + (a.length > 4 ? ' and ' + (a.length - 4) + ' more' : ''); }
+    var parts = [];
+    if (v.disallowed.length) parts.push(v.disallowed.length + ' marked "do not discount" (' + list(v.disallowed) + ')');
+    if (v.notFreeable.length) parts.push(v.notFreeable.length + ' that would become free but aren\'t allowed to be (' + list(v.notFreeable) + ')');
+    if (v.belowMin.length) parts.push(v.belowMin.length + ' that would go below their minimum price (' + list(v.belowMin) + ')');
+    if (v.overMaxPct && v.overMaxPct.length) parts.push(v.overMaxPct.length + ' over their maximum discount (' + list(v.overMaxPct) + ')');
+    var n = v.excludeSlugs.length;
+    return (isCode
+      ? 'This code will be capped on ' + n + (n === 1 ? ' product' : ' products') + ' so it never breaks their price limits: '
+      : n + (n === 1 ? ' product sits' : ' products sit') + ' this sale out and keep their normal price: ') + parts.join('; ') + '. Everything else gets the full discount.';
   }
   function legalViolationMessage(v) {
     var parts = [];
@@ -10070,15 +10090,18 @@
     if (!fields.title || !fields.message || !fields.startDate || !fields.endDate) return;
     var pctOff = fields.percentOff;
     var violations = legalViolations(scopeInfo, function (price) { return price * (1 - pctOff / 100); });
-    if (!violations.ok) { alert(legalViolationMessage(violations)); return; }
+    fields.excludeSlugs = violations.excludeSlugs;
     var existing = id ? SALE_EVENTS.filter(function (x) { return x.id === id; })[0] : null;
     var active = existing ? existing.active : true;
     var slug = existing ? existing.slug : (fields.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sale') + '-' + Date.now().toString(36);
-    callUpsertContent('sale_event', id || null, slug, active, fields)
-      .then(function () {
-        logAudit((existing ? 'Updated' : 'Created') + ' sale event "' + fields.title + '"');
+    (violations.ok ? Promise.resolve(true) : dialogConfirm(legalLeaveOutMessage(violations, false), { title: 'Some products sit this sale out', acceptLabel: 'Save sale' }))
+      .then(function (go) {
+        if (!go) return;
+        return callUpsertContent('sale_event', id || null, slug, active, fields).then(function () {
+        logAudit((existing ? 'Updated' : 'Created') + ' sale event "' + fields.title + '"' + (fields.excludeSlugs.length ? ' (' + fields.excludeSlugs.length + ' products left out)' : ''));
         resetEventForm();
         return refreshSaleEvents();
+        });
       })
       .catch(function (err) { alert(err.message || 'Could not save sale event.'); });
   });
@@ -10191,7 +10214,8 @@
     var couponViolations = legalViolations(scopeInfo, function (price) {
       return type === 'flat' ? Math.max(0, price - val) : price * (1 - val / 100);
     });
-    if (!couponViolations.ok) { alert(legalViolationMessage(couponViolations)); return; }
+    (couponViolations.ok ? Promise.resolve(true) : dialogConfirm(legalLeaveOutMessage(couponViolations, true), { title: 'Some products limit this code', acceptLabel: 'Save code' })).then(function (go) {
+    if (!go) return;
     var submitBtn = $('admCouponSubmitBtn');
     if (submitBtn) submitBtn.disabled = true;
     callUpsertCoupon({
@@ -10205,6 +10229,7 @@
       alert(err.message || 'Could not save the code.');
     }).then(function () {
       if (submitBtn) submitBtn.disabled = false;
+    });
     });
   });
 
