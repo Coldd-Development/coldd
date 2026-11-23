@@ -4644,6 +4644,8 @@
   }
   function renderAnalytics() {
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
+    // Group Robux comes from Roblox's summary, not the sales lists: drawn straight away.
+    renderGroupRobux();
     var w = anWindow();
     if (!salesReady()) {
       var kp = $('admAnKpis');
@@ -7586,6 +7588,133 @@
     if (document.hidden || curPanel !== 'analytics') return;
     robuxLoad(RANGE_DAYS, true);
   }, 5 * 60 * 1000);
+
+  /* ================================================================
+     GROUP ROBUX: what comes into and goes out of the coldd group, from Roblox's
+     own revenue summary (past day / week / month / year), and the minimum balance
+     to keep in the group before the monthly DevEx (on the 12th).
+     admin-robux-revenue (every 15 minutes) stores each window's figures in
+     robux_state.summary[window].all (sales, payouts...; money out is negative)
+     and the group's balance in robux_state.summary.balance.
+     ================================================================ */
+  var GRX = { state: null, loaded: false, loading: false, win: 'Month', runway: 3 };
+  var GRX_DEVEX_DAY = 12;        // DevEx happens once a month, on this day
+  var DEVEX_MIN_ROBUX = 30000;   // Roblox's minimum for one DevEx
+  try {
+    var grxW = localStorage.getItem('coldd_grx_win'); if (/^(Day|Week|Month|Year)$/.test(grxW || '')) GRX.win = grxW;
+    var grxR = Number(localStorage.getItem('coldd_grx_runway')); if ([1, 2, 3, 6].indexOf(grxR) >= 0) GRX.runway = grxR;
+  } catch (e) {}
+  var GRX_LABELS = {
+    itemSaleRobux: 'Item sales', premiumPayouts: 'Premium payouts', groupPremiumPayouts: 'Group Premium payouts',
+    creatorRewardsPayoutRobux: 'Creator rewards', immersiveAdPayouts: 'Immersive ads', subscriptionPayouts: 'Subscriptions',
+    commissionRobux: 'Commissions', publishingAdvanceRebates: 'Publishing rebates', groupAffiliatePayoutRobux: 'Affiliate payouts',
+    tradeSystemRobux: 'Trades', individualToGroupRobux: 'Sent by members', purchasedRobux: 'Robux bought',
+    recurringRobuxStipend: 'Robux stipend', adjustmentRobux: 'Adjustments', groupPayoutRobux: 'Group payouts',
+    subscriptionClawbacks: 'Subscription clawbacks'
+  };
+  var GRX_WIN_LABEL = { Day: 'past day', Week: 'past week', Month: 'past month', Year: 'past year' };
+  function refreshGroupRobux() {
+    var sb = window.coldSupabase;
+    if (!sb || GRX.loading) return Promise.resolve();
+    GRX.loading = true;
+    return sb.from('robux_state').select('summary, last_sync_at').eq('id', true).maybeSingle().then(function (r) {
+      GRX.loading = false; GRX.loaded = true;
+      if (r && !r.error && r.data) GRX.state = r.data;
+      if (curPanel === 'analytics') renderGroupRobux();
+    }, function () { GRX.loading = false; GRX.loaded = true; if (curPanel === 'analytics') renderGroupRobux(); });
+  }
+  setInterval(function () { if (!document.hidden && curPanel === 'analytics') refreshGroupRobux(); }, 5 * 60 * 1000);
+  function grxLabel(k) {
+    return GRX_LABELS[k] || k.replace(/Robux$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); });
+  }
+  // One window's figures split by sign (money out is negative); held Robux kept apart.
+  function grxFlows(win) {
+    var s = GRX.state && GRX.state.summary, w = s && s[win];
+    if (!w) return null;
+    var all = w.all || { itemSaleRobux: w.itemSaleRobux };
+    var ins = [], outs = [], tin = 0, tout = 0;
+    Object.keys(all).forEach(function (k) {
+      if (k === 'pendingRobux') return;
+      var v = Number(all[k]) || 0;
+      if (v > 0) { ins.push({ k: k, v: v }); tin += v; } else if (v < 0) { outs.push({ k: k, v: -v }); tout += -v; }
+    });
+    ins.sort(function (a, b) { return b.v - a.v; });
+    outs.sort(function (a, b) { return b.v - a.v; });
+    return { ins: ins, outs: outs, tin: tin, tout: tout, pending: Number(w.pendingRobux) || 0 };
+  }
+  // What Robux would pay out at the DevEx rate, in AU$.
+  function grxAud(robux) { return fmtA((Number(robux) || 0) * DEVEX_USD_PER_ROBUX * audRateOn(Date.now())); }
+  function grxNextDevex() {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + (now.getDate() > GRX_DEVEX_DAY ? 1 : 0), GRX_DEVEX_DAY);
+  }
+  function grxBars(list, cls, max, empty) {
+    if (!list.length) return '<p class="adm-empty">' + esc(empty) + '</p>';
+    return '<div class="adm-bars ' + cls + '">' + list.map(function (x) {
+      return '<div class="adm-bar-row"><span class="adm-bar-name">' + esc(grxLabel(x.k)) + '</span>' +
+        '<span class="adm-bar-track"><i style="width:' + Math.max(1.5, max ? x.v / max * 100 : 0).toFixed(1) + '%"></i></span>' +
+        '<span class="adm-bar-val">' + robuxRaw(x.v) + '<small>' + grxAud(x.v) + '</small></span></div>';
+    }).join('') + '</div>';
+  }
+  function renderGroupRobux() {
+    var facts = $('admGrxFacts'), flows = $('admGrxFlows'), devex = $('admGrxDevex');
+    if (!facts || !flows || !devex) return;
+    document.querySelectorAll('#admGrxWin [data-grx-win]').forEach(function (b) {
+      var on = b.getAttribute('data-grx-win') === GRX.win;
+      b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var sub = $('admGrxSub'); if (sub) sub.textContent = 'Roblox\'s own figures for the coldd group, ' + GRX_WIN_LABEL[GRX.win];
+    if (!GRX.loaded) {
+      refreshGroupRobux();
+      facts.innerHTML = ['Robux in', 'Robux out', 'Kept', 'On hold'].map(function (l) { return anFig(l, '<span class="adm-skel adm-skel-sm"></span>', '', '', '&nbsp;'); }).join('');
+      flows.innerHTML = ''; devex.innerHTML = '';
+      return;
+    }
+    var f = grxFlows(GRX.win);
+    if (!f) { facts.innerHTML = ''; flows.innerHTML = anEmpty('No group Robux figures yet. The Robux sync adds them every 15 minutes.'); devex.innerHTML = ''; return; }
+    var net = f.tin - f.tout;
+    facts.innerHTML = [
+      anFig('Robux in', robuxRaw(f.tin), '', '', '≈ ' + grxAud(f.tin) + ' at the DevEx rate'),
+      anFig('Robux out', robuxRaw(f.tout), '', '', f.outs.length ? 'Mostly ' + esc(grxLabel(f.outs[0].k).toLowerCase()) : 'Nothing went out'),
+      anFig('Kept', (net < 0 ? '−' : '') + robuxRaw(Math.abs(net)), '', '', net < 0 ? 'More went out than came in' : 'Stayed in the group'),
+      anFig('On hold', robuxRaw(f.pending), '', '', 'Sales Roblox hasn’t released yet')
+    ].join('');
+    var max = Math.max(f.ins[0] ? f.ins[0].v : 0, f.outs[0] ? f.outs[0].v : 0);
+    flows.innerHTML = '<div><h3 class="adm-grx-sub">Came in</h3>' + grxBars(f.ins, '', max, 'Nothing came in.') + '</div>' +
+      '<div><h3 class="adm-grx-sub">Went out</h3>' + grxBars(f.outs, 'adm-grx-out', max, 'Nothing went out.') + '</div>';
+
+    // Minimum balance before DevEx: N months of payouts, a month being the higher of
+    // the past month and the past year's monthly average, so a quiet month never
+    // lowers it. The rest of the balance is what could be taken out on the 12th.
+    var m = grxFlows('Month'), y = grxFlows('Year');
+    var monthly = Math.max(m ? m.tout : 0, y ? y.tout / 12 : 0);
+    var keep = Math.round(monthly * GRX.runway);
+    var bal = GRX.state.summary.balance && GRX.state.summary.balance.ok ? Number(GRX.state.summary.balance.robux) || 0 : null;
+    var day = grxNextDevex(), today = new Date();
+    var dayLabel = day.toDateString() === today.toDateString() ? 'today' : day.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    var free, freeSub;
+    if (bal == null) { free = '–'; freeSub = 'Needs the group balance'; }
+    else if (bal - keep <= 0) { free = robuxRaw(0); freeSub = 'The balance is ' + robuxRaw(keep - bal) + ' under the minimum'; }
+    else if (bal - keep < DEVEX_MIN_ROBUX) { free = robuxRaw(0); freeSub = robuxRaw(bal - keep) + ' over the minimum; DevEx needs ' + robuxRaw(DEVEX_MIN_ROBUX); }
+    else { free = robuxRaw(bal - keep); freeSub = '≈ ' + grxAud(bal - keep) + ' at today’s balance'; }
+    devex.innerHTML = '<div class="adm-grx-devex-head"><div><h3>Before you DevEx</h3><span>Next DevEx day: ' + esc(dayLabel) + '</span></div>' +
+      '<div class="adm-seg" role="group" aria-label="Months of payouts to keep">' + [1, 2, 3, 6].map(function (n) {
+        var on = n === GRX.runway;
+        return '<button type="button" data-grx-runway="' + n + '" class="' + (on ? 'active' : '') + '" aria-pressed="' + on + '">' + n + (n === 1 ? ' month' : ' months') + '</button>';
+      }).join('') + '</div></div>' +
+      '<div class="adm-an-facts">' + [
+        anFig('Keep in the group', robuxRaw(keep), '', '', GRX.runway + (GRX.runway === 1 ? ' month' : ' months') + ' of payouts at ' + robuxRaw(monthly) + ' a month'),
+        anFig('Group balance', bal == null ? '–' : robuxRaw(bal), '', '', bal == null ? 'The sync account can’t see group funds' : '≈ ' + grxAud(bal) + ' at the DevEx rate'),
+        anFig('Free to DevEx on ' + (dayLabel === 'today' ? 'today' : day.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })), free, '', '', freeSub)
+      ].join('') + '</div>' +
+      '<p class="adm-an-note">The minimum keeps enough to cover staff and every other payout for the months you pick, even if sales stopped. Once you DevEx, the payout to your own account counts as Robux out here too.</p>';
+  }
+  document.addEventListener('click', function (e) {
+    var w = e.target.closest('[data-grx-win]');
+    if (w) { GRX.win = w.getAttribute('data-grx-win'); try { localStorage.setItem('coldd_grx_win', GRX.win); } catch (x) {} renderGroupRobux(); return; }
+    var r = e.target.closest('[data-grx-runway]');
+    if (r) { GRX.runway = Number(r.getAttribute('data-grx-runway')) || 3; try { localStorage.setItem('coldd_grx_runway', String(GRX.runway)); } catch (x) {} renderGroupRobux(); }
+  });
 
   // The Analytics stat tile
   function robuxRevTile() {
