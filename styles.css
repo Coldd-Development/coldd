@@ -6177,6 +6177,19 @@ a.adm-or-plink .adm-or-title { text-decoration: underline; text-decoration-color
 a.adm-or-plink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .adm-or-row.is-void .adm-or-amt { color: var(--fg-3); }
 .adm-or-row.is-skel { cursor: default; }
+/* An order that arrived while the page is open: opens up at the top, pushing the
+   list down, then glows for a few seconds. Fill mode "backwards" so the row is
+   back to normal (hover works) once it ends. */
+.adm-or-row.is-new { overflow: hidden; animation: adm-or-in .5s cubic-bezier(.2, .8, .2, 1) backwards, adm-or-glow 6s ease-out backwards; }
+@keyframes adm-or-in {
+  from { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(-8px); }
+  to { max-height: 160px; padding-top: 9px; padding-bottom: 9px; opacity: 1; transform: none; }
+}
+@keyframes adm-or-glow {
+  0%, 25% { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .adm-or-row.is-new { animation: adm-or-glow 6s ease-out backwards; } }
 .adm-or-row.is-skel .adm-or-thumb.adm-skel { width: 38px; height: 38px; border-radius: var(--r-ctl); box-shadow: none; }
 .adm-or-row.is-skel .adm-skel-txt { width: min(240px, 60%); height: 14px; }
 .adm-or-row.is-skel .adm-skel-sm { width: min(96px, 80%); height: 12px; }

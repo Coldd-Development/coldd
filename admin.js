@@ -7218,7 +7218,7 @@
       bbbRenderAll();
     }).catch(function (err) { console.error('[admin] builtbybit tables:', err && err.message); if (!BBB.loaded) { BBB.loaded = true; bbbRenderAll(); } });
   }
-  // Asks the server to sync right now (it also syncs by itself every 15 minutes). Admin only.
+  // Asks the server to sync right now (it also syncs by itself every minute). Admin only.
   function bbbSync() {
     if (BBB.syncing) return Promise.resolve();
     BBB.syncing = true; BBB.error = '';
@@ -7932,7 +7932,7 @@
         var usd = robux ? null : (Number(o.total) || 0) * shares[j];
         var p = it.whole ? null : findProduct(it.slug);
         out.push({
-          kind: 'site', pf: 'site', t: Date.parse(o.date), id: o.id, title: it.title || o.title, buyer: o.userName,
+          key: 'site:' + o.id + ':' + j, kind: 'site', pf: 'site', t: Date.parse(o.date), id: o.id, title: it.title || o.title, buyer: o.userName,
           search: [o.userEmail, robux ? 'Robux' : paymentMethodLabel(o), o.couponCode].join(' '),
           status: o.source === 'granted' ? 'gifted' : o.status, test: o.isTest, gift: !!o.purchasedByUserId,
           amount: robux ? robuxRaw((Number(o.totalRobux) || 0) * shares[j]) : fmtA(usdToAudAt(usd, pt)), usd: usd,
@@ -7947,7 +7947,7 @@
       BBB.purchases.forEach(function (p) {
         var usdP = bbbIsUsd(p), title = titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id);
         out.push({
-          kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: saleOrderId('bbb', p), title: saleDisplayName(null, title), buyer: p.buyer_name || '',
+          key: 'bbb:' + p.purchase_id, kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: saleOrderId('bbb', p), title: saleDisplayName(null, title), buyer: p.buyer_name || '',
           search: bbbMethodName(p.gateway) + ' ' + p.purchase_id + ' ' + title,
           status: 'completed', amount: usdP ? fmtA(usdToAudAt(p.price, Date.parse(p.purchased_at))) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
           usd: usdP ? p.price : null,
@@ -7962,7 +7962,7 @@
       names.forEach(function (raw, j) {
         var usd = robux ? null : s.usd * shares[j], nm = canonName(raw, usd);
         out.push({
-          kind: 'ps', pf: s.platform, t: s.t, id: saleOrderId('ps', s), title: saleDisplayName(names.length > 1 ? null : s.productId, nm), buyer: s.buyer || '', search: s.name || '', single: names.length === 1,
+          key: 'ps:' + s.id + ':' + j, kind: 'ps', pf: s.platform, t: s.t, id: saleOrderId('ps', s), title: saleDisplayName(names.length > 1 ? null : s.productId, nm), buyer: s.buyer || '', search: s.name || '', single: names.length === 1,
           status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
           amount: robux ? robuxRaw(s.amount * shares[j]) : fmtA(usdToAudAt(usd, s.t)), usd: usd,
           thumb: orderThumb('', names.length > 1 ? null : s.productId, nm), src: s
@@ -7995,6 +7995,24 @@
     if (cb) { ORDER_CHANNEL = cb.getAttribute('data-ch'); ORDERS_SHOWN = 100; renderOrders(); return; }
     if (e.target.closest('#admOrdersMore')) { ORDERS_SHOWN += 100; renderOrders(); }
   });
+  // Orders that arrived while the page is open: key -> when they arrived. They
+  // slide in at the top and glow for a few seconds; a redraw inside that window
+  // resumes the animation where it was (negative animation-delay) instead of
+  // replaying it. Only recent sales count (an old backfill never animates).
+  var ORDER_SEEN = null, ORDER_SEEN_SRC = null, ORDER_NEW = {};
+  var ORDER_NEW_MS = 6000;
+  function markNewOrders(all) {
+    if (all === ORDER_SEEN_SRC) return;
+    var now = Date.now();
+    if (ORDER_SEEN) {
+      var fresh = all.filter(function (r) { return !ORDER_SEEN[r.key] && r.status !== 'pending' && r.t > now - 3 * DAY_MS; });
+      if (fresh.length && fresh.length <= 25) fresh.forEach(function (r) { ORDER_NEW[r.key] = now; });
+    }
+    ORDER_SEEN = {};
+    all.forEach(function (r) { ORDER_SEEN[r.key] = 1; });
+    ORDER_SEEN_SRC = all;
+    Object.keys(ORDER_NEW).forEach(function (k) { if (now - ORDER_NEW[k] > ORDER_NEW_MS) delete ORDER_NEW[k]; });
+  }
   function renderOrders() {
     var body = $('admOrdersBody');
     if (!body) return;
@@ -8013,6 +8031,7 @@
     }
     var q = (($('admOrderSearch') || {}).value || '').trim().toLowerCase();
     var all = allOrderRows();
+    markNewOrders(all);
     // Pending website checkouts were opened and never paid: never listed.
     var visible = all.filter(function (r) { return r.status !== 'pending'; });
     var counts = {};
@@ -8050,7 +8069,9 @@
       prod = lk
         ? '<a class="adm-or-prod adm-or-plink" href="' + esc(lk.href) + '"' + (lk.pid ? ' data-pid="' + esc(lk.pid) + '"' : ' target="_blank" rel="noopener"') + '>' + prod + '</a>'
         : '<span class="adm-or-prod">' + prod + '</span>';
-      return '<div class="adm-or-row is-link' + (voided ? ' is-void' : '') + '" data-k="' + k + '" tabindex="0" role="button" aria-label="' + esc(r.title + ', ' + label) + '">' +
+      var since = ORDER_NEW[r.key] ? Date.now() - ORDER_NEW[r.key] : -1;
+      var isNew = since >= 0 && since < ORDER_NEW_MS;
+      return '<div class="adm-or-row is-link' + (voided ? ' is-void' : '') + (isNew ? ' is-new' : '') + '"' + (isNew && since > 50 ? ' style="animation-delay:-' + since + 'ms"' : '') + ' data-k="' + k + '" tabindex="0" role="button" aria-label="' + esc((isNew ? 'New order: ' : '') + r.title + ', ' + label) + '">' +
         prod +
         '<span class="adm-or-pf" style="--pf:' + pfVar(r.pf) + '">' + pfMark(r.pf) + '<span>' + esc(label) + '</span></span>' +
         '<span class="adm-or-buyer">' + (r.buyer ? esc(r.buyer) : '<span class="adm-sub">–</span>') + '</span>' +
@@ -8087,12 +8108,32 @@
       if (row) { e.preventDefault(); act(row, !!e.target.closest('.adm-or-info')); }
     });
   })();
-  // The Orders page keeps itself current: website orders and marketplace sales
-  // every 30 seconds, BuiltByBit (synced on the server every 15 minutes) every 2 minutes.
-  setInterval(function () { if (!document.hidden && curPanel === 'orders') { refreshOrders(); refreshPlatformSales(); } }, 30000);
-  setInterval(function () { if (!document.hidden && (curPanel === 'orders' || curPanel === 'analytics')) refreshBbbData(); }, 120000);
-  // Analytics keeps itself current the same way, every minute.
-  setInterval(function () { if (!document.hidden && curPanel === 'analytics') { refreshOrders(); refreshPlatformSales(); } }, 60000);
+  // Live sales: every 5 seconds one tiny call (admin_sales_pulse) says whether
+  // website orders, marketplace sales or BuiltByBit purchases changed, and only
+  // a changed source is re-read. The servers bring sales in every 1-2 minutes
+  // (ClearlyDev email, Creator Store and BuiltByBit each every minute).
+  var PULSE = null, PULSE_BUSY = false;
+  function salesPulse() {
+    if (PULSE_BUSY || !window.coldSupabase || document.hidden) return;
+    if (curPanel !== 'orders' && curPanel !== 'analytics' && curPanel !== 'home') return;
+    PULSE_BUSY = true;
+    window.coldSupabase.rpc('admin_sales_pulse').then(function (r) {
+      PULSE_BUSY = false;
+      if (r.error || !r.data) return;
+      var d = r.data, was = PULSE;
+      PULSE = d;
+      if (!was) return;
+      if (d.o !== was.o) refreshOrders();
+      if (d.p !== was.p) refreshPlatformSales();
+      if (d.b !== was.b) refreshBbbData();
+    }, function () { PULSE_BUSY = false; });
+  }
+  setInterval(salesPulse, 5000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) salesPulse(); });
+  // Safety net for anything the pulse cannot see: full re-reads every 2 minutes
+  // (website orders, marketplace sales) and every 5 minutes (BuiltByBit).
+  setInterval(function () { if (!document.hidden && (curPanel === 'orders' || curPanel === 'analytics')) { refreshOrders(); refreshPlatformSales(); } }, 120000);
+  setInterval(function () { if (!document.hidden && (curPanel === 'orders' || curPanel === 'analytics')) refreshBbbData(); }, 300000);
   // Products are still being added: every 5 minutes the pages that match sales
   // to products (pictures, links, prices, categories) reload the product list,
   // so a new match shows up without a page refresh.
