@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
         text_body: (mail.text || "").slice(0, 200000),
         html_body: (mail.html || "").slice(0, 400000),
       };
-      const parsed = parseClearlyDevOrder({ subject: mail.subject || "", html: mail.html || "", text: mail.text || "" });
+      const parsed = parseClearlyDevOrder({ subject: mail.subject || "", html: mail.html || "", text: mail.text || "", from: mail.from?.address || "" });
       if (parsed.ok) {
         try {
           const perUnit = await usdPerUnit(parsed.currency, rates);

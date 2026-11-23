@@ -1,11 +1,15 @@
 // Reads a ClearlyDev "new order" notification email into one sale.
 //
-// Written against the WooCommerce/WCFM email ClearlyDev sent until August 2025
-// (subject "[Clearly Development] New Store Order (1124791) - 28th August 2025",
-// an item table with span.item-name + td.line_cost, "Gross Total:"), and kept
-// loose on purpose: the current platform's email may differ, so it also takes
-// "#1234567" / "Order 1234567" ids, any "Total" line and $ / £ / € / US$ / A$
-// amounts. Anything it cannot read comes back as { ok: false, error } and the
+// Reads both layouts ClearlyDev has used:
+// - the WooCommerce/WCFM email sent until August 2025 (subject "[Clearly
+//   Development] New Store Order (1124791) - 28th August 2025", an item table
+//   with span.item-name + td.line_cost, "Gross Total:");
+// - the current "New Order Received!" email (2026): "#1293638", "Your store has
+//   received a new order from Noah Gibbs.", Customer / Roblox Username / Order
+//   Date (11/22/2026, US order) / Order Value ($19.99), then "Products Ordered"
+//   with name, licence tier, "Quantity: 1" and price per product.
+// Kept loose on purpose: it also takes "Order 1234567" ids, any "Total" line
+// and $ / £ / € / US$ / A$ amounts. Anything it cannot read comes back as { ok: false, error } and the
 // email is kept for a re-read.
 //
 // Pure (no Deno APIs) so it can be tested with plain Node.
@@ -18,8 +22,9 @@ export interface ParsedOrder {
   total: number;
   items: ParsedItem[];
   buyer: string | null;
-  // The order date printed in the subject ("... - 28th August 2025"), noon in
-  // Sydney. Used instead of the email's own date when the email was forwarded.
+  // The order date printed in the email: the subject ("... - 28th August 2025")
+  // or the "Order Date" field (11/22/2026), noon in Sydney. Used instead of the
+  // email's own date when the email was forwarded.
   subjectDate: string | null;
 }
 export type ParseResult = ParsedOrder | { ok: false; error: string };
@@ -59,11 +64,11 @@ export function readMoney(s: string): { amount: number; currency: string } | nul
   return { amount: Math.round(amount * 100) / 100, currency };
 }
 
-export function parseClearlyDevOrder(email: { subject?: string; html?: string; text?: string }): ParseResult {
+export function parseClearlyDevOrder(email: { subject?: string; html?: string; text?: string; from?: string }): ParseResult {
   const subject = email.subject || "";
   const html = email.html || "";
   const text = email.text || (html ? htmlToText(html) : "");
-  const hay = subject + "\n" + text + "\n" + html;
+  const hay = (email.from || "") + "\n" + subject + "\n" + text + "\n" + html;
   if (!/clearly\s?dev/i.test(hay)) return { ok: false, error: "not a ClearlyDev email" };
   if (!/order/i.test(subject + "\n" + text)) return { ok: false, error: "not an order email" };
 
@@ -93,12 +98,16 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
   const pick = (re: RegExp) => {
     for (let i = 0; i < lines.length; i++) {
       if (!re.test(lines[i])) continue;
-      const here = readMoney(lines[i]) || (lines[i + 1] ? readMoney(lines[i + 1]) : null);
-      if (here) return here;
+      // The figure sits on the label's line or just below it; a two-column
+      // layout can put another label in between ("Order Date / Order Value").
+      for (let j = i; j <= i + 3 && j < lines.length; j++) {
+        const here = readMoney(lines[j]);
+        if (here) return here;
+      }
     }
     return null;
   };
-  const total = pick(/gross total/i) || pick(/order total|total paid|amount paid|^total\b/i) || pick(/\btotal\b/i) || pick(/subtotal/i);
+  const total = pick(/gross total/i) || pick(/order total|order value|total paid|amount paid|^total\b/i) || pick(/\btotal\b/i) || pick(/subtotal/i);
   let amount = total ? total.amount : null;
   let currency = total ? total.currency : null;
   if (amount == null && items.length && items.every((it) => it.amount != null)) {
@@ -123,6 +132,29 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
       items[0].amount = amount;
     }
   }
+  // The 2026 email: after "Products Ordered", each product is its name, an
+  // optional licence tier ("standard"), "Quantity: N" and its price.
+  if (!items.length) {
+    const start = lines.findIndex((l) => /^products? ordered\b/i.test(l));
+    if (start >= 0) {
+      let cur: ParsedItem | null = null;
+      for (let i = start + 1; i < lines.length && items.length < 50; i++) {
+        const l = lines[i];
+        if (/^\[image:/i.test(l)) continue;
+        if (/^[-=_*\s]{3,}$/.test(l)) { if (!cur && items.length) break; continue; }
+        if (/^(order (summary|total|value)|sub ?total|total\b|your earnings|platform fee|view (your )?order|payment|thanks|thank you|need help|questions\?|©)/i.test(l)) break;
+        const q = l.match(/^(?:quantity|qty)\s*[:x×]?\s*(\d+)/i);
+        const money = readMoney(l);
+        const onlyMoney = money && !/[a-z]{3,}/i.test(l.replace(/\b(USD|AUD|GBP|EUR|CAD)\b/gi, ""));
+        if (q) { if (cur) cur.qty = Number(q[1]); continue; }
+        if (onlyMoney) { if (cur) { cur.amount = money.amount; items.push(cur); cur = null; } continue; }
+        // the first line is the name; any other line under it is the licence tier
+        if (!cur) cur = { name: l.replace(/\s*[x×]\s*\d+\s*$/, "").trim(), qty: 1, amount: null };
+      }
+      if (cur) items.push(cur);
+      if (items.length === 1 && items[0].amount == null) items[0].amount = amount;
+    }
+  }
   // Item names when there was no WooCommerce table: "Product: X" lines.
   if (!items.length) {
     lines.forEach((l) => {
@@ -130,9 +162,18 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
       if (m) items.push({ name: m[1].replace(/\s*[x×]\s*\d+\s*$/, "").trim(), qty: 1, amount: null });
     });
   }
-  const buyer = (text.match(/([^\n]{2,80}?) has just placed a new order/i) || [])[1] || null;
+  const buyer = (text.match(/([^\n]{2,80}?) has just placed a new order/i) || text.match(/new order from ([^\n]{2,80}?)\.?[ \t]*$/im) || [])[1] || null;
   const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
   const dm = subject.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i);
-  const subjectDate = dm ? new Date(Date.UTC(Number(dm[3]), MONTHS.indexOf(dm[2].toLowerCase()), Number(dm[1]), 1, 0, 0)).toISOString() : null;
-  return { ok: true, orderId, currency, total: amount, items, buyer: buyer ? buyer.trim() : null, subjectDate };
+  let subjectDate = dm ? new Date(Date.UTC(Number(dm[3]), MONTHS.indexOf(dm[2].toLowerCase()), Number(dm[1]), 1, 0, 0)).toISOString() : null;
+  if (!subjectDate) {
+    // "Order Date" then 11/22/2026 (month first) on the same line or just below.
+    const di = lines.findIndex((l) => /^order date\b/i.test(l));
+    for (let j = di; di >= 0 && j <= di + 3 && j < lines.length; j++) {
+      const d = lines[j].match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+      if (d && Number(d[1]) <= 12 && Number(d[2]) <= 31) { subjectDate = new Date(Date.UTC(Number(d[3]), Number(d[1]) - 1, Number(d[2]), 1, 0, 0)).toISOString(); break; }
+    }
+  }
+  // The plain-text part marks bold as *Noah Gibbs*.
+  return { ok: true, orderId, currency, total: amount, items, buyer: buyer ? buyer.trim().replace(/^[*_]+|[*_]+$/g, "").trim() || null : null, subjectDate };
 }
