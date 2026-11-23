@@ -4042,7 +4042,7 @@
       var rb = x.currency === 'ROBUX';
       var names = splitOrderNames(x.name, x.qty || 1);
       if (names.length < 2) { add(x.productId, x.name, x.platform, rb ? 0 : usdToAudAt(x.usd, x.t), rb ? x.amount : 0, x.qty || 1, ''); return; }
-      var sh = nameShares(names);
+      var sh = saleShares(x, names);
       names.forEach(function (nm, j) { add(null, nm, x.platform, rb ? 0 : usdToAudAt(x.usd * sh[j], x.t), rb ? x.amount * sh[j] : 0, 1, ''); });
     });
     var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux); }).slice(0, 8);
@@ -7161,22 +7161,70 @@
   // only give the order total with the product names comma-joined, and some
   // names hold a comma of their own ("Gold Coast Airport, Australia"), so the
   // names are split back into exactly as many products as the order holds,
-  // preferring names we know. The total is shared by each product's price in
-  // our product database, else what it sells for on its own there, else evenly.
+  // preferring names we know. Each product then takes its own price on that
+  // platform (its nearest single-product sale there); whatever is left of the
+  // total is shared by the products without one, weighted by their price
+  // elsewhere (other platforms, the BuiltByBit listing, our product database's
+  // regular price), else evenly. Our database price alone is not used as is:
+  // coldd.dev prices are often discounted and differ from the marketplaces.
   var ORDER_NAMES = null;
   function orderNameIndex() {
     var prods = allProducts(), res = BBB.resources || [];
-    if (ORDER_NAMES && ORDER_NAMES.a === PSALES && ORDER_NAMES.b === BBB.resources && ORDER_NAMES.c === prods) return ORDER_NAMES;
-    var known = {}, single = {}, price = {};
+    if (ORDER_NAMES && ORDER_NAMES.a === PSALES && ORDER_NAMES.b === BBB.resources && ORDER_NAMES.c === prods && ORDER_NAMES.d === BBB.purchases) return ORDER_NAMES;
+    var known = {}, byPf = {}, anyP = {}, any = {}, bbbList = {};
     prods.forEach(function (p) { known[bbbNorm(p.title)] = true; });
-    res.forEach(function (r) { known[bbbNorm(r.title)] = true; });
+    res.forEach(function (r) {
+      var k = bbbNorm(r.title); known[k] = true;
+      var v = Number(r.final_price) || Number(r.list_price) || 0;
+      if (v > 0 && !bbbList[k]) bbbList[k] = v;
+    });
+    function single(pf, k, t, v) { (byPf[pf + '|' + k] = byPf[pf + '|' + k] || []).push([t, v]); (anyP[k] = anyP[k] || []).push(v); }
     PSALES.forEach(function (s) {
       if ((s.qty || 1) !== 1 || !s.name) return;
       var k = bbbNorm(s.name); known[k] = true;
-      if (s.currency !== 'ROBUX' && s.usd > 0 && s.status !== 'refunded') (single[k] = single[k] || []).push(s.usd);
+      if (s.currency !== 'ROBUX' && s.usd > 0 && s.status !== 'refunded') single(s.platform, k, s.t, s.usd);
     });
-    Object.keys(single).forEach(function (k) { var a = single[k].sort(function (x, y) { return x - y; }); price[k] = a[a.length >> 1]; });
-    return (ORDER_NAMES = { a: PSALES, b: BBB.resources, c: prods, known: known, price: price });
+    if (BBB.purchases && res.length) {
+      var titles = {};
+      res.forEach(function (r) { titles[String(r.resource_id)] = bbbNorm(r.title); });
+      BBB.purchases.forEach(function (p) { var k = titles[String(p.resource_id)]; if (k && bbbIsUsd(p) && p.price > 0) single('builtbybit', k, Date.parse(p.purchased_at), p.price); });
+    }
+    Object.keys(byPf).forEach(function (k) { byPf[k].sort(function (x, y) { return x[0] - y[0]; }); });
+    Object.keys(anyP).forEach(function (k) { var a = anyP[k].sort(function (x, y) { return x - y; }); any[k] = a[a.length >> 1]; });
+    return (ORDER_NAMES = { a: PSALES, b: BBB.resources, c: prods, d: BBB.purchases, known: known, byPf: byPf, any: any, bbbList: bbbList });
+  }
+  // The product's price on that platform at that time: its last single sale
+  // there on or before t, else its first one after.
+  function pfPriceAt(idx, pf, k, t) {
+    var a = idx.byPf[pf + '|' + k]; if (!a || !a.length) return 0;
+    var lo = 0, hi = a.length - 1, at = -1;
+    while (lo <= hi) { var mid = (lo + hi) >> 1; if (a[mid][0] <= t) { at = mid; lo = mid + 1; } else hi = mid - 1; }
+    return a[at < 0 ? 0 : at][1];
+  }
+  // US$ for each product of a multi-product sale; always adds up to the total.
+  function splitAmounts(names, pf, t, total) {
+    var idx = orderNameIndex();
+    function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+    function fill(a) { var k = a.filter(function (x) { return x > 0; }), avg = k.length ? sum(k) / k.length : 1; return a.map(function (x) { return x > 0 ? x : avg; }); }
+    var own = names.map(function (nm) { return pfPriceAt(idx, pf, bbbNorm(nm), t); });
+    var guess = names.map(function (nm) {
+      var k = bbbNorm(nm); if (idx.any[k]) return idx.any[k]; if (idx.bbbList[k]) return idx.bbbList[k];
+      var p = matchProduct(null, nm); return p ? (p.wasPrice > p.priceNum ? p.wasPrice : p.priceNum) || 0 : 0;
+    });
+    var K = sum(own), miss = [];
+    own.forEach(function (v, i) { if (!v) miss.push(i); });
+    if (!miss.length) {
+      if (Math.abs(K - total) < 0.015) return own;
+      return own.map(function (v) { return total * v / K; });
+    }
+    var rem = total - K;
+    if (rem > 0.005 * miss.length) {
+      var w = fill(miss.map(function (i) { return guess[i]; })), ws = sum(w);
+      return names.map(function (_, i) { var m = miss.indexOf(i); return m < 0 ? own[i] : rem * w[m] / ws; });
+    }
+    // Their own prices already cover the total (bought at a discount): share it by every price we have.
+    var all = fill(names.map(function (_, i) { return own[i] || guess[i]; })), as = sum(all);
+    return all.map(function (v) { return total * v / as; });
   }
   function splitOrderNames(name, qty) {
     var parts = String(name || '').split(', ').filter(Boolean), k = parts.length;
@@ -7196,7 +7244,7 @@
     for (g = qty; g > 0; g--) { var st = from[at][g]; out.unshift(parts.slice(st, at).join(', ')); at = st; }
     return out;
   }
-  // Each product's share of an order total, from its usual price.
+  // Each product's share of an order total, from its usual price (coldd.dev orders).
   function orderShares(prices) {
     var known = prices.filter(function (x) { return x > 0; });
     var avg = known.length ? known.reduce(function (a, b) { return a + b; }, 0) / known.length : 1;
@@ -7204,13 +7252,11 @@
     var sum = w.reduce(function (a, b) { return a + b; }, 0) || 1;
     return w.map(function (x) { return x / sum; });
   }
-  function nameShares(names) {
-    var price = orderNameIndex().price;
-    return orderShares(names.map(function (nm) {
-      var p = matchProduct(null, nm);
-      if (p && p.priceNum > 0) return p.priceNum;
-      return price[bbbNorm(nm)] || 0;
-    }));
+  // Each product's share (adding up to 1) of a multi-product marketplace sale.
+  function saleShares(s, names) {
+    if (names.length < 2) return [1];
+    if (!(s.usd > 0)) return names.map(function () { return 1 / names.length; });
+    return splitAmounts(names, s.platform, s.t, s.usd).map(function (v) { return v / s.usd; });
   }
   // One order ID per sale, whatever the platform calls it: BuiltByBit's TBX
   // transaction, ClearlyDev's and Payhip's own order number, ours on coldd.dev.
@@ -7266,7 +7312,7 @@
     PSALES.forEach(function (s) {
       var robux = s.currency === 'ROBUX';
       var names = splitOrderNames(s.name || 'Order', s.qty || 1);
-      var shares = names.length > 1 ? nameShares(names) : [1];
+      var shares = saleShares(s, names);
       names.forEach(function (nm, j) {
         var usd = robux ? null : s.usd * shares[j];
         out.push({
