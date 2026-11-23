@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         coldd Creator Store Analytics
 // @namespace    https://coldd.dev
-// @version      6.1
+// @version      6.2
 // @description  Your Creator Store earnings in AU$ on the transactions page: what you earned, sales, next payout, a chart and top products
 // @author       coldd
 // @match        https://create.roblox.com/*
@@ -16,6 +16,8 @@
 // ==/UserScript==
 
 /*
+ * 6.2: hides Roblox's own three boxes (Payout Total, Pending Revenue, Available
+ *      Balance), so the sales table sits right under this panel.
  * 6.1: a fourth figure, "This month’s earnings" (this calendar month so far,
  *      whatever the timeframe switch is on).
  * 6.0: a smaller panel, and it no longer sends sales to coldd.dev (the server
@@ -94,14 +96,32 @@
     requestAnimationFrame(() => {
       ensureQueued = false;
       if (!isTargetPage()) { stopAutoRefresh(); root()?.remove(); return; }
-      if (root()) return;
       const container = document.querySelector('[data-testid="creator-store-transactions-id"]');
+      if (container) hideDefaultStats(container);
+      if (root()) return;
       const sampleCard = container?.querySelector('.MuiCard-root');
       if (!container || !sampleCard) return;
       buildPanel(container, sampleCard);
       startAutoRefresh();
       if (state.payments.length) render(); else refresh(true);
     });
+  }
+  // Roblox's own three boxes above the sales table (Payout Total, Pending
+  // Revenue, Available Balance) are hidden, found by their titles. Checked on
+  // every page change, since React can draw them again.
+  const DEFAULT_STATS = /^(payout total|pending revenue|available balance)$/i;
+  function hideDefaultStats(container) {
+    const cards = [...container.querySelectorAll('.MuiCard-root')].filter((c) => !c.closest('#' + CONFIG.ROOT) &&
+      [...c.querySelectorAll('*')].some((e) => !e.children.length && DEFAULT_STATS.test((e.textContent || '').trim())));
+    if (!cards.length) return;
+    // The smallest box around all of them (their grid row), unless it also holds
+    // something else that matters (the table, the filters or this panel).
+    let wrap = cards[0].parentElement;
+    while (wrap && wrap !== container && !cards.every((c) => wrap.contains(c))) wrap = wrap.parentElement;
+    const safe = wrap && wrap !== container && !wrap.querySelector('table, input, select, [role="grid"], #' + CONFIG.ROOT);
+    // Hiding them one by one: take each card's own grid cell with it, so no gap is left.
+    const one = (c) => { let el = c; while (el.parentElement && el.parentElement !== container && el.parentElement.children.length === 1) el = el.parentElement; return el; };
+    (safe ? [wrap] : cards.map(one)).forEach((el) => { if (el.style.display !== 'none') el.style.setProperty('display', 'none', 'important'); });
   }
   function startAutoRefresh() {
     stopAutoRefresh();
