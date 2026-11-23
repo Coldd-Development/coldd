@@ -16,10 +16,18 @@
 //     purchases, revenue) overall and for each BuiltByBit listing that matches a coldd product.
 //
 // Auth: an admin's session, or the shared x-cron-secret (the pg_cron job runs `sync` every
-// 15 minutes). Read-only against BuiltByBit: nothing here writes to BuiltByBit.
+// minute). Read-only against BuiltByBit: nothing here writes to BuiltByBit.
+// Runs never overlap: each takes a lock (bbb2_state.running_until) and a run that finds
+// it taken skips. Quick runs stop after 40 s, the daily full read after 100 s.
+// A run with nothing new costs ONE request (page 1 of purchases); listings refresh every
+// 6 hours and the funnel every 30 minutes, whatever the cron cadence.
 // Secret: BUILTBYBIT_API_TOKEN (the same Private token as v1).
 //
 // Requests are spaced (MIN_GAP_MS) and a 429 puts every request on a shared cooldown.
+// BuiltByBit's rules (api-v2 docs): honour the Retry-After header on a 429 (its value is in
+// milliseconds); use the API, never scraping; never share the private token. So a cooldown
+// is never cut short: if it does not fit in this run, the run ends, and the cooldown is
+// saved in bbb2_state.cooldown_until so the next run waits it out too.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -27,10 +35,10 @@ const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
 const PER_PAGE = 100;
 const MIN_GAP_MS = 500;
-const MAX_WAIT_MS = 15000;
 const MAX_ATTEMPTS = 5;
 const REQUEST_TIMEOUT_MS = 20000;
-const BUDGET_MS = 100000;
+const QUICK_BUDGET_MS = 40000;
+const FULL_BUDGET_MS = 100000;
 
 const PURCHASES_FULL_EVERY_MS = 24 * 60 * 60 * 1000;
 const RESOURCES_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -99,11 +107,17 @@ async function v2(token: string, path: string): Promise<Obj> {
       throw new ApiFail(504, "BuiltByBit did not answer in time.");
     }
     if (res.status === 429) {
-      const hinted = Number(res.headers.get("Retry-After") ?? "0") * 1000;
-      const wait = Math.min(MAX_WAIT_MS, Math.max(hinted, 1000 * 2 ** attempt));
+      // BuiltByBit sends Retry-After in milliseconds. A small number (under 60) is read as
+      // seconds instead, and an HTTP date as a date, so the wait is never shorter than asked.
+      const ra = (res.headers.get("Retry-After") ?? "").trim();
+      const n = Number(ra);
+      let hinted = 0;
+      if (ra && Number.isFinite(n) && n > 0) hinted = n < 60 ? n * 1000 : n;
+      else if (ra && Number.isFinite(Date.parse(ra))) hinted = Date.parse(ra) - Date.now();
+      const wait = Math.max(hinted, 1000 * 2 ** attempt);
       COOLDOWN_UNTIL = Math.max(COOLDOWN_UNTIL, Date.now() + wait);
       console.warn("[admin-bbb-v2-sync] 429 on", path.split("?")[0], "cooling down", wait, "ms");
-      if (attempt === MAX_ATTEMPTS - 1) throw new ApiFail(429, "BuiltByBit rate limit hit.");
+      if (attempt === MAX_ATTEMPTS - 1 || Date.now() + wait > DEADLINE) throw new ApiFail(429, "BuiltByBit rate limit hit; waiting " + Math.ceil(wait / 1000) + " s as asked.");
       continue;
     }
     const text = await res.text();
@@ -153,15 +167,29 @@ Deno.serve(async (req: Request) => {
 
     const token = Deno.env.get("BUILTBYBIT_API_TOKEN");
     if (!token) return json({ ok: true, configured: false });
-    DEADLINE = Date.now() + BUDGET_MS;
-
     if (action !== "sync") return json({ ok: false, error: "Unknown action." }, 400);
     const force = body.force === true;
 
     const nowMs = Date.now();
     const { data: st0 } = await admin.from("bbb2_state").select("*").eq("id", true).maybeSingle();
     const st: Obj = st0 ?? {};
+    // A Retry-After cooldown from an earlier run still applies (even to "Sync now").
+    const savedCooldown = st.cooldown_until ? new Date(String(st.cooldown_until)).getTime() : 0;
+    if (savedCooldown > nowMs) {
+      COOLDOWN_UNTIL = Math.max(COOLDOWN_UNTIL, savedCooldown);
+      return json({ ok: true, configured: true, skipped: "BuiltByBit asked us to wait until " + new Date(savedCooldown).toISOString() });
+    }
     const age = (t: unknown) => (t ? nowMs - new Date(String(t)).getTime() : Infinity);
+    const fullDue = force || age(st.purchases_full_at) >= PURCHASES_FULL_EVERY_MS;
+    DEADLINE = Date.now() + (fullDue ? FULL_BUDGET_MS : QUICK_BUDGET_MS);
+    // One run at a time: take the lock unless another run holds it (it frees itself
+    // 30 s after that run's deadline if the run died).
+    const lockUntil = new Date(DEADLINE + 30000).toISOString();
+    if (st0) {
+      const { data: got } = await admin.from("bbb2_state").update({ running_until: lockUntil }).eq("id", true)
+        .or("running_until.is.null,running_until.lt." + new Date().toISOString()).select("id");
+      if (!got || !got.length) return json({ ok: true, configured: true, skipped: "another sync is running" });
+    }
     const patch: Obj = {};
     const errors: string[] = [];
     const summary: Obj = {};
@@ -169,7 +197,7 @@ Deno.serve(async (req: Request) => {
     // 1) purchases (account-wide). Quick read: newest pages only, stopping at the first page
     //    that is entirely stored already (checked newest-first on page 1). Full read daily.
     try {
-      const full = force || age(st.purchases_full_at) >= PURCHASES_FULL_EVERY_MS;
+      const full = fullDue;
       const known = new Set<number>();
       if (!full) {
         const { data } = await admin.from("bbb2_purchases").select("purchase_id").order("created_at", { ascending: false }).limit(3000);
@@ -280,7 +308,8 @@ Deno.serve(async (req: Request) => {
         if (overBudget()) break;
         const q = "/v2/analytics/single?analytics=" + ids.join(",") + "&period=custom_range&start_date=" + j.start + "&end_date=" + day(0) +
           (j.rid ? "&filters[resource_ids]=" + j.rid : "");
-        const d = await v2(token, q);
+        let d: Obj;
+        try { d = await v2(token, q); } catch (e) { if (e instanceof ApiFail && e.status === 408) break; throw e; }
         const a: Obj = d?.data?.analytics ?? {};
         const { error } = await admin.from("bbb2_funnel").upsert({
           resource_id: j.rid, period: j.label,
@@ -296,6 +325,8 @@ Deno.serve(async (req: Request) => {
     } catch (e) { errors.push("funnel: " + (e as Error).message); }
 
     patch.last_error = errors.length ? errors.join("; ").slice(0, 500) : null;
+    patch.cooldown_until = COOLDOWN_UNTIL > Date.now() ? new Date(COOLDOWN_UNTIL).toISOString() : null;
+    patch.running_until = null;
     patch.updated_at = new Date().toISOString();
     await admin.from("bbb2_state").upsert({ id: true, ...patch }, { onConflict: "id" });
     if (errors.length) console.warn("[admin-bbb-v2-sync] partial:", errors);

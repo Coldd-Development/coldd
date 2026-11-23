@@ -20,7 +20,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import PostalMime from "npm:postal-mime@2";
-import { parseClearlyDevOrder } from "../_shared/clearlydev_email.ts";
+import { forwardedSentAt, parseClearlyDevOrder } from "../_shared/clearlydev_email.ts";
 
 const MAX_PER_RUN = 25;
 // deno-lint-ignore no-explicit-any
@@ -189,17 +189,21 @@ Deno.serve(async (req) => {
           const perUnit = await usdPerUnit(parsed.currency, rates);
           const names = parsed.items.map((i) => i.name).filter(Boolean);
           const qty = parsed.items.reduce((s, i) => s + (i.qty || 1), 0) || 1;
-          // A forwarded order email (e.g. a test forward of an old one) carries the
-          // forward's date; the real order date is the one in the subject.
+          // The sale time is when ClearlyDev sent the email. A forwarded copy carries
+          // the forward's own date, so its quoted "Sent:" line is used instead (kept
+          // only when it is not after the forward itself).
           const forwarded = /^\s*(fwd?|fw)\s*:/i.test(mail.subject || "") || !/clearlydev\.com$/i.test(mail.from?.address || "");
+          const quoted = forwarded ? forwardedSentAt({ text: mail.text || "", html: mail.html || "" }) : null;
+          const fwdAt = row.sent_at ? new Date(row.sent_at).getTime() : Date.now();
+          const soldAt = quoted && new Date(quoted).getTime() <= fwdAt + 120000 ? quoted : (row.sent_at || new Date().toISOString());
           const up = await admin.from("platform_sales").upsert({
             platform: "clearlydev", source: "email", external_id: parsed.orderId,
-            sold_at: (forwarded && parsed.subjectDate) || row.sent_at || new Date().toISOString(),
+            sold_at: soldAt,
             product_id: names.length === 1 && qty === 1 ? byTitle.get(norm(names[0])) || null : null,
             product_name: (names.join(", ") || "ClearlyDev order").slice(0, 300),
             currency: parsed.currency, amount: parsed.total, amount_usd: Math.round(parsed.total * perUnit * 10000) / 10000,
             quantity: qty, buyer_name: parsed.buyer, status: "paid",
-            raw: { email_message_id: messageId }, updated_at: new Date().toISOString(),
+            raw: { email_message_id: messageId, email_sent_at: row.sent_at, forwarded, quoted_sent_at: quoted }, updated_at: new Date().toISOString(),
           }, { onConflict: "platform,external_id", ignoreDuplicates: true });
           if (up.error) throw new Error(up.error.message);
           summary.parsed++; summary.written++;

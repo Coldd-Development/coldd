@@ -51,6 +51,59 @@ export function htmlToText(html: string): string {
   ).replace(/[ \t ]+/g, " ").replace(/\n\s+/g, "\n").trim();
 }
 
+// When ClearlyDev sent the email, read from the header block a forward quotes:
+//   Outlook       "Sent: Tuesday, November 24, 2026 9:19 AM"
+//   Gmail         "Date: Tue, Nov 24, 2026 at 9:19 AM" (or "24 Nov 2026 at 9:19 am")
+//   Apple Mail    "Date: 24 November 2026 at 9:19:00 AM AEDT"
+// A time with no zone is the forwarder's own clock, read as Sydney time
+// (AEDT/AEST picked by date). Returns an ISO string, or null when there is no
+// such line (then the email's own Date header is used).
+const MONTH_IX: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+function zoneOffsetMs(tz: string, t: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })
+    .formatToParts(new Date(t));
+  const v = (k: string) => Number((parts.find((p) => p.type === k) || { value: "0" }).value);
+  return Date.UTC(v("year"), v("month") - 1, v("day"), v("hour") % 24, v("minute"), v("second")) - Math.floor(t / 1000) * 1000;
+}
+export function forwardedSentAt(email: { text?: string; html?: string }, tz = "Australia/Sydney"): string | null {
+  const text = email.text || (email.html ? htmlToText(email.html) : "");
+  // Only the quoted header block at the top of the forward.
+  const head = text.split(/\n/).slice(0, 60);
+  for (const raw of head) {
+    const m = raw.trim().replace(/^\*+|\*+$/g, "").match(/^(?:sent|date)\s*:\s*(.+)$/i);
+    if (!m) continue;
+    const v = m[1].replace(/\bat\b/gi, " ").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+    const d = v.match(/\b(\d{1,2})\s+([a-z]{3,9})\.?\s+(\d{4})\b/i) || v.match(/\b([a-z]{3,9})\.?\s+(\d{1,2})\s+(\d{4})\b/i);
+    const tm = v.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])\.?\s?m\b\.?/i) || v.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+    if (!d || !tm) continue;
+    const dayFirst = /^\d/.test(d[1]);
+    const day = Number(dayFirst ? d[1] : d[2]);
+    const mon = MONTH_IX[(dayFirst ? d[2] : d[1]).slice(0, 3).toLowerCase()];
+    const year = Number(d[3]);
+    if (mon == null || !(day >= 1 && day <= 31)) continue;
+    let hour = Number(tm[1]);
+    const min = Number(tm[2]), sec = Number(tm[3] || 0);
+    if (tm[4]) { const pm = /p/i.test(tm[4]); if (hour === 12) hour = pm ? 12 : 0; else if (pm) hour += 12; }
+    if (hour > 23 || min > 59) continue;
+    const wall = Date.UTC(year, mon, day, hour, min, sec);
+    const z = v.match(/\b(AEDT|AEST|ACDT|ACST|AWST|UTC|GMT)\b|([+-])(\d{2}):?(\d{2})\b/i);
+    let utc: number;
+    if (z && z[1]) {
+      const fixed: Record<string, number> = { AEDT: 11, AEST: 10, ACDT: 10.5, ACST: 9.5, AWST: 8, UTC: 0, GMT: 0 };
+      utc = wall - fixed[z[1].toUpperCase()] * 3600000;
+    } else if (z && z[2]) {
+      utc = wall - (z[2] === "-" ? -1 : 1) * (Number(z[3]) * 3600000 + Number(z[4]) * 60000);
+    } else {
+      // Local wall time in tz: correct the guess by the zone's offset at that moment.
+      utc = wall - zoneOffsetMs(tz, wall);
+      utc = wall - zoneOffsetMs(tz, utc);
+    }
+    if (!Number.isFinite(utc)) continue;
+    return new Date(utc).toISOString();
+  }
+  return null;
+}
+
 // "£1.49", "$ 12.00", "US$4.99", "4.99 USD" -> { amount, currency }
 export function readMoney(s: string): { amount: number; currency: string } | null {
   const m = s.match(/(US\$|A\$|AU\$|CA\$|C\$|[$£€])\s?(\d{1,6}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)|(\d{1,6}(?:[.,]\d{1,2})?)\s?(USD|GBP|EUR|AUD|CAD)\b/i);
@@ -141,6 +194,9 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
       for (let i = start + 1; i < lines.length && items.length < 50; i++) {
         const l = lines[i];
         if (/^\[image:/i.test(l)) continue;
+        // A forwarded copy shows each product picture as its alt text in brackets
+        // ("[R6 Parkour Animation Pack]"), just above the real name line.
+        if (/^\[[^\]]*\]$/.test(l)) continue;
         if (/^[-=_*\s]{3,}$/.test(l)) { if (!cur && items.length) break; continue; }
         if (/^(order (summary|total|value)|sub ?total|total\b|your earnings|platform fee|view (your )?order|payment|thanks|thank you|need help|questions\?|©)/i.test(l)) break;
         const q = l.match(/^(?:quantity|qty)\s*[:x×]?\s*(\d+)/i);
