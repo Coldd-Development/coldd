@@ -5758,3 +5758,69 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
 @media (max-width: 900px) {
   .adm-nav-label { grid-column: 1 / -1; }
 }
+
+/* Admin Prizes & Payouts (2026-11-23) ------------------------------------------
+   Overview, prize claims and referral payouts in the dashboard panel language.
+   The claim filter keeps its .adm-tab buttons (admin.js toggles them) but looks
+   like .adm-seg. Display only on :not([hidden]) so the page still hides. */
+.adm-prizes:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-prizes .dash-head.adm-home-head { margin-bottom: 2px; }
+.adm-seg .adm-tab { gap: 6px; padding: 6px 13px; border-radius: var(--r-pill); font-size: 12px; }
+.adm-prizes .adm-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.adm-prizes .adm-seg::-webkit-scrollbar { display: none; }
+.adm-prizes .adm-seg button { flex: 0 0 auto; white-space: nowrap; }
+.adm-seg .adm-gw-count:not(:empty) { margin-left: 0; padding: 0 6px; font-size: 11px; line-height: 17px; }
+.adm-gw .adm-hp-title a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.adm-gw .adm-or-tools { margin-bottom: 4px; flex-wrap: nowrap; }
+.adm-gw .adm-or-search { flex: 1 1 auto; min-width: 0; }
+.adm-gw-list { margin: 0 -10px; }
+.adm-gw-list .adm-gw-row { position: relative; flex-wrap: nowrap; gap: 12px; padding: 10px; border-top: 0; }
+.adm-gw-list .dr-actions { flex: 0 0 auto; }
+.adm-gw-list .adm-gw-row + .adm-gw-row::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 1px; background: var(--hairline); }
+.adm-gw-list .dr-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.adm-gw-list .dr-prod { margin-top: 3px; font-size: 13px; color: var(--fg-1); }
+.adm-gw-list .dr-prod .adm-sub { margin-left: 4px; }
+.adm-gw-list .dr-sub { margin-top: 2px; }
+.adm-gw-list .dt-badge, .adm-po-table .dt-badge { font-size: 11px; padding: 2px 8px; }
+.adm-gw-list .dash-empty-note { padding: 22px 10px; text-align: center; font-size: 13px; color: var(--fg-3); }
+.adm-po-wrap { overflow-x: auto; }
+.adm-po-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adm-po-table th { padding: 0 12px 8px 0; border-bottom: 1px solid var(--hairline); text-align: left; font-size: 12px; font-weight: 600; color: var(--fg-3); white-space: nowrap; }
+.adm-po-table td { padding: 11px 12px 11px 0; border-top: 1px solid var(--hairline); vertical-align: top; color: var(--fg-1); }
+.adm-po-table tbody tr:first-child td { border-top: 0; }
+.adm-po-table td:last-child, .adm-po-table th:last-child { padding-right: 0; }
+.adm-po-main { display: block; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.adm-po-date { display: block; color: var(--fg-1); white-space: nowrap; }
+.adm-po-sub { display: block; margin-top: 3px; font-size: 12px; color: var(--fg-3); overflow-wrap: anywhere; }
+.adm-po-sub.is-late { color: var(--accent); }
+.adm-po-sub a { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; }
+.adm-po-note { max-width: 240px; }
+.adm-po-amt b { display: block; font-size: 14px; font-weight: 700; color: var(--price); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-po-amt small { display: block; margin-top: 3px; font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.adm-po-table .adm-row-actions { justify-content: flex-end; height: auto; }
+.adm-po-table .adm-empty { padding: 22px 0; }
+.adm-gw-grid .dash-card { border-radius: var(--r-sm); padding: 18px 20px; }
+.adm-gw-grid .dash-card-head h2 { font-size: 15px; }
+.adm-prizes .adm-kpi-line { display: none; }
+@media (max-width: 560px) {
+  .adm-prizes .adm-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adm-prizes .adm-kpi-cell:nth-child(even) { border-left: 1px solid var(--hairline); }
+  .adm-prizes .adm-kpi-cell:nth-child(2) { border-top: 0; }
+  .adm-prizes .adm-kpi-value b { font-size: 22px; }
+  .adm-prizes .adm-kpi-sub { white-space: normal; }
+  .adm-prizes .adm-seg button { padding: 6px 10px; }
+}
+@media (max-width: 760px) {
+  .adm-po-table thead { display: none; }
+  .adm-po-table, .adm-po-table tbody, .adm-po-table tr, .adm-po-table td { display: block; }
+  .adm-po-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+  .adm-po-table tbody tr:first-child { border-top: 0; }
+  .adm-po-table td { padding: 3px 0; border: 0; }
+  .adm-po-table td:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .adm-po-table td:nth-child(3) { grid-column: 2; grid-row: 1; text-align: right; }
+  .adm-po-table td:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .adm-po-table td:nth-child(4) { grid-column: 2; grid-row: 2; text-align: right; }
+  .adm-po-table td:nth-child(5), .adm-po-table td:nth-child(6), .adm-po-table td[colspan] { grid-column: 1 / -1; grid-row: auto; }
+  .adm-po-table .adm-row-actions { justify-content: flex-start; padding-top: 8px; }
+  .adm-po-main { max-width: none; }
+}

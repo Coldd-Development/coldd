@@ -480,22 +480,50 @@
       robuxTotal:requested.filter(function(p){return p.source_currency.indexOf('robux')>=0;}).reduce(function(s,p){return s+Number(p.amount_robux||0);},0),count:requested.length,
       names:requested.map(function(p){return p.owner;}).filter(function(v,i,a){return a.indexOf(v)===i;})};
   }
+  // Referral payouts on the Prizes & Payouts page. Waiting requests first come,
+  // first served; history newest first. US$ requests show their AU$ (today's
+  // rate while waiting, the day it was paid once paid) with the US$ to send.
+  var PO_FILTER = 'open';
+  var PO_STATUS = { requested: ['Requested', 'warn'], changes_requested: ['Changes requested', 'info'], paid: ['Completed', 'ok'], denied: ['Denied', 'err'] };
+  function poOpen(p) { return p.status === 'requested' || p.status === 'changes_requested'; }
+  function poPaidAt(p) { return Date.parse(p.paid_at || p.updated_at || p.requested_at); }
   function renderPayouts() {
-    var el=$('admPayoutsBody');if(!el)return;
-    el.innerHTML=PAYOUTS.map(function(p){
-      var rb=p.source_currency.indexOf('robux')>=0;
-      var amount=rb?'R$ '+Number(p.amount_robux||0).toLocaleString():usd(p.amount_usd||0)+' USD';
-      var method=p.method==='usd'?'PayPal':p.method==='robux'?'Robux gamepass':'Store credit';
-      var status=p.status==='paid'?'Completed':p.status==='denied'?'Denied':p.status==='changes_requested'?'Changes requested':'Requested';
-      var tone=p.status==='paid'?'ok':p.status==='denied'?'err':'warn';
-      var destination=p.method==='usd'?'<p class="ref-detail-note">'+esc(p.paypal_email||'PayPal email missing')+'</p>':p.method==='robux'?'<p class="ref-detail-note">'+(p.gamepass_url&&/^https:\/\/www\.roblox\.com\/game-pass\/[0-9]+\/?$/.test(p.gamepass_url)?'<a href="'+esc(p.gamepass_url)+'" target="_blank" rel="noopener">Open gamepass</a>':'Gamepass link missing')+'</p>':'';
-      var pending=p.status==='requested'||p.status==='changes_requested';
-      var actions=pending&&can('admin')?((p.status==='requested'?'<button class="btn btn-ghost adm-btn-sm adm-payout-paid" type="button">'+(p.method==='store_credit'?'Issue credit':'Mark paid')+'</button>':'')+'<button class="btn btn-ghost adm-btn-sm adm-payout-changes" type="button">Request changes</button><button class="btn btn-ghost adm-btn-sm adm-payout-deny" type="button">Deny</button>'):'';
-      var note=p.change_reason||p.note||p.transfer_reference||'';
-      var due=new Date(new Date(p.updated_at||p.requested_at).getTime()+72*3600000);
-      return '<tr data-id="'+esc(p.id)+'"><td>'+fmtDateTime(new Date(p.requested_at))+(pending?'<p class="ref-detail-note">Around 72 hours. Target: '+fmtDateTime(due)+'</p>':'')+'</td><td>'+esc(p.owner)+(p.is_test?'<p class="ref-detail-note">Sandbox test</p>':'')+'</td><td>'+method+destination+'<p class="ref-detail-note">From '+esc(p.source_currency.replace('store_','store-credit '))+' earnings</p></td><td>'+amount+'</td><td><span class="dt-badge '+tone+'">'+status+'</span>'+(note?'<p class="ref-detail-note">'+esc(note)+'</p>':'')+'</td><td class="adm-row-actions">'+actions+'</td></tr>';
-    }).join('')||'<tr><td colspan="6" class="adm-empty">No payout requests yet.</td></tr>';
+    renderPpKpis();
+    var el = $('admPayoutsBody'); if (!el) return;
+    var openN = PAYOUTS.filter(poOpen).length;
+    document.querySelectorAll('#admPoTabs button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-po') === PO_FILTER); });
+    document.querySelectorAll('#admPoTabs [data-po-count]').forEach(function (s) { s.textContent = openN ? String(openN) : ''; });
+    var rows = PAYOUTS.filter(function (p) { return PO_FILTER === 'all' || (PO_FILTER === 'open' ? poOpen(p) : p.status === PO_FILTER); });
+    if (PO_FILTER === 'open') rows = rows.slice().reverse();
+    var now = Date.now();
+    el.innerHTML = rows.map(function (p) {
+      var rb = p.source_currency.indexOf('robux') >= 0;
+      var pending = poOpen(p);
+      var st = PO_STATUS[p.status] || PO_STATUS.requested;
+      var method = p.method === 'usd' ? 'PayPal' : p.method === 'robux' ? 'Robux gamepass' : 'Store credit';
+      var dest = p.method === 'usd' ? esc(p.paypal_email || 'PayPal email missing')
+        : p.method === 'robux' ? (p.gamepass_url && /^https:\/\/www\.roblox\.com\/game-pass\/[0-9]+\/?$/.test(p.gamepass_url) ? '<a href="' + esc(p.gamepass_url) + '" target="_blank" rel="noopener">Open gamepass</a>' : 'Gamepass link missing')
+        : 'Spendable at checkout';
+      var amount = rb ? '<b>' + robuxRaw(p.amount_robux) + '</b>'
+        : '<b>' + fmtA(usdToAudAt(p.amount_usd, pending ? now : poPaidAt(p))) + '</b><small>US$' + (Number(p.amount_usd) || 0).toFixed(2) + '</small>';
+      var note = p.change_reason || p.note || p.transfer_reference || '';
+      var due = Date.parse(p.updated_at || p.requested_at) + 72 * 3600000, late = pending && due < now;
+      var actions = pending && can('admin') ? ((p.status === 'requested' ? '<button class="btn btn-ghost adm-btn-sm adm-payout-paid" type="button">' + (p.method === 'store_credit' ? 'Issue credit' : 'Mark paid') + '</button>' : '') + '<button class="btn btn-ghost adm-btn-sm adm-payout-changes" type="button">Request changes</button><button class="btn btn-ghost adm-btn-sm adm-payout-deny" type="button">Deny</button>') : '';
+      return '<tr data-id="' + esc(p.id) + '">' +
+        '<td><span class="adm-po-main">' + esc(p.owner) + '</span><span class="adm-po-sub">From ' + (rb ? 'Robux' : 'USD') + ' earnings' + (p.is_test ? ' · Sandbox test' : '') + '</span></td>' +
+        '<td><span class="adm-po-main">' + method + '</span><span class="adm-po-sub">' + dest + '</span></td>' +
+        '<td class="adm-po-amt">' + amount + '</td>' +
+        '<td><span class="dt-badge ' + st[1] + '">' + st[0] + '</span>' + (note ? '<span class="adm-po-sub adm-po-note">' + esc(note) + '</span>' : '') + '</td>' +
+        '<td><span class="adm-po-date">' + fmtDateTime(new Date(p.requested_at)) + '</span>' + (pending ? '<span class="adm-po-sub' + (late ? ' is-late' : '') + '">' + (late ? 'Overdue, was due ' : 'Due ') + fmtDateTime(new Date(due)) + '</span>' : '') + '</td>' +
+        '<td class="adm-row-actions">' + actions + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="adm-empty">' + ({ open: 'No payouts waiting.', paid: 'No completed payouts yet.', denied: 'No denied payouts.', all: 'No payout requests yet.' }[PO_FILTER]) + '</td></tr>';
   }
+  var poTabs = $('admPoTabs');
+  if (poTabs) poTabs.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-po]'); if (!b) return;
+    PO_FILTER = b.getAttribute('data-po') || 'open';
+    renderPayouts();
+  });
   var payoutsBody=$('admPayoutsBody');
   if(payoutsBody)payoutsBody.addEventListener('click',async function(e){
     var button=e.target.closest('button');var tr=e.target.closest('tr');if(!tr||!button||button.disabled||!can('admin'))return;
@@ -7353,7 +7381,36 @@
   function gwWinner(c) { return c.verified_discord_name || c.verified_bbb_name || c.account_name || c.account_email || 'Unknown winner'; }
   function gwBadge(status) { var s = GW_STATUS[status] || GW_STATUS.pending; return '<span class="dt-badge ' + s[1] + '">' + s[0] + '</span>'; }
 
+  // Prizes & Payouts overview: what is waiting on staff, and what has gone out.
+  // Robux is shown beside AU$, never converted.
+  function renderPpKpis() {
+    var grid = $('admPpKpis'); if (!grid) return;
+    var now = Date.now();
+    function money(list, at) {
+      var a = 0, r = 0;
+      list.forEach(function (p) {
+        if (p.source_currency.indexOf('robux') >= 0) r += Number(p.amount_robux) || 0;
+        else a += usdToAudAt(p.amount_usd, at(p));
+      });
+      return fmtA(a) + (r ? '<span class="adm-rbx"> | ' + robuxRaw(r) + '</span>' : '');
+    }
+    var pending = PRIZE_CLAIMS.filter(function (c) { return c.status === 'pending'; });
+    var oldest = pending.reduce(function (m, c) { return Math.min(m, Date.parse(c.created_at)); }, Infinity);
+    var given = PRIZE_CLAIMS.filter(function (c) { return c.status === 'fulfilled'; });
+    var given30 = given.filter(function (c) { return Date.parse(c.reviewed_at || c.updated_at || c.created_at) >= now - 30 * 86400000; }).length;
+    var open = PAYOUTS.filter(poOpen), paid = PAYOUTS.filter(function (p) { return p.status === 'paid'; });
+    var due = open.reduce(function (m, p) { return Math.min(m, Date.parse(p.updated_at || p.requested_at) + 72 * 3600000); }, Infinity);
+    grid.innerHTML = [
+      kpiCell({ label: 'Claims to check', value: PRIZE_CLAIMS_LOADED ? num(pending.length) : '–', delta: '',
+        sub: !PRIZE_CLAIMS_LOADED ? 'Loading…' : pending.length ? 'Oldest sent ' + relTime(new Date(oldest).toISOString()) : 'All caught up' }),
+      kpiCell({ label: 'Prizes given', value: num(given.length), delta: '', sub: given30 ? plural(given30, 'prize') + ' in the last 30 days' : 'None in the last 30 days' }),
+      kpiCell({ label: 'Payouts to send', value: money(open, function () { return now; }), count: open.length ? plural(open.length, 'request') : '', delta: '',
+        sub: open.length ? (due < now ? 'Overdue since ' : 'Next due ') + fmtDateTime(new Date(due)) : 'Nothing waiting' }),
+      kpiCell({ label: 'Paid out', value: money(paid, poPaidAt), count: paid.length ? plural(paid.length, 'payout') : '', delta: '', sub: 'Referral payouts completed' })
+    ].join('');
+  }
   function renderGiveaways() {
+    renderPpKpis();
     var body = $('admGwBody'); if (!body) return;
     var counts = { pending: 0, fulfilled: 0, declined: 0 };
     PRIZE_CLAIMS.forEach(function (c) { if (counts[c.status] != null) counts[c.status]++; });

@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261123m" />
+  <link rel="stylesheet" href="/styles.css?v=20261123n" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -904,33 +904,54 @@
             <div id="admOrderDetailBody"></div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-giveaways" hidden>
-            <div class="dash-head"><h1>Prizes &amp; Payouts</h1><p>Prize claims from <a href="/claim/" target="_blank" rel="noopener">coldd.dev/claim</a>. Check the proof, send the prize, then mark it fulfilled, or decline it with a reason. The winner gets a notification at every stage.</p></div>
-            <div class="adm-toolbar">
-              <div class="adm-tabs" id="admGwTabs">
-                <button type="button" class="adm-tab active" data-status="pending">Awaiting confirmation <span class="adm-gw-count" data-count="pending"></span></button>
-                <button type="button" class="adm-tab" data-status="fulfilled">Prize fulfilled <span class="adm-gw-count" data-count="fulfilled"></span></button>
-                <button type="button" class="adm-tab" data-status="declined">Declined <span class="adm-gw-count" data-count="declined"></span></button>
-                <button type="button" class="adm-tab" data-status="all">All</button>
-              </div>
-              <input maxlength="200" type="text" id="admGwSearch" class="adm-input" placeholder="Search by reference, winner, Discord, product…" />
-              <button class="btn btn-ghost adm-btn-sm" type="button" id="admGwRefresh">Refresh</button>
-            </div>
-            <div class="dash-card glass">
-              <div class="dash-rows" id="admGwBody"><p class="dash-empty-note">Loading…</p></div>
+          <section class="dash-panel adm-prizes" id="adm-panel-giveaways" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Prizes &amp; Payouts</h1>
+              <p>Giveaway prizes and referral payouts, all sent by hand</p>
             </div>
 
-            <div class="dash-card glass dash-tablewrap">
-              <div class="dash-card-head"><h2>Referral payout requests</h2><span class="adm-sub">Reviewed and sent manually - nothing here is automated.</span></div>
-              <table class="dash-table">
-                <thead><tr><th>Requested</th><th>User</th><th>Method</th><th>Amount</th><th>Status</th><th></th></tr></thead>
-                <tbody id="admPayoutsBody"></tbody>
-              </table>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admPpKpis"></div>
+            </div>
+
+            <div class="adm-hp adm-gw">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Prize claims</h2><span>from <a href="/claim/" target="_blank" rel="noopener">coldd.dev/claim</a></span></div>
+                <div class="adm-seg" role="group" aria-label="Claim status" id="admGwTabs">
+                  <button type="button" class="adm-tab active" data-status="pending">Awaiting <span class="adm-gw-count" data-count="pending"></span></button>
+                  <button type="button" class="adm-tab" data-status="fulfilled">Fulfilled <span class="adm-gw-count" data-count="fulfilled"></span></button>
+                  <button type="button" class="adm-tab" data-status="declined">Declined <span class="adm-gw-count" data-count="declined"></span></button>
+                  <button type="button" class="adm-tab" data-status="all">All</button>
+                </div>
+              </div>
+              <div class="adm-or-tools">
+                <div class="adm-or-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admGwSearch" placeholder="Search by reference, winner, Discord, product…" aria-label="Search prize claims" /></div>
+                <button class="btn btn-ghost adm-btn-sm" type="button" id="admGwRefresh">Refresh</button>
+              </div>
+              <div class="dash-rows adm-gw-list" id="admGwBody"><p class="dash-empty-note">Loading…</p></div>
+            </div>
+
+            <div class="adm-hp adm-po">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Referral payouts</h2><span>Checked and sent by staff</span></div>
+                <div class="adm-seg" role="group" aria-label="Payout status" id="admPoTabs">
+                  <button type="button" class="active" data-po="open">To send <span class="adm-gw-count" data-po-count="open"></span></button>
+                  <button type="button" data-po="paid">Completed</button>
+                  <button type="button" data-po="denied">Denied</button>
+                  <button type="button" data-po="all">All</button>
+                </div>
+              </div>
+              <div class="adm-po-wrap">
+                <table class="adm-po-table">
+                  <thead><tr><th>User</th><th>Send to</th><th>Amount</th><th>Status</th><th>Requested</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                  <tbody id="admPayoutsBody"></tbody>
+                </table>
+              </div>
             </div>
           </section>
 
           <section class="dash-panel" id="adm-panel-giveaway-detail" hidden>
-            <div class="dash-head"><a href="#" data-panel="giveaways" class="lnk-back">Back to giveaways</a></div>
+            <div class="dash-head"><a href="#" data-panel="giveaways" class="lnk-back">Back to Prizes &amp; Payouts</a></div>
             <div id="admGwDetailBody"></div>
           </section>
 
@@ -1727,6 +1748,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261123m" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123m"></script>
+  <script src="/catalog-loader.php?v=20261123n" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123n"></script>
 </body>
 </html>
