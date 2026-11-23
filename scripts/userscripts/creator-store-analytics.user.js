@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         coldd Creator Store Analytics
 // @namespace    https://coldd.dev
-// @version      5.2
+// @version      5.3
 // @description  Creator Store sales analytics in AU$ (revenue, fees, payouts, top products) that also syncs every sale to the coldd admin
 // @author       coldd
 // @match        https://create.roblox.com/*
@@ -20,6 +20,9 @@
 // ==/UserScript==
 
 /*
+ * 5.3: product pictures in Recent sales. Reads the real payload fields
+ *      (basePayment.productKey.productTargetId = asset id,
+ *      purchaser.entity.longValue = buyer id, amounts = significand x 10^exponent).
  * 5.2: numbers use Roblox's normal font again (no forced fixed-width digits,
  *      no copied font; every label is on Roblox's own text class like 4.2).
  * 5.1: buyer pictures work (the payload has no buyer id, so buyers are looked up
@@ -86,6 +89,7 @@
     lastFetchTime: 0,
     audRate: CONFIG.FX_FALLBACK,
     headshots: new Map(),  // userId -> image url
+    assetThumbs: new Map(), // assetId -> image url ('' = none)
     syncNote: '',
     cardClass: '',
     userIds: new Map(),   // lower-case username -> user id ('' = not found)
@@ -179,21 +183,27 @@
   }
   function normalise(p) {
     const base = p.basePayment || {};
-    const gross = (base.totalAmount?.quantity?.significand || 0) / CONFIG.CURRENCY_DIVISOR;
-    const net = (p.netAmount?.quantity?.significand || 0) / CONFIG.CURRENCY_DIVISOR;
+    // Money is significand x 10^exponent (exponent has always been -9 so far).
+    const money = (q) => {
+      if (!q) return 0;
+      const sig = Number(q.significand) || 0;
+      return typeof q.exponent === 'number' ? sig * Math.pow(10, q.exponent) : sig / CONFIG.CURRENCY_DIVISOR;
+    };
+    const gross = money(base.totalAmount?.quantity);
+    const net = money(p.netAmount?.quantity);
     const when = new Date(base.paymentDateTime || 0);
     // The stored sale key must never change (coldd matches re-sent sales on it),
     // so it is still built from exactly the fields 5.0 used.
     const keyAsset = base.assetId || base.productId || '';
-    const assetId = keyAsset || findId(base, /^(asset|item|target|product)Id$/i);
-    const buyerId = p.purchaserId || findId(p.purchaser, /^(id|userId)$/i) || findId(p, /^(purchaser|buyer)(User)?Id$/i);
+    const assetId = base.productKey?.productTargetId || keyAsset || findId(base, /^(asset|item|target|product)Id$/i);
+    const buyerId = p.purchaser?.entity?.longValue || p.purchaserId || findId(p, /^(purchaser|buyer)(User)?Id$/i);
     return {
       id: String(base.paymentId || `${base.paymentDateTime}|${p.purchaserId || p.purchaserName}|${keyAsset}`),
       when, gross, net,
       currency: String(base.totalAmount?.currencyCode || base.totalAmount?.currency || 'USD').toUpperCase(),
       name: base.productName || 'Unknown asset',
       assetId: String(assetId || ''),
-      assetType: base.assetType || '',
+      assetType: base.productKey?.productType || base.assetType || '',
       buyer: p.purchaserName || 'Unknown buyer',
       buyerId: buyerId ? String(buyerId) : '',
     };
@@ -392,6 +402,8 @@
     #${CONFIG.IDS.ROOT} .cs-recent td:last-child, #${CONFIG.IDS.ROOT} .cs-recent th:last-child { text-align: right; padding-right: 0; }
     #${CONFIG.IDS.ROOT} .cs-buyer { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
     #${CONFIG.IDS.ROOT} .cs-buyer img, #${CONFIG.IDS.ROOT} .cs-buyer span.cs-av { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,.08); flex: 0 0 auto; }
+    #${CONFIG.IDS.ROOT} .cs-prod { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+    #${CONFIG.IDS.ROOT} .cs-prod img, #${CONFIG.IDS.ROOT} .cs-prod span.cs-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; background: rgba(255,255,255,.08); flex: 0 0 auto; }
     #${CONFIG.IDS.ROOT} a.cs-link { color: inherit; text-decoration: none; } #${CONFIG.IDS.ROOT} a.cs-link:hover, #${CONFIG.IDS.ROOT} .cs-buyer:hover { text-decoration: underline; }
   `;
 
@@ -513,7 +525,9 @@
         const img = p.buyerId && state.headshots.get(p.buyerId);
         const av = img ? `<img src="${esc(img)}" alt="" loading="lazy">` : '<span class="cs-av"></span>';
         const buyer = p.buyerId ? `<a class="cs-buyer" href="https://www.roblox.com/users/${esc(p.buyerId)}/profile">${av}${esc(p.buyer)}</a>` : `<span class="cs-buyer">${av}${esc(p.buyer)}</span>`;
-        const prod = p.assetId ? `<a class="cs-link" href="https://create.roblox.com/store/asset/${esc(p.assetId)}">${esc(p.name)}</a>` : esc(p.name);
+        const thumb = p.assetId && state.assetThumbs.get(p.assetId);
+        const pic = thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : '<span class="cs-thumb"></span>';
+        const prod = p.assetId ? `<a class="cs-link cs-prod" href="https://create.roblox.com/store/asset/${esc(p.assetId)}">${pic}<span>${esc(p.name)}</span></a>` : `<span class="cs-prod">${pic}<span>${esc(p.name)}</span></span>`;
         return `<tr><td>${buyer}</td><td>${prod}</td><td>${fmtA(aud(p.gross))}</td><td class="cs-green">${fmtA(aud(p.net))}</td><td title="${esc(p.when.toLocaleString('en-AU'))}">${esc(relTime(p.when))}</td></tr>`;
       }).join('')}</tbody></table>`;
     };
@@ -531,12 +545,18 @@
     }
     rows.forEach((p) => { if (!p.buyerId && p.buyer) p.buyerId = state.userIds.get(p.buyer.toLowerCase()) || ''; });
     const missing = [...new Set(rows.map((p) => p.buyerId).filter((id) => id && !state.headshots.has(id)))];
-    if (!missing.length) { if (names.length && $(CONFIG.IDS.RECENT) === box) draw(); return; }
-    try {
-      const r = await gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${missing.join(',')}&size=48x48&format=Png&isCircular=true` });
-      (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.headshots.set(String(t.targetId), t.imageUrl); });
-      if ($(CONFIG.IDS.RECENT) === box) draw();
-    } catch (_) { /* pictures are a nicety; the list still works */ }
+    const assets = [...new Set(rows.map((p) => p.assetId).filter((id) => id && !state.assetThumbs.has(id)))];
+    const jobs = [];
+    if (missing.length) jobs.push(gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${missing.join(',')}&size=48x48&format=Png&isCircular=true` })
+      .then((r) => (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.headshots.set(String(t.targetId), t.imageUrl); })));
+    if (assets.length) jobs.push(gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/assets?assetIds=${assets.join(',')}&size=150x150&format=Png&isCircular=false` })
+      .then((r) => {
+        (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.assetThumbs.set(String(t.targetId), t.imageUrl); });
+        assets.forEach((id) => { if (!state.assetThumbs.has(id)) state.assetThumbs.set(id, ''); });
+      }));
+    if (!jobs.length) { if (names.length && $(CONFIG.IDS.RECENT) === box) draw(); return; }
+    await Promise.all(jobs.map((j) => j.catch(() => { /* pictures are a nicety; the list still works */ })));
+    if ($(CONFIG.IDS.RECENT) === box) draw();
   }
 
   // ---------- start ----------
