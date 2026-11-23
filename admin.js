@@ -4166,7 +4166,8 @@
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
       var rb = s.currency === 'ROBUX', names = splitOrderNames(s.name, s.qty || 1), sh = saleShares(s, names);
-      names.forEach(function (nm, j) {
+      names.forEach(function (raw, j) {
+        var nm = canonName(raw, rb ? 0 : s.usd * sh[j]);
         add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? s.amount * sh[j] : 0,
           buyer: s.buyer ? s.platform + ':' + String(s.buyer).toLowerCase() : '', buyerName: s.buyer, order: s.platform + ':' + s.id });
       });
@@ -6990,14 +6991,28 @@
   // added by hand as they turn up). Each points to the coldd.dev name, or the
   // BuiltByBit name for a product not on the site yet; once the product is on
   // coldd.dev, matching finds it there under that name with no further change.
+  // NAME_ALIAS[normalised alias] = { any: name or null, priced: [{ price, name }] }.
+  // A priced alias only applies to a sale within 10% (at least US$0.50) of its price.
   var NAME_ALIAS = {};
-  function canonName(t) { return NAME_ALIAS[bbbNorm(t)] || t; }
+  function canonName(t, usd) {
+    var e = NAME_ALIAS[bbbNorm(t)]; if (!e) return t;
+    if (usd > 0) for (var i = 0; i < e.priced.length; i++) {
+      var p = e.priced[i].price;
+      if (Math.abs(usd - p) <= Math.max(0.5, p * 0.1)) return e.priced[i].name;
+    }
+    return e.any || t;
+  }
   function refreshNameAliases() {
     if (!window.coldSupabase) return Promise.resolve();
-    return window.coldSupabase.from('product_name_aliases').select('alias, canonical').then(function (res) {
+    return window.coldSupabase.from('product_name_aliases').select('alias, canonical, price_usd').then(function (res) {
       if (res.error) { console.error('[admin] name aliases:', res.error.message); return; }
       var m = {};
-      (res.data || []).forEach(function (r) { if (r.alias && r.canonical) m[bbbNorm(r.alias)] = r.canonical; });
+      (res.data || []).forEach(function (r) {
+        if (!r.alias || !r.canonical) return;
+        var e = m[bbbNorm(r.alias)] = m[bbbNorm(r.alias)] || { any: null, priced: [] };
+        if (r.price_usd != null && Number(r.price_usd) > 0) e.priced.push({ price: Number(r.price_usd), name: r.canonical });
+        else e.any = r.canonical;
+      });
       NAME_ALIAS = m;
       PM = { src: null, list: [], memo: {} }; ORDER_NAMES = null; AN_ITEMS = null;
       if (curPanel === 'orders') renderOrders();
@@ -7924,8 +7939,8 @@
       var robux = s.currency === 'ROBUX';
       var names = splitOrderNames(s.name || 'Order', s.qty || 1);
       var shares = saleShares(s, names);
-      names.forEach(function (nm, j) {
-        var usd = robux ? null : s.usd * shares[j];
+      names.forEach(function (raw, j) {
+        var usd = robux ? null : s.usd * shares[j], nm = canonName(raw, usd);
         out.push({
           kind: 'ps', pf: s.platform, t: s.t, id: saleOrderId('ps', s), title: saleDisplayName(names.length > 1 ? null : s.productId, nm), buyer: s.buyer || '', search: s.name || '', single: names.length === 1,
           status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
