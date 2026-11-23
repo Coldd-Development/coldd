@@ -1750,9 +1750,9 @@
     var against = 'previous ' + periodWord();
     if (!prev) return cur
       ? '<span class="adm-kpi-delta up">New</span><span class="adm-kpi-cmp">nothing in the ' + against + '</span>'
-      : '<span class="adm-kpi-delta flat">–</span><span class="adm-kpi-cmp">same as the ' + against + '</span>';
+      : '';
     var pct = (cur - prev) / prev * 100;
-    if (Math.abs(pct) < 0.5) return '<span class="adm-kpi-delta flat">–</span><span class="adm-kpi-cmp">level with the ' + against + '</span>';
+    if (Math.abs(pct) < 0.5) return '';
     var cls = pct > 0 ? 'up' : 'down';
     return '<span class="adm-kpi-delta ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(pct) + '</span><span class="adm-kpi-cmp">vs ' + against + '</span>';
   }
@@ -2080,9 +2080,11 @@
     var tot = sumSales(sales, cS, cE), totP = sumSales(sales, pS, pE);
     function cell(key, r) { return pfValue(key, r.aud, r.robux); }
     function change(cur, prev) {
-      if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '<span class="adm-chg flat">–</span>';
-      var pct = (cur - prev) / prev * 100, cls = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
-      return '<span class="adm-chg ' + cls + '">' + (cls === 'up' ? homeIcon('arrow_upward', 12) : cls === 'down' ? homeIcon('arrow_downward', 12) : '') + fmtPctAbs(pct) + '</span>';
+      if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '';
+      var pct = (cur - prev) / prev * 100;
+      if (Math.abs(pct) < 0.5) return '';
+      var cls = pct > 0 ? 'up' : 'down';
+      return '<span class="adm-chg ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 12) + fmtPctAbs(pct) + '</span>';
     }
     table.innerHTML = '<thead><tr><th scope="col">Platform</th><th scope="col">Last 30d</th><th scope="col">Previous 30d</th><th scope="col">Change</th><th scope="col">Share</th><th scope="col">Orders</th></tr></thead><tbody>' +
       rows.map(function (r) {
