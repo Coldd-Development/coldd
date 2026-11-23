@@ -111,21 +111,22 @@
   // daily history, cached 12 hours), so its AU$ never moves afterwards. A day
   // without a rate (weekend, holiday) takes the last rate before it; a sale
   // newer than the history takes the live rate above.
-  var FX_DAYS = {}, FX_KEYS = [];
+  var FX_DAYS = {}, FX_KEYS = [], FX_READY = false;
   (function loadAudHistory() {
     var KEY = 'coldd_admin_fx_hist_v1', cached = null;
-    function use(rates) { FX_DAYS = rates; FX_KEYS = Object.keys(rates).sort(); }
+    function use(rates) { FX_DAYS = rates; FX_KEYS = Object.keys(rates).sort(); FX_READY = true; }
+    function done() { if (!FX_READY) { FX_READY = true; if (typeof renderAll === 'function') renderAll(); } }
     try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) {}
     if (cached && cached.rates) use(cached.rates);
     if (cached && Date.now() - cached.at < 12 * 3600000) return;
     fetch('https://api.frankfurter.dev/v1/2020-01-01..?base=USD&symbols=AUD').then(function (r) { return r.json(); }).then(function (d) {
       var rates = {};
       Object.keys((d && d.rates) || {}).forEach(function (day) { var v = Number(d.rates[day] && d.rates[day].AUD); if (v > 0) rates[day] = v; });
-      if (!Object.keys(rates).length) return;
+      if (!Object.keys(rates).length) { done(); return; }
       use(rates);
       try { localStorage.setItem(KEY, JSON.stringify({ rates: rates, at: Date.now() })); } catch (_) {}
       if (typeof renderAll === 'function') renderAll();
-    }).catch(function () {});
+    }).catch(done);
   })();
   function audRateOn(t) {
     if (!FX_KEYS.length || !(t > 0)) return AUD_RATE;
@@ -1004,7 +1005,7 @@
     if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return bytes + ' B';
   }
-  var PRODUCTS_CACHE = [];
+  var PRODUCTS_CACHE = [], PRODUCTS_LOADED = false;
   function mapProductRow(row) {
     var legalRaw = Array.isArray(row.product_legal) ? (row.product_legal[0] || {}) : (row.product_legal || {});
     return {
@@ -1070,7 +1071,8 @@
       window.coldSupabase.rpc('admin_product_storage_paths')
     ]).then(function (both) {
       var res = both[0];
-      if (res.error) { console.error('[admin] failed to load products:', res.error.message); return; }
+      if (res.error) { console.error('[admin] failed to load products:', res.error.message); if (!PRODUCTS_LOADED) { PRODUCTS_LOADED = true; renderAll(); } return; }
+      PRODUCTS_LOADED = true;
       var paths = {};
       ((both[1] && !both[1].error && both[1].data) || []).forEach(function (r) { paths[r.id] = r.storage_path; });
       (res.data || []).forEach(function (r) { r.storage_path = paths[r.id] || ''; });
@@ -1872,12 +1874,12 @@
       return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status, source').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
       PSALES_LOADED = true;
-      if (res.error) { console.error('[admin] platform sales:', res.error.message); return; }
-      if (curPanel === 'orders') setTimeout(renderOrders, 0);
-      if (curPanel === 'analytics') renderAnalytics();
+      if (res.error) { console.error('[admin] platform sales:', res.error.message); if (curPanel === 'orders') renderOrders(); if (curPanel === 'analytics') renderAnalytics(); return; }
       PSALES = (res.data || []).map(function (r) {
         return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
       });
+      if (curPanel === 'orders') renderOrders();
+      if (curPanel === 'analytics') renderAnalytics();
       if (curPanel === 'home') renderHome();
     });
   }
@@ -4139,7 +4141,7 @@
   function renderAnalytics() {
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
     var w = anWindow();
-    if (!ORDERS_LOADED) {
+    if (!salesReady()) {
       var kp = $('admAnKpis');
       if (kp) kp.innerHTML = ['Sales', 'Average sale', 'Site visits', 'Site conversion'].map(function (l) {
         return '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"><span class="adm-skel adm-skel-sm"></span></span><span class="adm-kpi-sub">&nbsp;</span></div>';
@@ -6529,6 +6531,15 @@
       BBB.siteByRange[key] = { funnel: f, payments: (r[1] && r[1].data) || [] };
     }).catch(function (e) { console.error('[admin] site funnel:', e && e.message); });
   }
+  // Orders and Analytics draw only once every source is in (site orders, the
+  // other platforms, BuiltByBit, products for matching, the day-by-day exchange
+  // rates), so nothing shows half-loaded numbers that jump a moment later.
+  // After 20 seconds they draw with whatever has arrived.
+  var SALES_WAIT_OVER = false;
+  setTimeout(function () { SALES_WAIT_OVER = true; if (curPanel === 'orders') renderOrders(); if (curPanel === 'analytics') renderAnalytics(); }, 20000);
+  function salesReady() {
+    return SALES_WAIT_OVER || (ORDERS_LOADED && PSALES_LOADED && BBB.loaded && PRODUCTS_LOADED && FX_READY);
+  }
   function bbbRenderAll() {
     if (curPanel === 'marketplaces') renderMarketplaces();
     if (curPanel === 'home') renderHome();
@@ -6571,8 +6582,9 @@
       ((r[4] && r[4].data) || []).forEach(function (d) { BBB.dismissed[d.issue_key] = true; });
       if (BBB.state && BBB.state.updated_at) BBB.syncedAt = BBB.state.updated_at;
       if (BBB.configured !== false) BBB.configured = true;
+      BBB.loaded = true;
       bbbRenderAll();
-    }).catch(function (err) { console.error('[admin] builtbybit tables:', err && err.message); });
+    }).catch(function (err) { console.error('[admin] builtbybit tables:', err && err.message); if (!BBB.loaded) { BBB.loaded = true; bbbRenderAll(); } });
   }
   // Asks the server to sync right now (it also syncs by itself every 15 minutes). Admin only.
   function bbbSync() {
@@ -7202,7 +7214,7 @@
   }
   // One order ID per sale, whatever the platform calls it: BuiltByBit's TBX
   // transaction, ClearlyDev's and Payhip's own order number, ours on coldd.dev.
-  // Creator Store (and hand-entered Parcel sales) have none, so they get a
+  // Creator Store and Parcel have none we keep, so they get a
   // short one of ours, made from the sale's stored key so it never changes.
   function ownOrderId(prefix, key) {
     key = String(key || '');
@@ -7213,7 +7225,8 @@
     if (kind === 'site') return src.id;
     if (kind === 'bbb') return src.external_tid || ('BBB-' + src.purchase_id);
     if (src.platform === 'creatorstore') return ownOrderId('CS-', src.ext || src.id);
-    if (src.platform === 'parcel' && /^manual-/.test(String(src.ext || ''))) return ownOrderId('PC-', src.ext);
+    if (src.platform === 'parcel') return ownOrderId('PC-', src.ext || src.id);
+    if (src.platform === 'clearlydev') return '#' + String(src.ext || src.id).replace(/^#/, '');
     return String(src.ext || src.id);
   }
   function allOrderRows() {
@@ -7293,6 +7306,19 @@
   function renderOrders() {
     var body = $('admOrdersBody');
     if (!body) return;
+    if (!salesReady()) {
+      var tb = $('admOrderChannel');
+      if (tb && !tb.children.length) tb.innerHTML = ORDER_TABS.map(function (p) {
+        return '<button type="button" role="tab" aria-selected="' + (ORDER_CHANNEL === p.key) + '" class="adm-pf-tab' + (ORDER_CHANNEL === p.key ? ' active' : '') + '" data-ch="' + p.key + '" style="--pf:' + (p.key === 'all' ? 'var(--fg-2)' : pfVar(p.key)) + '">' +
+          orderTabMark(p.key) + '<span>' + esc(p.label) + '</span><em><span class="adm-skel adm-skel-n"></span></em></button>';
+      }).join('');
+      var sm = $('admOrderSum'); if (sm) sm.textContent = '';
+      var skel = '<div class="adm-or-row is-skel" aria-hidden="true"><span class="adm-or-prod"><span class="adm-or-thumb adm-skel"></span><span class="adm-skel adm-skel-txt"></span></span>' +
+        '<span class="adm-or-pf"><span class="adm-skel adm-skel-sm"></span></span><span class="adm-or-buyer"><span class="adm-skel adm-skel-sm"></span></span>' +
+        '<span class="adm-or-date"><span class="adm-skel adm-skel-sm"></span></span><span class="adm-or-amt"><span class="adm-skel adm-skel-amt"></span></span><span></span></div>';
+      body.innerHTML = '<span class="sr-only">Loading orders</span>' + new Array(9).join(skel);
+      return;
+    }
     var q = (($('admOrderSearch') || {}).value || '').trim().toLowerCase();
     var all = allOrderRows();
     // Pending website checkouts were opened and never paid: never listed.
@@ -7315,7 +7341,6 @@
     var sum = $('admOrderSum');
     if (sum) sum.textContent = plural(rows.length, 'order');
     var shown = rows.slice(0, ORDERS_SHOWN);
-    if (!ORDERS_LOADED) { body.innerHTML = '<p class="adm-empty">Loading orders…</p>'; return; }
     if (!shown.length) { body.innerHTML = '<p class="adm-empty">No orders match.</p>'; return; }
     ORDER_ROWS = shown;
     var bbbUrls = {};

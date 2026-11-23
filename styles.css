@@ -5881,6 +5881,12 @@ a.adm-or-plink .adm-or-title { text-decoration: underline; text-decoration-color
 @media (hover: hover) and (pointer: fine) { a.adm-or-plink:hover .adm-or-title { text-decoration-color: currentColor; } }
 a.adm-or-plink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .adm-or-row.is-void .adm-or-amt { color: var(--fg-3); }
+.adm-or-row.is-skel { cursor: default; }
+.adm-or-row.is-skel .adm-or-thumb.adm-skel { width: 38px; height: 38px; border-radius: var(--r-ctl); box-shadow: none; }
+.adm-or-row.is-skel .adm-skel-txt { width: min(240px, 60%); height: 14px; }
+.adm-or-row.is-skel .adm-skel-sm { width: min(96px, 80%); height: 12px; }
+.adm-or-row.is-skel .adm-skel-amt { width: 64px; height: 14px; }
+.adm-pf-tab .adm-skel-n { width: 22px; height: 10px; vertical-align: middle; }
 body.adm-oi-open { overflow: hidden; }
 .adm-oi-back { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(4,5,7,0.62); }
 .adm-oi-back[hidden] { display: none; }
