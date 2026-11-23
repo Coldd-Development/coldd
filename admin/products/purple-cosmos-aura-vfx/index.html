@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261123j" />
+  <link rel="stylesheet" href="/styles.css?v=20261123k" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -859,11 +859,15 @@
 
           </section>
 
-          <section class="dash-panel" id="adm-panel-orders" hidden>
-            <div class="dash-head"><h1>Order management</h1><p>Every order from the storefront and BuiltByBit, newest first.</p></div>
-            <div class="dash-searchbar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admOrderSearch" placeholder="Search order #, product, or buyer…" aria-label="Search orders" /></div>
-            <div class="dash-filter-row">
-              <label class="dash-filter-field"><span>Status</span>
+          <section class="dash-panel adm-orders" id="adm-panel-orders" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Orders</h1>
+              <p>Every sale from every platform, newest first</p>
+            </div>
+            <div class="adm-pf-tabs" id="admOrderChannel" role="tablist" aria-label="Platform"></div>
+            <div class="adm-hp adm-or">
+              <div class="adm-or-tools">
+                <div class="adm-or-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admOrderSearch" placeholder="Search order, product or buyer" aria-label="Search orders" /></div>
                 <div class="adm-dd adm-dd-inline" id="admOrderStatusFilterDD">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
                     <span class="adm-dd-val"></span>
@@ -871,17 +875,10 @@
                   </button>
                   <div class="adm-dd-menu" role="listbox" aria-label="Order status" hidden></div>
                 </div>
-              </label>
-              <label class="dash-filter-field"><span>Channel</span>
-                <div class="adm-mp-filter" id="admOrderChannel" role="group" aria-label="Order channel">
-                  <button type="button" data-ch="all" class="active">All</button>
-                  <button type="button" data-ch="site">Website</button>
-                  <button type="button" data-ch="bbb">BuiltByBit</button>
-                </div>
-              </label>
-            </div>
-            <div class="dash-card glass">
-              <div class="dash-rows" id="admOrdersBody"><p class="dash-empty-note">Loading…</p></div>
+                <span class="adm-or-sum" id="admOrderSum"></span>
+              </div>
+              <div class="adm-or-head" aria-hidden="true"><span>Order</span><span>Platform</span><span>Buyer</span><span>Status</span><span>Date</span><span>Amount</span><span></span></div>
+              <div class="adm-or-list" id="admOrdersBody"><p class="adm-empty">Loading orders…</p></div>
             </div>
           </section>
 
@@ -1705,6 +1702,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261123j" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123j"></script>
+  <script src="/catalog-loader.php?v=20261123k" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123k"></script>
 </body>
 </html>

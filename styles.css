@@ -5665,3 +5665,73 @@ html[data-theme="light"] .adm-ro-method, html[data-theme="light"] .adm-work-ico,
   .adm-kpi-foot { padding: 11px 16px; gap: 6px 18px; }
   .adm-plat-tablewrap { margin: 8px -16px 0; padding: 0 16px; }
 }
+
+/* Admin Orders (2026-11-23) --------------------------------------------------
+   Every platform in one list, same panel language as the dashboard home.
+   Note: no display rule on .adm-orders itself, so [hidden] keeps working. */
+.adm-orders .dash-head.adm-home-head { margin-bottom: 14px; }
+.adm-pf-tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.adm-pf-tabs::-webkit-scrollbar { display: none; }
+.adm-pf-tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: var(--r-pill);
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--fg-2); background: var(--bg-3); border: 1px solid var(--hairline); cursor: pointer;
+  transition: color .18s, background .18s, border-color .18s, transform .16s var(--ease-out); }
+.adm-pf-tab:active { transform: scale(0.97); }
+.adm-pf-tab em { font-style: normal; font-size: 12px; font-weight: 600; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.adm-pf-tab .adm-pf-logo { width: 20px; height: 20px; }
+.adm-pf-globe { display: inline-grid; place-items: center; color: var(--fg-2); }
+.adm-pf-globe svg { width: 18px; height: 18px; }
+.adm-pf-tab.active { color: #fff; background: rgba(255,255,255,0.11); border-color: var(--hairline-strong); box-shadow: inset 0 -2px 0 var(--pf); }
+.adm-pf-tab.active em { color: var(--fg-2); }
+@media (hover: hover) and (pointer: fine) { .adm-pf-tab:not(.active):hover { color: var(--fg); border-color: var(--hairline-strong); } }
+.adm-pf-tab:focus-visible, .adm-or-row.is-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.adm-or { padding-bottom: 8px; }
+.adm-or-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.adm-or-search { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: var(--r-ctl);
+  background: rgba(255,255,255,0.04); border: 1px solid var(--hairline); color: var(--fg-3); transition: border-color .18s, background .18s; }
+.adm-or-search:focus-within { border-color: rgba(255,77,68,0.5); background: rgba(255,255,255,0.06); }
+.adm-or-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--fg); font: inherit; font-size: 14px; }
+.adm-or-search input::placeholder { color: var(--fg-3); }
+.adm-or-sum { margin-left: auto; font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-or-head, .adm-or-row { display: grid; grid-template-columns: minmax(0, 2.4fr) 132px minmax(0, 1.1fr) 118px 96px 108px 34px; align-items: center; gap: 12px; }
+.adm-or-head { padding: 0 10px 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); border-bottom: 1px solid var(--hairline); }
+.adm-or-head span:nth-child(6) { text-align: right; }
+.adm-or-list { display: flex; flex-direction: column; margin: 0 -10px; padding: 0 10px; }
+.adm-or-row { position: relative; padding: 9px 10px; margin: 0 -10px; border-radius: var(--r-ctl); transition: background .18s; }
+.adm-or-row + .adm-or-row::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 1px; background: var(--hairline); }
+.adm-or-row.is-link { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .adm-or-row:hover { background: rgba(255,255,255,0.03); } }
+.adm-or-prod { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.adm-or-thumb { flex: 0 0 auto; width: 38px; height: 38px; border-radius: var(--r-ctl); background: var(--bg-2) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--hairline); }
+.adm-or-thumb.is-logo { display: grid; place-items: center; }
+.adm-or-thumb.is-logo .adm-pf-logo { width: 20px; height: 20px; }
+.adm-or-name { display: flex; flex-direction: column; min-width: 0; }
+.adm-or-title { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-or-id { font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.adm-or-pf { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--fg-1); }
+.adm-or-pf span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-or-buyer { font-size: 13px; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-or-status { display: flex; flex-wrap: wrap; gap: 4px; }
+.adm-or-date { font-size: 12px; color: var(--fg-3); white-space: nowrap; }
+.adm-or-amt { text-align: right; font-size: 14px; font-weight: 700; color: var(--price); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-or-amt small { display: block; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.adm-or-act { display: flex; justify-content: flex-end; }
+.adm-or-more { text-align: center; padding: 14px 0 6px; }
+
+html[data-theme="light"] .adm-pf-tab.active { color: var(--fg); background: rgba(0,0,0,0.06); }
+html[data-theme="light"] .adm-or-search { background: rgba(0,0,0,0.03); }
+html[data-theme="light"] .adm-or-row:hover { background: rgba(0,0,0,0.03); }
+
+@media (max-width: 1100px) {
+  .adm-or-head, .adm-or-row { grid-template-columns: minmax(0, 2fr) 120px 110px 100px 34px; }
+  .adm-or-head span:nth-child(3), .adm-or-buyer, .adm-or-head span:nth-child(5), .adm-or-date { display: none; }
+  .adm-or-head span:nth-child(6) { text-align: right; }
+}
+@media (max-width: 680px) {
+  .adm-or-head { display: none; }
+  .adm-or-row { grid-template-columns: minmax(0, 1fr) auto 34px; row-gap: 6px; }
+  .adm-or-pf, .adm-or-status { grid-column: 1 / 2; }
+  .adm-or-pf { order: 2; } .adm-or-status { order: 3; }
+  .adm-or-amt { grid-row: 1; grid-column: 2; } .adm-or-act { grid-row: 1; grid-column: 3; }
+  .adm-or-sum { margin-left: 0; }
+}

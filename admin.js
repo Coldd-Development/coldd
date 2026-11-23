@@ -1807,12 +1807,13 @@
       if (curPanel === 'home') renderWork();
     });
     return fetchAllRows(function () {
-      return window.coldSupabase.from('platform_sales').select('id, platform, sold_at, product_name, currency, amount, amount_usd, net_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
+      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
       PSALES_LOADED = true;
       if (res.error) { console.error('[admin] platform sales:', res.error.message); return; }
+      if (curPanel === 'orders') setTimeout(renderOrders, 0);
       PSALES = (res.data || []).map(function (r) {
-        return { id: r.id, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status };
+        return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status };
       });
       if (curPanel === 'home') renderHome();
     });
@@ -6958,51 +6959,131 @@
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>' +
       '<div class="adm-row-menu-list" hidden>' + items.join('') + '</div></div>';
   }
+  // Orders, redesigned 2026-11-23: every sale from every platform in one list.
+  // Platform filter (Global by default) with each platform's own logo and
+  // count, search, status, and a summary of what is showing. Website orders
+  // keep their row menu (view / complete / refund / revoke) and open the
+  // detail page on click; other platforms are read-only rows.
   var ORDER_CHANNEL = 'all', ORDERS_SHOWN = 100;
+  // Owner's order: Global, coldd.dev, BuiltByBit, ClearlyDev, Creator Store, Parcel, Payhip.
+  var ORDER_TABS = [{ key: 'all', label: 'Global' }].concat(['site', 'builtbybit', 'clearlydev', 'creatorstore', 'parcel', 'payhip'].map(function (k) { return HOME_PLATFORMS.filter(function (p) { return p.key === k; })[0]; }));
+  function orderTabMark(key) {
+    if (key === 'all') return '<span class="adm-pf-logo adm-pf-globe">' + mpLogo('site') + '</span>';
+    return pfMark(key);
+  }
+  // One normalised row per order: { pf, t, id, title, buyer, meta, status, amount, net, thumb, o }
+  function allOrderRows() {
+    var out = [];
+    var prodImg = {};
+    allProducts().forEach(function (p) { if (p.dbId && p.image) prodImg[p.dbId] = p.image; });
+    ORDERS.forEach(function (o) {
+      if (o.status === 'failed') return;
+      var robux = o.currency === 'robux';
+      out.push({
+        pf: 'site', t: Date.parse(o.date), id: o.id, title: o.title, buyer: o.userName,
+        meta: (robux ? 'Robux' : paymentMethodLabel(o)) + (o.licence === 'resell' ? ' · resell' : ''),
+        status: o.source === 'granted' ? 'gifted' : o.status, test: o.isTest, gift: !!o.purchasedByUserId,
+        amount: robux ? robuxRaw(o.totalRobux) : fmtA(usdToAud(o.total)), net: null,
+        thumb: o.image ? window.imgUrl(o.image) : '', o: o
+      });
+    });
+    if (BBB.configured) {
+      var titles = bbbResourceTitleById(), covers = {};
+      BBB.resources.forEach(function (r) { if (r.cover_image_url) covers[String(r.resource_id)] = r.cover_image_url; });
+      BBB.purchases.forEach(function (p) {
+        var usdP = bbbIsUsd(p);
+        out.push({
+          pf: 'builtbybit', t: Date.parse(p.purchased_at), id: 'BBB-' + p.purchase_id,
+          title: titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id), buyer: '', meta: bbbMethodName(p.gateway),
+          status: 'completed', amount: usdP ? fmtA(usdToAud(p.price)) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
+          net: usdP ? fmtA(usdToAud(p.price - p.fee)) : null, thumb: covers[String(p.resource_id)] || ''
+        });
+      });
+    }
+    PSALES.forEach(function (s) {
+      var robux = s.currency === 'ROBUX';
+      out.push({
+        pf: s.platform, t: s.t, id: s.ext || s.id, title: s.name || 'Order', buyer: s.buyer || '',
+        meta: (s.qty > 1 ? s.qty + ' items' : ''), status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
+        amount: robux ? robuxRaw(s.amount) : fmtA(usdToAud(s.usd)),
+        net: !robux && s.net != null && Math.abs(s.net - s.usd) > 0.004 ? fmtA(usdToAud(s.net)) : null,
+        thumb: s.productId && prodImg[s.productId] ? prodImg[s.productId] : ''
+      });
+    });
+    out.sort(function (a, b) { return b.t - a.t; });
+    return out;
+  }
+  var ORDER_STATUS_LABEL = { completed: ['Completed', 'ok'], pending: ['Pending', 'warn'], refunded: ['Refunded', 'err'], revoked: ['Revoked', 'err'], gifted: ['Gifted', 'info'] };
   document.addEventListener('click', function (e) {
-    var cb = e.target.closest('#admOrderChannel button');
+    var cb = e.target.closest('#admOrderChannel [data-ch]');
     if (cb) { ORDER_CHANNEL = cb.getAttribute('data-ch'); ORDERS_SHOWN = 100; renderOrders(); return; }
     if (e.target.closest('#admOrdersMore')) { ORDERS_SHOWN += 100; renderOrders(); }
   });
   function renderOrders() {
+    var body = $('admOrdersBody');
+    if (!body) return;
     var statusF = orderStatusDropdown.getValue() || 'all';
     var q = (($('admOrderSearch') || {}).value || '').trim().toLowerCase();
-    Array.prototype.forEach.call(document.querySelectorAll('#admOrderChannel button'), function (b) { b.classList.toggle('active', b.getAttribute('data-ch') === ORDER_CHANNEL); });
-    var entries = feedEntries({ channel: ORDER_CHANNEL === 'all' ? null : ORDER_CHANNEL }).filter(function (e) {
-      if (e.ch === 'bbb') {
-        // BuiltByBit purchases are always completed sales
-        if (statusF !== 'all' && statusF !== 'completed') return false;
-        return !q || ('bbb-' + e.p.purchase_id).indexOf(q) >= 0 || String(e.title).toLowerCase().indexOf(q) >= 0 || bbbMethodName(e.p.gateway).toLowerCase().indexOf(q) >= 0 || 'builtbybit'.indexOf(q) >= 0;
-      }
-      var o = e.o;
-      // Pending clutters the default view with checkouts that were opened and never finished -
-      // filter to it directly via the status dropdown when you need a stuck one.
-      if (o.status === 'pending' && statusF === 'all') return false;
-      var okStatus = statusF === 'all' || o.status === statusF;
-      var okQ = !q || o.id.toLowerCase().indexOf(q) >= 0 || o.title.toLowerCase().indexOf(q) >= 0 || o.userName.toLowerCase().indexOf(q) >= 0;
-      return okStatus && okQ;
+    var all = allOrderRows();
+    // Pending website checkouts were opened and never paid: hidden unless asked for.
+    var visible = all.filter(function (r) { return statusF === 'all' ? r.status !== 'pending' : r.status === statusF; });
+    var counts = {};
+    visible.forEach(function (r) { counts[r.pf] = (counts[r.pf] || 0) + 1; });
+    var tabs = $('admOrderChannel');
+    if (tabs) tabs.innerHTML = ORDER_TABS.map(function (p) {
+      var n = p.key === 'all' ? visible.length : (counts[p.key] || 0);
+      var on = ORDER_CHANNEL === p.key;
+      return '<button type="button" role="tab" aria-selected="' + on + '" class="adm-pf-tab' + (on ? ' active' : '') + '" data-ch="' + p.key + '" style="--pf:' + (p.key === 'all' ? 'var(--fg-2)' : pfVar(p.key)) + '">' +
+        orderTabMark(p.key) + '<span>' + esc(p.label) + '</span><em>' + num(n) + '</em></button>';
+    }).join('');
+    var rows = visible.filter(function (r) {
+      if (ORDER_CHANNEL !== 'all' && r.pf !== ORDER_CHANNEL) return false;
+      if (!q) return true;
+      var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || '';
+      return [r.id, r.title, r.buyer, r.meta, label].join(' ').toLowerCase().indexOf(q) >= 0;
     });
-    var rows = entries.slice(0, ORDERS_SHOWN);
-    $('admOrdersBody').innerHTML = rows.map(function (e) {
-      if (e.ch === 'bbb') return feedBbbRowHtml(e, true);
-      var o = e.o;
-      var img = o.image ? window.imgUrl(o.image) : '/banner.jpg';
-      // A real, currently-paying gift order - distinct from the "Gifted"
-      // free-comp badge, so shown alongside it rather than in place of it.
-      var giftBadge = o.purchasedByUserId ? ' <span class="dt-badge warn" title="Bought as a gift for a different account">Gift</span>' : '';
-      var statusHtml = o.source === 'granted' ? '<span class="dt-badge info">Gifted</span>' : statusBadge(o.status);
-      if(o.isTest)statusHtml+=' <span class="dt-badge warn">Sandbox test</span>';
-      return '<div class="dash-row" data-id="' + esc(o.id) + '">' +
-        '<span class="dr-thumb" style="background-image:url(\'' + img + '\')"></span>' +
-        '<div class="dr-main">' +
-          '<div class="dr-title">' + esc(o.title) + (o.licence === 'resell' ? ' <span class="adm-sub">· resell</span>' : '') + '</div>' +
-          '<div class="dr-sub">' + fmtDate(new Date(o.date)) + ' · <span class="dt-mono">' + esc(o.id) + '</span> · ' + esc(o.userName) + ' · ' + o.currency.toUpperCase() + ' · ' + statusHtml + giftBadge + '</div>' +
-        '</div>' +
-        channelBadge('site') + '<span class="p-price" data-fixed style="margin-left:12px;">' + orderAmount(o) + '</span>' +
-        '<div class="dr-actions">' + orderRowMenuHtml(o) + '</div></div>';
-    }).join('') + (entries.length > rows.length ? '<div style="text-align:center;padding:14px 0"><button type="button" class="btn btn-ghost adm-btn-sm" id="admOrdersMore">Show 100 more (' + (entries.length - rows.length) + ' left)</button></div>' : '');
-    if (!rows.length) $('admOrdersBody').innerHTML = '<p class="dash-empty-note">No orders match.</p>';
+    var sum = $('admOrderSum');
+    if (sum) sum.textContent = plural(rows.length, 'order');
+    var shown = rows.slice(0, ORDERS_SHOWN);
+    if (!ORDERS_LOADED) { body.innerHTML = '<p class="adm-empty">Loading orders…</p>'; return; }
+    if (!shown.length) { body.innerHTML = '<p class="adm-empty">No orders match.</p>'; return; }
+    body.innerHTML = shown.map(function (r) {
+      var st = ORDER_STATUS_LABEL[r.status] || [r.status, 'mute'];
+      var badges = '<span class="dt-badge ' + st[1] + '">' + esc(st[0]) + '</span>' +
+        (r.test ? ' <span class="dt-badge warn">Test</span>' : '') + (r.gift ? ' <span class="dt-badge warn" title="Bought as a gift for a different account">Gift</span>' : '');
+      var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || r.pf;
+      var thumb = r.thumb
+        ? '<span class="adm-or-thumb" style="background-image:url(\'' + esc(r.thumb) + '\')"></span>'
+        : '<span class="adm-or-thumb is-logo">' + pfMark(r.pf) + '</span>';
+      var site = r.pf === 'site';
+      return '<div class="adm-or-row' + (site ? ' is-link' : '') + '"' + (site ? ' data-order="' + esc(r.id) + '" tabindex="0" role="button"' : '') + '>' +
+        '<span class="adm-or-prod">' + thumb + '<span class="adm-or-name"><span class="adm-or-title">' + esc(r.title) + '</span>' +
+          '<span class="adm-or-id">' + esc(r.id) + (r.meta ? ' · ' + esc(r.meta) : '') + '</span></span></span>' +
+        '<span class="adm-or-pf" style="--pf:' + pfVar(r.pf) + '">' + pfMark(r.pf) + '<span>' + esc(label) + '</span></span>' +
+        '<span class="adm-or-buyer">' + (r.buyer ? esc(r.buyer) : '<span class="adm-sub">–</span>') + '</span>' +
+        '<span class="adm-or-status">' + badges + '</span>' +
+        '<span class="adm-or-date" title="' + esc(fmtDateTime(new Date(r.t))) + '">' + esc(fmtDate(new Date(r.t))) + '</span>' +
+        '<span class="adm-or-amt">' + r.amount + (r.net ? '<small>net ' + r.net + '</small>' : '') + '</span>' +
+        '<span class="adm-or-act">' + (site ? orderRowMenuHtml(r.o) : '') + '</span>' +
+      '</div>';
+    }).join('') + (rows.length > shown.length ? '<div class="adm-or-more"><button type="button" class="btn btn-ghost adm-btn-sm" id="admOrdersMore">Show 100 more (' + num(rows.length - shown.length) + ' left)</button></div>' : '');
   }
+  // Website rows open their detail page (the row menu keeps its own clicks).
+  (function () {
+    var body = $('admOrdersBody');
+    if (!body) return;
+    function open(row) { viewOrderId = row.getAttribute('data-order'); showPanel('order-detail', { extra: viewOrderId }); }
+    body.addEventListener('click', function (e) {
+      if (e.target.closest('.adm-row-menu')) return;
+      var row = e.target.closest('.adm-or-row[data-order]');
+      if (row) open(row);
+    });
+    body.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.target.closest('.adm-row-menu')) return;
+      var row = e.target.closest('.adm-or-row[data-order]');
+      if (row) { e.preventDefault(); open(row); }
+    });
+  })();
   var ordersBody = $('admOrdersBody');
   // Listens on document, not ordersBody: openRowMenu() portals the open
   // .adm-row-menu-list to <body> (see its own comment for why), so a click

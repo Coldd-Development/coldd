@@ -107,6 +107,22 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
   if (!currency) { const any = readMoney(text); currency = any ? any.currency : "USD"; }
   if (amount == null) return { ok: false, error: "no total found" };
 
+  // Forwarded copies (Gmail strips class names) and any other layout: the item
+  // names are the links to clearlydev.com/product/... pages.
+  if (!items.length) {
+    const seen = new Set<string>();
+    const linkRe = /href="https?:\/\/(?:www\.)?clearlydev\.com\/product\/[^"]+"[^>]*>([\s\S]{1,200}?)<\/a>/gi;
+    let lm: RegExpExecArray | null;
+    while ((lm = linkRe.exec(html))) {
+      const nm = htmlToText(lm[1]).trim();
+      if (nm && !seen.has(nm.toLowerCase())) { seen.add(nm.toLowerCase()); items.push({ name: nm, qty: 1, amount: null }); }
+    }
+    if (items.length === 1) {
+      const q1 = text.match(/×\s*(\d+)/);
+      items[0].qty = q1 ? Number(q1[1]) : 1;
+      items[0].amount = amount;
+    }
+  }
   // Item names when there was no WooCommerce table: "Product: X" lines.
   if (!items.length) {
     lines.forEach((l) => {
