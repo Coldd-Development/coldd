@@ -7017,8 +7017,31 @@
   // Finds the coldd.dev product a sale on any platform is for: by id, then by
   // name (exact, then the longest name one contains, then most words shared).
   var PM = { src: null, list: [], memo: {} };
-  var PM_STOP = ['the', 'a', 'an', 'and', 'of', 'for', 'with', 'roblox'];
-  function pmWords(s) { return String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(function (w) { return w && PM_STOP.indexOf(w) < 0; }); }
+  var PM_STOP = ['the', 'a', 'an', 'and', 'of', 'for', 'with', 'roblox', 'asset', 'assets'];
+  var PM_SAME = { bundle: 'pack', bundles: 'pack', packs: 'pack', kit: 'pack' };
+  // Words that never tell two products apart on their own.
+  var PM_GENERIC = ['pack', 'vfx', 'template', 'templates', 'system', 'map', 'game', 'full', 'complete', 'mega', 'set', 'collection',
+    'model', 'models', 'animation', 'animations', 'effect', 'effects', 'edition', 'version', 'premium', 'ultimate', 'hd', 'free', 'custom', 'scripted'];
+  function pmWords(s) {
+    var out = [];
+    String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').forEach(function (w) {
+      w = PM_SAME[w] || w;
+      if (w && PM_STOP.indexOf(w) < 0 && out.indexOf(w) < 0) out.push(w);
+    });
+    return out;
+  }
+  // The numbers in a name ("500+ Combat VFX Asset Pack" -> "500"): two names
+  // with different numbers are different products.
+  function pmNums(s) { return (String(s || '').match(/\d+/g) || []).sort().join(','); }
+  // When one name holds the other, what is left over must not be just a
+  // number (or a number and a short word): "500+ Combat VFX Pack" is not
+  // "Combat VFX Pack", "Shophouse Building Pack 2" is not "...Pack", but
+  // "Zombie Animation Pack - 242 Animations" is "Zombie Animation Pack".
+  function pmExtraOk(longer, shorter) {
+    var rest = longer.replace(shorter, '');
+    if (!/\d/.test(rest)) return true;
+    return rest.replace(/\d+/g, '').length >= 4;
+  }
   function matchProduct(id, title) {
     if (id) { var byId = findProduct(id); if (byId) return byId; }
     title = canonName(title);
@@ -7026,23 +7049,28 @@
     var prods = allProducts();
     // A fresh product list (every refreshProducts) resets the cache, so a product
     // added or renamed in the database is matched on the next render.
-    if (PM.src !== prods) PM = { src: prods, memo: {}, list: prods.map(function (p) { return { p: p, n: bbbNorm(p.title), w: pmWords(p.title) }; }) };
+    if (PM.src !== prods) PM = { src: prods, memo: {}, list: prods.map(function (p) { return { p: p, n: bbbNorm(p.title), w: pmWords(p.title), d: pmNums(p.title) }; }) };
     if (Object.prototype.hasOwnProperty.call(PM.memo, t)) return PM.memo[t];
-    var hit = null, best = 0, tw = pmWords(title);
+    var hit = null, best = 0, tw = pmWords(title), td = pmNums(title);
     PM.list.forEach(function (x) { if (!hit && x.n === t) hit = x.p; });
-    if (!hit) PM.list.forEach(function (x) {
-      if (x.n.length < 8) return;
-      if ((t.indexOf(x.n) >= 0 || (t.length >= 8 && x.n.indexOf(t) >= 0)) && x.n.length > best) { best = x.n.length; hit = x.p; }
-    });
+    // Otherwise: one name's words must all appear in the other, and the extra
+    // words must be generic ones. A number among the extras only passes when
+    // it is a descriptive tail ("Zombie Animation Pack - 242 Animations"), never
+    // an edition ("500+ ...", "... 2").
     if (!hit && tw.length) {
-      best = 0;
+      var bestLen = 0;
       PM.list.forEach(function (x) {
         if (!x.w.length) return;
-        var inter = x.w.filter(function (w) { return tw.indexOf(w) >= 0; }).length;
-        var score = inter / (tw.length + x.w.length - inter);
-        if (score > best) { best = score; hit = x.p; }
+        var aInB = tw.every(function (w) { return x.w.indexOf(w) >= 0; }), bInA = x.w.every(function (w) { return tw.indexOf(w) >= 0; });
+        if (!aInB && !bInA) return;
+        var extra = aInB ? x.w.filter(function (w) { return tw.indexOf(w) < 0; }) : tw.filter(function (w) { return x.w.indexOf(w) < 0; });
+        // A tail after the whole shorter name: "Zombie Animation Pack" + " - 242 Animations".
+        var tail = x.n.length >= 8 && t.length >= 8 && ((t.indexOf(x.n) === 0 && pmExtraOk(t, x.n)) || (x.n.indexOf(t) === 0 && pmExtraOk(x.n, t)));
+        var ok = extra.every(function (w) { return /\d/.test(w) ? tail : PM_GENERIC.indexOf(w) >= 0 || tail; });
+        if (!ok) return;
+        var inter = Math.min(tw.length, x.w.length), score = inter / (tw.length + x.w.length - inter);
+        if (score > best || (score === best && x.n.length > bestLen)) { best = score; bestLen = x.n.length; hit = x.p; }
       });
-      if (best < 0.6) hit = null;
     }
     PM.memo[t] = hit;
     return hit;
@@ -7055,7 +7083,7 @@
       if (!r.cover_image_url) return;
       var n = bbbNorm(r.title);
       if (n === t) { hit = r.cover_image_url; best = Infinity; return; }
-      if (n.length >= 8 && best !== Infinity && (t.indexOf(n) >= 0 || n.indexOf(t) >= 0) && n.length > best) { best = n.length; hit = r.cover_image_url; }
+      if (n.length >= 8 && best !== Infinity && ((t.indexOf(n) >= 0 && pmExtraOk(t, n)) || (n.indexOf(t) >= 0 && pmExtraOk(n, t))) && n.length > best) { best = n.length; hit = r.cover_image_url; }
     });
     return hit;
   }
