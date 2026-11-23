@@ -1792,8 +1792,14 @@
   // written by platform-sales-ingest (userscript, bots, email) or by hand.
   var PSALES = [], PSALES_LOADED = false;
   var PSYNC = {}; // platform_sync_state rows by platform (background syncs, e.g. creator-store-sync)
+  var MAIL_FAILED = 0; // ClearlyDev order emails in the last 7 days the parser could not read
   function refreshPlatformSales() {
     if (!window.coldSupabase) return Promise.resolve();
+    window.coldSupabase.from('inbound_emails').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('received_at', new Date(Date.now() - 7 * DAY_MS).toISOString()).then(function (r) {
+      if (r.error) return;
+      MAIL_FAILED = r.count || 0;
+      if (curPanel === 'home') renderWork();
+    });
     window.coldSupabase.from('platform_sync_state').select('*').then(function (r) {
       if (r.error) return;
       PSYNC = {};
@@ -2121,13 +2127,14 @@
     }
     // Background marketplace syncs (platform_sync_state): flag a dead cookie or one never set.
     [
-      { key: 'creatorstore', label: 'Creator Store', secret: 'ROBLOX_CREATOR_COOKIE', fix: 'Sign in to Roblox in an incognito window and replace ROBLOX_CREATOR_COOKIE in Supabase secrets' },
-      { key: 'clearlydev', label: 'ClearlyDev', secret: 'CLEARLYDEV_COOKIE', fix: 'Copy a fresh Cookie header from the ClearlyDev dashboard into CLEARLYDEV_COOKIE in Supabase secrets' }
+      { key: 'creatorstore', label: 'Creator Store', secret: 'ROBLOX_CREATOR_COOKIE', dead: 'Creator Store sync cookie expired', fix: 'Sign in to Roblox in an incognito window and replace ROBLOX_CREATOR_COOKIE in Supabase secrets' },
+      { key: 'clearlydev', label: 'ClearlyDev email', secret: 'SALES_IMAP_PASSWORD', dead: 'Can\'t log in to sales@coldd.dev', fix: 'Check the mailbox password in Migadu and update SALES_IMAP_PASSWORD in Supabase secrets' }
     ].forEach(function (sy) {
       var st = PSYNC[sy.key];
-      if (st && st.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: sy.label + ' sync cookie expired', sub: sy.fix });
-      else if (st && /not set/.test(st.last_error || '')) items.push({ icon: 'error', text: sy.label + ' background sync is off', sub: 'Add ' + sy.secret + ' in Supabase secrets to turn it on' });
+      if (st && st.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: sy.dead, sub: sy.fix });
+      else if (st && /not set/.test(st.last_error || '')) items.push({ icon: 'error', text: sy.label + ' sync is off', sub: 'Add ' + sy.secret + ' in Supabase secrets to turn it on' });
     });
+    if (MAIL_FAILED) items.push({ tone: 'err', icon: 'error', text: plural(MAIL_FAILED, 'ClearlyDev email') + " couldn't be read", sub: 'Kept in inbound_emails (last 7 days) for a re-read' });
     var claims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
     if (claims) items.push({ icon: 'redeem', text: plural(claims, 'prize claim') + ' to check', sub: 'Giveaways', panel: 'giveaways' });
     var payouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
