@@ -2147,6 +2147,14 @@
   wirePlatChart($('admPlatChart'));
   wirePlatChart($('admAnChart'));
 
+  // A share as people read it: whole numbers from 10%, one decimal from 1%,
+  // two below that, so a small platform never shows a flat 0%.
+  function sharePct(s) {
+    if (!s) return '0%';
+    if (s >= 9.95) return Math.round(s) + '%';
+    if (s >= 0.995) return s.toFixed(1).replace(/\.0$/, '') + '%';
+    return s >= 0.01 ? s.toFixed(2) + '%' : '<0.01%';
+  }
   // Per-platform table. Dashboard: last 30 days against the 30 before. Analytics
   // passes its own window (no comparison columns for all time).
   function renderPlatTable(sales, o) {
@@ -2176,7 +2184,7 @@
         return '<tr style="--pf:' + pfVar(r.p.key) + '"><th scope="row"><span class="adm-pf"><i></i>' + pfMark(r.p.key) + esc(r.p.label) + '</span></th>' +
           '<td class="is-strong">' + cell(r.p.key, r.cur) + '</td>' +
           (cmp ? '<td class="is-muted">' + cell(r.p.key, r.prev) + '</td><td>' + change(r.cur.aud, r.prev.aud) + '</td>' : '') +
-          '<td><span class="adm-share"><span class="adm-share-bar"><i style="width:' + share.toFixed(1) + '%"></i></span><span>' + Math.round(share) + '%</span></span></td>' +
+          '<td><span class="adm-share"><span class="adm-share-bar"><i style="width:' + (share ? Math.max(share, 1.5) : 0).toFixed(1) + '%"></i></span><span>' + sharePct(share) + '</span></span></td>' +
           '<td>' + num(r.cur.n) + '</td></tr>';
       }).join('') + '</tbody>' +
       '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + rbx(tot.robux) + '</td>' +
@@ -7110,19 +7118,10 @@
   /* ================================================================
      ORDERS PANEL
      ================================================================ */
-  var orderStatusDropdown = makeDropdown($('admOrderStatusFilterDD'), {
-    onChange: function () { renderOrders(); }
-  });
-  orderStatusDropdown.setOptions([
-    { value: 'all', label: 'All statuses' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'refunded', label: 'Refunded' },
-    { value: 'revoked', label: 'Revoked' }
-  ], 'all');
   // Orders, redesigned 2026-11-23: every sale from every platform in one list.
   // Platform filter (Global by default) with each platform's own logo and
-  // count, search, status, and a summary of what is showing. Website orders
+  // count, search, and a summary of what is showing. No status column: a
+  // refunded, revoked or gifted order says so under its amount. Website orders
   // keep their row menu (view / complete / refund / revoke) and open the
   // detail page on click; other platforms are read-only rows.
   var ORDER_CHANNEL = 'all', ORDERS_SHOWN = 100, ORDER_ROWS = [];
@@ -7180,6 +7179,16 @@
     return out;
   }
   var ORDER_STATUS_LABEL = { completed: ['Completed', 'ok'], pending: ['Pending', 'warn'], refunded: ['Refunded', 'err'], revoked: ['Revoked', 'err'], gifted: ['Gifted', 'info'] };
+  // Where a product name goes: the coldd.dev product editor when the order
+  // matches one of our products, else the listing on the platform it sold on.
+  function orderProdLink(r, bbbUrls) {
+    var src = r.src || {};
+    var p = matchProduct(r.kind === 'bbb' ? null : src.productId, r.title);
+    if (p && p.slug) return { href: '/admin/products/' + encodeURIComponent(p.slug) + '/', pid: p.id };
+    if (r.kind === 'bbb' && bbbUrls[String(src.resource_id)]) return { href: bbbUrls[String(src.resource_id)] };
+    if (r.pf === 'creatorstore' && /^\d+$/.test(String(src.productId || ''))) return { href: 'https://create.roblox.com/store/asset/' + src.productId };
+    return null;
+  }
   document.addEventListener('click', function (e) {
     var cb = e.target.closest('#admOrderChannel [data-ch]');
     if (cb) { ORDER_CHANNEL = cb.getAttribute('data-ch'); ORDERS_SHOWN = 100; renderOrders(); return; }
@@ -7188,11 +7197,10 @@
   function renderOrders() {
     var body = $('admOrdersBody');
     if (!body) return;
-    var statusF = orderStatusDropdown.getValue() || 'all';
     var q = (($('admOrderSearch') || {}).value || '').trim().toLowerCase();
     var all = allOrderRows();
-    // Pending website checkouts were opened and never paid: hidden unless asked for.
-    var visible = all.filter(function (r) { return statusF === 'all' ? r.status !== 'pending' : r.status === statusF; });
+    // Pending website checkouts were opened and never paid: never listed.
+    var visible = all.filter(function (r) { return r.status !== 'pending'; });
     var counts = {};
     visible.forEach(function (r) { counts[r.pf] = (counts[r.pf] || 0) + 1; });
     var tabs = $('admOrderChannel');
@@ -7206,7 +7214,7 @@
       if (ORDER_CHANNEL !== 'all' && r.pf !== ORDER_CHANNEL) return false;
       if (!q) return true;
       var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || '';
-      return [r.id, r.title, r.buyer, r.search, label].join(' ').toLowerCase().indexOf(q) >= 0;
+      return [r.id, r.title, r.buyer, r.search, label, r.status].join(' ').toLowerCase().indexOf(q) >= 0;
     });
     var sum = $('admOrderSum');
     if (sum) sum.textContent = plural(rows.length, 'order');
@@ -7214,22 +7222,27 @@
     if (!ORDERS_LOADED) { body.innerHTML = '<p class="adm-empty">Loading orders…</p>'; return; }
     if (!shown.length) { body.innerHTML = '<p class="adm-empty">No orders match.</p>'; return; }
     ORDER_ROWS = shown;
+    var bbbUrls = {};
+    if (BBB.configured) BBB.resources.forEach(function (x) { if (x.url) bbbUrls[String(x.resource_id)] = x.url; });
     body.innerHTML = shown.map(function (r, k) {
-      var st = ORDER_STATUS_LABEL[r.status] || [r.status, 'mute'];
-      var badges = '<span class="dt-badge ' + st[1] + '">' + esc(st[0]) + '</span>' +
-        (r.test ? ' <span class="dt-badge warn">Test</span>' : '') + (r.gift ? ' <span class="dt-badge warn" title="Bought as a gift for a different account">Gift</span>' : '');
+      var flag = r.status === 'refunded' ? 'Refunded' : r.status === 'revoked' ? 'Revoked' : r.status === 'gifted' ? 'Gifted' : r.test ? 'Test order' : r.gift ? 'Gift' : '';
+      var voided = r.status === 'refunded' || r.status === 'revoked';
+      var lk = orderProdLink(r, bbbUrls);
       var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || r.pf;
       var thumb = r.thumb
         ? '<span class="adm-or-thumb" style="background-image:url(\'' + esc(r.thumb) + '\')"></span>'
         : '<span class="adm-or-thumb is-logo">' + pfMark(r.pf) + '</span>';
       var d = new Date(r.t);
-      return '<div class="adm-or-row is-link" data-k="' + k + '" tabindex="0" role="button" aria-label="' + esc(r.title + ', ' + label) + '">' +
-        '<span class="adm-or-prod">' + thumb + '<span class="adm-or-title" title="' + esc(r.title) + '">' + esc(r.title) + '</span></span>' +
+      var prod = thumb + '<span class="adm-or-title" title="' + esc(r.title) + '">' + esc(r.title) + '</span>';
+      prod = lk
+        ? '<a class="adm-or-prod adm-or-plink" href="' + esc(lk.href) + '"' + (lk.pid ? ' data-pid="' + esc(lk.pid) + '"' : ' target="_blank" rel="noopener"') + '>' + prod + '</a>'
+        : '<span class="adm-or-prod">' + prod + '</span>';
+      return '<div class="adm-or-row is-link' + (voided ? ' is-void' : '') + '" data-k="' + k + '" tabindex="0" role="button" aria-label="' + esc(r.title + ', ' + label) + '">' +
+        prod +
         '<span class="adm-or-pf" style="--pf:' + pfVar(r.pf) + '">' + pfMark(r.pf) + '<span>' + esc(label) + '</span></span>' +
         '<span class="adm-or-buyer">' + (r.buyer ? esc(r.buyer) : '<span class="adm-sub">–</span>') + '</span>' +
-        '<span class="adm-or-status">' + badges + '</span>' +
         '<span class="adm-or-date"><span>' + esc(fmtDate(d)) + '</span><small>' + esc(d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })) + '</small></span>' +
-        '<span class="adm-or-amt">' + r.amount + '</span>' +
+        '<span class="adm-or-amt">' + r.amount + (flag ? '<small>' + flag + '</small>' : '') + '</span>' +
         '<span class="adm-or-act"><button type="button" class="adm-or-info" aria-label="Order info" title="Order info">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></span>' +
       '</div>';
@@ -7246,11 +7259,17 @@
       openOrderInfo(r);
     }
     body.addEventListener('click', function (e) {
+      var pl = e.target.closest('.adm-or-plink');
+      if (pl) {
+        var pid = pl.getAttribute('data-pid');
+        if (pid && !(e.ctrlKey || e.metaKey || e.shiftKey || e.button)) { e.preventDefault(); openProductEdit(pid); }
+        return;
+      }
       var row = e.target.closest('.adm-or-row[data-k]');
       if (row) act(row, !!e.target.closest('.adm-or-info'));
     });
     body.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter') return;
+      if (e.key !== 'Enter' || e.target.closest('.adm-or-plink')) return;
       var row = e.target.closest('.adm-or-row[data-k]');
       if (row) { e.preventDefault(); act(row, !!e.target.closest('.adm-or-info')); }
     });
