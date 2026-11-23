@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261124l" />
+  <link rel="stylesheet" href="/styles.css?v=20261124m" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -806,12 +806,20 @@
             </div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-marketplaces" hidden>
-            <div class="dash-head"><h1>Marketplaces</h1><p>What still needs doing on BuiltByBit, ClearlyDev, Parcel and Creator Store.</p></div>
-            <div class="dash-stats adm-stats-4" id="admMpStats"></div>
+          <section class="dash-panel adm-mps" id="adm-panel-marketplaces" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Marketplaces</h1>
+              <div class="adm-head-actions">
+                <button class="btn btn-primary adm-btn-sm" type="button" id="admMpAddToggle" aria-expanded="false" aria-controls="admMpAddBox">+ Add task</button>
+              </div>
+            </div>
 
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Add a task</h2></div>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid is-5" id="admMpStats"></div>
+            </div>
+
+            <div class="adm-hp" id="admMpAddBox" hidden>
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Add a task</h2><span>For one product on one marketplace</span></div></div>
               <form class="adm-mp-add" id="admMpAddForm">
                 <div class="adm-dd" id="admMpProductDD">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -835,16 +843,22 @@
               <div class="adm-edit-msg" id="admMpMsg"></div>
             </div>
 
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>To do</h2><div class="adm-mp-filter" id="admMpFilter" role="group" aria-label="Marketplace filter"></div></div>
-              <div id="admMpTasks"></div>
+            <div class="adm-mps-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>To do</h2></div><div class="adm-mp-filter" id="admMpFilter" role="group" aria-label="Marketplace filter"></div></div>
+                <div id="admMpTasks"></div>
+              </div>
+              <div class="adm-mps-side">
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Coverage</h2><span>Live coldd.dev products on each marketplace</span></div></div>
+                  <div id="admMpCoverage"></div>
+                </div>
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Recently completed</h2></div></div>
+                  <div id="admMpDoneLog"></div>
+                </div>
+              </div>
             </div>
-
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Recently completed</h2></div>
-              <div id="admMpDoneLog"></div>
-            </div>
-
           </section>
 
           <section class="dash-panel adm-orders" id="adm-panel-orders" hidden>
@@ -1734,6 +1748,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261124l" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124l"></script>
+  <script src="/catalog-loader.php?v=20261124m" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124m"></script>
 </body>
 </html>

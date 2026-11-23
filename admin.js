@@ -7567,10 +7567,28 @@
     mpProductDD.setOptions(prods.map(function (p) { return { value: p.dbId, label: p.title }; }), $('admMpProduct').value || '');
 
     var items = mpOpenItems();
+    var live = prods.filter(function (p) { return p.visible; });
+    function cover(key) {
+      var r = { live: 0, upd: 0, none: 0 };
+      live.forEach(function (p) { var st = mpStatus(p.dbId, key); if (st === 'live') r.live++; else if (st === 'needs_update') r.upd++; else r.none++; });
+      return r;
+    }
     $('admMpStats').innerHTML = MP_TASK_TARGETS.map(function (m) {
       var n = items.filter(function (i) { return i.mk === m.key; }).length;
-      return '<div class="dash-stat glass"><span class="ds-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span><span class="ds-num">' + n + '</span><span class="ds-sub">' + (n ? 'to do' : 'all caught up') + '</span></div>';
+      var c = m.key === 'site' ? null : cover(m.key);
+      return '<div class="adm-kpi-cell"><span class="adm-kpi-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span>' +
+        '<span class="adm-kpi-value"><b>' + num(n) + '</b><em>' + (n ? 'to do' : '') + '</em></span><span class="adm-kpi-line"></span>' +
+        '<span class="adm-kpi-sub">' + (c ? num(c.live) + ' of ' + num(live.length) + ' live' : (n ? 'Site tasks' : 'All caught up')) + '</span></div>';
     }).join('');
+    var cov = $('admMpCoverage');
+    if (cov) cov.innerHTML = live.length ? '<div class="adm-mp-cov">' + MARKETPLACES.map(function (m) {
+      var c = cover(m.key), t = live.length;
+      function seg(v, cls, label) { return v ? '<i class="' + cls + '" style="flex:' + v + ' 1 0" title="' + esc(label + ': ' + num(v)) + '"></i>' : ''; }
+      return '<div class="adm-mp-cov-row" style="--pf:' + pfVar(m.key) + '"><span class="adm-mp-cov-name">' + mpLogo(m.key) + esc(m.label) + '</span>' +
+        '<span class="adm-mp-cov-val">' + sharePct(c.live / t * 100) + '</span>' +
+        '<span class="adm-mp-cov-bar" role="img" aria-label="' + esc(m.label + ': ' + c.live + ' live, ' + c.upd + ' need an update, ' + c.none + ' not uploaded') + '">' + seg(c.live, 'is-live', 'Live') + seg(c.upd, 'is-upd', 'Needs update') + seg(c.none, 'is-none', 'Not uploaded') + '</span>' +
+        '<span class="adm-mp-cov-sub">' + num(c.live) + ' live' + (c.upd ? ' · ' + num(c.upd) + ' to update' : '') + (c.none ? ' · ' + num(c.none) + ' not uploaded' : '') + '</span></div>';
+    }).join('') + '</div><div class="adm-mp-cov-key" aria-hidden="true"><span><i class="is-live"></i>Live</span><span><i class="is-upd"></i>Needs update</span><span><i class="is-none"></i>Not uploaded</span></div>' : anEmpty('No live products yet.');
 
     $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MP_TASK_TARGETS).map(function (m) {
       return '<button type="button" class="' + (m.key === 'all' ? '' : 'mk-' + m.key) + (MP_FILTER === m.key ? ' active' : '') + '" data-mp="' + m.key + '">' + (m.key === 'all' ? '' : mpLogo(m.key)) + esc(m.label) + '</button>';
@@ -7625,6 +7643,12 @@
     }).join('') || '<tr><td colspan="5" class="adm-empty">No products yet.</td></tr>';
   }
 
+  var mpAddToggle = $('admMpAddToggle');
+  if (mpAddToggle) mpAddToggle.addEventListener('click', function () {
+    var box = $('admMpAddBox'), open = box.hidden;
+    box.hidden = !open; mpAddToggle.setAttribute('aria-expanded', String(open));
+    mpAddToggle.textContent = open ? 'Close' : '+ Add task';
+  });
   var mpTasksBox = $('admMpTasks');
   if (mpTasksBox) mpTasksBox.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-act]'); if (!btn || !can('admin')) return;

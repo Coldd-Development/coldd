@@ -6097,6 +6097,40 @@ html[data-theme="light"] .adm-rv-stars { color: rgba(0,0,0,0.14); }
 html[data-theme="light"] .adm-rv-av { background: rgba(0,0,0,0.05); }
 @media (max-width: 560px) { .adm-rv .adm-review-text, .adm-rv .adm-review-reply, .adm-rv .adm-review-reply-form, .adm-rv .adm-row-actions { margin-left: 0; } }
 
+/* Admin Marketplaces (2026-11-24) --------------------------------------------
+   To-do counts per marketplace, the task list, coverage of live products on
+   each marketplace, and recently completed. */
+.adm-mps:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-mps .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.adm-mps #admMpAddBox[hidden] { display: none; }
+.adm-kpi-grid.is-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.adm-mps .adm-mp-statlabel { display: inline-flex; align-items: center; gap: 7px; }
+.adm-mps .adm-mp-statlabel .adm-mp-logo { width: 16px; height: 16px; border-radius: 4px; }
+.adm-mps-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.adm-mps-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.adm-mps .adm-mp-card { background: none; border: 0; box-shadow: none; padding: 12px 0; border-top: 1px solid var(--hairline); border-radius: 0; }
+.adm-mps .adm-mp-card:first-child { border-top: 0; padding-top: 0; }
+.adm-mp-cov { display: flex; flex-direction: column; }
+.adm-mp-cov-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.adm-mp-cov-row:first-child { border-top: 0; padding-top: 0; }
+.adm-mp-cov-name { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--fg); }
+.adm-mp-cov-name .adm-mp-logo { width: 18px; height: 18px; border-radius: 4px; }
+.adm-mp-cov-val { font-size: 14px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+.adm-mp-cov-bar { grid-column: 1 / -1; display: flex; gap: 2px; height: 8px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255,255,255,0.05); }
+.adm-mp-cov-bar i, .adm-mp-cov-key i { display: block; min-width: 3px; }
+.adm-mp-cov-bar .is-live, .adm-mp-cov-key .is-live { background: var(--pf, var(--price)); }
+.adm-mp-cov-bar .is-upd, .adm-mp-cov-key .is-upd { background: var(--warn); }
+.adm-mp-cov-bar .is-none, .adm-mp-cov-key .is-none { background: rgba(255,255,255,0.12); }
+.adm-mp-cov-sub { grid-column: 1 / -1; font-size: 12px; color: var(--fg-3); }
+.adm-mp-cov-key { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--fg-3); }
+.adm-mp-cov-key span { display: inline-flex; align-items: center; gap: 6px; }
+.adm-mp-cov-key i { width: 10px; height: 10px; border-radius: 3px; }
+.adm-mp-cov-key .is-live { background: var(--fg-2); }
+html[data-theme="light"] .adm-mp-cov-bar { background: rgba(0,0,0,0.05); }
+html[data-theme="light"] .adm-mp-cov-bar .is-none, html[data-theme="light"] .adm-mp-cov-key .is-none { background: rgba(0,0,0,0.12); }
+@media (max-width: 1100px) { .adm-mps-grid { grid-template-columns: minmax(0, 1fr); } .adm-kpi-grid.is-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .adm-kpi-grid.is-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
    was 20px narrower, so every column drifted right), one-line product names,
    date over time, the ⋮ info button, and the order info popup. */
