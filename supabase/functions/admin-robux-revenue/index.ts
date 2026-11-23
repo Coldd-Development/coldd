@@ -193,10 +193,17 @@ Deno.serve(async (req: Request) => {
       for (const tf of ["Day", "Week", "Month", "Year"]) {
         if (overBudget()) break;
         const d = await roblox(cookie, `/v1/groups/${groupId}/revenue/summary/${tf}`);
-        sums[tf] = { itemSaleRobux: Number(d.itemSaleRobux) || 0, pendingRobux: Number(d.pendingRobux) || 0 };
+        // Every figure Roblox returns is kept (payouts and other money going out sit
+        // next to the sales figures), not just the two the dashboard shows.
+        const all: Obj = {};
+        for (const [k, v] of Object.entries(d)) if (typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v))) all[k] = Number(v);
+        sums[tf] = { itemSaleRobux: Number(d.itemSaleRobux) || 0, pendingRobux: Number(d.pendingRobux) || 0, all };
       }
       if (Object.keys(sums).length) patch.summary = { fetched_at: new Date().toISOString(), ...sums };
     } catch (e) { if ((e as ApiFail).status !== 408) errors.push("summary: " + (e as Error).message); }
+    // Money going out shows in the summary (groupPayoutRobux is negative). The group
+    // sale ledger has no spending types: Purchase, GroupPayout, AdSpend and DevEx all
+    // answer 400 for a group (checked 2026-11-24).
 
     patch.last_error = errors.length ? errors.join("; ").slice(0, 400) : null;
     patch.updated_at = new Date().toISOString();
