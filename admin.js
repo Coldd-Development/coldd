@@ -1949,10 +1949,10 @@
   }
   var PLAT_CHART = null; // last chart data, so a resize can redraw without recomputing
   function renderPlatforms(sales) {
-    var legend = $('admPlatLegend'), chart = $('admPlatChart'), table = $('admPlatTable');
+    var chart = $('admPlatChart'), table = $('admPlatTable');
     if (!chart) return;
     if (!ORDERS_LOADED) {
-      legend.innerHTML = ''; table.innerHTML = '';
+      table.innerHTML = '';
       chart.innerHTML = '<div class="adm-skel adm-skel-chart"></div>';
       return;
     }
@@ -1970,10 +1970,6 @@
       var add = function (a, b) { return a + b; };
       return { key: p.key, label: p.label, data: data, robux: byPfR[p.key], total: data.reduce(add, 0), robuxTotal: byPfR[p.key].reduce(add, 0) };
     });
-
-    legend.innerHTML = series.map(function (s) {
-      return '<span style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + ' <b>' + pfValue(s.key, s.total, s.robuxTotal, true) + '</b></span>';
-    }).join('');
 
     PLAT_CHART = { months: months, series: series };
     drawPlatChart();

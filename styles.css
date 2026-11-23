@@ -5560,11 +5560,8 @@ html[data-theme="light"] {
 .adm-home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .adm-plat-summary { margin: -4px 0 14px; font-size: 14px; line-height: 1.5; color: var(--fg-2); }
 .adm-plat-summary b { color: var(--fg); font-weight: 700; }
-.adm-plat-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 6px; font-size: 12px; color: var(--fg-2); }
-.adm-plat-legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.adm-plat-legend i, .adm-pf > i { flex: 0 0 auto; width: 12px; height: 2px; border-radius: 1px; background: var(--pf); }
-.adm-plat-legend b { color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; }
-.adm-plat-legend em, .adm-pc-tip em { font-style: normal; color: var(--fg-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+.adm-pf > i { flex: 0 0 auto; width: 12px; height: 2px; border-radius: 1px; background: var(--pf); }
+.adm-pc-tip em { font-style: normal; color: var(--fg-3); font-weight: 500; font-variant-numeric: tabular-nums; }
 .adm-plat-table td small { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
 .adm-plat-chart { position: relative; height: 236px; margin-bottom: 4px; }
 .adm-plat-chart svg { display: block; max-width: 100%; overflow: visible; }
@@ -5600,7 +5597,7 @@ html[data-theme="light"] {
 .adm-pf-logo { flex: 0 0 auto; width: 18px; height: 18px; border-radius: var(--r-xs); object-fit: contain; }
 /* The Robux half of "A$10.00 | R$ 1,000": same line, quieter. */
 .adm-rbx { font-weight: 500; color: var(--fg-3); white-space: nowrap; }
-.adm-plat-legend b .adm-rbx, .adm-pc-tip b .adm-rbx { font-weight: 500; }
+.adm-pc-tip b .adm-rbx { font-weight: 500; }
 .adm-share { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .adm-share-bar { width: 60px; height: 4px; border-radius: var(--r-pill); background: rgba(255,255,255,0.07); overflow: hidden; }
 .adm-share-bar i { display: block; height: 100%; border-radius: inherit; background: var(--pf); }
