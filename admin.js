@@ -4102,8 +4102,8 @@
       m.pfs[x.pf] = true; m.aud += x.aud; m.robux += x.robux; m.units++;
     });
     var all = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux) || (b.units - a.units); });
-    var cnt = $('admBestCount'); if (cnt) cnt.textContent = all.length ? plural(all.length, 'product') : '';
-    box.innerHTML = all.length ? all.slice(0, 150).map(function (p, i) {
+    var cnt = $('admBestCount'); if (cnt) cnt.textContent = all.length > 20 ? 'Top 20 of ' + num(all.length) : all.length ? plural(all.length, 'product') : '';
+    box.innerHTML = all.length ? all.slice(0, 20).map(function (p, i) {
       var img = p.image || bbbCoverFor(p.title);
       var pfs = HOME_PLATFORMS.filter(function (x) { return p.pfs[x.key]; }).map(function (x) { return '<span title="' + esc(x.label) + '">' + pfMark(x.key) + '</span>'; }).join('');
       return '<div class="adm-an-prod"><span class="adm-an-rank">' + (i + 1) + '</span>' +
@@ -4112,6 +4112,54 @@
         '<span class="adm-an-pval">' + (p.aud || !p.robux ? fmtA(p.aud) : '') + (p.robux ? (p.aud ? '<small>' : '') + robuxRaw(p.robux) + (p.aud ? '</small>' : '') : '') + '</span></div>';
     }).join('') : anEmpty('No sales in this range.');
   }
+
+  // A donut: one slice per share, a hairline of surface between slices, the
+  // total in the middle. Each slice carries its own hover text.
+  function donutSvg(slices, o) {
+    var size = o.size || 168, r = size / 2, ri = r * 0.62, cx = r, cy = r;
+    var tot = anSum(slices.map(function (s) { return s.v; }));
+    var out = '<svg class="adm-donut" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + esc(o.aria || '') + '">';
+    if (!(tot > 0)) out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" stroke-width="' + (r - ri) + '" class="adm-donut-empty"/>';
+    else {
+      var live = slices.filter(function (s) { return s.v > 0; }), a0 = -Math.PI / 2;
+      live.forEach(function (s) {
+        var tip = esc(s.label) + '|' + esc(s.tip || sharePct(s.v / tot * 100));
+        if (live.length === 1) {
+          out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" stroke-width="' + (r - ri) + '" style="stroke:' + s.color + '" data-tip="' + tip + '"/>';
+          return;
+        }
+        var a1 = a0 + s.v / tot * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0;
+        function pt(rad, a) { return (cx + rad * Math.cos(a)).toFixed(2) + ' ' + (cy + rad * Math.sin(a)).toFixed(2); }
+        out += '<path d="M' + pt(r, a0) + 'A' + r + ' ' + r + ' 0 ' + big + ' 1 ' + pt(r, a1) + 'L' + pt(ri, a1) + 'A' + ri + ' ' + ri + ' 0 ' + big + ' 0 ' + pt(ri, a0) + 'Z" style="fill:' + s.color + '" data-tip="' + tip + '"/>';
+        a0 = a1;
+      });
+    }
+    out += '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" class="adm-donut-num">' + esc(o.center || '') + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" class="adm-donut-sub">' + esc(o.sub || '') + '</text></svg>';
+    return out;
+  }
+  // Hover text for any donut slice on the Analytics page.
+  (function wireDonuts() {
+    var panel = $('adm-panel-analytics'); if (!panel) return;
+    var tip = document.createElement('div');
+    tip.className = 'adm-pc-tip adm-donut-tip'; tip.hidden = true;
+    document.body.appendChild(tip);
+    panel.addEventListener('mouseover', function (e) {
+      var s = e.target.closest && e.target.closest('.adm-donut [data-tip]');
+      if (!s) { tip.hidden = true; return; }
+      var parts = s.getAttribute('data-tip').split('|');
+      tip.innerHTML = '<h4>' + parts[0] + '</h4><div>' + (parts[1] || '') + '</div>';
+      tip.hidden = false;
+    });
+    panel.addEventListener('mousemove', function (e) {
+      if (tip.hidden) return;
+      var x = e.clientX + 14, y = e.clientY + 14;
+      if (x + tip.offsetWidth > innerWidth - 8) x = e.clientX - tip.offsetWidth - 14;
+      if (y + tip.offsetHeight > innerHeight - 8) y = e.clientY - tip.offsetHeight - 14;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    });
+    panel.addEventListener('mouseleave', function () { tip.hidden = true; });
+  })();
 
   // Platform mix: how much of the revenue and of the orders each platform carries.
   function renderAnMix(sales, w) {
@@ -4129,21 +4177,22 @@
       var i = vals.indexOf(Math.max.apply(null, vals));
       return esc(HOME_PLATFORMS[i].label) + ' ' + verb + ' ' + sharePct(vals[i] / tot * 100);
     }
-    function bar(vals, tot, label) {
-      var segs = tot ? keys.map(function (k, i) {
-        var v = vals[i] / tot * 100;
-        return v > 0 ? '<i style="flex:' + v.toFixed(3) + ' 1 0;--pf:' + pfVar(k) + '" title="' + esc(HOME_PLATFORMS[i].label + ': ' + sharePct(v)) + '"></i>' : '';
-      }).join('') : '';
-      return '<div class="adm-mix-bar" role="img" aria-label="' + esc(label) + '">' + segs + '</div>';
+    function slices(vals, tot, money) {
+      return keys.map(function (k, i) {
+        return { v: vals[i], color: pfVar(k), label: HOME_PLATFORMS[i].label, tip: sharePct(tot ? vals[i] / tot * 100 : 0) + ', ' + (money ? fmtA(vals[i]) : plural(vals[i], 'order')) };
+      });
     }
     box.innerHTML = '<div class="adm-an-figs">' +
         anFig('Revenue spread', revS == null ? '–' : revS, revS == null ? '' : '/ 100', ptsDelta(revS, revP, w), lead(rev, totA, 'brings in')) +
         anFig('Order spread', ordS == null ? '–' : ordS, ordS == null ? '' : '/ 100', ptsDelta(ordS, ordP, w), lead(ord, totN, 'takes')) + '</div>' +
-      '<div class="adm-mix-bars"><span>Revenue</span>' + bar(rev, totA, 'Revenue share by platform') + '<span>Orders</span>' + bar(ord, totN, 'Order share by platform') + '</div>' +
+      '<div class="adm-pies">' +
+        '<figure class="adm-pie">' + donutSvg(slices(rev, totA, true), { aria: 'Revenue share by platform', center: totA ? fmtA(totA, true) : 'A$0', sub: 'revenue' }) + '<figcaption>Revenue</figcaption></figure>' +
+        '<figure class="adm-pie">' + donutSvg(slices(ord, totN, false), { aria: 'Order share by platform', center: num(totN), sub: totN === 1 ? 'order' : 'orders' }) + '<figcaption>Orders</figcaption></figure>' +
+      '</div>' +
       '<div class="adm-mix-table" role="table" aria-label="Share of revenue and orders by platform">' +
         '<div class="adm-mix-row is-head" role="row"><span role="columnheader">Platform</span><span role="columnheader">Revenue</span><span role="columnheader">Orders</span></div>' +
         keys.map(function (k, i) {
-          return '<div class="adm-mix-row" role="row" style="--pf:' + pfVar(k) + '"><span role="cell" class="adm-pf"><i></i>' + pfMark(k) + esc(HOME_PLATFORMS[i].label) + '</span>' +
+          return '<div class="adm-mix-row" role="row" style="--pf:' + pfVar(k) + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + pfMark(k) + esc(HOME_PLATFORMS[i].label) + '</span>' +
             '<span role="cell">' + (totA ? sharePct(rev[i] / totA * 100) : '–') + '</span><span role="cell">' + sharePct(ord[i] / totN * 100) + '</span></div>';
         }).join('') + '</div>' +
       '<p class="adm-an-note">100 means sales are spread evenly over all ' + keys.length + ' platforms, 0 means they all come from one. Revenue is AU$ sales; Robux sales count as orders.</p>';
@@ -4249,7 +4298,11 @@
     }
   })($('admVolChart'));
 
-  // Categories: revenue by product category, our catalogue's categories (BuiltByBit's for products we don't list).
+  // Categories: revenue by product category, our catalogue's categories
+  // (BuiltByBit's for products we don't list). Each category keeps its own
+  // colour whatever it sells; the smaller ones share a grey "Other" slice.
+  var AN_CAT_SLOT = { 'Buildings': 1, 'Assets': 2, 'Animations & VFX': 3, 'Uniforms & Gear': 4, 'Maps': 5, 'Scripts & UI': 6, 'Vehicles': 7, 'Weapons': 8 };
+  function catColor(c) { return AN_CAT_SLOT[c] ? 'var(--cat-' + AN_CAT_SLOT[c] + ')' : 'var(--cat-other)'; }
   function renderAnCats(w) {
     var box = $('admAnCats'); if (!box) return;
     var all = anAllItems(), cur = anIn(all, w.start, w.end), prev = w.prevStart ? anIn(all, w.prevStart, w.prevEnd) : null;
@@ -4266,17 +4319,24 @@
     var tot = anSum(cats.map(function (c) { return g[c].aud; }));
     var named = cats.filter(function (c) { return c !== 'Uncategorised' && g[c].aud > 0; });
     var selling = catList.filter(function (c) { return g[c] && g[c].n; }).length;
-    var maxA = Math.max.apply(null, cats.map(function (c) { return g[c].aud; }).concat([0.0001]));
+    // Slices: each coloured category on its own, in a fixed order; the rest as one "Other".
+    var slices = Object.keys(AN_CAT_SLOT).filter(function (c) { return g[c] && g[c].aud > 0; }).map(function (c) {
+      return { v: g[c].aud, color: catColor(c), label: c, tip: sharePct(g[c].aud / tot * 100) + ', ' + fmtA(g[c].aud) };
+    });
+    var other = anSum(cats.filter(function (c) { return !AN_CAT_SLOT[c]; }).map(function (c) { return g[c].aud; }));
+    if (other > 0) slices.push({ v: other, color: 'var(--cat-other)', label: 'Other', tip: sharePct(other / tot * 100) + ', ' + fmtA(other) });
     box.innerHTML = '<div class="adm-an-figs">' +
         anFig('Category spread', score == null ? '–' : score, score == null ? '' : '/ 100', ptsDelta(score, scoreP, w),
           named.length ? esc(named[0]) + ' brings in ' + sharePct(g[named[0]].aud / tot * 100) : 'No AU$ sales in this range') +
         anFig('Categories selling', num(selling), 'of ' + catList.length, '', selling < catList.length ? (catList.length - selling) + (catList.length - selling === 1 ? ' category' : ' categories') + ' with no sales' : 'Every category sold') + '</div>' +
-      '<div class="adm-bars" role="table" aria-label="Revenue by category">' + cats.map(function (c) {
-        var x = g[c], share = tot ? x.aud / tot * 100 : 0;
-        return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + esc(c) + '<small>' + plural(x.n, 'sale') + '</small></span>' +
-          '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (x.aud ? Math.max(1.5, x.aud / maxA * 100) : 0).toFixed(1) + '%"></i></span>' +
-          '<span class="adm-bar-val" role="cell">' + moneyBoth(x.aud, x.robux) + '<small>' + (tot ? sharePct(share) : '') + (gp ? ' ' + chgChip(x.aud, gp[c] ? gp[c].aud : 0) : '') + '</small></span></div>';
-      }).join('') + '</div>' +
+      '<div class="adm-cat-wrap">' +
+        '<figure class="adm-pie">' + donutSvg(slices, { size: 176, aria: 'Revenue share by category', center: tot ? fmtA(tot, true) : 'A$0', sub: 'revenue' }) + '</figure>' +
+        '<div class="adm-cat-list" role="table" aria-label="Revenue by category">' + cats.map(function (c) {
+          var x = g[c];
+          return '<div class="adm-cat-row" role="row"><span class="adm-cat-name" role="cell"><b class="adm-dot" style="--pf:' + catColor(c) + '"></b><span>' + esc(c) + '<small>' + plural(x.n, 'sale') + '</small></span></span>' +
+            '<span class="adm-bar-val" role="cell">' + moneyBoth(x.aud, x.robux) + '<small>' + (tot ? sharePct(x.aud / tot * 100) : '') + (gp ? ' ' + chgChip(x.aud, gp[c] ? gp[c].aud : 0) : '') + '</small></span></div>';
+        }).join('') + '</div>' +
+      '</div>' +
       '<p class="adm-an-note">100 means revenue is spread evenly over all ' + catList.length + ' categories. Products we don\'t list here take their BuiltByBit category.</p>';
   }
 
