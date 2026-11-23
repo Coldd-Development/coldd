@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         coldd Creator Store Analytics
 // @namespace    https://coldd.dev
-// @version      5.1
+// @version      5.2
 // @description  Creator Store sales analytics in AU$ (revenue, fees, payouts, top products) that also syncs every sale to the coldd admin
 // @author       coldd
 // @match        https://create.roblox.com/*
@@ -20,6 +20,8 @@
 // ==/UserScript==
 
 /*
+ * 5.2: numbers use Roblox's normal font again (no forced fixed-width digits,
+ *      no copied font; every label is on Roblox's own text class like 4.2).
  * 5.1: buyer pictures work (the payload has no buyer id, so buyers are looked up
  *      by username on users.roblox.com), Roblox's own font again, and the
  *      payment's field layout (types only) is logged to the console once.
@@ -356,7 +358,7 @@
 
   // ---------- UI ----------
   const STYLE = `
-    #${CONFIG.IDS.ROOT} { display: flex; flex-direction: column; gap: 16px; width: 100%; margin-bottom: 24px; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+    #${CONFIG.IDS.ROOT} { display: flex; flex-direction: column; gap: 16px; width: 100%; margin-bottom: 24px; box-sizing: border-box; }
     #${CONFIG.IDS.ROOT} * { box-sizing: border-box; }
     #${CONFIG.IDS.ROOT} select, #${CONFIG.IDS.ROOT} button, #${CONFIG.IDS.ROOT} table { font-family: inherit; }
     #${CONFIG.IDS.ROOT} .cs-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
@@ -398,9 +400,6 @@
     state.cardClass = card; // borrow Roblox's own card look so the panel matches the page
     const root = document.createElement('div');
     root.id = CONFIG.IDS.ROOT;
-    // Roblox's own typeface (4.2 got it from the MuiTypography class on every label).
-    const typo = container.querySelector('.MuiTypography-root') || document.querySelector('.MuiTypography-root');
-    if (typo) root.style.fontFamily = getComputedStyle(typo).fontFamily;
     root.innerHTML = `
       <style>${STYLE}</style>
       <div class="cs-head">
