@@ -5481,6 +5481,9 @@ html[data-theme="light"] {
   --pf-parcel: #c99400; --pf-creatorstore: #2b2e35; --pf-payhip: #0ea5e9;
 }
 .adm-home { display: flex; flex-direction: column; gap: 16px; }
+/* display:flex above would beat the hidden attribute showPanel() sets, so the
+   dashboard showed on top of every other admin section. */
+.adm-home[hidden] { display: none; }
 .adm-home .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: baseline; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; }
 .adm-home-head p { margin: 0; font-size: 14px; color: var(--fg-3); }
 .adm-hp { min-width: 0; padding: 18px 20px; background: var(--bg-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); box-shadow: var(--e-3); }
