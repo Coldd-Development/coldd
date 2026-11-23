@@ -1,50 +1,30 @@
 // ==UserScript==
 // @name         coldd Creator Store Analytics
 // @namespace    https://coldd.dev
-// @version      5.3
-// @description  Creator Store sales analytics in AU$ (revenue, fees, payouts, top products) that also syncs every sale to the coldd admin
+// @version      6.0
+// @description  Your Creator Store earnings in AU$ on the transactions page: what you earned, sales, next payout, a chart and top products
 // @author       coldd
 // @match        https://create.roblox.com/*
 // @icon         https://www.roblox.com/favicon.ico
-// @require      https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @grant        GM_registerMenuCommand
-// @connect      ekinmytmudjwfaqaqswp.supabase.co
 // @connect      api.frankfurter.dev
 // @connect      thumbnails.roblox.com
-// @connect      users.roblox.com
 // @sandbox      JavaScript
 // @run-at       document-idle
 // ==/UserScript==
 
 /*
- * 5.3: product pictures in Recent sales. Reads the real payload fields
- *      (basePayment.productKey.productTargetId = asset id,
- *      purchaser.entity.longValue = buyer id, amounts = significand x 10^exponent).
- * 5.2: numbers use Roblox's normal font again (no forced fixed-width digits,
- *      no copied font; every label is on Roblox's own text class like 4.2).
- * 5.1: buyer pictures work (the payload has no buyer id, so buyers are looked up
- *      by username on users.roblox.com), Roblox's own font again, and the
- *      payment's field layout (types only) is logged to the console once.
- *
- * What changed from 4.2
- * - It no longer writes rows into Roblox's own transactions table. That table
- *   is React-controlled: rows added from outside got reordered and recycled by
- *   React (old orders mixed in with new ones, the wrong buyer pictures). The
- *   newest sales now show in a "Recent sales" list inside this panel instead.
- * - Buyer pictures come from thumbnails.roblox.com (the old headshot-thumbnail
- *   image URL no longer resolves).
- * - Every figure is AU$ (live USD rate from frankfurter.dev, cached 12 hours).
- * - Cards: Total revenue, Processing fees (net earnings under it), Next payout,
- *   Upcoming payout, AOV, Orders. Payouts: each sale sits in escrow for 30 days
- *   and is paid on the 1st of the month after it clears (a sale on 28 Nov
- *   clears 28 Dec and is paid 1 Jan). Payout cards ignore the timeframe.
- * - Peak buying hours is gone; Asset Revenue Breakdown is now Top Products.
- * - Each sync also sends the sales to coldd (platform-sales-ingest), so they
- *   count on the admin dashboard. Set the key once from the Tampermonkey menu
- *   ("Set coldd sync key") or the "Connect coldd" button on the panel.
+ * 6.0: a smaller panel, and it no longer sends sales to coldd.dev (the server
+ *      reads the same sales list every minute by itself now).
+ *      Kept: earned (after Roblox's fee), sales, next payout, one earnings chart,
+ *      top 5 products. Removed: status pills, the coldd connect button and key,
+ *      the fees / upcoming payout / average order cards, exchange-rate notes,
+ *      coloured numbers and the Recent sales table (Roblox's own table right
+ *      below lists every sale). Chart.js is gone too: the chart is a few SVG bars.
+ * Payouts: a sale sits in escrow for 30 days and is paid on the 1st of the
+ * month after it clears (sold 28 Nov, clears 28 Dec, paid 1 Jan).
  */
 (function () {
   'use strict';
@@ -59,57 +39,36 @@
     API_BASE_URL: 'https://apis.roblox.com/marketplace-fiat-service/v1/seller/payments',
     CURRENCY_DIVISOR: 1_000_000_000,
     ESCROW_DAYS: 30,
-    INGEST_URL: 'https://ekinmytmudjwfaqaqswp.supabase.co/functions/v1/platform-sales-ingest',
-    INGEST_BATCH: 500,
     FX_FALLBACK: 1.52,
     FX_TTL_MS: 12 * 60 * 60 * 1000,
-    RECENT_ROWS: 10,
-    IDS: Object.freeze({
-      ROOT: 'coldd-cs-analytics',
-      BADGE: 'coldd-cs-badge',
-      SYNC: 'coldd-cs-sync',
-      SELECT: 'coldd-cs-range',
-      CARDS: 'coldd-cs-cards',
-      VELOCITY_TITLE: 'coldd-cs-velocity-title',
-      VELOCITY_CANVAS: 'coldd-cs-velocity',
-      TOP: 'coldd-cs-top',
-      RECENT: 'coldd-cs-recent',
-    }),
+    TOP_ROWS: 5,
+    ROOT: 'coldd-cs-analytics',
   });
-  const KEY_STORE = 'coldd_ingest_key';
-  const SYNCED_UPTO = 'coldd_synced_upto';
   const FX_STORE = 'coldd_fx_usd_aud';
+  const RANGE_STORE = 'coldd_cs_range';
+  const RANGES = [['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['year', 'This year'], ['all', 'All time']];
 
   const state = {
     payments: [],          // normalised, newest first
-    selectedRange: '28d',
-    velocityChart: null,
+    range: GM_getValue(RANGE_STORE, '30d'),
     isFetching: false,
     refreshTimer: null,
     lastFetchTime: 0,
     audRate: CONFIG.FX_FALLBACK,
-    headshots: new Map(),  // userId -> image url
     assetThumbs: new Map(), // assetId -> image url ('' = none)
-    syncNote: '',
     cardClass: '',
-    userIds: new Map(),   // lower-case username -> user id ('' = not found)
-    loggedShape: false,
+    status: 'Loading sales…',
   };
+  if (!RANGES.some((r) => r[0] === state.range)) state.range = '30d';
 
-  // ---------- small helpers ----------
-  const $ = (id) => document.getElementById(id);
+  // ---------- helpers ----------
+  const root = () => document.getElementById(CONFIG.ROOT);
+  const q = (sel) => root()?.querySelector(sel);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const aud = (usd) => (Number(usd) || 0) * state.audRate;
   const fmtA = (v) => 'A$' + (Number(v) || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDay = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
   const plural = (n, w) => `${n.toLocaleString('en-AU')} ${w}${n === 1 ? '' : 's'}`;
-  function relTime(d) {
-    const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
-    if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm ago';
-    if (s < 86400) return Math.round(s / 3600) + 'h ago';
-    if (s < 86400 * 30) return Math.round(s / 86400) + 'd ago';
-    return fmtDay(d);
-  }
   function gmRequest(opts) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
@@ -124,17 +83,16 @@
     const url = new URL(location.href);
     return url.pathname === CONFIG.TARGET_PATH && url.searchParams.get('tab') === CONFIG.TARGET_TAB && url.searchParams.get('paymentType') === CONFIG.TARGET_PAYMENT;
   }
-  // One observer for the life of the tab: Roblox's React app can drop our
-  // panel when it re-renders or when you switch tabs and come back, so the
-  // panel is put back whenever it goes missing on the target page.
+  // Roblox's React app can drop the panel when it re-renders or when you switch
+  // tabs and come back, so it is put back whenever it goes missing.
   let ensureQueued = false;
   function ensurePanel() {
     if (ensureQueued) return;
     ensureQueued = true;
     requestAnimationFrame(() => {
       ensureQueued = false;
-      if (!isTargetPage()) { stopAutoRefresh(); $(CONFIG.IDS.ROOT)?.remove(); return; }
-      if ($(CONFIG.IDS.ROOT)) return;
+      if (!isTargetPage()) { stopAutoRefresh(); root()?.remove(); return; }
+      if (root()) return;
       const container = document.querySelector('[data-testid="creator-store-transactions-id"]');
       const sampleCard = container?.querySelector('.MuiCard-root');
       if (!container || !sampleCard) return;
@@ -143,7 +101,6 @@
       if (state.payments.length) render(); else refresh(true);
     });
   }
-
   function startAutoRefresh() {
     stopAutoRefresh();
     state.refreshTimer = setInterval(() => refresh(true), CONFIG.REFRESH_INTERVAL_MS);
@@ -158,54 +115,20 @@
   }
 
   // ---------- data ----------
-  // The live payload does not carry the purchaserId / assetId / paymentId
-  // fields 4.2 assumed, so ids are searched for by name instead of assumed.
-  function findId(obj, re, depth = 0) {
-    if (!obj || typeof obj !== 'object' || depth > 3) return '';
-    for (const [k, v] of Object.entries(obj)) {
-      if (re.test(k) && (typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)))) return String(v);
-    }
-    for (const v of Object.values(obj)) {
-      if (v && typeof v === 'object') { const f = findId(v, re, depth + 1); if (f) return f; }
-    }
-    return '';
-  }
-  // Key names and value types only (no values), for working out the payload.
-  function shapeOf(v, d = 0) {
-    if (Array.isArray(v)) return [v.length ? shapeOf(v[0], d + 1) : 'empty'];
-    if (v && typeof v === 'object') {
-      if (d > 4) return '{...}';
-      const o = {};
-      Object.keys(v).forEach((k) => { o[k] = shapeOf(v[k], d + 1); });
-      return o;
-    }
-    return typeof v;
-  }
   function normalise(p) {
     const base = p.basePayment || {};
-    // Money is significand x 10^exponent (exponent has always been -9 so far).
-    const money = (q) => {
-      if (!q) return 0;
-      const sig = Number(q.significand) || 0;
-      return typeof q.exponent === 'number' ? sig * Math.pow(10, q.exponent) : sig / CONFIG.CURRENCY_DIVISOR;
+    // Money is significand x 10^exponent (the exponent has always been -9 so far).
+    const money = (m) => {
+      if (!m) return 0;
+      const sig = Number(m.significand) || 0;
+      return typeof m.exponent === 'number' ? sig * Math.pow(10, m.exponent) : sig / CONFIG.CURRENCY_DIVISOR;
     };
-    const gross = money(base.totalAmount?.quantity);
-    const net = money(p.netAmount?.quantity);
-    const when = new Date(base.paymentDateTime || 0);
-    // The stored sale key must never change (coldd matches re-sent sales on it),
-    // so it is still built from exactly the fields 5.0 used.
-    const keyAsset = base.assetId || base.productId || '';
-    const assetId = base.productKey?.productTargetId || keyAsset || findId(base, /^(asset|item|target|product)Id$/i);
-    const buyerId = p.purchaser?.entity?.longValue || p.purchaserId || findId(p, /^(purchaser|buyer)(User)?Id$/i);
     return {
-      id: String(base.paymentId || `${base.paymentDateTime}|${p.purchaserId || p.purchaserName}|${keyAsset}`),
-      when, gross, net,
-      currency: String(base.totalAmount?.currencyCode || base.totalAmount?.currency || 'USD').toUpperCase(),
+      when: new Date(base.paymentDateTime || 0),
+      gross: money(base.totalAmount?.quantity),
+      net: money(p.netAmount?.quantity),
       name: base.productName || 'Unknown asset',
-      assetId: String(assetId || ''),
-      assetType: base.productKey?.productType || base.assetType || '',
-      buyer: p.purchaserName || 'Unknown buyer',
-      buyerId: buyerId ? String(buyerId) : '',
+      assetId: String(base.productKey?.productTargetId || base.assetId || base.productId || ''),
     };
   }
   async function fetchAllPayments() {
@@ -216,13 +139,7 @@
       const res = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status} reading payments`);
       const data = await res.json();
-      if (Array.isArray(data.sellerPayments)) {
-        if (!state.loggedShape && data.sellerPayments[0]) {
-          state.loggedShape = true;
-          console.info('[coldd analytics] payment layout (types only):', JSON.stringify(shapeOf(data.sellerPayments[0])));
-        }
-        out.push(...data.sellerPayments.map(normalise));
-      }
+      if (Array.isArray(data.sellerPayments)) out.push(...data.sellerPayments.map(normalise));
       hasMore = Boolean(data.pageInfo?.hasMore);
       cursor = data.pageInfo?.nextCursor || '';
       if (hasMore) await new Promise((r) => setTimeout(r, 150));
@@ -238,337 +155,250 @@
       if (rate > 0) { state.audRate = rate; GM_setValue(FX_STORE, { rate, at: Date.now() }); }
     } catch (_) { if (cached) state.audRate = cached.rate; }
   }
-
   async function fetchAndRender() {
     if (state.isFetching) return;
     state.isFetching = true;
-    setBadge('Syncing ledger…', 'info');
     try {
       await loadAudRate();
       state.payments = await fetchAllPayments();
       state.lastFetchTime = Date.now();
+      state.status = 'Updated ' + new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
       render();
-      const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setBadge(`${plural(state.payments.length, 'order')} analysed · ${t}`, 'ok');
-      syncToColdd();
     } catch (err) {
-      console.error('[coldd analytics] sync failed:', err);
-      setBadge('Could not read your sales', 'err');
+      console.error('[coldd analytics] could not read sales:', err);
+      state.status = 'Couldn’t load sales, trying again soon';
+      renderStatus();
     } finally {
       state.isFetching = false;
     }
   }
 
-  // ---------- coldd sync ----------
-  function ingestKey() { return GM_getValue(KEY_STORE, ''); }
-  function askForKey() {
-    const k = prompt('Paste the coldd sync key (PLATFORM_INGEST_KEY). It is saved in Tampermonkey on this browser only.', ingestKey() || '');
-    if (k === null) return;
-    GM_setValue(KEY_STORE, k.trim());
-    GM_setValue(SYNCED_UPTO, 0); // first sync after a new key sends the full history
-    renderSyncState();
-    syncToColdd();
-  }
-  GM_registerMenuCommand('Set coldd sync key', askForKey);
-
-  async function syncToColdd() {
-    const key = ingestKey();
-    if (!key) { state.syncNote = 'not connected'; renderSyncState(); return; }
-    // After the first full send, only the last 45 days go up each time
-    // (re-sending is harmless: coldd updates the same row by payment id).
-    const upto = Number(GM_getValue(SYNCED_UPTO, 0)) || 0;
-    const since = upto ? upto - 45 * 86400000 : 0;
-    const list = state.payments.filter((p) => p.when.getTime() >= since);
-    if (!list.length) { state.syncNote = 'up to date'; renderSyncState(); return; }
-    state.syncNote = 'sending…'; renderSyncState();
-    try {
-      let written = 0;
-      for (let i = 0; i < list.length; i += CONFIG.INGEST_BATCH) {
-        const batch = list.slice(i, i + CONFIG.INGEST_BATCH).map((p) => ({
-          external_id: p.id, sold_at: p.when.toISOString(), product_name: p.name,
-          amount: Math.round(p.gross * 100) / 100, net_amount: Math.round(p.net * 100) / 100, currency: p.currency,
-          buyer_name: p.buyer, buyer_ref: p.buyerId, raw: { assetId: p.assetId, assetType: p.assetType },
-        }));
-        const r = await gmRequest({
-          method: 'POST', url: CONFIG.INGEST_URL, data: JSON.stringify({ platform: 'creatorstore', source: 'userscript', sales: batch }),
-          headers: { 'Content-Type': 'application/json', 'x-ingest-key': key },
-        });
-        const body = (() => { try { return JSON.parse(r.responseText); } catch (_) { return {}; } })();
-        if (r.status === 401) { state.syncNote = 'wrong key'; renderSyncState(); return; }
-        if (r.status >= 300) throw new Error(body.error || `HTTP ${r.status}`);
-        written += body.written || 0;
-      }
-      GM_setValue(SYNCED_UPTO, state.payments[0]?.when.getTime() || Date.now());
-      state.syncNote = `synced ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } catch (err) {
-      console.error('[coldd analytics] coldd sync failed:', err);
-      state.syncNote = 'sync failed';
-    }
-    renderSyncState();
-  }
-
-  // ---------- metrics ----------
+  // ---------- numbers ----------
   function rangeStart(key, now) {
-    const d = new Date(now);
+    const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     switch (key) {
-      case '28d': d.setDate(d.getDate() - 27); d.setHours(0, 0, 0, 0); return d;
-      case 'mtd': return new Date(now.getFullYear(), now.getMonth(), 1);
-      case 'ytd': return new Date(now.getFullYear(), 0, 1);
-      case '60d': return new Date(now.getTime() - 60 * 86400000);
-      case '90d': return new Date(now.getTime() - 90 * 86400000);
-      case '6m': d.setMonth(d.getMonth() - 6); return d;
-      case '1y': d.setFullYear(d.getFullYear() - 1); return d;
+      case '7d': return new Date(day0.getTime() - 6 * 86400000);
+      case '30d': return new Date(day0.getTime() - 29 * 86400000);
+      case '90d': return new Date(day0.getTime() - 89 * 86400000);
+      case 'year': return new Date(now.getFullYear(), 0, 1);
       default: return null;
     }
   }
-  // Escrow: a sale clears 30 days after purchase and is paid on the 1st of the
-  // month after it clears.
+  // A sale clears 30 days after purchase and is paid on the 1st of the month after.
   function payoutDate(when) {
     const cleared = new Date(when.getTime() + CONFIG.ESCROW_DAYS * 86400000);
     return new Date(cleared.getFullYear(), cleared.getMonth() + 1, 1);
   }
-  function metrics() {
+  function numbers() {
     const now = new Date();
-    const start = rangeStart(state.selectedRange, now);
+    const start = rangeStart(state.range, now);
     const inRange = start ? state.payments.filter((p) => p.when >= start) : state.payments;
     let gross = 0, net = 0;
     inRange.forEach((p) => { gross += p.gross; net += p.net; });
 
-    const nextDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const afterDate = new Date(now.getFullYear(), now.getMonth() + 2, 1);
-    const next = { date: nextDate, net: 0, n: 0 }, upcoming = { date: afterDate, net: 0, n: 0 };
-    state.payments.forEach((p) => {
-      const pd = payoutDate(p.when).getTime();
-      if (pd === nextDate.getTime()) { next.net += p.net; next.n++; }
-      else if (pd === afterDate.getTime()) { upcoming.net += p.net; upcoming.n++; }
-    });
+    const payDay = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const payout = { date: payDay, net: 0, n: 0 };
+    state.payments.forEach((p) => { if (payoutDate(p.when).getTime() === payDay.getTime()) { payout.net += p.net; payout.n++; } });
 
-    const daily = state.selectedRange === '28d' || state.selectedRange === 'mtd';
-    const series = new Map();
+    // Bars: one per day for up to 90 days, else one per month.
+    const daily = state.range !== 'year' && state.range !== 'all';
+    const keyOf = (d) => daily ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : `${d.getFullYear()}-${d.getMonth()}`;
+    const bars = new Map();
+    const first = start || (inRange.length ? inRange[inRange.length - 1].when : now);
     if (daily) {
-      for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); d <= now; d.setDate(d.getDate() + 1)) {
-        series.set(dayKey(d, true), { label: fmtDay(d), gross: 0, net: 0 });
+      for (let d = new Date(first.getFullYear(), first.getMonth(), first.getDate()); d <= now; d.setDate(d.getDate() + 1)) {
+        bars.set(keyOf(d), { when: new Date(d), net: 0, n: 0 });
+      }
+    } else {
+      for (let d = new Date(first.getFullYear(), first.getMonth(), 1); d <= now; d.setMonth(d.getMonth() + 1)) {
+        bars.set(keyOf(d), { when: new Date(d), net: 0, n: 0 });
       }
     }
-    const assets = new Map();
-    inRange.slice().reverse().forEach((p) => {
-      const k = dayKey(p.when, daily);
-      if (!series.has(k)) series.set(k, { label: daily ? fmtDay(p.when) : p.when.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }), gross: 0, net: 0 });
-      const s = series.get(k); s.gross += p.gross; s.net += p.net;
-      const a = assets.get(p.name) || { name: p.name, assetId: p.assetId, sold: 0, gross: 0 };
-      a.sold++; a.gross += p.gross; assets.set(p.name, a);
+    const products = new Map();
+    inRange.forEach((p) => {
+      const b = bars.get(keyOf(p.when));
+      if (b) { b.net += p.net; b.n++; }
+      const a = products.get(p.name) || { name: p.name, assetId: p.assetId, n: 0, net: 0 };
+      a.n++; a.net += p.net; products.set(p.name, a);
     });
-    const top = [...assets.values()].sort((a, b) => b.gross - a.gross);
-    return { gross, net, fees: gross - net, orders: inRange.length, next, upcoming, daily, series, top };
-  }
-  function dayKey(d, daily) {
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    return daily ? `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}` : `${d.getFullYear()}-${m}`;
+    const top = [...products.values()].sort((a, b) => b.net - a.net).slice(0, CONFIG.TOP_ROWS);
+    return { gross, net, n: inRange.length, payout, daily, bars: [...bars.values()], top };
   }
 
   // ---------- UI ----------
+  const R = '#' + CONFIG.ROOT;
   const STYLE = `
-    #${CONFIG.IDS.ROOT} { display: flex; flex-direction: column; gap: 16px; width: 100%; margin-bottom: 24px; box-sizing: border-box; }
-    #${CONFIG.IDS.ROOT} * { box-sizing: border-box; }
-    #${CONFIG.IDS.ROOT} select, #${CONFIG.IDS.ROOT} button, #${CONFIG.IDS.ROOT} table { font-family: inherit; }
-    #${CONFIG.IDS.ROOT} .cs-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-    #${CONFIG.IDS.ROOT} .cs-head h2 { font-size: 1.25rem; font-weight: 600; margin: 0; }
-    #${CONFIG.IDS.ROOT} .cs-pill { font-size: .75rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; }
-    #${CONFIG.IDS.ROOT} .cs-pill.info { background: rgba(0,133,255,.2); color: #4aa3ff; }
-    #${CONFIG.IDS.ROOT} .cs-pill.ok { background: rgba(76,175,80,.2); color: #5fd068; }
-    #${CONFIG.IDS.ROOT} .cs-pill.err { background: rgba(255,82,82,.2); color: #ff6b6b; }
-    #${CONFIG.IDS.ROOT} .cs-pill.mute { background: rgba(255,255,255,.08); color: rgba(255,255,255,.7); }
-    #${CONFIG.IDS.ROOT} button.cs-pill { border: 0; cursor: pointer; font-family: inherit; }
-    #${CONFIG.IDS.ROOT} select { background: rgba(255,255,255,.08); color: inherit; border: 1px solid rgba(255,255,255,.2); border-radius: 6px; padding: 6px 12px; font-size: .85rem; font-weight: 500; cursor: pointer; }
-    #${CONFIG.IDS.ROOT} select option { background: #232527; color: #fff; }
-    #${CONFIG.IDS.ROOT} .cs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
-    #${CONFIG.IDS.ROOT} .cs-card { padding: 16px; display: flex; flex-direction: column; gap: 6px; margin: 0; min-width: 0; }
-    #${CONFIG.IDS.ROOT} .cs-label { font-size: .95rem; font-weight: 500; opacity: .85; }
-    #${CONFIG.IDS.ROOT} .cs-value { font-size: 1.6rem; font-weight: 700; white-space: nowrap; }
-    #${CONFIG.IDS.ROOT} .cs-sub { font-size: .8rem; opacity: .65; }
-    #${CONFIG.IDS.ROOT} .cs-green { color: #4caf50; } #${CONFIG.IDS.ROOT} .cs-red { color: #ff5252; } #${CONFIG.IDS.ROOT} .cs-blue { color: #29b6f6; }
-    #${CONFIG.IDS.ROOT} .cs-row { display: grid; grid-template-columns: 2fr 1.2fr; gap: 16px; }
-    @media (max-width: 1000px) { #${CONFIG.IDS.ROOT} .cs-row { grid-template-columns: 100%; } }
-    #${CONFIG.IDS.ROOT} .cs-panel { padding: 20px; display: flex; flex-direction: column; margin: 0; min-width: 0; }
-    #${CONFIG.IDS.ROOT} .cs-panel h3 { margin: 0 0 14px; font-size: 1.1rem; font-weight: 500; }
-    #${CONFIG.IDS.ROOT} .cs-list { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; overflow-y: auto; max-height: 260px; }
-    #${CONFIG.IDS.ROOT} .cs-top { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
-    #${CONFIG.IDS.ROOT} .cs-top div { display: flex; justify-content: space-between; gap: 12px; }
-    #${CONFIG.IDS.ROOT} .cs-top b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #${CONFIG.IDS.ROOT} .cs-top small { font-size: .75rem; opacity: .65; }
-    #${CONFIG.IDS.ROOT} .cs-recent { width: 100%; border-collapse: collapse; font-size: .85rem; }
-    #${CONFIG.IDS.ROOT} .cs-recent th { text-align: left; font-weight: 500; opacity: .65; padding: 0 10px 8px 0; }
-    #${CONFIG.IDS.ROOT} .cs-recent td { padding: 8px 10px 8px 0; border-top: 1px solid rgba(255,255,255,.06); vertical-align: middle; }
-    #${CONFIG.IDS.ROOT} .cs-recent td:last-child, #${CONFIG.IDS.ROOT} .cs-recent th:last-child { text-align: right; padding-right: 0; }
-    #${CONFIG.IDS.ROOT} .cs-buyer { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
-    #${CONFIG.IDS.ROOT} .cs-buyer img, #${CONFIG.IDS.ROOT} .cs-buyer span.cs-av { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,.08); flex: 0 0 auto; }
-    #${CONFIG.IDS.ROOT} .cs-prod { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
-    #${CONFIG.IDS.ROOT} .cs-prod img, #${CONFIG.IDS.ROOT} .cs-prod span.cs-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; background: rgba(255,255,255,.08); flex: 0 0 auto; }
-    #${CONFIG.IDS.ROOT} a.cs-link { color: inherit; text-decoration: none; } #${CONFIG.IDS.ROOT} a.cs-link:hover, #${CONFIG.IDS.ROOT} .cs-buyer:hover { text-decoration: underline; }
+    ${R} { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-bottom: 24px; box-sizing: border-box; }
+    ${R} * { box-sizing: border-box; }
+    ${R} button { font: inherit; color: inherit; }
+    ${R} .cs-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    ${R} .cs-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 8px; background: color-mix(in srgb, currentColor 7%, transparent); }
+    ${R} .cs-seg button { border: 0; background: none; padding: 5px 12px; border-radius: 6px; font-size: .8125rem; cursor: pointer; opacity: .7; }
+    ${R} .cs-seg button:hover { opacity: 1; }
+    ${R} .cs-seg button[aria-pressed="true"] { opacity: 1; background: color-mix(in srgb, currentColor 13%, transparent); font-weight: 600; }
+    ${R} .cs-status { font-size: .8125rem; opacity: .55; }
+    ${R} .cs-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; }
+    ${R} .cs-fig { padding: 16px 20px; min-width: 0; }
+    ${R} .cs-fig + .cs-fig { border-left: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+    ${R} .cs-fig span { display: block; font-size: .8125rem; opacity: .65; }
+    ${R} .cs-fig strong { display: block; font-size: 1.5rem; font-weight: 600; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    ${R} .cs-fig small { display: block; font-size: .8125rem; opacity: .55; }
+    ${R} .cs-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+    @media (max-width: 900px) { ${R} .cs-row { grid-template-columns: 100%; } ${R} .cs-figs { grid-template-columns: 100%; } ${R} .cs-fig + .cs-fig { border-left: 0; border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); } }
+    ${R} .cs-panel { padding: 16px 20px; margin: 0; min-width: 0; display: flex; flex-direction: column; }
+    ${R} .cs-panel h3 { margin: 0 0 12px; font-size: .9375rem; font-weight: 600; }
+    ${R} .cs-chart { position: relative; flex: 1 1 auto; min-height: 180px; }
+    ${R} .cs-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    ${R} .cs-chart rect.b { fill: #3b82f6; }
+    ${R} .cs-chart rect.hit { fill: transparent; }
+    ${R} .cs-chart rect.b.on { fill: #60a5fa; }
+    ${R} .cs-chart line { stroke: currentColor; stroke-opacity: .12; }
+    ${R} .cs-chart text { fill: currentColor; fill-opacity: .55; font-size: 11px; }
+    ${R} .cs-tip { position: absolute; pointer-events: none; padding: 6px 10px; border-radius: 6px; font-size: .8125rem; white-space: nowrap; background: #1f2023; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.3); transform: translate(-50%, calc(-100% - 8px)); }
+    ${R} .cs-empty { font-size: .875rem; opacity: .55; padding: 8px 0; }
+    ${R} .cs-top { display: flex; flex-direction: column; }
+    ${R} .cs-top a, ${R} .cs-top div.cs-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; color: inherit; text-decoration: none; min-width: 0; }
+    ${R} .cs-top > * + * { border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent); }
+    ${R} .cs-top a:hover .cs-name { text-decoration: underline; }
+    ${R} .cs-top img, ${R} .cs-top .cs-pic { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; background: color-mix(in srgb, currentColor 8%, transparent); }
+    ${R} .cs-top .cs-txt { flex: 1 1 auto; min-width: 0; }
+    ${R} .cs-name { display: block; font-size: .875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ${R} .cs-top small { display: block; font-size: .75rem; opacity: .55; }
+    ${R} .cs-amt { font-size: .875rem; font-weight: 600; flex: 0 0 auto; }
   `;
 
   function buildPanel(container, sampleCard) {
     const card = sampleCard.className;
-    state.cardClass = card; // borrow Roblox's own card look so the panel matches the page
-    const root = document.createElement('div');
-    root.id = CONFIG.IDS.ROOT;
-    root.innerHTML = `
+    state.cardClass = card; // Roblox's own card look, so the panel matches the page
+    const el = document.createElement('div');
+    el.id = CONFIG.ROOT;
+    el.className = 'MuiTypography-root';
+    el.innerHTML = `
       <style>${STYLE}</style>
-      <div class="cs-head">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <h2 class="MuiTypography-root">Store Analytics</h2>
-          <span id="${CONFIG.IDS.BADGE}" class="cs-pill info">Syncing ledger…</span>
-          <span id="${CONFIG.IDS.SYNC}"></span>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;">
-          <span style="opacity:.8;font-weight:500;">Timeframe</span>
-          <select id="${CONFIG.IDS.SELECT}">
-            <option value="28d">Last 28 days</option><option value="mtd">Month to date</option><option value="ytd">Year to date</option>
-            <option value="60d">Last 60 days</option><option value="90d">Last 90 days</option><option value="6m">Last 6 months</option>
-            <option value="1y">Last year</option><option value="all">All time</option>
-          </select>
-        </label>
+      <div class="cs-bar">
+        <div class="cs-seg" role="group" aria-label="Timeframe">${RANGES.map(([k, label]) => `<button type="button" data-range="${k}" aria-pressed="${k === state.range}">${label}</button>`).join('')}</div>
+        <span class="cs-status"></span>
       </div>
-      <div class="cs-cards" id="${CONFIG.IDS.CARDS}"></div>
+      <div class="${card} cs-figs"></div>
       <div class="cs-row">
-        <div class="${card} cs-panel"><h3 class="MuiTypography-root" id="${CONFIG.IDS.VELOCITY_TITLE}">Daily Revenue Velocity</h3><div style="position:relative;height:260px;width:100%;"><canvas id="${CONFIG.IDS.VELOCITY_CANVAS}"></canvas></div></div>
-        <div class="${card} cs-panel"><h3 class="MuiTypography-root">Top Products</h3><div class="cs-list" id="${CONFIG.IDS.TOP}"><span style="opacity:.6">Calculating…</span></div></div>
-      </div>
-      <div class="${card} cs-panel"><h3 class="MuiTypography-root">Recent sales</h3><div id="${CONFIG.IDS.RECENT}"></div></div>`;
-    container.insertBefore(root, container.firstChild);
-    const sel = $(CONFIG.IDS.SELECT);
-    sel.value = state.selectedRange;
-    sel.addEventListener('change', (e) => { state.selectedRange = e.target.value; render(); });
-    root.addEventListener('click', (e) => { if (e.target.closest('[data-connect]')) askForKey(); });
-    renderSyncState();
+        <div class="${card} cs-panel"><h3 class="cs-chart-title">Earnings</h3><div class="cs-chart"></div></div>
+        <div class="${card} cs-panel"><h3>Top products</h3><div class="cs-top"></div></div>
+      </div>`;
+    container.insertBefore(el, container.firstChild);
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-range]');
+      if (!b) return;
+      state.range = b.getAttribute('data-range');
+      GM_setValue(RANGE_STORE, state.range);
+      el.querySelectorAll('[data-range]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      render();
+    });
+    renderStatus();
   }
-
-  function setBadge(text, tone) {
-    const b = $(CONFIG.IDS.BADGE);
-    if (!b) return;
-    b.textContent = text;
-    b.className = 'cs-pill ' + tone;
+  function renderStatus() {
+    const s = q('.cs-status');
+    if (s) s.textContent = state.status;
   }
-  function renderSyncState() {
-    const el = $(CONFIG.IDS.SYNC);
-    if (!el) return;
-    if (!ingestKey()) { el.innerHTML = '<button type="button" class="cs-pill mute" data-connect>Connect coldd</button>'; return; }
-    const tone = /failed|wrong/.test(state.syncNote) ? 'err' : 'mute';
-    el.innerHTML = `<button type="button" class="cs-pill ${tone}" data-connect title="Change the coldd sync key">coldd: ${esc(state.syncNote || 'waiting')}</button>`;
-  }
-
-  function cardHtml(label, value, sub, cls) {
-    return `<div class="${state.cardClass} cs-card"><span class="MuiTypography-root cs-label">${esc(label)}</span><span class="MuiTypography-root cs-value ${cls || ''}">${value}</span><span class="MuiTypography-root cs-sub">${sub}</span></div>`;
+  function fig(label, value, sub) {
+    return `<div class="cs-fig"><span>${esc(label)}</span><strong>${value}</strong><small>${sub}</small></div>`;
   }
   function render() {
-    if (!$(CONFIG.IDS.ROOT)) return;
-    const m = metrics();
-    const feePct = m.gross ? (m.fees / m.gross * 100).toFixed(1) : '0.0';
-    $(CONFIG.IDS.CARDS).innerHTML = [
-      cardHtml('Total revenue', fmtA(aud(m.gross)), `Gross before fees · US$1 = A$${state.audRate.toFixed(2)}`),
-      cardHtml('Processing fees', '-' + fmtA(aud(m.fees)), `Net earnings <b class="cs-green">${fmtA(aud(m.net))}</b> · ${feePct}% fees`, 'cs-red'),
-      cardHtml(`Next payout · ${fmtDay(m.next.date)}`, fmtA(aud(m.next.net)), `${plural(m.next.n, 'sale')} out of escrow by then`, 'cs-green'),
-      cardHtml(`Upcoming payout · ${fmtDay(m.upcoming.date)}`, fmtA(aud(m.upcoming.net)), `${plural(m.upcoming.n, 'sale')} so far, still collecting`, 'cs-blue'),
-      cardHtml('AOV', fmtA(aud(m.orders ? m.gross / m.orders : 0)), `Net ${fmtA(aud(m.orders ? m.net / m.orders : 0))} per order`),
-      cardHtml('Orders', m.orders.toLocaleString('en-AU'), `${new Set(state.payments.map((p) => p.buyer)).size.toLocaleString('en-AU')} buyers all time`),
+    if (!root()) return;
+    renderStatus();
+    const m = numbers();
+    q('.cs-figs').innerHTML = [
+      fig('Earned', fmtA(aud(m.net)), m.gross ? `${fmtA(aud(m.gross))} before Roblox’s fee` : 'No sales in this time'),
+      fig('Sales', m.n.toLocaleString('en-AU'), m.n ? `${fmtA(aud(m.net / m.n))} each on average` : '&nbsp;'),
+      fig('Next payout', fmtA(aud(m.payout.net)), `${esc(m.payout.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'long' }))} · ${plural(m.payout.n, 'sale')}`),
     ].join('');
-    $(CONFIG.IDS.VELOCITY_TITLE).textContent = m.daily ? 'Daily Revenue Velocity' : 'Monthly Revenue Velocity';
+    q('.cs-chart-title').textContent = m.daily ? 'Earnings per day' : 'Earnings per month';
+    // The list first: it sets the row's height, which the chart is sized to.
     renderTop(m.top);
-    renderVelocity(m.series, m.daily);
-    renderRecent();
+    renderChart(m.bars, m.daily);
   }
-  function renderTop(top) {
-    const box = $(CONFIG.IDS.TOP);
-    if (!top.length) { box.innerHTML = '<span style="opacity:.6">No sales in this range</span>'; return; }
-    const total = top.reduce((s, a) => s + a.gross, 0);
-    box.innerHTML = top.map((a) => `
-      <div class="MuiTypography-root cs-top">
-        <div><b title="${esc(a.name)}">${a.assetId ? `<a class="cs-link" href="https://create.roblox.com/store/asset/${esc(a.assetId)}">${esc(a.name)}</a>` : esc(a.name)}</b><span class="cs-green" style="font-weight:600">${fmtA(aud(a.gross))}</span></div>
-        <div><small>${plural(a.sold, 'sale')}</small><small>${total ? (a.gross / total * 100).toFixed(1) : '0.0'}% of revenue</small></div>
-      </div>`).join('');
-  }
-  function renderVelocity(series, daily) {
-    const ctx = $(CONFIG.IDS.VELOCITY_CANVAS);
-    if (!ctx || typeof Chart === 'undefined') return;
-    const keys = [...series.keys()].sort();
-    const rows = keys.map((k) => series.get(k));
-    if (state.velocityChart) state.velocityChart.destroy();
-    state.velocityChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: rows.length ? rows.map((r) => r.label) : ['No data'],
-        datasets: [{
-          label: 'Revenue (A$)', data: rows.length ? rows.map((r) => aud(r.gross)) : [0],
-          borderColor: '#0085ff', backgroundColor: 'rgba(0,133,255,.1)', fill: true, tension: 0.25, borderWidth: 2,
-          pointRadius: daily ? 2 : 4, pointHoverRadius: 5,
-        }],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => `Revenue ${fmtA(c.raw)} · net ${fmtA(aud(rows[c.dataIndex]?.net || 0))}` } },
-        },
-        scales: {
-          x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: 'rgba(255,255,255,.7)', maxTicksLimit: daily ? 14 : 12, maxRotation: 45 } },
-          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: 'rgba(255,255,255,.7)', callback: (v) => 'A$' + v } },
-        },
-      },
+
+  // A plain bar chart: one bar per day (or month), hover for the figure.
+  function renderChart(bars, daily) {
+    const box = q('.cs-chart');
+    if (!box) return;
+    // Sized to the box (it grows to match the Top products card next to it).
+    const W = Math.max(240, box.clientWidth || 600), H = Math.max(180, box.clientHeight || 180), padL = 44, padB = 20, padT = 6;
+    const max = Math.max(...bars.map((b) => aud(b.net)), 0);
+    if (!bars.length || max <= 0) { box.innerHTML = '<div class="cs-empty">No sales in this time.</div>'; return; }
+    const step = niceStep(max / 3);
+    const top = Math.ceil(max / step) * step;
+    const plotW = W - padL, plotH = H - padB - padT;
+    const slot = plotW / bars.length, bw = Math.max(1, Math.min(28, slot * 0.7));
+    const y = (v) => padT + plotH - (v / top) * plotH;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Earnings per ${daily ? 'day' : 'month'}">`;
+    for (let v = 0; v <= top + 1e-9; v += step) {
+      svg += `<line x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${padL - 8}" y="${y(v) + 4}" text-anchor="end">A$${v.toLocaleString('en-AU')}</text>`;
+    }
+    const every = Math.max(1, Math.ceil(bars.length / (daily ? 8 : 10)));
+    let hits = '';
+    bars.forEach((b, i) => {
+      const v = aud(b.net), x = padL + i * slot + (slot - bw) / 2, h = Math.max(v > 0 ? 2 : 0, (v / top) * plotH);
+      svg += `<rect class="b" data-i="${i}" x="${x}" y="${padT + plotH - h}" width="${bw}" height="${h}" rx="${Math.min(3, bw / 2)}"/>`;
+      // A full-height hover area per bar, drawn last so it sits on top of the bars.
+      hits += `<rect class="hit" data-i="${i}" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${plotH}"/>`;
+      if (i % every === 0) svg += `<text x="${padL + i * slot + slot / 2}" y="${H - 4}" text-anchor="middle">${esc(daily ? fmtDay(b.when) : b.when.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }))}</text>`;
     });
+    box.innerHTML = svg + hits + '</svg><div class="cs-tip" hidden></div>';
+    const tip = box.querySelector('.cs-tip'), svgEl = box.querySelector('svg');
+    let on = null;
+    const clear = () => { tip.hidden = true; if (on) on.classList.remove('on'); on = null; };
+    svgEl.addEventListener('mousemove', (e) => {
+      const hit = e.target.closest('rect.hit');
+      if (!hit) { clear(); return; }
+      const i = +hit.getAttribute('data-i'), b = bars[i];
+      const bar = svgEl.querySelector(`rect.b[data-i="${i}"]`);
+      if (on !== bar) { if (on) on.classList.remove('on'); on = bar; if (bar) bar.classList.add('on'); }
+      const r = box.getBoundingClientRect();
+      const label = daily ? b.when.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : b.when.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+      tip.textContent = `${label} · ${fmtA(aud(b.net))} · ${plural(b.n, 'sale')}`;
+      tip.style.left = Math.min(r.width - 90, Math.max(90, e.clientX - r.left)) + 'px';
+      tip.style.top = Math.max(18, (+(bar ? bar.getAttribute('y') : padT) / H) * r.height) + 'px';
+      tip.hidden = false;
+    });
+    svgEl.addEventListener('mouseleave', clear);
   }
-  async function renderRecent() {
-    const box = $(CONFIG.IDS.RECENT);
-    const rows = state.payments.slice(0, CONFIG.RECENT_ROWS);
-    if (!rows.length) { box.innerHTML = '<span style="opacity:.6">No sales yet</span>'; return; }
+  function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    const f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+
+  async function renderTop(top) {
+    const box = q('.cs-top');
+    if (!box) return;
+    if (!top.length) { box.innerHTML = '<div class="cs-empty">No sales in this time.</div>'; return; }
     const draw = () => {
-      box.innerHTML = `<table class="MuiTypography-root cs-recent"><thead><tr><th>Buyer</th><th>Product</th><th>Paid</th><th>Net</th><th>When</th></tr></thead><tbody>${rows.map((p) => {
-        const img = p.buyerId && state.headshots.get(p.buyerId);
-        const av = img ? `<img src="${esc(img)}" alt="" loading="lazy">` : '<span class="cs-av"></span>';
-        const buyer = p.buyerId ? `<a class="cs-buyer" href="https://www.roblox.com/users/${esc(p.buyerId)}/profile">${av}${esc(p.buyer)}</a>` : `<span class="cs-buyer">${av}${esc(p.buyer)}</span>`;
-        const thumb = p.assetId && state.assetThumbs.get(p.assetId);
-        const pic = thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : '<span class="cs-thumb"></span>';
-        const prod = p.assetId ? `<a class="cs-link cs-prod" href="https://create.roblox.com/store/asset/${esc(p.assetId)}">${pic}<span>${esc(p.name)}</span></a>` : `<span class="cs-prod">${pic}<span>${esc(p.name)}</span></span>`;
-        return `<tr><td>${buyer}</td><td>${prod}</td><td>${fmtA(aud(p.gross))}</td><td class="cs-green">${fmtA(aud(p.net))}</td><td title="${esc(p.when.toLocaleString('en-AU'))}">${esc(relTime(p.when))}</td></tr>`;
-      }).join('')}</tbody></table>`;
+      box.innerHTML = top.map((a) => {
+        const img = a.assetId && state.assetThumbs.get(a.assetId);
+        const pic = img ? `<img src="${esc(img)}" alt="" loading="lazy">` : '<span class="cs-pic"></span>';
+        const inner = `${pic}<span class="cs-txt"><span class="cs-name">${esc(a.name)}</span><small>${plural(a.n, 'sale')}</small></span><span class="cs-amt">${fmtA(aud(a.net))}</span>`;
+        return a.assetId ? `<a href="https://create.roblox.com/store/asset/${esc(a.assetId)}" title="${esc(a.name)}">${inner}</a>` : `<div class="cs-item">${inner}</div>`;
+      }).join('');
     };
     draw();
-    // No buyer id in the payload: look the usernames up (public endpoint, sent
-    // without cookies so it needs no CSRF token).
-    const names = [...new Set(rows.filter((p) => !p.buyerId && p.buyer && !state.userIds.has(p.buyer.toLowerCase())).map((p) => p.buyer))];
-    if (names.length) {
-      try {
-        const r = await gmRequest({ method: 'POST', url: 'https://users.roblox.com/v1/usernames/users', anonymous: true,
-          headers: { 'Content-Type': 'application/json' }, data: JSON.stringify({ usernames: names, excludeBannedUsers: false }) });
-        (JSON.parse(r.responseText).data || []).forEach((u) => { if (u && Number(u.id) > 0) state.userIds.set(String(u.requestedUsername || u.name).toLowerCase(), String(u.id)); });
-      } catch (_) { /* fall through: no pictures for these */ }
-      names.forEach((n) => { if (!state.userIds.has(n.toLowerCase())) state.userIds.set(n.toLowerCase(), ''); });
-    }
-    rows.forEach((p) => { if (!p.buyerId && p.buyer) p.buyerId = state.userIds.get(p.buyer.toLowerCase()) || ''; });
-    const missing = [...new Set(rows.map((p) => p.buyerId).filter((id) => id && !state.headshots.has(id)))];
-    const assets = [...new Set(rows.map((p) => p.assetId).filter((id) => id && !state.assetThumbs.has(id)))];
-    const jobs = [];
-    if (missing.length) jobs.push(gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${missing.join(',')}&size=48x48&format=Png&isCircular=true` })
-      .then((r) => (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.headshots.set(String(t.targetId), t.imageUrl); })));
-    if (assets.length) jobs.push(gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/assets?assetIds=${assets.join(',')}&size=150x150&format=Png&isCircular=false` })
-      .then((r) => {
-        (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.assetThumbs.set(String(t.targetId), t.imageUrl); });
-        assets.forEach((id) => { if (!state.assetThumbs.has(id)) state.assetThumbs.set(id, ''); });
-      }));
-    if (!jobs.length) { if (names.length && $(CONFIG.IDS.RECENT) === box) draw(); return; }
-    await Promise.all(jobs.map((j) => j.catch(() => { /* pictures are a nicety; the list still works */ })));
-    if ($(CONFIG.IDS.RECENT) === box) draw();
+    const missing = [...new Set(top.map((a) => a.assetId).filter((id) => id && !state.assetThumbs.has(id)))];
+    if (!missing.length) return;
+    try {
+      const r = await gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/assets?assetIds=${missing.join(',')}&size=150x150&format=Png&isCircular=false` });
+      (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.assetThumbs.set(String(t.targetId), t.imageUrl); });
+    } catch (_) { /* pictures are a nicety; the list still works */ }
+    missing.forEach((id) => { if (!state.assetThumbs.has(id)) state.assetThumbs.set(id, ''); });
+    if (q('.cs-top') === box) draw();
   }
 
   // ---------- start ----------
-  function hookHistory() {
-    ['pushState', 'replaceState'].forEach((m) => {
-      const orig = history[m];
-      history[m] = function (...args) { const r = orig.apply(this, args); ensurePanel(); return r; };
-    });
-  }
-  hookHistory();
+  ['pushState', 'replaceState'].forEach((m) => {
+    const orig = history[m];
+    history[m] = function (...args) { const r = orig.apply(this, args); ensurePanel(); return r; };
+  });
   window.addEventListener('popstate', ensurePanel);
   window.addEventListener('focus', () => refresh(false));
+  window.addEventListener('resize', () => { if (root() && state.payments.length) render(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(false); });
   new MutationObserver(ensurePanel).observe(document.body, { childList: true, subtree: true });
   ensurePanel();
