@@ -5824,3 +5824,43 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
   .adm-po-table .adm-row-actions { justify-content: flex-start; padding-top: 8px; }
   .adm-po-main { max-width: none; }
 }
+
+/* Admin Analytics (2026-11-23) ------------------------------------------------
+   Same panel language as the dashboard. Every platform before fees on top;
+   coldd.dev-only figures (traffic, funnel, searches, carts, coupons) below. */
+.adm-an:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-an .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.adm-an .adm-range { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.adm-an .adm-range button { flex: 0 0 auto; white-space: nowrap; }
+.adm-an-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.adm-an-mini { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.adm-an-stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 10px 12px; border-radius: var(--r-ctl); background: rgba(255,255,255,0.03); border: 1px solid var(--hairline); }
+.adm-an-stat span { font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-an-stat b { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-an-stat small { font-size: 12px; color: var(--fg-3); }
+.adm-an-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adm-an-table th { padding: 0 12px 8px 0; border-bottom: 1px solid var(--hairline); text-align: left; font-size: 12px; font-weight: 600; color: var(--fg-3); white-space: nowrap; }
+.adm-an-table td { padding: 9px 12px 9px 0; border-top: 1px solid var(--hairline); color: var(--fg-1); vertical-align: top; }
+.adm-an-table tbody tr:first-child td { border-top: 0; }
+.adm-an-table th:last-child, .adm-an-table td:last-child { padding-right: 0; }
+.adm-an-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-an-table td.dt-mono { word-break: break-all; }
+.adm-an-table .adm-empty { padding: 18px 0; }
+.adm-an-table .dt-badge { font-size: 11px; padding: 2px 8px; }
+.adm-an-list { display: flex; flex-direction: column; }
+.adm-an-prod { display: grid; grid-template-columns: 18px 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--hairline); }
+.adm-an-prod:first-child { border-top: 0; padding-top: 0; }
+.adm-an-rank { font-size: 12px; font-weight: 700; color: var(--fg-3); text-align: center; font-variant-numeric: tabular-nums; }
+.adm-an-pname { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.adm-an-pname b { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-an-pfs { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-3); }
+.adm-an-pfs > span { display: inline-flex; }
+.adm-an-pfs .adm-pf-logo { width: 16px; height: 16px; }
+.adm-an-pfs em { font-style: normal; margin-left: 3px; }
+.adm-an-pval { text-align: right; font-size: 14px; font-weight: 700; color: var(--price); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-an-pval small { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.adm-an-bars { margin-bottom: 14px; }
+.adm-an .adm-more-btn { margin-top: 10px; }
+.adm-an .adm-funnel { margin-top: 0; }
+@media (max-width: 1100px) { .adm-an-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .adm-an-stat b { font-size: 18px; } }

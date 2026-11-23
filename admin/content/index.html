@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261123n" />
+  <link rel="stylesheet" href="/styles.css?v=20261123o" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -201,123 +201,78 @@
             </div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-analytics" hidden>
-            <div class="dash-head adm-head-row">
-              <div><h1>Analytics</h1><p>Every figure below recalculates for the selected range.</p></div>
-              <div class="adm-range" role="group" aria-label="Date range">
+          <section class="dash-panel adm-an" id="adm-panel-analytics" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Analytics</h1>
+              <div class="adm-seg adm-range" role="group" aria-label="Date range">
                 <button type="button" data-range="1">24h</button>
-                <button type="button" data-range="7">7D</button>
-                <button type="button" data-range="30" class="active">30D</button>
-                <button type="button" data-range="90">90D</button>
-                <button type="button" data-range="0">All</button>
+                <button type="button" data-range="7">7d</button>
+                <button type="button" data-range="30" class="active">30d</button>
+                <button type="button" data-range="90">90d</button>
+                <button type="button" data-range="0">All time</button>
               </div>
             </div>
 
-            <div class="dash-stats" id="admAnStats"></div>
-
-            <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Revenue analytics</h2><span class="adm-sub">Daily figures with a moving-average trend line. Site and BuiltByBit.</span></div></div>
-              <div id="admRevChart"></div>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admAnKpis"></div>
             </div>
 
-            <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Revenue breakdown</h2><span class="adm-sub">Payment mix, order value and customer mix over the selected range.</span></div></div>
-              <div id="admRevBreakdown"></div>
-            </div>
-
-            <div class="adm-two-col">
-              <div class="dash-card glass">
-                <div class="dash-card-head"><div><h2>Best sellers</h2><span class="adm-sub">Site and BuiltByBit combined.</span></div></div>
-                <div class="dash-rows" id="admBestSellers"></div>
+            <div class="adm-hp adm-plat">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Sales by platform</h2></div>
               </div>
-              <div class="dash-card glass">
-                <div class="dash-card-head"><div><h2>Revenue by category</h2><span class="adm-sub">Site and BuiltByBit combined.</span></div></div>
-                <div id="admCatChart"></div>
-                <div class="adm-catlist" id="admCatList"></div>
+              <div class="adm-plat-chart" id="admAnChart"></div>
+              <div class="adm-plat-tablewrap"><table class="adm-plat-table" id="admAnPlatTable"></table></div>
+            </div>
+
+            <div class="adm-an-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top products</h2><span>Every platform</span></div></div>
+                <div class="adm-an-list" id="admBestSellers"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Robux sales</h2><span>Roblox group</span></div></div>
+                <div id="admRobux"></div>
               </div>
             </div>
 
-            <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Recent orders</h2><span class="adm-sub" id="admAnRecentOrdersSub"></span></div><a href="#" data-panel="orders">View all</a></div>
-              <div class="dash-rows" id="admAnRecentOrders"></div>
-            </div>
-
-            <div class="dash-card glass" id="admRobuxCard">
-              <div class="dash-card-head"><div><h2>Group Robux revenue</h2><span class="adm-sub">Robux received after Roblox's 30% cut.</span></div></div>
-              <div id="admRobux"></div>
-            </div>
-
-            <div class="dash-card glass" id="admBbbCard">
-              <div class="dash-card-head adm-bbb-head">
-                <div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit stats</h2><span class="adm-sub" id="admBbbSub"></span></div>
-                <div class="adm-bbb-tools">
-                  <div class="adm-mp-filter" id="admBbbRange" role="group" aria-label="BuiltByBit date range">
-                    <button type="button" data-bbb-range="7">7D</button>
-                    <button type="button" data-bbb-range="30">30D</button>
-                    <button type="button" data-bbb-range="90">90D</button>
-                    <button type="button" data-bbb-range="0">All</button>
-                  </div>
-                  <button type="button" class="btn btn-ghost adm-btn-sm" id="admBbbSync">Sync now</button>
-                </div>
-              </div>
-              <div id="admBbbBody"></div>
-            </div>
-
-            <div class="dash-card glass" id="admBbbAnalyticsCard">
-              <div class="dash-card-head"><div><h2><img class="adm-mp-logo" src="/mp-logos/builtbybit.png" alt="" width="22" height="22" loading="lazy" /> BuiltByBit</h2><span class="adm-sub" id="admBbbAnalyticsSub"></span></div></div>
-              <div id="admBbbAnalytics"></div>
-            </div>
-
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Traffic analytics</h2></div>
-              <div class="dash-stats adm-stats-3" id="admTrafficStats"></div>
-              <div id="admTrafficChart"></div>
-              <div class="adm-mini-head">Top pages · last 120 days</div>
-              <div class="dash-tablewrap">
-                <table class="dash-table"><thead><tr><th>Page</th><th>Views</th><th>Sessions</th></tr></thead>
-                <tbody id="admTopPagesBody"></tbody></table>
-              </div>
+            <div class="adm-hp">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Site traffic</h2><span>coldd.dev</span></div></div>
+              <div class="adm-an-mini" id="admTrafficStats"></div>
+              <div class="adm-an-bars" id="admTrafficChart"></div>
+              <table class="adm-an-table">
+                <thead><tr><th>Top pages</th><th class="is-num">Views</th><th class="is-num">Sessions</th></tr></thead>
+                <tbody id="admTopPagesBody"></tbody>
+              </table>
               <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admTopPagesMore" hidden>Show all pages</button>
             </div>
 
-            <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Conversion funnel</h2><span class="adm-sub">How far sessions get, step by step.</span></div></div>
+            <div class="adm-hp">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Checkout funnel</h2><span>coldd.dev visits</span></div></div>
               <div id="admFunnel"></div>
             </div>
 
-            <div class="adm-two-col">
-              <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><div><h2>Top searches</h2><span class="adm-sub">No results = searches that found nothing, i.e. products people want that we do not list.</span></div></div>
-                <table class="dash-table">
-                  <thead><tr><th>Query</th><th>Searches</th><th title="Searches that returned no products">No results</th></tr></thead>
-                  <tbody id="admSearchBody"></tbody>
-                </table>
+            <div class="adm-an-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top searches</h2><span>No results means people want something we don't sell</span></div></div>
+                <table class="adm-an-table"><thead><tr><th>Search</th><th class="is-num">Times</th><th class="is-num">No results</th></tr></thead><tbody id="admSearchBody"></tbody></table>
               </div>
-              <div class="dash-card glass dash-tablewrap">
-                <div class="dash-card-head"><div><h2>How did you hear about us</h2><span class="adm-sub">One-question survey on the thank-you page.</span></div></div>
-                <table class="dash-table">
-                  <thead><tr><th>Source</th><th>Answers</th><th>Share</th></tr></thead>
-                  <tbody id="admHowHeardBody"></tbody>
-                </table>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>How buyers found us</h2><span>Thank-you page survey</span></div></div>
+                <table class="adm-an-table"><thead><tr><th>Answer</th><th class="is-num">Count</th><th class="is-num">Share</th></tr></thead><tbody id="admHowHeardBody"></tbody></table>
               </div>
             </div>
 
-            <div class="dash-card glass dash-tablewrap">
-              <div class="dash-card-head"><h2>Abandoned carts</h2><span class="adm-sub">Value at risk: <strong id="admAbandonedTotal"></strong></span></div>
-              <table class="dash-table">
-                <thead><tr><th>Date</th><th>Item</th><th>Value</th><th>Customer</th><th>Recovery email</th></tr></thead>
-                <tbody id="admAbandonedBody"></tbody>
-              </table>
+            <div class="adm-hp">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Abandoned carts</h2><span id="admAbandonedTotal"></span></div></div>
+              <div class="adm-po-wrap"><table class="adm-an-table"><thead><tr><th>Date</th><th>Item</th><th class="is-num">Value</th><th>Customer</th><th>Recovery email</th></tr></thead><tbody id="admAbandonedBody"></tbody></table></div>
               <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admAbandonedMore" hidden>Show all carts</button>
             </div>
 
-            <div class="dash-card glass dash-tablewrap">
-              <div class="dash-card-head"><h2>Coupon usage &amp; redemption</h2></div>
-              <div class="dash-stats adm-stats-3" id="admCouponTotals"></div>
-              <table class="dash-table">
-                <thead><tr><th>Code</th><th>Status</th><th>Uses</th><th>Discount given</th><th>Revenue influenced</th></tr></thead>
-                <tbody id="admCouponAnBody"></tbody>
-              </table>
+            <div class="adm-hp">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Coupons</h2></div></div>
+              <div class="adm-an-mini" id="admCouponTotals"></div>
+              <div class="adm-po-wrap"><table class="adm-an-table"><thead><tr><th>Code</th><th>Status</th><th>Uses</th><th class="is-num">Discount given</th><th class="is-num">Sales with code</th></tr></thead><tbody id="admCouponAnBody"></tbody></table></div>
             </div>
           </section>
 
@@ -1748,6 +1703,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261123n" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123n"></script>
+  <script src="/catalog-loader.php?v=20261123o" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123o"></script>
 </body>
 </html>

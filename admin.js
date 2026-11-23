@@ -1717,12 +1717,13 @@
   if ([1, 7, 30, 0].indexOf(HOME_PERIOD) < 0) HOME_PERIOD = 30;
   var DAY_MS = 86400000;
   // Fixed order: a platform keeps its colour (--pf-<key>) whatever the data does.
+  // One fixed order everywhere (tables, chart tooltips, product badges).
   var HOME_PLATFORMS = [
     { key: 'site', label: 'coldd.dev' },
     { key: 'builtbybit', label: 'BuiltByBit' },
+    { key: 'creatorstore', label: 'Creator Store' },
     { key: 'clearlydev', label: 'ClearlyDev' },
     { key: 'parcel', label: 'Parcel' },
-    { key: 'creatorstore', label: 'Creator Store' },
     { key: 'payhip', label: 'Payhip' }
   ];
   // Platforms that also take Robux: their AU$ is real-money sales only, and the
@@ -1873,6 +1874,7 @@
       PSALES_LOADED = true;
       if (res.error) { console.error('[admin] platform sales:', res.error.message); return; }
       if (curPanel === 'orders') setTimeout(renderOrders, 0);
+      if (curPanel === 'analytics') renderAnalytics();
       PSALES = (res.data || []).map(function (r) {
         return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status };
       });
@@ -2008,7 +2010,9 @@
     }
     return out;
   }
-  var PLAT_CHART = null; // last chart data, so a resize can redraw without recomputing
+  // Sales-by-platform line chart, shared by the dashboard (12 months) and
+  // Analytics (the selected range). Each chart box keeps its own data in
+  // box.__chart = { buckets, series, step, aria }, so a resize can redraw it.
   function renderPlatforms(sales) {
     var chart = $('admPlatChart'), table = $('admPlatTable');
     if (!chart) return;
@@ -2017,30 +2021,35 @@
       chart.innerHTML = '<div class="adm-skel adm-skel-chart"></div>';
       return;
     }
-    var months = homeMonths(12);
-    var first = months[0].start.getTime(), byPf = {};
-    var byPfR = {}; // Robux part of each month, so Robux-taking platforms (Parcel, coldd.dev) show both units
-    HOME_PLATFORMS.forEach(function (p) { byPf[p.key] = months.map(function () { return 0; }); byPfR[p.key] = months.map(function () { return 0; }); });
-    sales.forEach(function (x) {
-      if (x.t < first || !byPf[x.pf]) return;
-      var d = new Date(x.t), i = (d.getFullYear() - months[0].start.getFullYear()) * 12 + d.getMonth() - months[0].start.getMonth();
-      if (i >= 0 && i < months.length) { byPf[x.pf][i] += x.aud; byPfR[x.pf][i] += x.robux; }
-    });
-    var series = HOME_PLATFORMS.map(function (p) {
-      var data = byPf[p.key];
-      var add = function (a, b) { return a + b; };
-      return { key: p.key, label: p.label, data: data, robux: byPfR[p.key], total: data.reduce(add, 0), robuxTotal: byPfR[p.key].reduce(add, 0) };
-    });
-
-    PLAT_CHART = { months: months, series: series };
-    drawPlatChart();
+    chart.__chart = pfChartData(sales, homeMonths(12), 1, 'Monthly sales in AU$ for each platform over the last 12 months');
+    drawPlatChart(chart);
     renderPlatTable(sales);
   }
-
-  function drawPlatChart() {
-    var box = $('admPlatChart');
-    if (!box || !PLAT_CHART) return;
-    var months = PLAT_CHART.months, series = PLAT_CHART.series, n = months.length;
+  // Contiguous buckets ({ start, end, short, long }) -> one AU$ series per
+  // platform, with the Robux each platform took kept beside it.
+  function pfChartData(sales, buckets, step, aria) {
+    var first = buckets[0].start.getTime(), ends = buckets.map(function (b) { return b.end.getTime(); }), last = ends[ends.length - 1];
+    var byPf = {}, byPfR = {};
+    HOME_PLATFORMS.forEach(function (p) { byPf[p.key] = buckets.map(function () { return 0; }); byPfR[p.key] = buckets.map(function () { return 0; }); });
+    sales.forEach(function (x) {
+      if (x.t < first || x.t >= last || !byPf[x.pf]) return;
+      var lo = 0, hi = ends.length - 1;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
+      byPf[x.pf][lo] += x.aud; byPfR[x.pf][lo] += x.robux;
+    });
+    var add = function (a, b) { return a + b; };
+    return {
+      buckets: buckets, step: step || 1, aria: aria,
+      series: HOME_PLATFORMS.map(function (p) {
+        var data = byPf[p.key];
+        return { key: p.key, label: p.label, data: data, robux: byPfR[p.key], total: data.reduce(add, 0), robuxTotal: byPfR[p.key].reduce(add, 0) };
+      })
+    };
+  }
+  function drawPlatChart(box) {
+    var CH = box && box.__chart;
+    if (!CH) return;
+    var months = CH.buckets, series = CH.series, n = months.length;
     var W = Math.max(320, box.clientWidth || 640), H = 236;
     var narrow = W < 560;
     var padL = 56, padR = narrow ? 16 : 118, padT = 12, padB = 28;
@@ -2056,8 +2065,10 @@
       svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
         '<text class="pc-axis" x="' + (padL - 10) + '" y="' + y + '" dy="4" text-anchor="end">' + esc('A$' + axisNum(t)) + '</text>';
     });
+    // Axis labels counted back from the newest point, every step-th one.
+    var step = (CH.step || 1) * (narrow ? 2 : 1);
     months.forEach(function (m, i) {
-      if (narrow && i % 2 !== (n - 1) % 2) return;
+      if ((n - 1 - i) % step) return;
       svg += '<text class="pc-axis" x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(m.short) + '</text>';
     });
     // Flat-at-zero platforms first, so a platform with sales is never hidden under one without.
@@ -2065,8 +2076,9 @@
     order.forEach(function (s) {
       var pts = s.data.map(function (v, i) { return X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
       var color = pfVar(s.key);
-      svg += '<path class="pc-line" style="stroke:' + color + '" d="M' + pts.slice(0, n - 1).join('L') + '"/>' +
-        '<path class="pc-line is-part" style="stroke:' + color + '" d="M' + pts.slice(n - 2).join('L') + '"/>';
+      // The newest point is still filling up, so its segment is dashed.
+      svg += '<path class="pc-line" style="stroke:' + color + '" d="M' + (n > 1 ? pts.slice(0, n - 1) : pts).join('L') + '"/>';
+      if (n > 1) svg += '<path class="pc-line is-part" style="stroke:' + color + '" d="M' + pts.slice(n - 2).join('L') + '"/>';
     });
     // End labels with a short key line, nudged apart so they never overlap.
     if (!narrow) {
@@ -2084,36 +2096,36 @@
     }
     svg += '<line class="pc-cross" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + ih) + '" visibility="hidden"/>';
     series.forEach(function (s) { svg += '<circle class="pc-dot" data-pf="' + s.key + '" r="4" cx="0" cy="0" style="fill:' + pfVar(s.key) + '" visibility="hidden"/>'; });
-    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Monthly sales in AU$ for each platform over the last 12 months">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(CH.aria || 'Sales in AU$ for each platform') + '">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
     box.__pc = { X: X, Y: Y, n: n, padL: padL, iw: iw, W: W };
   }
-  (function () {
-    var box = $('admPlatChart');
+  function wirePlatChart(box) {
     if (!box) return;
     function hide() {
       var tip = box.querySelector('.adm-pc-tip'); if (tip) tip.hidden = true;
       box.querySelectorAll('.pc-cross, .pc-dot').forEach(function (el) { el.setAttribute('visibility', 'hidden'); });
     }
     box.addEventListener('mousemove', function (e) {
-      var pc = box.__pc, svg = box.querySelector('svg');
-      if (!pc || !svg || !PLAT_CHART) return;
+      var pc = box.__pc, svg = box.querySelector('svg'), CH = box.__chart;
+      if (!pc || !svg || !CH) return;
       var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (pc.W / r.width);
       if (x < pc.padL - 20 || x > pc.padL + pc.iw + 20) { hide(); return; }
       var i = Math.max(0, Math.min(pc.n - 1, Math.round((x - pc.padL) / (pc.iw / Math.max(1, pc.n - 1)))));
       var cx = pc.X(i).toFixed(1);
       var cross = box.querySelector('.pc-cross');
       cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
-      PLAT_CHART.series.forEach(function (s) {
+      CH.series.forEach(function (s) {
         var dot = box.querySelector('.pc-dot[data-pf="' + s.key + '"]');
         if (!dot) return;
         dot.setAttribute('cx', cx); dot.setAttribute('cy', pc.Y(s.data[i]).toFixed(1));
         dot.setAttribute('visibility', s.data[i] > 0 ? 'visible' : 'hidden');
       });
-      var m = PLAT_CHART.months[i], total = 0;
-      var rows = PLAT_CHART.series.map(function (s) { total += s.data[i]; return s; }).slice().sort(function (a, b) { return b.data[i] - a.data[i]; });
+      var m = CH.buckets[i], total = 0;
+      CH.series.forEach(function (s) { total += s.data[i]; });
       var tip = box.querySelector('.adm-pc-tip');
+      // Platforms always in the same order (HOME_PLATFORMS), never re-sorted by value.
       tip.innerHTML = '<h4>' + esc(m.long) + (i === pc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
-        rows.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i]) + '</b></div>'; }).join('') +
+        CH.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i]) + '</b></div>'; }).join('') +
         '<div class="adm-pc-tip-total">All platforms<b>' + fmtA(total) + '</b></div>';
       tip.hidden = false;
       var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
@@ -2128,19 +2140,27 @@
         var w = box.clientWidth;
         if (!w || Math.abs(w - lastW) < 4) return;
         lastW = w;
-        clearTimeout(t); t = setTimeout(drawPlatChart, 80);
+        clearTimeout(t); t = setTimeout(function () { drawPlatChart(box); }, 80);
       }).observe(box);
     }
-  })();
+  }
+  wirePlatChart($('admPlatChart'));
+  wirePlatChart($('admAnChart'));
 
-  function renderPlatTable(sales) {
-    var table = $('admPlatTable');
+  // Per-platform table. Dashboard: last 30 days against the 30 before. Analytics
+  // passes its own window (no comparison columns for all time).
+  function renderPlatTable(sales, o) {
+    o = o || {};
+    var table = $(o.id || 'admPlatTable');
     if (!table) return;
-    var now = Date.now();
-    var cS = new Date(now - 30 * DAY_MS), cE = new Date(now + 60000), pS = new Date(now - 60 * DAY_MS), pE = cS;
-    var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: sumSales(sales, pS, pE, p.key) }; });
-    var tot = sumSales(sales, cS, cE), totP = sumSales(sales, pS, pE);
+    var now = Date.now(), own = 'start' in o;
+    var cS = own ? o.start : new Date(now - 30 * DAY_MS), cE = own ? o.end : new Date(now + 60000);
+    var pS = own ? o.prevStart : new Date(now - 60 * DAY_MS), pE = own ? o.prevEnd : cS;
+    var cmp = !!pS;
+    var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: cmp ? sumSales(sales, pS, pE, p.key) : null }; });
+    var tot = sumSales(sales, cS, cE), totP = cmp ? sumSales(sales, pS, pE) : null;
     function cell(key, r) { return pfValue(key, r.aud, r.robux); }
+    function rbx(n) { return n ? '<span class="adm-rbx"> | ' + robuxRaw(n) + '</span>' : ''; }
     function change(cur, prev) {
       if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '';
       var pct = (cur - prev) / prev * 100;
@@ -2148,17 +2168,20 @@
       var cls = pct > 0 ? 'up' : 'down';
       return '<span class="adm-chg ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 12) + fmtPctAbs(pct) + '</span>';
     }
-    table.innerHTML = '<thead><tr><th scope="col">Platform</th><th scope="col">Last 30d</th><th scope="col">Previous 30d</th><th scope="col">Change</th><th scope="col">Share</th><th scope="col">Orders</th></tr></thead><tbody>' +
+    table.innerHTML = '<thead><tr><th scope="col">Platform</th><th scope="col">' + esc(o.curLabel || 'Last 30d') + '</th>' +
+      (cmp ? '<th scope="col">' + esc(o.prevLabel || 'Previous 30d') + '</th><th scope="col">Change</th>' : '') +
+      '<th scope="col">Share</th><th scope="col">Orders</th></tr></thead><tbody>' +
       rows.map(function (r) {
         var share = tot.aud ? r.cur.aud / tot.aud * 100 : 0;
         return '<tr style="--pf:' + pfVar(r.p.key) + '"><th scope="row"><span class="adm-pf"><i></i>' + pfMark(r.p.key) + esc(r.p.label) + '</span></th>' +
           '<td class="is-strong">' + cell(r.p.key, r.cur) + '</td>' +
-          '<td class="is-muted">' + cell(r.p.key, r.prev) + '</td>' +
-          '<td>' + change(r.cur.aud, r.prev.aud) + '</td>' +
+          (cmp ? '<td class="is-muted">' + cell(r.p.key, r.prev) + '</td><td>' + change(r.cur.aud, r.prev.aud) + '</td>' : '') +
           '<td><span class="adm-share"><span class="adm-share-bar"><i style="width:' + share.toFixed(1) + '%"></i></span><span>' + Math.round(share) + '%</span></span></td>' +
           '<td>' + num(r.cur.n) + '</td></tr>';
       }).join('') + '</tbody>' +
-      '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + (tot.robux ? '<span class="adm-rbx"> | ' + robuxRaw(tot.robux) + '</span>' : '') + '</td><td class="is-muted">' + fmtA(totP.aud) + (totP.robux ? '<span class="adm-rbx"> | ' + robuxRaw(totP.robux) + '</span>' : '') + '</td><td>' + change(tot.aud, totP.aud) + '</td><td></td><td>' + num(tot.n) + '</td></tr></tfoot>';
+      '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + rbx(tot.robux) + '</td>' +
+      (cmp ? '<td class="is-muted">' + fmtA(totP.aud) + rbx(totP.robux) + '</td><td>' + change(tot.aud, totP.aud) + '</td>' : '') +
+      '<td></td><td>' + num(tot.n) + '</td></tr></tfoot>';
   }
 
   /* ---- Today's work ----
@@ -3884,183 +3907,227 @@
   /* ================================================================
      ANALYTICS PANEL
      ================================================================ */
-  function renderAnalytics() {
-    if (!ORDERS_LOADED) { $('admAnStats').innerHTML = loadingStats(6); return; }
-    var aov = avgOrderValue();
-    var conv = conversionRate();
-
-    var curOrders = completedInRange();
-    var curRev = websiteRevenue(curOrders);
-    var win = RANGE_DAYS ? prevRangeWindow() : null;
-    var prevOrders = win ? completedInWindow(win.start, win.end) : [];
-    var prevRev = websiteRevenue(prevOrders);
-    var curVisits = RANGE_DAYS ? pageviewsInWindow(rangeStart(), new Date()) : TRAFFIC.reduce(function (s, r) { return s + r.pageviews; }, 0);
-    var prevVisits = win ? pageviewsInWindow(win.start, win.end) : 0;
-
-    // Store performance only. Audience and channel numbers live in Marketing.
-    var anSessions = TRAFFIC.slice(Math.max(0, TRAFFIC.length - (RANGE_DAYS || 120))).reduce(function (sum, r) { return sum + r.sessions; }, 0);
-    var anAbandoned = ABANDONED.reduce(function (sum, a) { return sum + a.value; }, 0);
-    $('admAnStats').innerHTML = [
-      statTile('Site Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
-      statTile('Site Robux Revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
-      robuxRevTile(),
-      bbbRevTile(),
-      statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
-      statTile('Avg order value', usd(aov), null, ''),
-      statTile('Conversion rate', pct(conv), null, ''),
-      bbbOrdersTile(),
-      statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
-      statTile('Revenue per session', anSessions ? usd(curRev.usd / anSessions) : ' - ', anSessions.toLocaleString('en-US') + ' sessions', ''),
-      statTile('Abandoned carts', usd(anAbandoned), ABANDONED.length + ' cart' + (ABANDONED.length === 1 ? '' : 's') + ' at risk', '')
-    ].join('');
-
-    var revLines = [{ name: 'Site', color: 'var(--accent)', data: dailyRevenueSeries() }];
-    if (BBB.configured) revLines.push({ name: 'BuiltByBit', color: 'var(--price)', data: bbbDailySeries(RANGE_DAYS || 120) });
-    $('admRevChart').innerHTML = svgTrend(revLines, { height: 150, fmt: axisUsd });
-    attachChartTooltip($('admRevChart'));
-
-    if ($('admRevBreakdown')) {
-      var methods = revenueByMethod();
-      var rc = repeatCustomerStats();
-      var rf = refundStats();
-      var bd = statGrid([
-        statTile('Repeat customers', pct(rc.rate), rc.repeat + ' of ' + rc.payers + ' buyers · lifetime', ''),
-        statTile('Refund rate', pct(rf.rate), rf.count + ' refunded · ' + usd(rf.usd), ''),
-        statTile('Avg order value', usd(avgOrderValue()), 'over selected range', '')
-      ]);
-      if (methods.length) {
-        bd += '<div class="adm-mini-head">Revenue by payment method · USD-equivalent</div>' +
-          donutChart(methods.map(function (m) {
-            var disp = m.label === 'Robux' ? robuxRaw(m.robux) : usd(m.v);
-            return { label: m.label, value: m.v, color: methodColor(m.label), display: esc(disp), plain: disp };
-          }), { centerLabel: usd(methods.reduce(function (s, m) { return s + m.v; }, 0)), centerSub: 'total' });
+  /* ---- Analytics (redesigned 2026-11-23) ----
+     Every platform, before fees, for the selected range. Site-only figures
+     (traffic, funnel, searches, carts, coupons) are labelled coldd.dev. */
+  function anWindow() {
+    var now = Date.now();
+    if (!RANGE_DAYS) return { start: null, end: new Date(now + 60000), prevStart: null, prevEnd: null };
+    var p = prevRangeWindow();
+    return { start: rangeStart(), end: new Date(now + 60000), prevStart: p.start, prevEnd: p.end };
+  }
+  function anRangeWord() { return RANGE_DAYS === 1 ? '24 hours' : RANGE_DAYS + ' days'; }
+  function anDelta(cur, prev, w) {
+    if (!w.prevStart) return '';
+    var against = 'previous ' + anRangeWord();
+    if (!prev) return cur ? '<span class="adm-kpi-delta up">New</span><span class="adm-kpi-cmp">nothing in the ' + against + '</span>' : '';
+    var pct = (cur - prev) / prev * 100;
+    if (Math.abs(pct) < 0.5) return '';
+    var cls = pct > 0 ? 'up' : 'down';
+    return '<span class="adm-kpi-delta ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(pct) + '</span><span class="adm-kpi-cmp">vs ' + against + '</span>';
+  }
+  function anMini(label, value, sub) {
+    return '<div class="adm-an-stat"><span>' + esc(label) + '</span><b>' + value + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+  }
+  // Chart buckets for the range: hours for 24h, days up to 90d, months for all time.
+  function anBuckets(sales) {
+    var now = new Date(), out = [], i, s;
+    if (RANGE_DAYS === 1) {
+      for (i = 23; i >= 0; i--) {
+        s = new Date(now); s.setMinutes(0, 0, 0); s.setHours(s.getHours() - i);
+        out.push({ start: s, end: new Date(s.getTime() + 3600000), short: s.toLocaleTimeString('en-AU', { hour: 'numeric' }), long: s.toLocaleString('en-AU', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) });
       }
-      bd += '<div class="adm-mini-head">Average order value · daily</div>' + svgBars(aovDailySeries(), { height: 110, color: 'var(--price)', fmt: axisUsd });
-      $('admRevBreakdown').innerHTML = bd;
+      return { buckets: out, step: 4 };
     }
-
-    var best = bestSellers(6);
-    $('admBestSellers').innerHTML = best.length ? best.map(function (p, i) {
-      return '<div class="dash-row"><span class="adm-rank">#' + (i + 1) + '</span><span class="dr-thumb" style="background-image:url(\'' + p.image + '\')"></span>' +
-        '<div class="dr-main"><div class="dr-title">' + esc(p.title) + '</div><div class="dr-sub">' + p.units + ' sold' + (p.bbbUnits ? ' · ' + p.bbbUnits + ' on BuiltByBit' : '') + '</div></div>' +
-        '<span class="p-price">' + usd(p.revenue) + '</span></div>';
-    }).join('') : '<p class="adm-empty">No completed orders in this range.</p>';
-
-    var byCat = revenueByCategory();
-    var prevCat = win ? categoryRevenueWindow(prevOrders) : null;
-    var catTotal = byCat.reduce(function (s, c) { return s + c.v; }, 0);
-    var catPalette = ['var(--accent)', '#3b7bbf', '#e8b84b', 'var(--price)', '#9b6dd6', '#5fb0a5', '#d67c4a', '#8a8f98'];
-    $('admCatChart').innerHTML = byCat.length ? donutChart(byCat.map(function (c, i) {
-      var pv = prevCat ? (prevCat[c.label] || 0) : null;
-      var deltaTxt = (pv != null && pv > 0) ? ' · ' + (c.v >= pv ? '+' : '') + Math.round((c.v - pv) / pv * 100) + '% vs prev' : '';
-      return {
-        label: c.label, value: c.v, color: catPalette[i % catPalette.length],
-        display: esc(usd(c.v)), plain: usd(c.v),
-        tip: c.label + ' · ' + usd(c.v) + ' · ' + (catTotal ? Math.round(c.v / catTotal * 100) : 0) + '%' + deltaTxt
-      };
-    }), { centerLabel: usd(catTotal), centerSub: 'revenue' }) : '<p class="adm-empty">No data in this range.</p>';
-    if ($('admCatList')) $('admCatList').innerHTML = '';
-
-    $('admTrafficChart').innerHTML = svgBars(trafficSeries(), { color: 'var(--price)' });
-    attachChartTooltip($('admTrafficChart'));
-    var trafficRows = TRAFFIC.slice(Math.max(0, TRAFFIC.length - (RANGE_DAYS || 120)));
-    var totalViews = trafficRows.reduce(function (s, r) { return s + r.pageviews; }, 0);
-    var totalSessions = trafficRows.reduce(function (s, r) { return s + r.sessions; }, 0);
-    var retLabel = TRAFFIC_VISITORS ? pct(TRAFFIC_VISITORS.rate) : '–';
-    var retSub = TRAFFIC_VISITORS ? (TRAFFIC_VISITORS.returning.toLocaleString('en-US') + ' of ' + TRAFFIC_VISITORS.total.toLocaleString('en-US') + ' · 120d') : 'gathering data';
-    $('admTrafficStats').innerHTML =
-      '<div class="dash-stat glass"><span class="ds-label">Pageviews</span><span class="ds-num">' + totalViews.toLocaleString('en-US') + '</span></div>' +
-      '<div class="dash-stat glass"><span class="ds-label">Sessions</span><span class="ds-num">' + totalSessions.toLocaleString('en-US') + '</span></div>' +
-      '<div class="dash-stat glass"><span class="ds-label">Returning visitors</span><span class="ds-num">' + retLabel + '</span><span class="ds-sub">' + retSub + '</span></div>';
-
-    if ($('admTopPagesBody')) {
+    if (RANGE_DAYS) {
+      for (i = RANGE_DAYS - 1; i >= 0; i--) {
+        s = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        out.push({ start: s, end: new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1), short: s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }), long: s.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long' }) });
+      }
+      return { buckets: out, step: RANGE_DAYS <= 7 ? 1 : RANGE_DAYS <= 30 ? 5 : 15 };
+    }
+    var first = sales.reduce(function (m, x) { return x.t < m ? x.t : m; }, now.getTime());
+    var f = new Date(first), n = (now.getFullYear() - f.getFullYear()) * 12 + now.getMonth() - f.getMonth() + 1;
+    for (i = 0; i < n; i++) {
+      s = new Date(f.getFullYear(), f.getMonth() + i, 1);
+      out.push({ start: s, end: new Date(s.getFullYear(), s.getMonth() + 1, 1), short: s.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), long: s.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }) });
+    }
+    return { buckets: out, step: Math.max(1, Math.ceil(n / 8)) };
+  }
+  function renderAnKpis(sales, w) {
+    var grid = $('admAnKpis'); if (!grid) return;
+    var cur = sumSales(sales, w.start, w.end), prev = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd) : null;
+    function moneyN(s, e) { var a = s ? s.getTime() : -Infinity, b = e.getTime(); return sales.filter(function (x) { return x.t >= a && x.t < b && x.aud > 0; }).length; }
+    var n = moneyN(w.start, w.end), nP = w.prevStart ? moneyN(w.prevStart, w.prevEnd) : 0;
+    var avg = n ? cur.aud / n : 0, avgP = nP ? prev.aud / nP : 0;
+    var v = viewsIn(w.start, w.end), vP = w.prevStart ? viewsIn(w.prevStart, w.prevEnd) : null;
+    var site = sumSales(sales, w.start, w.end, 'site'), siteP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd, 'site') : null;
+    var conv = v.sessions ? site.n / v.sessions * 100 : 0, convP = vP && vP.sessions ? siteP.n / vP.sessions * 100 : 0;
+    grid.innerHTML = [
+      kpiCell({ label: 'Sales', value: fmtA(cur.aud, cur.aud >= 1000), count: plural(cur.n, 'sale'), delta: anDelta(cur.aud, prev && prev.aud, w),
+        sub: cur.robux ? '+ ' + robuxRaw(cur.robux) + ' in Robux sales' : 'No Robux sales', panel: 'orders' }),
+      kpiCell({ label: 'Average sale', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? 'Across ' + plural(n, 'money sale') : 'No money sales' }),
+      kpiCell({ label: 'Site visits', value: num(v.sessions), delta: anDelta(v.sessions, vP && vP.sessions, w), sub: num(v.views) + ' page views' + (w.start ? '' : ', last 120 days') }),
+      kpiCell({ label: 'Site conversion', value: v.sessions ? pct(conv) : '–', delta: anDelta(conv, convP, w), sub: plural(site.n, 'site order') + ' from ' + plural(v.sessions, 'visit') })
+    ].join('');
+  }
+  // Best sellers across every platform, matched to the coldd.dev product where
+  // there is one so the same product on several platforms shares a row.
+  function renderAnTop(w) {
+    var box = $('admBestSellers'); if (!box) return;
+    var s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), map = {};
+    function add(id, title, pf, aud, robux, units, fallbackImg) {
+      var p = matchProduct(id, title);
+      var key = p ? 'p:' + p.id : 't:' + bbbNorm(title);
+      var m = map[key] = map[key] || { title: p ? p.title : (title || 'Unknown product'), image: p && p.image ? window.imgUrl(p.image) : '', pfs: {}, aud: 0, robux: 0, units: 0 };
+      if (!m.image) m.image = fallbackImg || bbbCoverFor(title);
+      m.pfs[pf] = true; m.aud += aud; m.robux += robux; m.units += units;
+    }
+    ORDERS.forEach(function (o) {
+      if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
+      var t = Date.parse(o.paidAt || o.date); if (t < s || t >= e) return;
+      var items = o.items && o.items.length ? o.items : [{ product_slug: o.productId, title: o.title, qty: 1, unit_price_usd: o.total }];
+      var rb = o.currency === 'robux', usdSum = items.reduce(function (a, it) { return a + (Number(it.unit_price_usd) || 0) * (it.qty || 1); }, 0);
+      items.forEach(function (it) {
+        var u = (Number(it.unit_price_usd) || 0) * (it.qty || 1);
+        var share = usdSum ? u / usdSum : 1 / items.length;
+        add(it.product_slug, it.title, 'site', rb ? 0 : usdToAudAt(u, t), rb ? (Number(o.totalRobux) || 0) * share : 0, it.qty || 1, '');
+      });
+    });
+    if (BBB.configured) {
+      var titles = bbbResourceTitleById(), covers = {};
+      BBB.resources.forEach(function (r) { if (r.cover_image_url) covers[String(r.resource_id)] = r.cover_image_url; });
+      BBB.purchases.forEach(function (p) {
+        if (!bbbIsUsd(p)) return;
+        var t = Date.parse(p.purchased_at); if (t < s || t >= e) return;
+        add(null, titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id), 'builtbybit', usdToAudAt(p.price, t), 0, 1, covers[String(p.resource_id)] || '');
+      });
+    }
+    PSALES.forEach(function (x) {
+      if (x.status === 'refunded' || x.t < s || x.t >= e) return;
+      var rb = x.currency === 'ROBUX';
+      add(x.productId, x.name, x.platform, rb ? 0 : usdToAudAt(x.usd, x.t), rb ? x.amount : 0, x.qty || 1, '');
+    });
+    var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux); }).slice(0, 8);
+    box.innerHTML = list.length ? list.map(function (p, i) {
+      var pfs = HOME_PLATFORMS.filter(function (x) { return p.pfs[x.key]; }).map(function (x) { return '<span title="' + esc(x.label) + '">' + pfMark(x.key) + '</span>'; }).join('');
+      return '<div class="adm-an-prod"><span class="adm-an-rank">' + (i + 1) + '</span>' +
+        '<span class="adm-or-thumb"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>' +
+        '<span class="adm-an-pname"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><span class="adm-an-pfs">' + pfs + '<em>' + plural(p.units, 'sale') + '</em></span></span>' +
+        '<span class="adm-an-pval">' + (p.aud || !p.robux ? fmtA(p.aud) : '') + (p.robux ? (p.aud ? '<small>' : '') + robuxRaw(p.robux) + (p.aud ? '</small>' : '') : '') + '</span></div>';
+    }).join('') : '<p class="adm-empty">No sales in this range.</p>';
+  }
+  function renderAnTraffic() {
+    var rows = TRAFFIC.slice(Math.max(0, TRAFFIC.length - (RANGE_DAYS || 120)));
+    var views = rows.reduce(function (s, r) { return s + r.pageviews; }, 0);
+    var sessions = rows.reduce(function (s, r) { return s + r.sessions; }, 0);
+    var st = $('admTrafficStats');
+    if (st) st.innerHTML = anMini('Page views', num(views), RANGE_DAYS ? '' : 'Last 120 days') + anMini('Visits', num(sessions), '') +
+      anMini('Returning visitors', TRAFFIC_VISITORS ? pct(TRAFFIC_VISITORS.rate) : '–',
+        TRAFFIC_VISITORS ? num(TRAFFIC_VISITORS.returning) + ' of ' + num(TRAFFIC_VISITORS.total) + ', last 120 days' : 'Gathering data');
+    var ch = $('admTrafficChart');
+    if (ch) { ch.innerHTML = svgBars(trafficSeries(), { height: 120, color: 'var(--info)' }); attachChartTooltip(ch); }
+    var body = $('admTopPagesBody');
+    if (body) {
       var tpShow = TOP_PAGES_OPEN ? TRAFFIC_PAGES.slice(0, 50) : TRAFFIC_PAGES.slice(0, 5);
-      $('admTopPagesBody').innerHTML = tpShow.map(function (p) {
+      body.innerHTML = tpShow.map(function (p) {
         var label = p.path === '/' ? '/ <span class="adm-sub">Home page</span>' : esc(p.path);
-        return '<tr><td class="dt-mono">' + label + '</td><td>' + p.views.toLocaleString('en-US') + '</td><td>' + p.sessions.toLocaleString('en-US') + '</td></tr>';
+        return '<tr><td class="dt-mono">' + label + '</td><td class="is-num">' + num(p.views) + '</td><td class="is-num">' + num(p.sessions) + '</td></tr>';
       }).join('') || '<tr><td colspan="3" class="adm-empty">No traffic yet.</td></tr>';
       var tpBtn = $('admTopPagesMore');
       if (tpBtn) { tpBtn.hidden = TRAFFIC_PAGES.length <= 5; tpBtn.textContent = TOP_PAGES_OPEN ? 'Show fewer' : 'Show all ' + Math.min(TRAFFIC_PAGES.length, 50) + ' pages'; }
     }
+  }
+  function renderAnFunnel() {
+    var box = $('admFunnel'); if (!box) return;
+    var fn = funnelCounts();
+    var steps = [
+      { label: 'Visited the site', v: fn.visitors },
+      { label: 'Viewed a product', v: fn.product },
+      { label: 'Added to cart', v: fn.cart },
+      { label: 'Started checkout', v: fn.checkout },
+      { label: 'Paid', v: fn.paid }
+    ];
+    var top = Math.max.apply(null, steps.map(function (st) { return st.v; }).concat([1]));
+    var rows = steps.map(function (st, i) {
+      var prev = i ? steps[i - 1].v : 0;
+      var note = i === 0 ? '' : (prev ? pct(st.v / prev * 100) + ' of the step above' : '');
+      var w = st.v ? Math.max(1.5, st.v / top * 100) : 0;
+      return '<div class="adm-funnel-row"><div class="adm-funnel-label">' + esc(st.label) + '</div>' +
+        '<div class="adm-funnel-track"><i style="width:' + w.toFixed(1) + '%"></i></div>' +
+        '<div class="adm-funnel-num">' + num(st.v) + '</div>' +
+        '<div class="adm-funnel-note">' + note + '</div></div>';
+    }).join('');
+    box.innerHTML = '<div class="adm-an-mini">' +
+      anMini('Visit to paid', steps[0].v ? pct(fn.paid / steps[0].v * 100) : '–', '') +
+      anMini('Cart to checkout', fn.cart ? pct(fn.checkout / fn.cart * 100) : '–', '') +
+      anMini('Checkout to paid', fn.checkout ? pct(fn.paid / fn.checkout * 100) : '–', '') + '</div>' +
+      '<div class="adm-funnel">' + rows + '</div>';
+  }
+  function renderAnLists() {
+    var sb = $('admSearchBody');
+    if (sb) sb.innerHTML = topSearches(15).map(function (sq) {
+      return '<tr><td>' + esc(sq.q) + '</td><td class="is-num">' + num(sq.count) + '</td><td class="is-num">' + (sq.noResults ? '<span class="dt-badge warn">' + num(sq.noResults) + '</span>' : '') + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="adm-empty">No searches logged yet.</td></tr>';
+    var hb = $('admHowHeardBody');
+    if (hb) hb.innerHTML = howHeard().map(function (r) {
+      return '<tr><td>' + esc(r.label) + '</td><td class="is-num">' + num(r.count) + '</td><td class="is-num">' + r.pct + '%</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="adm-empty">No survey answers yet.</td></tr>';
 
-    if ($('admFunnel')) {
-      var fn = funnelCounts();
-      var steps = [
-        { label: 'Visited the site', v: fn.visitors },
-        { label: 'Viewed a product', v: fn.product },
-        { label: 'Added to cart', v: fn.cart },
-        { label: 'Started checkout', v: fn.checkout },
-        { label: 'Paid (orders)', v: fn.paid }
-      ];
-      var fTop = Math.max.apply(null, steps.map(function (st) { return st.v; }).concat([1]));
-      var fRows = steps.map(function (st, i) {
-        var prev = i ? steps[i - 1].v : 0;
-        var note = i === 0 ? '' : (prev ? pct(st.v / prev * 100) + ' of previous step' : ' - ');
-        var w = st.v ? Math.max(1.5, st.v / fTop * 100) : 0;
-        return '<div class="adm-funnel-row"><div class="adm-funnel-label">' + esc(st.label) + '</div>' +
-          '<div class="adm-funnel-track"><i style="width:' + w.toFixed(1) + '%"></i></div>' +
-          '<div class="adm-funnel-num">' + st.v.toLocaleString('en-US') + '</div>' +
-          '<div class="adm-funnel-note">' + note + '</div></div>';
-      }).join('');
-      var fNote = 'Counted by session over the selected range; admin and sign-in pages are excluded. Paid is completed orders, which are not tied to a session, so it can run ahead of the step above.';
-      $('admFunnel').innerHTML = statGrid([
-        statTile('Visitor to paid', steps[0].v ? pct(fn.paid / steps[0].v * 100) : ' - ', 'over selected range', ''),
-        statTile('Cart to checkout', fn.cart ? pct(fn.checkout / fn.cart * 100) : ' - ', null, ''),
-        statTile('Checkout to paid', fn.checkout ? pct(fn.paid / fn.checkout * 100) : ' - ', null, '')
-      ]) + '<div class="adm-funnel">' + fRows + '</div><p class="adm-note">' + fNote + '</p>';
+    var ab = $('admAbandonedBody');
+    if (ab) {
+      var abShow = ABANDONED_OPEN ? ABANDONED.slice(0, 50) : ABANDONED.slice(0, 5);
+      ab.innerHTML = abShow.map(function (a) {
+        var sent = a.recoveryEmailSentAt
+          ? '<span class="dt-badge ok">Email sent</span><span class="adm-po-sub">' + (a.abandonedStep != null ? 'Step ' + a.abandonedStep + ' · ' : '') + fmtDate(new Date(a.recoveryEmailSentAt)) + '</span>'
+          : (a.abandonedStep > 0 ? '<span class="dt-badge mute">Step ' + a.abandonedStep + ' handled</span>'
+            : (a.email ? '<span class="dt-badge warn">Not sent yet</span>' : '<span class="dt-badge mute">No email</span>'));
+        return '<tr><td>' + fmtDate(new Date(a.date)) + '</td><td>' + esc(a.title) + '</td><td class="is-num">' + fmtA(usdToAudAt(a.value, Date.parse(a.date))) + '</td><td>' + (a.email ? esc(a.email) : '<span class="adm-sub">Unknown</span>') + '</td><td>' + sent + '</td></tr>';
+      }).join('') || '<tr><td colspan="5" class="adm-empty">No abandoned carts.</td></tr>';
+      var atRisk = ABANDONED.reduce(function (sum, a) { return sum + usdToAudAt(a.value, Date.parse(a.date)); }, 0);
+      var tot = $('admAbandonedTotal'); if (tot) tot.textContent = ABANDONED.length ? fmtA(atRisk) + ' across ' + plural(ABANDONED.length, 'cart') : '';
+      var abBtn = $('admAbandonedMore');
+      if (abBtn) { abBtn.hidden = ABANDONED.length <= 5; abBtn.textContent = ABANDONED_OPEN ? 'Show fewer' : 'Show all ' + Math.min(ABANDONED.length, 50) + ' carts'; }
     }
-
-    if ($('admSearchBody')) {
-      var ts = topSearches(15);
-      $('admSearchBody').innerHTML = ts.map(function (sq) {
-        return '<tr><td>' + esc(sq.q) + '</td><td>' + sq.count + '</td><td>' + (sq.noResults ? '<span class="dt-badge warn">' + sq.noResults + '</span>' : '<span class="adm-sub"> - </span>') + '</td></tr>';
-      }).join('') || '<tr><td colspan="3" class="adm-empty">No searches logged yet.</td></tr>';
-    }
-
-    if ($('admHowHeardBody')) {
-      var hh = howHeard();
-      $('admHowHeardBody').innerHTML = hh.map(function (r) {
-        return '<tr><td>' + esc(r.label) + '</td><td>' + r.count + '</td><td>' + r.pct + '%</td></tr>';
-      }).join('') || '<tr><td colspan="3" class="adm-empty">No survey answers yet.</td></tr>';
-    }
-
-    var abShow = ABANDONED_OPEN ? ABANDONED.slice(0, 50) : ABANDONED.slice(0, 5);
-    $('admAbandonedBody').innerHTML = abShow.map(function (a) {
-      var sent = a.recoveryEmailSentAt
-        ? '<span class="dt-badge ok">Email sent</span><div class="adm-sub">' + (a.abandonedStep != null ? 'Step ' + a.abandonedStep + ' · ' : '') + fmtDate(new Date(a.recoveryEmailSentAt)) + '</div>'
-        : (a.abandonedStep > 0 ? '<span class="dt-badge">Step ' + a.abandonedStep + ' handled</span><div class="adm-sub">sent before tracking</div>'
-          : (a.email ? '<span class="dt-badge warn">Not sent yet</span>' : '<span class="dt-badge">No email</span>'));
-      return '<tr><td>' + fmtDate(new Date(a.date)) + '</td><td>' + esc(a.title) + '</td><td>' + usd(a.value) + '</td><td>' + (a.email ? esc(a.email) : '<span class="adm-sub">unknown</span>') + '</td><td>' + sent + '</td></tr>';
-    }).join('') || '<tr><td colspan="5" class="adm-empty">No abandoned carts.</td></tr>';
-    $('admAbandonedTotal').textContent = usd(ABANDONED.reduce(function (sum, a) { return sum + a.value; }, 0));
-    var abBtn = $('admAbandonedMore');
-    if (abBtn) { abBtn.hidden = ABANDONED.length <= 5; abBtn.textContent = ABANDONED_OPEN ? 'Show fewer' : 'Show all ' + Math.min(ABANDONED.length, 50) + ' carts'; }
 
     var cs = couponStats();
-    if ($('admCouponTotals')) {
-      var ct = cs.reduce(function (a, c) { a.disc += c.discountGiven; a.rev += c.revenue; return a; }, { disc: 0, rev: 0 });
-      $('admCouponTotals').innerHTML = statGrid([
-        statTile('Coupon revenue', usd(ct.rev), 'orders using a code · this range', ''),
-        statTile('Discount given', usd(ct.disc), 'this range', ''),
-        statTile('Net after discount', usd(ct.rev - ct.disc), null, '')
-      ]);
-    }
-    $('admCouponAnBody').innerHTML = cs.map(function (c) {
-      var codeCell = c.label ? esc(c.label) + '<div class="adm-sub">' + c.issued + ' code' + (c.issued === 1 ? '' : 's') + ' issued · one per signup</div>' : esc(c.code);
+    var ct = cs.reduce(function (a, c) { a.disc += c.discountGiven; a.rev += c.revenue; return a; }, { disc: 0, rev: 0 });
+    var cTot = $('admCouponTotals');
+    if (cTot) cTot.innerHTML = anMini('Sales with a code', fmtA(usdToAud(ct.rev)), '') + anMini('Discount given', fmtA(usdToAud(ct.disc)), '') + anMini('After discount', fmtA(usdToAud(ct.rev - ct.disc)), '');
+    var cb = $('admCouponAnBody');
+    if (cb) cb.innerHTML = cs.map(function (c) {
+      var codeCell = c.label ? esc(c.label) + '<span class="adm-po-sub">' + plural(c.issued, 'code') + ' issued, one per signup</span>' : esc(c.code);
       var usesCell = c.issued ? c.uses + ' of ' + c.issued + ' used' : c.uses + (c.limit ? ' / ' + c.limit : '');
-      return '<tr><td class="dt-mono">' + codeCell + '</td><td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge err">Inactive</span>') + '</td><td>' + usesCell + '</td><td>' + usd(c.discountGiven) + '</td><td>' + usd(c.revenue) + '</td></tr>';
-    }).join('');
-
+      return '<tr><td class="dt-mono">' + codeCell + '</td><td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge mute">Off</span>') + '</td><td>' + usesCell + '</td><td class="is-num">' + fmtA(usdToAud(c.discountGiven)) + '</td><td class="is-num">' + fmtA(usdToAud(c.revenue)) + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="adm-empty">No coupons yet.</td></tr>';
+  }
+  function renderAnalytics() {
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
-    // Recent orders (website + BuiltByBit) for the selected range
-    var anFeed = feedEntries({ completedOnly: true, since: RANGE_DAYS ? rangeStart() : null });
-    if ($('admAnRecentOrders')) {
-      var shownN = Math.min(15, anFeed.length);
-      if ($('admAnRecentOrdersSub')) $('admAnRecentOrdersSub').textContent = anFeed.length + ' order' + (anFeed.length === 1 ? '' : 's') + ' in this range' + (anFeed.length > shownN ? ', showing the latest ' + shownN : '');
-      $('admAnRecentOrders').innerHTML = anFeed.slice(0, 15).map(feedRowHtml).join('') || '<p class="adm-empty">No orders in this range.</p>';
+    var w = anWindow();
+    if (!ORDERS_LOADED) {
+      var kp = $('admAnKpis');
+      if (kp) kp.innerHTML = ['Sales', 'Average sale', 'Site visits', 'Site conversion'].map(function (l) {
+        return '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"><span class="adm-skel adm-skel-sm"></span></span><span class="adm-kpi-sub">&nbsp;</span></div>';
+      }).join('');
+      var ch = $('admAnChart'); if (ch) ch.innerHTML = '<div class="adm-skel adm-skel-chart"></div>';
+      return;
     }
+    var sales = homeSales();
+    renderAnKpis(sales, w);
+    var chart = $('admAnChart');
+    if (chart) {
+      var b = anBuckets(sales);
+      chart.__chart = pfChartData(sales, b.buckets, b.step, 'Sales in AU$ for each platform over the selected range');
+      drawPlatChart(chart);
+    }
+    var label = RANGE_DAYS === 1 ? '24h' : RANGE_DAYS + 'd';
+    renderPlatTable(sales, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
+      curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label });
+    renderAnTop(w);
     renderRobuxAnalytics();
-    renderBbbAnalytics();
+    renderAnTraffic();
+    renderAnFunnel();
+    renderAnLists();
   }
 
   /* ================================================================
@@ -6335,6 +6402,48 @@
   }
 
   function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+  // Finds the coldd.dev product a sale on any platform is for: by id, then by
+  // name (exact, then the longest name one contains, then most words shared).
+  var PM = { n: -1, list: [], memo: {} };
+  var PM_STOP = ['the', 'a', 'an', 'and', 'of', 'for', 'with', 'roblox'];
+  function pmWords(s) { return String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(function (w) { return w && PM_STOP.indexOf(w) < 0; }); }
+  function matchProduct(id, title) {
+    if (id) { var byId = findProduct(id); if (byId) return byId; }
+    var t = bbbNorm(title); if (!t) return null;
+    var prods = allProducts();
+    if (PM.n !== prods.length) PM = { n: prods.length, memo: {}, list: prods.map(function (p) { return { p: p, n: bbbNorm(p.title), w: pmWords(p.title) }; }) };
+    if (Object.prototype.hasOwnProperty.call(PM.memo, t)) return PM.memo[t];
+    var hit = null, best = 0, tw = pmWords(title);
+    PM.list.forEach(function (x) { if (!hit && x.n === t) hit = x.p; });
+    if (!hit) PM.list.forEach(function (x) {
+      if (x.n.length < 8) return;
+      if ((t.indexOf(x.n) >= 0 || (t.length >= 8 && x.n.indexOf(t) >= 0)) && x.n.length > best) { best = x.n.length; hit = x.p; }
+    });
+    if (!hit && tw.length) {
+      best = 0;
+      PM.list.forEach(function (x) {
+        if (!x.w.length) return;
+        var inter = x.w.filter(function (w) { return tw.indexOf(w) >= 0; }).length;
+        var score = inter / (tw.length + x.w.length - inter);
+        if (score > best) { best = score; hit = x.p; }
+      });
+      if (best < 0.6) hit = null;
+    }
+    PM.memo[t] = hit;
+    return hit;
+  }
+  // A BuiltByBit listing's cover for a product name sold elsewhere.
+  function bbbCoverFor(title) {
+    var t = bbbNorm(title); if (!t || !BBB.resources) return '';
+    var hit = '', best = 0;
+    BBB.resources.forEach(function (r) {
+      if (!r.cover_image_url) return;
+      var n = bbbNorm(r.title);
+      if (n === t) { hit = r.cover_image_url; best = Infinity; return; }
+      if (n.length >= 8 && best !== Infinity && (t.indexOf(n) >= 0 || n.indexOf(t) >= 0) && n.length > best) { best = n.length; hit = r.cover_image_url; }
+    });
+    return hit;
+  }
   function bbbResourceByTitle() {
     var by = {};
     BBB.resources.forEach(function (r) { var k = bbbNorm(r.title); if (k && !by[k]) by[k] = r; });
@@ -6826,47 +6935,18 @@
     if (!box) return;
     var range = RANGE_DAYS, d = robuxStats(range);
     if (!d) { robuxLoad(range); box.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
-    if (d.error) { box.innerHTML = '<p class="adm-empty">Robux revenue is not available right now.</p>'; return; }
+    if (d.error) { box.innerHTML = '<p class="adm-empty">Robux sales are not available right now.</p>'; return; }
     var total = Number(d.total) || 0, sales = Number(d.sales) || 0;
-    var tiles = statGrid([
-      statTile('Group Robux Revenue', robuxRaw(total), '≈ ' + usd(total * DEVEX_USD_PER_ROBUX) + ' USD', pctDelta(total, Number(d.prev_total) || 0)),
-      statTile('Robux sales', num(sales), null, pctDelta(sales, Number(d.prev_sales) || 0)),
-      statTile('Average sale', sales ? robuxRaw(total / sales) : '–', null, ''),
-      statTile('Pending', robuxRaw(d.pending), 'not cleared yet', ''),
-      statTile('Unique buyers', num(d.buyers), d.repeat_buyers ? num(d.repeat_buyers) + ' bought more than once' : null, '')
-    ]);
-    if (!sales) { box.innerHTML = tiles + '<p class="adm-empty">No Robux sales in this range.</p>'; return; }
-
-    var chart = '<div class="adm-mini-head">Robux revenue per day</div>' +
-      svgTrend([{ name: 'Robux revenue', color: 'var(--accent)', data: robuxDailySeries(d, range) }], { height: 150, fmt: axisNum });
-
-    var typeSegs = (d.types || []).map(function (t, i) {
-      return { label: ROBUX_TYPE_LABELS[t.type] || t.type, value: Number(t.robux) || 0, color: ROBUX_COLORS[i % ROBUX_COLORS.length], display: robuxRaw(t.robux), plain: robuxRaw(t.robux) + ' · ' + t.sales + ' sales' };
-    });
-    var types = '<div><div class="adm-mini-head">By item type</div>' + donutChart(typeSegs, { centerLabel: 'R$ ' + axisNum(total), centerSub: 'revenue' }) + '</div>';
-
-    var top = (d.top_items || []).map(function (it) {
-      return '<tr><td>' + esc(it.name) + '</td><td>' + esc(ROBUX_TYPE_LABELS[it.type] || it.type) + '</td><td>' + robuxRaw(it.robux) + '</td><td>' + num(it.sales) + '</td><td>' + (total ? Math.round((Number(it.robux) || 0) / total * 100) : 0) + '%</td></tr>';
+    // The ledger records what reached the group (70%); buyers paid about total / 0.7.
+    var stats = '<div class="adm-an-mini">' +
+      anMini('Buyers paid', '≈ ' + robuxRaw(total / 0.7), robuxRaw(total) + ' reached the group after Roblox\'s 30%') +
+      anMini('Sales', num(sales), d.buyers ? plural(Number(d.buyers), 'buyer') : '') +
+      anMini('Pending', robuxRaw(d.pending), 'Not cleared yet') + '</div>';
+    if (!sales) { box.innerHTML = stats + '<p class="adm-empty">No Robux sales in this range.</p>'; return; }
+    var items = (d.top_items || []).slice(0, 6).map(function (it) {
+      return '<tr><td>' + esc(it.name) + '<span class="adm-po-sub">' + esc(ROBUX_TYPE_LABELS[it.type] || it.type) + '</span></td><td class="is-num">' + num(it.sales) + '</td><td class="is-num">' + robuxRaw(it.robux) + '</td></tr>';
     }).join('');
-    var items = '<div><div class="adm-mini-head">Top items</div><div class="dash-tablewrap"><table class="dash-table"><thead><tr><th>Item</th><th>Type</th><th>Robux</th><th>Sales</th><th>Share</th></tr></thead><tbody>' + top + '</tbody></table></div></div>';
-
-    var byDow = {};
-    (d.weekday || []).forEach(function (x) { byDow[x.dow] = x; });
-    var dowData = ROBUX_DOW.map(function (name, i) {
-      var x = byDow[i], v = x ? Number(x.robux) || 0 : 0, n = x ? Number(x.sales) || 0 : 0;
-      return { label: name, v: v, tip: robuxRaw(v) + ' · ' + n + ' sales' };
-    });
-    var dow = '<div><div class="adm-mini-head">Busiest weekdays</div>' + svgBars(dowData, { height: 120, fmt: axisNum }) +
-      '<div class="bbb-legend" style="justify-content:space-between;margin-top:4px">' + ROBUX_DOW.map(function (n) { return '<span>' + n + '</span>'; }).join('') + '</div></div>';
-
-    var bestRows = (d.best_days || []).map(function (b) {
-      return '<tr><td>' + esc(fmtUtc(new Date(b.d + 'T00:00:00Z'))) + '</td><td>' + robuxRaw(b.robux) + '</td><td>' + num(b.sales) + '</td></tr>';
-    }).join('');
-    var best = '<div><div class="adm-mini-head">Best days</div><div class="dash-tablewrap"><table class="dash-table"><thead><tr><th>Day</th><th>Robux</th><th>Sales</th></tr></thead><tbody>' + bestRows + '</tbody></table></div></div>';
-
-    var warn = (ROBUX.state && ROBUX.state.last_error) ? '<div class="adm-edit-msg err">Last Robux sync: ' + esc(ROBUX.state.last_error) + '</div>' : '';
-    box.innerHTML = tiles + chart + '<div class="adm-two-col" style="margin-top:14px">' + types + items + '</div>' +
-      '<div class="adm-two-col" style="margin-top:14px">' + dow + best + '</div>' + warn;
+    box.innerHTML = stats + '<table class="adm-an-table"><thead><tr><th>Top items</th><th class="is-num">Sales</th><th class="is-num">Received</th></tr></thead><tbody>' + items + '</tbody></table>';
   }
 
   var mpProductDD = makeDropdown($('admMpProductDD'), { valueInput: $('admMpProduct'), placeholder: 'Product', searchable: true });
