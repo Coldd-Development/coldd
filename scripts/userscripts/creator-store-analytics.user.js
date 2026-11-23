@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         coldd Creator Store Analytics
 // @namespace    https://coldd.dev
-// @version      6.0
+// @version      6.1
 // @description  Your Creator Store earnings in AU$ on the transactions page: what you earned, sales, next payout, a chart and top products
 // @author       coldd
 // @match        https://create.roblox.com/*
@@ -16,6 +16,8 @@
 // ==/UserScript==
 
 /*
+ * 6.1: a fourth figure, "This month’s earnings" (this calendar month so far,
+ *      whatever the timeframe switch is on).
  * 6.0: a smaller panel, and it no longer sends sales to coldd.dev (the server
  *      reads the same sales list every minute by itself now).
  *      Kept: earned (after Roblox's fee), sales, next payout, one earnings chart,
@@ -196,6 +198,11 @@
     let gross = 0, net = 0;
     inRange.forEach((p) => { gross += p.gross; net += p.net; });
 
+    // This calendar month so far (not tied to the timeframe switch).
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const month = { start: monthStart, net: 0, n: 0 };
+    state.payments.forEach((p) => { if (p.when >= monthStart) { month.net += p.net; month.n++; } });
+
     const payDay = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const payout = { date: payDay, net: 0, n: 0 };
     state.payments.forEach((p) => { if (payoutDate(p.when).getTime() === payDay.getTime()) { payout.net += p.net; payout.n++; } });
@@ -222,7 +229,7 @@
       a.n++; a.net += p.net; products.set(p.name, a);
     });
     const top = [...products.values()].sort((a, b) => b.net - a.net).slice(0, CONFIG.TOP_ROWS);
-    return { gross, net, n: inRange.length, payout, daily, bars: [...bars.values()], top };
+    return { gross, net, n: inRange.length, month, payout, daily, bars: [...bars.values()], top };
   }
 
   // ---------- UI ----------
@@ -237,14 +244,23 @@
     ${R} .cs-seg button:hover { opacity: 1; }
     ${R} .cs-seg button[aria-pressed="true"] { opacity: 1; background: color-mix(in srgb, currentColor 13%, transparent); font-weight: 600; }
     ${R} .cs-status { font-size: .8125rem; opacity: .55; }
-    ${R} .cs-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; }
+    ${R} .cs-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; }
     ${R} .cs-fig { padding: 16px 20px; min-width: 0; }
     ${R} .cs-fig + .cs-fig { border-left: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
     ${R} .cs-fig span { display: block; font-size: .8125rem; opacity: .65; }
     ${R} .cs-fig strong { display: block; font-size: 1.5rem; font-weight: 600; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     ${R} .cs-fig small { display: block; font-size: .8125rem; opacity: .55; }
     ${R} .cs-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
-    @media (max-width: 900px) { ${R} .cs-row { grid-template-columns: 100%; } ${R} .cs-figs { grid-template-columns: 100%; } ${R} .cs-fig + .cs-fig { border-left: 0; border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); } }
+    @media (max-width: 1100px) {
+      ${R} .cs-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      ${R} .cs-fig:nth-child(odd) { border-left: 0; }
+      ${R} .cs-fig:nth-child(n+3) { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+    }
+    @media (max-width: 900px) { ${R} .cs-row { grid-template-columns: 100%; } }
+    @media (max-width: 600px) {
+      ${R} .cs-figs { grid-template-columns: 100%; }
+      ${R} .cs-fig + .cs-fig { border-left: 0; border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+    }
     ${R} .cs-panel { padding: 16px 20px; margin: 0; min-width: 0; display: flex; flex-direction: column; }
     ${R} .cs-panel h3 { margin: 0 0 12px; font-size: .9375rem; font-weight: 600; }
     ${R} .cs-chart { position: relative; flex: 1 1 auto; min-height: 180px; }
@@ -310,6 +326,7 @@
       fig('Earned', fmtA(aud(m.net)), m.gross ? `${fmtA(aud(m.gross))} before Roblox’s fee` : 'No sales in this time'),
       fig('Sales', m.n.toLocaleString('en-AU'), m.n ? `${fmtA(aud(m.net / m.n))} each on average` : '&nbsp;'),
       fig('Next payout', fmtA(aud(m.payout.net)), `${esc(m.payout.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'long' }))} · ${plural(m.payout.n, 'sale')}`),
+      fig('This month’s earnings', fmtA(aud(m.month.net)), `${plural(m.month.n, 'sale')} since 1 ${esc(m.month.start.toLocaleDateString('en-AU', { month: 'long' }))}`),
     ].join('');
     q('.cs-chart-title').textContent = m.daily ? 'Earnings per day' : 'Earnings per month';
     // The list first: it sets the row's height, which the chart is sized to.
