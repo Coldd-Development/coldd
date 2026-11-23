@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         coldd Creator Store Analytics
 // @namespace    https://coldd.dev
-// @version      5.0
+// @version      5.1
 // @description  Creator Store sales analytics in AU$ (revenue, fees, payouts, top products) that also syncs every sale to the coldd admin
 // @author       coldd
 // @match        https://create.roblox.com/*
@@ -14,11 +14,16 @@
 // @connect      ekinmytmudjwfaqaqswp.supabase.co
 // @connect      api.frankfurter.dev
 // @connect      thumbnails.roblox.com
+// @connect      users.roblox.com
 // @sandbox      JavaScript
 // @run-at       document-idle
 // ==/UserScript==
 
 /*
+ * 5.1: buyer pictures work (the payload has no buyer id, so buyers are looked up
+ *      by username on users.roblox.com), Roblox's own font again, and the
+ *      payment's field layout (types only) is logged to the console once.
+ *
  * What changed from 4.2
  * - It no longer writes rows into Roblox's own transactions table. That table
  *   is React-controlled: rows added from outside got reordered and recycled by
@@ -81,6 +86,8 @@
     headshots: new Map(),  // userId -> image url
     syncNote: '',
     cardClass: '',
+    userIds: new Map(),   // lower-case username -> user id ('' = not found)
+    loggedShape: false,
   };
 
   // ---------- small helpers ----------
@@ -100,7 +107,7 @@
   function gmRequest(opts) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
-        method: opts.method || 'GET', url: opts.url, headers: opts.headers || {}, data: opts.data, timeout: 30000,
+        method: opts.method || 'GET', url: opts.url, headers: opts.headers || {}, data: opts.data, timeout: 30000, anonymous: !!opts.anonymous,
         onload: (r) => resolve(r), onerror: () => reject(new Error('Network error')), ontimeout: () => reject(new Error('Timed out')),
       });
     });
@@ -145,21 +152,48 @@
   }
 
   // ---------- data ----------
+  // The live payload does not carry the purchaserId / assetId / paymentId
+  // fields 4.2 assumed, so ids are searched for by name instead of assumed.
+  function findId(obj, re, depth = 0) {
+    if (!obj || typeof obj !== 'object' || depth > 3) return '';
+    for (const [k, v] of Object.entries(obj)) {
+      if (re.test(k) && (typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)))) return String(v);
+    }
+    for (const v of Object.values(obj)) {
+      if (v && typeof v === 'object') { const f = findId(v, re, depth + 1); if (f) return f; }
+    }
+    return '';
+  }
+  // Key names and value types only (no values), for working out the payload.
+  function shapeOf(v, d = 0) {
+    if (Array.isArray(v)) return [v.length ? shapeOf(v[0], d + 1) : 'empty'];
+    if (v && typeof v === 'object') {
+      if (d > 4) return '{...}';
+      const o = {};
+      Object.keys(v).forEach((k) => { o[k] = shapeOf(v[k], d + 1); });
+      return o;
+    }
+    return typeof v;
+  }
   function normalise(p) {
     const base = p.basePayment || {};
     const gross = (base.totalAmount?.quantity?.significand || 0) / CONFIG.CURRENCY_DIVISOR;
     const net = (p.netAmount?.quantity?.significand || 0) / CONFIG.CURRENCY_DIVISOR;
     const when = new Date(base.paymentDateTime || 0);
-    const assetId = base.assetId || base.productId || '';
+    // The stored sale key must never change (coldd matches re-sent sales on it),
+    // so it is still built from exactly the fields 5.0 used.
+    const keyAsset = base.assetId || base.productId || '';
+    const assetId = keyAsset || findId(base, /^(asset|item|target|product)Id$/i);
+    const buyerId = p.purchaserId || findId(p.purchaser, /^(id|userId)$/i) || findId(p, /^(purchaser|buyer)(User)?Id$/i);
     return {
-      id: String(base.paymentId || `${base.paymentDateTime}|${p.purchaserId || p.purchaserName}|${assetId}`),
+      id: String(base.paymentId || `${base.paymentDateTime}|${p.purchaserId || p.purchaserName}|${keyAsset}`),
       when, gross, net,
       currency: String(base.totalAmount?.currencyCode || base.totalAmount?.currency || 'USD').toUpperCase(),
       name: base.productName || 'Unknown asset',
-      assetId: String(assetId),
+      assetId: String(assetId || ''),
       assetType: base.assetType || '',
       buyer: p.purchaserName || 'Unknown buyer',
-      buyerId: p.purchaserId ? String(p.purchaserId) : '',
+      buyerId: buyerId ? String(buyerId) : '',
     };
   }
   async function fetchAllPayments() {
@@ -170,7 +204,13 @@
       const res = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status} reading payments`);
       const data = await res.json();
-      if (Array.isArray(data.sellerPayments)) out.push(...data.sellerPayments.map(normalise));
+      if (Array.isArray(data.sellerPayments)) {
+        if (!state.loggedShape && data.sellerPayments[0]) {
+          state.loggedShape = true;
+          console.info('[coldd analytics] payment layout (types only):', JSON.stringify(shapeOf(data.sellerPayments[0])));
+        }
+        out.push(...data.sellerPayments.map(normalise));
+      }
       hasMore = Boolean(data.pageInfo?.hasMore);
       cursor = data.pageInfo?.nextCursor || '';
       if (hasMore) await new Promise((r) => setTimeout(r, 150));
@@ -318,6 +358,7 @@
   const STYLE = `
     #${CONFIG.IDS.ROOT} { display: flex; flex-direction: column; gap: 16px; width: 100%; margin-bottom: 24px; box-sizing: border-box; font-variant-numeric: tabular-nums; }
     #${CONFIG.IDS.ROOT} * { box-sizing: border-box; }
+    #${CONFIG.IDS.ROOT} select, #${CONFIG.IDS.ROOT} button, #${CONFIG.IDS.ROOT} table { font-family: inherit; }
     #${CONFIG.IDS.ROOT} .cs-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     #${CONFIG.IDS.ROOT} .cs-head h2 { font-size: 1.25rem; font-weight: 600; margin: 0; }
     #${CONFIG.IDS.ROOT} .cs-pill { font-size: .75rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; }
@@ -357,6 +398,9 @@
     state.cardClass = card; // borrow Roblox's own card look so the panel matches the page
     const root = document.createElement('div');
     root.id = CONFIG.IDS.ROOT;
+    // Roblox's own typeface (4.2 got it from the MuiTypography class on every label).
+    const typo = container.querySelector('.MuiTypography-root') || document.querySelector('.MuiTypography-root');
+    if (typo) root.style.fontFamily = getComputedStyle(typo).fontFamily;
     root.innerHTML = `
       <style>${STYLE}</style>
       <div class="cs-head">
@@ -376,10 +420,10 @@
       </div>
       <div class="cs-cards" id="${CONFIG.IDS.CARDS}"></div>
       <div class="cs-row">
-        <div class="${card} cs-panel"><h3 id="${CONFIG.IDS.VELOCITY_TITLE}">Daily Revenue Velocity</h3><div style="position:relative;height:260px;width:100%;"><canvas id="${CONFIG.IDS.VELOCITY_CANVAS}"></canvas></div></div>
-        <div class="${card} cs-panel"><h3>Top Products</h3><div class="cs-list" id="${CONFIG.IDS.TOP}"><span style="opacity:.6">Calculating…</span></div></div>
+        <div class="${card} cs-panel"><h3 class="MuiTypography-root" id="${CONFIG.IDS.VELOCITY_TITLE}">Daily Revenue Velocity</h3><div style="position:relative;height:260px;width:100%;"><canvas id="${CONFIG.IDS.VELOCITY_CANVAS}"></canvas></div></div>
+        <div class="${card} cs-panel"><h3 class="MuiTypography-root">Top Products</h3><div class="cs-list" id="${CONFIG.IDS.TOP}"><span style="opacity:.6">Calculating…</span></div></div>
       </div>
-      <div class="${card} cs-panel"><h3>Recent sales</h3><div id="${CONFIG.IDS.RECENT}"></div></div>`;
+      <div class="${card} cs-panel"><h3 class="MuiTypography-root">Recent sales</h3><div id="${CONFIG.IDS.RECENT}"></div></div>`;
     container.insertBefore(root, container.firstChild);
     const sel = $(CONFIG.IDS.SELECT);
     sel.value = state.selectedRange;
@@ -403,7 +447,7 @@
   }
 
   function cardHtml(label, value, sub, cls) {
-    return `<div class="${state.cardClass} cs-card"><span class="cs-label">${esc(label)}</span><span class="cs-value ${cls || ''}">${value}</span><span class="cs-sub">${sub}</span></div>`;
+    return `<div class="${state.cardClass} cs-card"><span class="MuiTypography-root cs-label">${esc(label)}</span><span class="MuiTypography-root cs-value ${cls || ''}">${value}</span><span class="MuiTypography-root cs-sub">${sub}</span></div>`;
   }
   function render() {
     if (!$(CONFIG.IDS.ROOT)) return;
@@ -427,7 +471,7 @@
     if (!top.length) { box.innerHTML = '<span style="opacity:.6">No sales in this range</span>'; return; }
     const total = top.reduce((s, a) => s + a.gross, 0);
     box.innerHTML = top.map((a) => `
-      <div class="cs-top">
+      <div class="MuiTypography-root cs-top">
         <div><b title="${esc(a.name)}">${a.assetId ? `<a class="cs-link" href="https://create.roblox.com/store/asset/${esc(a.assetId)}">${esc(a.name)}</a>` : esc(a.name)}</b><span class="cs-green" style="font-weight:600">${fmtA(aud(a.gross))}</span></div>
         <div><small>${plural(a.sold, 'sale')}</small><small>${total ? (a.gross / total * 100).toFixed(1) : '0.0'}% of revenue</small></div>
       </div>`).join('');
@@ -466,7 +510,7 @@
     const rows = state.payments.slice(0, CONFIG.RECENT_ROWS);
     if (!rows.length) { box.innerHTML = '<span style="opacity:.6">No sales yet</span>'; return; }
     const draw = () => {
-      box.innerHTML = `<table class="cs-recent"><thead><tr><th>Buyer</th><th>Product</th><th>Paid</th><th>Net</th><th>When</th></tr></thead><tbody>${rows.map((p) => {
+      box.innerHTML = `<table class="MuiTypography-root cs-recent"><thead><tr><th>Buyer</th><th>Product</th><th>Paid</th><th>Net</th><th>When</th></tr></thead><tbody>${rows.map((p) => {
         const img = p.buyerId && state.headshots.get(p.buyerId);
         const av = img ? `<img src="${esc(img)}" alt="" loading="lazy">` : '<span class="cs-av"></span>';
         const buyer = p.buyerId ? `<a class="cs-buyer" href="https://www.roblox.com/users/${esc(p.buyerId)}/profile">${av}${esc(p.buyer)}</a>` : `<span class="cs-buyer">${av}${esc(p.buyer)}</span>`;
@@ -475,10 +519,22 @@
       }).join('')}</tbody></table>`;
     };
     draw();
+    // No buyer id in the payload: look the usernames up (public endpoint, sent
+    // without cookies so it needs no CSRF token).
+    const names = [...new Set(rows.filter((p) => !p.buyerId && p.buyer && !state.userIds.has(p.buyer.toLowerCase())).map((p) => p.buyer))];
+    if (names.length) {
+      try {
+        const r = await gmRequest({ method: 'POST', url: 'https://users.roblox.com/v1/usernames/users', anonymous: true,
+          headers: { 'Content-Type': 'application/json' }, data: JSON.stringify({ usernames: names, excludeBannedUsers: false }) });
+        (JSON.parse(r.responseText).data || []).forEach((u) => { if (u && Number(u.id) > 0) state.userIds.set(String(u.requestedUsername || u.name).toLowerCase(), String(u.id)); });
+      } catch (_) { /* fall through: no pictures for these */ }
+      names.forEach((n) => { if (!state.userIds.has(n.toLowerCase())) state.userIds.set(n.toLowerCase(), ''); });
+    }
+    rows.forEach((p) => { if (!p.buyerId && p.buyer) p.buyerId = state.userIds.get(p.buyer.toLowerCase()) || ''; });
     const missing = [...new Set(rows.map((p) => p.buyerId).filter((id) => id && !state.headshots.has(id)))];
-    if (!missing.length) return;
+    if (!missing.length) { if (names.length && $(CONFIG.IDS.RECENT) === box) draw(); return; }
     try {
-      const r = await gmRequest({ url: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${missing.join(',')}&size=48x48&format=Png&isCircular=true` });
+      const r = await gmRequest({ anonymous: true, url: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${missing.join(',')}&size=48x48&format=Png&isCircular=true` });
       (JSON.parse(r.responseText).data || []).forEach((t) => { if (t.state === 'Completed' && t.imageUrl) state.headshots.set(String(t.targetId), t.imageUrl); });
       if ($(CONFIG.IDS.RECENT) === box) draw();
     } catch (_) { /* pictures are a nicety; the list still works */ }
