@@ -95,6 +95,9 @@ Deno.serve(async (req) => {
   const deadline = Date.now() + BUDGET_MS;
 
   const rows: Obj[] = [];
+  // Quick run (cron every minute): one page, stopping when it is all stored; the 3-day
+  // re-read (late or changed payments) runs every 15 minutes.
+  const deep = body.force === true || new Date().getUTCMinutes() % 15 === 0 || !newestRow;
   let cursor = "", pages = 0, error = "", cookieOk: boolean | null = true;
   try {
     while (pages < MAX_PAGES && Date.now() < deadline) {
@@ -115,6 +118,11 @@ Deno.serve(async (req) => {
       }
       if (!data.pageInfo?.hasMore || !data.pageInfo?.nextCursor) break;
       if (cutoff && !anyNew) break;
+      if (!deep) {
+        const ids = list.map(toRow).filter(Boolean).map((r) => (r as Obj).external_id);
+        const { data: have } = await admin.from("platform_sales").select("external_id").eq("platform", "creatorstore").in("external_id", ids);
+        if ((have || []).length >= ids.length) break;
+      }
       cursor = data.pageInfo.nextCursor;
       await sleep(250);
     }

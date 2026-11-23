@@ -19,6 +19,11 @@
 // flag on recent sales), then fetches Roblox's Day/Week/Month/Year summaries. A "full" pass (first run,
 // weekly, or force) walks the whole history and resumes from a saved cursor if it runs out of time.
 //
+// Cadence (cron every minute): a quick run reads the newest ledger page and stops once it is
+// all stored (one request when nothing is new); the 45-day re-read (refreshes pending flags)
+// runs every 15 minutes, Roblox's summaries + group balance every 5. A run in progress makes
+// the next one skip (robux_state.reconcile.running_until), so requests never double up.
+//
 // Auth: an admin's session, or the shared x-cron-secret. Read-only against Roblox.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -27,6 +32,9 @@ import { notifyRobloxCookieBroken } from "../_shared/roblox.ts";
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const ECON = "https://economy.roblox.com";
 const BUDGET_MS = 100000;
+const QUICK_BUDGET_MS = 40000;
+const RECENT_EVERY_MS = 15 * 60 * 1000;
+const SUMMARY_EVERY_MS = 5 * 60 * 1000;
 const MIN_GAP_MS = 500;
 const RECENT_DAYS = 45;
 const FULL_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -120,13 +128,21 @@ Deno.serve(async (req: Request) => {
     const cookie = Deno.env.get("ROBLOX_FALLBACK_COOKIE");
     const groupId = Deno.env.get("ROBLOX_GROUP_ID");
     if (!cookie || !groupId) return json({ ok: true, configured: false });
-    DEADLINE = Date.now() + BUDGET_MS;
     const force = body.force === true;
 
     const { data: st0 } = await admin.from("robux_state").select("*").eq("id", true).maybeSingle();
     const st: Obj = st0 ?? {};
+    const rc: Obj = st.reconcile || {};
+    const ageOf = (t: unknown) => (t ? Date.now() - new Date(String(t)).getTime() : Infinity);
+    if (!force && rc.running_until && new Date(rc.running_until).getTime() > Date.now()) {
+      return json({ ok: true, configured: true, skipped: "another sync is running" });
+    }
     const lastFullAge = st.last_full_at ? Date.now() - new Date(st.last_full_at).getTime() : Infinity;
     const full = force || lastFullAge >= FULL_EVERY_MS || !!st.resume_cursor;
+    const deep = full || ageOf(rc.recent_at) >= RECENT_EVERY_MS;
+    const sumDue = force || deep || ageOf(st.summary?.fetched_at) >= SUMMARY_EVERY_MS;
+    DEADLINE = Date.now() + (deep ? BUDGET_MS : QUICK_BUDGET_MS);
+    if (st0) await admin.from("robux_state").update({ reconcile: { ...rc, running_until: new Date(DEADLINE + 30000).toISOString() } }).eq("id", true);
     const patch: Obj = {};
     const errors: string[] = [];
     const summary: Obj = {};
@@ -163,12 +179,19 @@ Deno.serve(async (req: Request) => {
             synced_at: new Date().toISOString(),
           });
         }
+        // Quick run: a page that is all stored already means nothing newer is missing.
+        let allKnown = false;
+        if (!deep && out.length) {
+          const { data: have } = await admin.from("robux_sales").select("id_hash").in("id_hash", out.map((o) => o.id_hash));
+          allKnown = (have || []).length >= out.length;
+        }
         if (out.length) {
           const { error } = await admin.from("robux_sales").upsert(out, { onConflict: "id_hash" });
           if (error) throw new Error("save sales: " + error.message);
           rowsSaved += out.length;
         }
         cursor = d.nextPageCursor ? String(d.nextPageCursor) : null;
+        if (allKnown) { finished = true; break; }
         if (!cursor) { finished = true; break; }
         const oldest = rows.length ? Date.parse(rows[rows.length - 1].created) : Infinity;
         if (!full && oldest < cutoff) { finished = true; break; }
@@ -178,7 +201,8 @@ Deno.serve(async (req: Request) => {
         patch.resume_cursor = finished ? null : cursor;
         if (finished) patch.last_full_at = patch.last_sync_at;
       }
-      summary.ledger = { mode: full ? "full" : "recent", pages: pagesRead, saved: rowsSaved, skipped, finished };
+      if (deep && !full && finished) patch.reconcile = { ...rc, recent_at: patch.last_sync_at };
+      summary.ledger = { mode: full ? "full" : deep ? "recent" : "quick", pages: pagesRead, saved: rowsSaved, skipped, finished };
     } catch (e) {
       const f = e as ApiFail;
       errors.push("ledger: " + f.message);
@@ -187,8 +211,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 2) Roblox's own totals, kept for reconciliation
-    try {
+    // 2) Roblox's own totals, kept for reconciliation (every 5 minutes)
+    if (sumDue) try {
       const sums: Obj = {};
       for (const tf of ["Day", "Week", "Month", "Year"]) {
         if (overBudget()) break;
@@ -215,6 +239,7 @@ Deno.serve(async (req: Request) => {
     // sale ledger has no spending types: Purchase, GroupPayout, AdSpend and DevEx all
     // answer 400 for a group (checked 2026-11-24).
 
+    patch.reconcile = { ...(patch.reconcile || rc), running_until: null };
     patch.last_error = errors.length ? errors.join("; ").slice(0, 400) : null;
     patch.updated_at = new Date().toISOString();
     await admin.from("robux_state").upsert({ id: true, ...patch }, { onConflict: "id" });
