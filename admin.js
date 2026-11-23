@@ -619,6 +619,7 @@
       items: items
     };
   }
+  var ORDERS_SIG = '';
   function refreshOrders() {
     if (!window.coldSupabase) return Promise.resolve();
     // Excludes 'parcel'/'robux' source rows - synthetic order records the
@@ -629,6 +630,11 @@
     return window.coldSupabase.from('orders').select('*, order_items(*)').not('source', 'in', '("parcel","robux")').order('created_at', { ascending: false }).limit(20000).then(function (res) {
       if (res.error) { console.error('[admin] failed to load orders:', res.error.message); ORDERS_LOADED = true; renderAll(); return; }
       var rows = res.data || [];
+      // Unchanged since the last read (the Orders page re-reads every 30 seconds):
+      // keep the same list so nothing rebuilds or redraws.
+      var sig = JSON.stringify(rows);
+      if (ORDERS_LOADED && sig === ORDERS_SIG) return;
+      ORDERS_SIG = sig;
       var userIds = rows.map(function (o) { return o.user_id; }).filter(function (v, i, arr) { return v && arr.indexOf(v) === i; });
       // Add-ons are in their own table; read them separately so a missing table never hides orders.
       var addonsLoad = window.coldSupabase.from('order_addons')
@@ -1854,7 +1860,7 @@
 
   // public.platform_sales: ClearlyDev / Parcel / Creator Store / Payhip sales,
   // written by platform-sales-ingest (userscript, bots, email) or by hand.
-  var PSALES = [], PSALES_LOADED = false;
+  var PSALES = [], PSALES_LOADED = false, PSALES_SIG = '';
   var PSYNC = {}; // platform_sync_state rows by platform (background syncs, e.g. creator-store-sync)
   var MAIL_FAILED = 0; // ClearlyDev order emails in the last 7 days the parser could not read
   function refreshPlatformSales() {
@@ -1873,8 +1879,13 @@
     return fetchAllRows(function () {
       return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status, source').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
+      var firstLoad = !PSALES_LOADED;
       PSALES_LOADED = true;
       if (res.error) { console.error('[admin] platform sales:', res.error.message); if (curPanel === 'orders') renderOrders(); if (curPanel === 'analytics') renderAnalytics(); return; }
+      // Unchanged since the last read: keep the same list so nothing rebuilds or redraws.
+      var sig = JSON.stringify(res.data || []);
+      if (!firstLoad && sig === PSALES_SIG) return;
+      PSALES_SIG = sig;
       PSALES = (res.data || []).map(function (r) {
         return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
       });
@@ -6782,15 +6793,7 @@
   // The API returns at most 1000 rows per request whatever .limit() asks for, so read every
   // page. Past 1000 listing rows the rest were silently dropped and showed as "Upload".
   function fetchAllRows(build) {
-    var PAGE = 1000, all = [];
-    function next(from) {
-      return build().range(from, from + PAGE - 1).then(function (res) {
-        if (res.error) return res;
-        all = all.concat(res.data || []);
-        return (res.data || []).length === PAGE ? next(from + PAGE) : { data: all, error: null };
-      });
-    }
-    return next(0);
+    return bbbPaged(build).then(function (rows) { return { data: rows, error: null }; }, function (err) { return { data: null, error: err }; });
   }
   function refreshMarketplaces() {
     if (!window.coldSupabase) return Promise.resolve();
@@ -7025,9 +7028,8 @@
   function saleDisplayName(id, title) {
     var p = matchProduct(id, title);
     if (p) return p.title;
-    var c = canonName(title), k = bbbNorm(c), hit = null;
-    (BBB.resources || []).forEach(function (r) { if (!hit && bbbNorm(r.title) === k) hit = r.title; });
-    return hit || c;
+    var c = canonName(title), r = bbbIdx().byNorm[bbbNorm(c)];
+    return r ? r.title : c;
   }
   // Finds the coldd.dev product a sale on any platform is for: by id, then by
   // name (exact, then the longest name one contains, then most words shared).
@@ -7091,16 +7093,28 @@
     return hit;
   }
   // A BuiltByBit listing's cover for a product name sold elsewhere.
-  function bbbCoverFor(title) {
-    var t = bbbNorm(canonName(title)); if (!t || !BBB.resources) return '';
-    var hit = '', best = 0;
-    BBB.resources.forEach(function (r) {
-      if (!r.cover_image_url) return;
-      var n = bbbNorm(r.title);
-      if (n === t) { hit = r.cover_image_url; best = Infinity; return; }
-      if (n.length >= 8 && best !== Infinity && ((t.indexOf(n) >= 0 && pmExtraOk(t, n)) || (n.indexOf(t) >= 0 && pmExtraOk(n, t))) && n.length > best) { best = n.length; hit = r.cover_image_url; }
+  var BBB_IDX = { src: null };
+  function bbbIdx() {
+    var res = BBB.resources || [];
+    if (BBB_IDX.src === res && BBB_IDX.alias === NAME_ALIAS) return BBB_IDX;
+    var byNorm = {}, covers = [];
+    res.forEach(function (r) {
+      var n = bbbNorm(r.title); if (!n) return;
+      if (!byNorm[n]) byNorm[n] = r;
+      if (r.cover_image_url) covers.push({ n: n, url: r.cover_image_url });
     });
-    return hit;
+    return (BBB_IDX = { src: res, alias: NAME_ALIAS, byNorm: byNorm, covers: covers, cover: {} });
+  }
+  function bbbCoverFor(title) {
+    var ix = bbbIdx(), t = bbbNorm(canonName(title)); if (!t) return '';
+    if (Object.prototype.hasOwnProperty.call(ix.cover, t)) return ix.cover[t];
+    var hit = '', best = 0;
+    ix.covers.forEach(function (r) {
+      var n = r.n;
+      if (n === t) { hit = r.url; best = Infinity; return; }
+      if (n.length >= 8 && best !== Infinity && ((t.indexOf(n) >= 0 && pmExtraOk(t, n)) || (n.indexOf(t) >= 0 && pmExtraOk(n, t))) && n.length > best) { best = n.length; hit = r.url; }
+    });
+    return (ix.cover[t] = hit);
   }
   function bbbResourceByTitle() {
     var by = {};
@@ -7124,19 +7138,6 @@
     return Object.keys(by).map(function (k) { return by[k]; });
   }
 
-  // PostgREST returns at most 1000 rows per request, so read big tables in pages.
-  function bbbPaged(build) {
-    var all = [];
-    function page(from) {
-      return build().range(from, from + 999).then(function (r) {
-        if (r.error) throw r.error;
-        var rows = r.data || [];
-        all = all.concat(rows);
-        return rows.length === 1000 ? page(from + 1000) : all;
-      });
-    }
-    return page(0);
-  }
   // Website side for a date range (cached per range): admin_site_funnel + admin_site_payments.
   function bbbSite(range) { return BBB.siteByRange[String(range)] || null; }
   function bbbSiteLoad(range) {
@@ -7167,17 +7168,24 @@
     if (curPanel === 'orders') renderOrders();
   }
   // PostgREST returns at most 1000 rows per request, so read big tables in pages.
+  // The database is in Frankfurt, so every request is a long round trip: after
+  // the first page the rest load 6 at a time instead of one after another.
   function bbbPaged(build) {
-    var all = [];
-    function page(from) {
-      return build().range(from, from + 999).then(function (r) {
-        if (r.error) throw r.error;
-        var rows = r.data || [];
-        all = all.concat(rows);
-        return rows.length === 1000 ? page(from + 1000) : all;
-      });
-    }
-    return page(0);
+    return build().range(0, 999).then(function (r) {
+      if (r.error) throw r.error;
+      var all = r.data || [];
+      if (all.length < 1000) return all;
+      function batch(from) {
+        var ps = [];
+        for (var k = 0; k < 6; k++) ps.push(build().range(from + k * 1000, from + k * 1000 + 999));
+        return Promise.all(ps).then(function (rs) {
+          var more = true;
+          rs.forEach(function (x) { if (x.error) throw x.error; var d = x.data || []; all = all.concat(d); if (d.length < 1000) more = false; });
+          return more ? batch(from + 6000) : all;
+        });
+      }
+      return batch(1000);
+    });
   }
   function refreshBbbData() {
     if (!window.coldSupabase) return Promise.resolve();
@@ -7190,6 +7198,10 @@
       sb.from('bbb_issue_dismissals').select('issue_key'),
       Promise.all([bbbSiteLoad(BBB_RANGE), bbbSiteLoad(RANGE_DAYS)])
     ]).then(function (r) {
+      // Unchanged since the last read: keep the same lists so nothing rebuilds or redraws.
+      var sig = r[0].length + '|' + (r[0][0] ? r[0][0].purchase_id : '') + '|' + JSON.stringify(r[0].slice(0, 50)) + '|' + r[1].length + '|' + JSON.stringify(r[2] && r[2].data ? r[2].data.length : 0) + '|' + JSON.stringify((r[3] && r[3].data) || null);
+      if (BBB.loaded && sig === BBB.sig) return;
+      BBB.sig = sig;
       BBB.purchases = r[0].map(function (p) {
         return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, list_price: Number(p.price_list) || 0, fee: Number(p.fee) || 0, currency: p.currency, gateway: p.gateway,
           bundle_id: p.bundle_id, sale_event_id: p.sale_event_id, buyer_id: p.buyer_id, buyer_name: p.buyer_name || '', external_tid: p.external_tid || '' };
@@ -7901,7 +7913,15 @@
     if (src.platform === 'clearlydev') return '#' + String(src.ext || src.id).replace(/^#/, '');
     return String(src.ext || src.id);
   }
+  var ORDER_ROWS_ALL = null;
   function allOrderRows() {
+    var prods = allProducts(), C = ORDER_ROWS_ALL;
+    if (C && C.a === ORDERS && C.b === BBB.purchases && C.c === BBB.resources && C.d === PSALES && C.e === prods && C.f === NAME_ALIAS && C.g === FX_KEYS) return C.rows;
+    var rows = buildOrderRows();
+    ORDER_ROWS_ALL = { a: ORDERS, b: BBB.purchases, c: BBB.resources, d: PSALES, e: prods, f: NAME_ALIAS, g: FX_KEYS, rows: rows };
+    return rows;
+  }
+  function buildOrderRows() {
     var out = [];
     ORDERS.forEach(function (o) {
       if (o.status === 'failed') return;
@@ -8007,8 +8027,8 @@
     var rows = visible.filter(function (r) {
       if (ORDER_CHANNEL !== 'all' && r.pf !== ORDER_CHANNEL) return false;
       if (!q) return true;
-      var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || '';
-      return [r.id, r.title, r.buyer, r.search, label, r.status].join(' ').toLowerCase().indexOf(q) >= 0;
+      if (!r.hay) r.hay = [r.id, r.title, r.buyer, r.search, (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || '', r.status].join(' ').toLowerCase();
+      return r.hay.indexOf(q) >= 0;
     });
     var sum = $('admOrderSum');
     if (sum) sum.textContent = plural(rows.length, 'order');
