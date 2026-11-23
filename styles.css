@@ -5899,6 +5899,7 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
 /* Order volume */
 .adm-an-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 -20px 12px; border-bottom: 1px solid var(--hairline); }
 .adm-vol-chart { position: relative; height: 210px; }
+.adm-vol-grain button:disabled { opacity: .35; cursor: not-allowed; }
 .adm-vol-chart svg { display: block; max-width: 100%; overflow: visible; }
 .adm-vol-chart text { font-family: inherit; }
 .adm-vol-chart .adm-skel-chart { height: 210px; }

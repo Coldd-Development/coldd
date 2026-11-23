@@ -4320,10 +4320,69 @@
       '<p class="adm-an-note">100 means sales are spread evenly over all ' + keys.length + ' platforms, 0 means they all come from one. Revenue is AU$ sales; Robux sales count as orders.</p>';
   }
 
-  // Order volume: orders per hour (24h), day (7 to 90 days) or month (all time), stacked by platform.
+  // Order volume: orders per hour, day, week or month (the pills; the range
+  // picks a sensible one until one is chosen), stacked by platform. A grouping
+  // that would draw more than 750 bars for the range is switched off.
+  var VOL_GRAIN = '';
+  try { VOL_GRAIN = localStorage.getItem('coldd_admin_vol_grain_v1') || ''; } catch (_) {}
+  var VOL_MAX = 750;
+  function volAuto() { return RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS && RANGE_DAYS <= 90 ? 'day' : 'month'; }
+  function volFloor(d, g) {
+    d = new Date(d);
+    if (g === 'hour') { d.setMinutes(0, 0, 0); return d; }
+    d.setHours(0, 0, 0, 0);
+    if (g === 'week') d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    if (g === 'month') d.setDate(1);
+    return d;
+  }
+  function volNext(d, g) {
+    d = new Date(d);
+    if (g === 'hour') d.setHours(d.getHours() + 1);
+    else if (g === 'day') d.setDate(d.getDate() + 1);
+    else if (g === 'week') d.setDate(d.getDate() + 7);
+    else d.setMonth(d.getMonth() + 1);
+    return d;
+  }
+  function volStart(sales) {
+    if (RANGE_DAYS) return RANGE_DAYS === 1 ? new Date(Date.now() - 23 * 3600000) : new Date(Date.now() - (RANGE_DAYS - 1) * DAY_MS);
+    return new Date(sales.reduce(function (m, x) { return x.t < m ? x.t : m; }, Date.now()));
+  }
+  function volCount(sales, g) {
+    var span = Date.now() - volStart(sales).getTime();
+    return Math.ceil(span / (g === 'hour' ? 3600000 : g === 'day' ? DAY_MS : g === 'week' ? 7 * DAY_MS : 30.4 * DAY_MS)) + 1;
+  }
+  function volBuckets(sales, g) {
+    var out = [], s = volFloor(volStart(sales), g), now = Date.now();
+    while (s.getTime() <= now && out.length < VOL_MAX + 2) {
+      var e = volNext(s, g), lab;
+      if (g === 'hour') lab = { short: s.toLocaleTimeString('en-AU', { hour: 'numeric' }), long: s.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) };
+      else if (g === 'day') lab = { short: s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }), long: s.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long' }) };
+      else if (g === 'week') lab = { short: s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }), long: 'Week of ' + s.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) };
+      else lab = { short: s.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), long: s.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }) };
+      out.push({ start: s, end: e, short: lab.short, long: lab.long });
+      s = e;
+    }
+    var n = out.length;
+    return { buckets: out, step: Math.max(1, Math.ceil(n / 8)) };
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#admVolGrain [data-grain]');
+    if (!b || b.disabled) return;
+    VOL_GRAIN = b.getAttribute('data-grain');
+    try { localStorage.setItem('coldd_admin_vol_grain_v1', VOL_GRAIN); } catch (_) {}
+    renderAnalytics();
+  });
   function renderAnVolume(sales, w) {
     var box = $('admVolChart'); if (!box) return;
-    var b = anBuckets(sales), buckets = b.buckets, n = buckets.length;
+    var grain = VOL_GRAIN && volCount(sales, VOL_GRAIN) <= VOL_MAX ? VOL_GRAIN : volAuto();
+    document.querySelectorAll('#admVolGrain [data-grain]').forEach(function (btn) {
+      var g = btn.getAttribute('data-grain'), tooMany = volCount(sales, g) > VOL_MAX;
+      btn.classList.toggle('active', g === grain);
+      btn.setAttribute('aria-pressed', String(g === grain));
+      btn.disabled = tooMany;
+      btn.title = tooMany ? 'Too many bars for this range; pick a shorter range' : '';
+    });
+    var b = volBuckets(sales, grain), buckets = b.buckets, n = buckets.length;
     var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
     var series = HOME_PLATFORMS.map(function (p) { return { key: p.key, label: p.label, data: buckets.map(function () { return 0; }) }; });
     var at = {}; series.forEach(function (s, i) { at[s.key] = i; });
@@ -4337,8 +4396,8 @@
     drawVolChart(box);
     var totals = buckets.map(function (_, i) { return anSum(series.map(function (s) { return s.data[i]; })); });
     var cur = sumSales(sales, w.start, w.end), prev = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd) : null;
-    var unit = RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS ? 'day' : 'month';
-    var per = RANGE_DAYS === 1 ? cur.n / 24 : RANGE_DAYS ? cur.n / RANGE_DAYS : cur.n / Math.max(1, n);
+    var unit = grain;
+    var per = cur.n / Math.max(1, n);
     var bi = totals.indexOf(Math.max.apply(null, totals));
     var stats = $('admVolStats');
     if (stats) stats.innerHTML = anFig('Orders', num(cur.n), '', anDelta(cur.n, prev && prev.n, w), '') +
