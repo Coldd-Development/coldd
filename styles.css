@@ -5585,6 +5585,7 @@ html[data-theme="light"] {
 .adm-pc-tip div { display: flex; align-items: center; gap: 8px; line-height: 1.75; color: var(--fg-2); }
 .adm-pc-tip i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--pf); }
 .adm-pc-tip b { margin-left: auto; padding-left: 16px; color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.adm-pc-tip .adm-pc-tip-note { margin: 2px 0 0; font-size: 11px; color: var(--fg-3); }
 .adm-pc-tip .adm-pc-tip-total { margin-top: 4px; padding-top: 5px; border-top: 1px solid var(--hairline); color: var(--fg-1); font-weight: 600; }
 .adm-plat-tablewrap { margin: 8px -20px 0; padding: 0 20px; overflow-x: auto; border-top: 1px solid var(--hairline); }
 .adm-plat-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13px; }
@@ -6070,6 +6071,31 @@ html[data-theme="light"] .adm-pr-name em { background: rgba(0,0,0,0.04); }
   .adm-pr-row { grid-template-columns: minmax(0, 1fr) auto; }
   .adm-pr-row > .adm-pr-num:nth-child(3), .adm-pr-act { display: none; }
 }
+
+/* Admin Reviews (2026-11-24) -------------------------------------------------
+   Overview, star breakdown, most reviewed, and one list with tabs. */
+.adm-revs:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-revs .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.adm-revs #admImportReviewBox[hidden] { display: none; }
+.adm-rv-stars { display: inline-flex; gap: 1px; font-size: 13px; letter-spacing: 0; color: rgba(255,255,255,0.14); white-space: nowrap; }
+.adm-rv-stars .on { color: var(--warn); }
+.adm-rv-list { display: flex; flex-direction: column; }
+.adm-rv { padding: 14px 0; border-top: 1px solid var(--hairline); }
+.adm-rv:first-child { border-top: 0; padding-top: 2px; }
+.adm-rv.is-hidden { opacity: .6; }
+.adm-rv-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adm-rv-av { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font-size: 13px; font-weight: 700; color: var(--fg); background: rgba(255,255,255,0.07); border: 1px solid var(--hairline); }
+.adm-rv-who { flex: 1 1 200px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.adm-rv-who b { font-size: 14px; font-weight: 600; color: var(--fg); }
+.adm-rv-who small { font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-rv .adm-review-text { margin: 8px 0 10px 42px; font-size: 14px; color: var(--fg-1); }
+.adm-rv .adm-review-reply, .adm-rv .adm-review-reply-form, .adm-rv .adm-row-actions { margin-left: 42px; }
+.adm-rv .adm-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.adm-rv-top { grid-template-columns: 18px 38px minmax(0, 1fr) auto !important; }
+.adm-rv-avg { color: var(--fg); }
+html[data-theme="light"] .adm-rv-stars { color: rgba(0,0,0,0.14); }
+html[data-theme="light"] .adm-rv-av { background: rgba(0,0,0,0.05); }
+@media (max-width: 560px) { .adm-rv .adm-review-text, .adm-rv .adm-review-reply, .adm-rv .adm-review-reply-form, .adm-rv .adm-row-actions { margin-left: 0; } }
 
 /* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
    was 20px narrower, so every column drifted right), one-line product names,

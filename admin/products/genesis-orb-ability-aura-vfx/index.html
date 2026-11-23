@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261124k" />
+  <link rel="stylesheet" href="/styles.css?v=20261124l" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -985,22 +985,20 @@
             </form>
           </section>
 
-          <section class="dash-panel" id="adm-panel-reviews" hidden>
-            <div class="dash-head"><h1>Review moderation</h1><p>Reviews go public immediately - hide the ones that shouldn't be, and reply to any that need a response.</p></div>
-            <div class="adm-toolbar">
-              <div class="adm-dd adm-dd-inline" id="admReviewFilterDD">
-                <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
-                  <span class="adm-dd-val"></span>
-                  <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="adm-dd-menu" role="listbox" aria-label="Review status" hidden></div>
+          <section class="dash-panel adm-revs" id="adm-panel-reviews" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Reviews</h1>
+              <div class="adm-head-actions">
+                <button class="btn btn-ghost adm-btn-sm" type="button" id="admImportReviewToggle" aria-expanded="false" aria-controls="admImportReviewBox">+ Import a review</button>
               </div>
             </div>
-            <div id="admReviewsList"></div>
 
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Import a review</h2></div>
-              <p class="adm-note">For reviews left on other platforms (BuiltByBit, Discord, etc.) that you want shown on the product page - published immediately, no moderation queue.</p>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admRevKpis"></div>
+            </div>
+
+            <div class="adm-hp" id="admImportReviewBox" hidden>
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Import a review</h2><span>From BuiltByBit, Discord and the like; shows on the product page straight away</span></div></div>
               <form class="adm-form" id="admImportReviewForm" style="flex-wrap:wrap;position:relative;">
                 <div style="position:relative;flex:1;min-width:220px;">
                   <input maxlength="200" type="text" id="admImportReviewProductSearch" class="adm-input" placeholder="Product (leave empty for a general review)" autocomplete="off" style="width:100%;box-sizing:border-box;" />
@@ -1027,6 +1025,30 @@
                 <button class="btn btn-primary adm-btn-sm" type="submit">Import review</button>
               </form>
               <div class="co-msg" id="admImportReviewMsg"></div>
+            </div>
+
+            <div class="adm-an-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Ratings</h2><span>Every visible review</span></div></div>
+                <div id="admRevStars"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Most reviewed</h2><span>Products with the most reviews</span></div></div>
+                <div id="admRevTop"></div>
+              </div>
+            </div>
+
+            <div class="adm-hp">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Reviews</h2><span>Public the moment they're posted; hide any that shouldn't be</span></div>
+                <div class="adm-seg" role="group" aria-label="Show reviews" id="admReviewTabs">
+                  <button type="button" class="active" data-rf="new">New <span class="adm-gw-count" data-rcount="new"></span></button>
+                  <button type="button" data-rf="approved">Visible</button>
+                  <button type="button" data-rf="hidden">Hidden</button>
+                  <button type="button" data-rf="all">All</button>
+                </div>
+              </div>
+              <div class="adm-rv-list" id="admReviewsList"></div>
             </div>
           </section>
 
@@ -1712,6 +1734,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261124k" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124k"></script>
+  <script src="/catalog-loader.php?v=20261124l" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124l"></script>
 </body>
 </html>
