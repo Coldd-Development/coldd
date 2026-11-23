@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261124j" />
+  <link rel="stylesheet" href="/styles.css?v=20261124k" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -495,27 +495,34 @@
             </div>
           </div>
 
-          <section class="dash-panel" id="adm-panel-products" hidden>
-            <div class="dash-head"><h1>Product management</h1><p>Edit pricing and visibility, or add admin-only listings.</p></div>
-            <div class="adm-toolbar">
-              <input maxlength="200" type="text" id="admProdSearch" class="adm-input" placeholder="Search by product name…" />
-              <div class="adm-dd adm-dd-inline" id="admProdSortDD">
-                <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
-                  <span class="adm-dd-val"></span>
-                  <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="adm-dd-menu" role="listbox" aria-label="Sort products" hidden></div>
+          <section class="dash-panel adm-prods" id="adm-panel-products" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Products</h1>
+              <div class="adm-head-actions">
+                <button class="btn btn-ghost adm-btn-sm" type="button" id="admOpenUnreleasedPanel"><span>Unreleased files</span><span id="admUnreleasedCount" class="adm-sub" hidden></span></button>
+                <button class="btn btn-ghost adm-btn-sm" type="button" id="admOpenUpdatePanel">Push update</button>
+                <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenCreatePanel">+ New product</button>
               </div>
-              <span style="flex:1;"></span>
-              <button class="btn btn-ghost adm-btn-sm" type="button" id="admOpenUnreleasedPanel"><span>Unreleased files</span><span id="admUnreleasedCount" class="adm-sub" hidden></span></button>
-              <button class="btn btn-ghost adm-btn-sm" type="button" id="admOpenUpdatePanel">Push Update</button>
-              <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenCreatePanel">+ Create Product</button>
             </div>
-            <div class="dash-card glass dash-tablewrap">
-              <table class="dash-table adm-table-tight">
-                <thead><tr><th>Thumbnail</th><th>Product Name</th><th>Category</th><th>Rating</th><th>Purchases</th><th></th></tr></thead>
-                <tbody id="admProdBody"></tbody>
-              </table>
+
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admProdKpis"></div>
+            </div>
+
+            <div class="adm-hp adm-or adm-pr">
+              <div class="adm-or-tools">
+                <div class="adm-or-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admProdSearch" placeholder="Search products or categories" aria-label="Search products" /></div>
+                <div class="adm-dd adm-dd-inline" id="admProdSortDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Sort products" hidden></div>
+                </div>
+                <span class="adm-or-sum" id="admProdSum"></span>
+              </div>
+              <div class="adm-pr-head" aria-hidden="true"><span>Product</span><span>Category</span><span>Price</span><span>Rating</span><span>Sales</span><span></span></div>
+              <div class="adm-or-list" id="admProdBody"></div>
             </div>
           </section>
 
@@ -1705,6 +1712,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261124j" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124j"></script>
+  <script src="/catalog-loader.php?v=20261124k" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124k"></script>
 </body>
 </html>

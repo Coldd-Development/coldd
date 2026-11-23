@@ -6033,6 +6033,44 @@ html[data-theme="light"] .adm-mkt-new { background: rgba(0,0,0,0.02); }
   .adm-an-figs.is-4 .adm-an-fig:nth-child(n+3) { border-top: 1px solid var(--hairline); padding-top: 12px; }
 }
 
+/* Admin Products (2026-11-24) ------------------------------------------------
+   Head with the actions, overview row, and a product list in the Orders style.
+   Sales count every platform. */
+.adm-prods:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-prods .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.adm-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adm-pr-head, .adm-pr-row { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) 100px 96px 108px 104px; align-items: center; gap: 12px; }
+.adm-pr-head { position: relative; margin: 0 -10px; padding: 0 10px 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-pr-head::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 1px; background: var(--hairline); }
+.adm-pr-head span:nth-child(n+3):nth-child(-n+5) { text-align: right; }
+.adm-pr-row { position: relative; padding: 9px 10px; margin: 0 -10px; border-radius: var(--r-ctl); cursor: pointer; transition: background .18s; }
+.adm-pr-row + .adm-pr-row::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 1px; background: var(--hairline); }
+@media (hover: hover) and (pointer: fine) { .adm-pr-row:hover { background: rgba(255,255,255,0.03); } }
+.adm-pr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.adm-pr-row.is-hidden .adm-or-thumb { opacity: .5; }
+.adm-pr-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.adm-pr-name b { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-pr-name em { flex: 0 0 auto; font-style: normal; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); color: var(--fg-2); background: rgba(255,255,255,0.06); border: 1px solid var(--hairline); }
+.adm-pr-cat { font-size: 13px; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-pr-num { text-align: right; font-size: 14px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-pr-num small { display: block; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.adm-pr-num .adm-star { font-size: 12px; }
+.adm-pr-act { display: flex; justify-content: flex-end; gap: 2px; }
+.adm-pr-act .adm-icon-btn { color: var(--fg-3); }
+.adm-pr-top { display: block; max-width: 100%; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-prods .adm-kpi-value b { min-width: 0; }
+html[data-theme="light"] .adm-pr-row:hover { background: rgba(0,0,0,0.03); }
+html[data-theme="light"] .adm-pr-name em { background: rgba(0,0,0,0.04); }
+@media (max-width: 1100px) {
+  .adm-pr-head, .adm-pr-row { grid-template-columns: minmax(0, 2fr) 96px 104px 104px; }
+  .adm-pr-head span:nth-child(2), .adm-pr-cat, .adm-pr-head span:nth-child(4), .adm-pr-row > .adm-pr-num:nth-child(4) { display: none; }
+}
+@media (max-width: 680px) {
+  .adm-pr-head { display: none; }
+  .adm-pr-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .adm-pr-row > .adm-pr-num:nth-child(3), .adm-pr-act { display: none; }
+}
+
 /* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
    was 20px narrower, so every column drifted right), one-line product names,
    date over time, the ⋮ info button, and the order info popup. */
