@@ -3,7 +3,7 @@
 // Deploy with:
 //   supabase functions deploy public-site-stats --no-verify-jwt
 //
-// Powers the homepage hero stats (product count, Discord member count)
+// Powers the homepage hero stats (product count, purchases, Discord member count)
 // with real numbers instead of hardcoded copy. No auth - these are
 // aggregate counts safe to expose publicly, same trust level as the
 // storefront itself. Discord's own API doesn't send CORS headers for
@@ -40,14 +40,27 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
 
-    const [productRes, discordRes] = await Promise.all([
+    // Purchases on every platform: coldd.dev paid orders (not test orders or free
+    // grants), BuiltByBit, the marketplace sales table (Creator Store, ClearlyDev,
+    // Payhip, Parcel by hand) and Parcel's Robux sales (developer products in the
+    // group ledger). Game passes are left out: those are coldd.dev Robux orders,
+    // already counted with the orders.
+    const head = { count: "exact" as const, head: true };
+    const [productRes, discordRes, siteRes, bbbRes, psRes, parcelRes] = await Promise.all([
       admin.from("products").select("*", { count: "exact", head: true }).eq("is_active", true),
       fetch(`https://discord.com/api/v10/invites/${INVITE_CODE}?with_counts=true`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      admin.from("orders").select("id", head).eq("status", "paid").eq("is_test", false).neq("source", "granted"),
+      admin.from("bbb2_purchases").select("purchase_id", head),
+      admin.from("platform_sales").select("id", head).neq("status", "refunded"),
+      admin.from("robux_sales").select("id_hash", head).eq("item_type", "DeveloperProduct"),
     ]);
+    const parts = [siteRes, bbbRes, psRes, parcelRes];
+    const purchaseCount = parts.every((r) => typeof r.count === "number") ? parts.reduce((s, r) => s + (r.count as number), 0) : null;
 
     return json({
       ok: true,
       productCount: productRes.count ?? null,
+      purchaseCount,
       discordMemberCount: discordRes?.approximate_member_count ?? null,
     });
   } catch (err) {

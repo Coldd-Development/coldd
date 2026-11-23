@@ -403,6 +403,10 @@ export type SaleEvent = {
   scope: "sitewide" | "platform" | "category";
   platform: string | null;
   category: string | null;
+  // Products this sale leaves out (slugs): ones marked "do not discount", or whose
+  // price limits the sale would break. Saved with the sale by the admin, so the
+  // storefront badge and the discount charged agree.
+  exclude: string[];
 };
 
 // The one live sale event (first match if several overlap), or null.
@@ -426,7 +430,8 @@ export async function activeSaleEvent(admin: any): Promise<SaleEvent | null> {
     const pct = Math.max(0, Math.min(90, Math.round(Number(d.percentOff) || 0)));
     if (pct <= 0) continue;
     const scope = d.scope === "platform" || d.scope === "category" ? d.scope : "sitewide";
-    return { slug: String((row as any).slug || ""), pct, scope, platform: d.platform || null, category: d.category || null };
+    const exclude = Array.isArray(d.excludeSlugs) ? d.excludeSlugs.map((x: unknown) => String(x)) : [];
+    return { slug: String((row as any).slug || ""), pct, scope, platform: d.platform || null, category: d.category || null, exclude };
   }
   return null;
 }
@@ -437,6 +442,7 @@ export async function activeSaleEvent(admin: any): Promise<SaleEvent | null> {
 export function saleEventDiscount(lines: PricedLine[], sale: SaleEvent | null): { discount: number; pct: number } {
   if (!sale || sale.pct <= 0) return { discount: 0, pct: 0 };
   const inScope = (li: PricedLine) => {
+    if (sale.exclude && sale.exclude.indexOf(li.slug) >= 0) return false;
     if (sale.scope === "platform") return li.platform === sale.platform;
     if (sale.scope === "category") return li.platform === sale.platform && li.cat === sale.category;
     return true;
