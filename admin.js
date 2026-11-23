@@ -107,6 +107,35 @@
       if (typeof renderAll === 'function') renderAll();
     }).catch(function () {});
   })();
+  // A sale converts at the ECB rate of the day it was made (frankfurter.dev
+  // daily history, cached 12 hours), so its AU$ never moves afterwards. A day
+  // without a rate (weekend, holiday) takes the last rate before it; a sale
+  // newer than the history takes the live rate above.
+  var FX_DAYS = {}, FX_KEYS = [];
+  (function loadAudHistory() {
+    var KEY = 'coldd_admin_fx_hist_v1', cached = null;
+    function use(rates) { FX_DAYS = rates; FX_KEYS = Object.keys(rates).sort(); }
+    try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) {}
+    if (cached && cached.rates) use(cached.rates);
+    if (cached && Date.now() - cached.at < 12 * 3600000) return;
+    fetch('https://api.frankfurter.dev/v1/2020-01-01..?base=USD&symbols=AUD').then(function (r) { return r.json(); }).then(function (d) {
+      var rates = {};
+      Object.keys((d && d.rates) || {}).forEach(function (day) { var v = Number(d.rates[day] && d.rates[day].AUD); if (v > 0) rates[day] = v; });
+      if (!Object.keys(rates).length) return;
+      use(rates);
+      try { localStorage.setItem(KEY, JSON.stringify({ rates: rates, at: Date.now() })); } catch (_) {}
+      if (typeof renderAll === 'function') renderAll();
+    }).catch(function () {});
+  })();
+  function audRateOn(t) {
+    if (!FX_KEYS.length || !(t > 0)) return AUD_RATE;
+    var day = new Date(t).toISOString().slice(0, 10);
+    if (FX_DAYS[day]) return FX_DAYS[day];
+    if (day > FX_KEYS[FX_KEYS.length - 1]) return AUD_RATE;
+    var lo = 0, hi = FX_KEYS.length - 1, best = 0;
+    while (lo <= hi) { var mid = (lo + hi) >> 1; if (FX_KEYS[mid] <= day) { best = mid; lo = mid + 1; } else hi = mid - 1; }
+    return FX_DAYS[FX_KEYS[best]];
+  }
   function usd(n) { return '$' + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function usd0(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
   function aud(n) { return 'A$' + (Math.round((Number(n) || 0) * AUD_RATE * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -1695,6 +1724,8 @@
   }
 
   function usdToAud(n) { return (Number(n) || 0) * AUD_RATE; }
+  // A sale's AU$: its US$ at the rate of the day it happened.
+  function usdToAudAt(n, t) { return (Number(n) || 0) * audRateOn(t); }
   function robuxToAud(n) { return (Number(n) || 0) * DEVEX_USD_PER_ROBUX * AUD_RATE; }
   // Formats a figure that is already AU$ (aud() above converts from USD).
   function fmtA(v, whole) {
@@ -1706,29 +1737,28 @@
   function plural(n, word) { return num(n) + ' ' + word + (n === 1 ? '' : 's'); }
   function fmtPctAbs(p) { p = Math.abs(p); return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%'; }
 
-  // Every sale on every platform as { pf, t, aud, robux, n }, NET: what reaches
-  // us after the platform's own fee wherever that fee is known. Website orders
-  // count once paid (no tests, no admin grants; card fees are not tracked);
-  // BuiltByBit is FinalPrice minus BuiltByBit's fee; platform_sales rows use
-  // net_usd when the feed sends it (Creator Store does), otherwise the sale
-  // amount. Refunds are left out.
+  // Every sale on every platform as { pf, t, aud, robux, n }, BEFORE FEES: what
+  // the buyer paid, converted at the rate of the day of the sale. Website orders
+  // count once paid (no tests, no admin grants); BuiltByBit is FinalPrice;
+  // platform_sales rows use the sale amount. Refunds are left out.
   function homeSales() {
     var out = [];
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
       var t = Date.parse(o.paidAt || o.date);
       if (o.currency === 'robux') out.push({ pf: 'site', t: t, aud: 0, robux: o.totalRobux, n: 1 });
-      else out.push({ pf: 'site', t: t, aud: usdToAud(o.total), robux: 0, n: 1 });
+      else out.push({ pf: 'site', t: t, aud: usdToAudAt(o.total, t), robux: 0, n: 1 });
     });
     if (BBB.configured) BBB.purchases.forEach(function (p) {
       if (!bbbIsUsd(p)) return;
-      out.push({ pf: 'builtbybit', t: Date.parse(p.purchased_at), aud: usdToAud(p.price - p.fee), robux: 0, n: 1 });
+      var bt = Date.parse(p.purchased_at);
+      out.push({ pf: 'builtbybit', t: bt, aud: usdToAudAt(p.price, bt), robux: 0, n: 1 });
     });
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
       // One row is one order, however many items it held (a ClearlyDev cart can carry several).
       if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: s.amount, n: 1 });
-      else out.push({ pf: s.platform, t: s.t, aud: usdToAud(s.net != null ? s.net : s.usd), robux: 0, n: 1 });
+      else out.push({ pf: s.platform, t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0, n: 1 });
     });
     return out;
   }
@@ -1921,7 +1951,7 @@
     var list = ORDERS.filter(function (o) { return !o.isTest && o.status === 'completed' && o.source !== 'granted'; }).slice(0, 5);
     if (!list.length) { box.innerHTML = '<p class="adm-empty">No website orders yet.</p>'; return; }
     box.innerHTML = list.map(function (o) {
-      var amount = o.currency === 'robux' ? robuxRaw(o.totalRobux) : fmtA(usdToAud(o.total));
+      var amount = o.currency === 'robux' ? robuxRaw(o.totalRobux) : fmtA(usdToAudAt(o.total, Date.parse(o.paidAt || o.date)));
       var method = paymentMethodLabel(o);
       return '<button type="button" class="adm-ro-row" data-order="' + esc(o.id) + '">' +
         '<span class="adm-ro-prod"><span class="adm-ro-thumb"' + (o.image ? ' style="background-image:url(\'' + esc(o.image) + '\')"' : '') + '></span>' +
@@ -6993,7 +7023,7 @@
         pf: 'site', t: Date.parse(o.date), id: o.id, title: o.title, buyer: o.userName,
         meta: (robux ? 'Robux' : paymentMethodLabel(o)) + (o.licence === 'resell' ? ' · resell' : ''),
         status: o.source === 'granted' ? 'gifted' : o.status, test: o.isTest, gift: !!o.purchasedByUserId,
-        amount: robux ? robuxRaw(o.totalRobux) : fmtA(usdToAud(o.total)), net: null,
+        amount: robux ? robuxRaw(o.totalRobux) : fmtA(usdToAudAt(o.total, Date.parse(o.paidAt || o.date))), net: null,
         thumb: o.image ? window.imgUrl(o.image) : '', o: o
       });
     });
@@ -7005,8 +7035,8 @@
         out.push({
           pf: 'builtbybit', t: Date.parse(p.purchased_at), id: 'BBB-' + p.purchase_id,
           title: titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id), buyer: '', meta: bbbMethodName(p.gateway),
-          status: 'completed', amount: usdP ? fmtA(usdToAud(p.price)) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
-          net: usdP ? fmtA(usdToAud(p.price - p.fee)) : null, thumb: covers[String(p.resource_id)] || ''
+          status: 'completed', amount: usdP ? fmtA(usdToAudAt(p.price, Date.parse(p.purchased_at))) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
+          net: null, thumb: covers[String(p.resource_id)] || ''
         });
       });
     }
@@ -7015,8 +7045,8 @@
       out.push({
         pf: s.platform, t: s.t, id: s.ext || s.id, title: s.name || 'Order', buyer: s.buyer || '',
         meta: (s.qty > 1 ? s.qty + ' items' : ''), status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
-        amount: robux ? robuxRaw(s.amount) : fmtA(usdToAud(s.usd)),
-        net: !robux && s.net != null && Math.abs(s.net - s.usd) > 0.004 ? fmtA(usdToAud(s.net)) : null,
+        amount: robux ? robuxRaw(s.amount) : fmtA(usdToAudAt(s.usd, s.t)),
+        net: null,
         thumb: s.productId && prodImg[s.productId] ? prodImg[s.productId] : ''
       });
     });
