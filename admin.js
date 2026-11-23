@@ -3941,8 +3941,7 @@
      ANALYTICS PANEL
      ================================================================ */
   /* ---- Analytics (redesigned 2026-11-23) ----
-     Every platform, before fees, for the selected range. Site-only figures
-     (traffic, funnel, searches, carts, coupons) are labelled coldd.dev. */
+     Every platform, before fees, for the selected range. */
   function anWindow() {
     var now = Date.now();
     if (!RANGE_DAYS) return { start: null, end: new Date(now + 60000), prevStart: null, prevEnd: null };
@@ -4004,139 +4003,385 @@
       kpiCell({ label: 'Site conversion', value: v.sessions ? pct(conv) : '–', delta: anDelta(conv, convP, w), sub: plural(site.n, 'site order') + ' from ' + plural(v.sessions, 'visit') })
     ].join('');
   }
-  // Best sellers across every platform, matched to the coldd.dev product where
-  // there is one so the same product on several platforms shares a row.
-  function renderAnTop(w) {
-    var box = $('admBestSellers'); if (!box) return;
-    var s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), map = {};
-    function add(id, title, pf, aud, robux, units, fallbackImg) {
-      var p = matchProduct(id, title);
-      var key = p ? 'p:' + p.id : 't:' + bbbNorm(title);
-      var m = map[key] = map[key] || { title: p ? p.title : (title || 'Unknown product'), image: p && p.image ? window.imgUrl(p.image) : '', pfs: {}, aud: 0, robux: 0, units: 0 };
-      if (!m.image) m.image = fallbackImg || bbbCoverFor(title);
-      m.pfs[pf] = true; m.aud += aud; m.robux += robux; m.units += units;
+  /* ---- Analytics below the platform chart (rebuilt 2026-11-24) ----
+     Top products, platform mix, order volume, categories, price points, when
+     people buy and customers. Product-level figures come from anAllItems():
+     one entry per product sold on any platform, multi-product orders split the
+     same way the Orders page splits them, matched to our products live (a
+     product added to the database later is picked up on the next render). */
+  // BuiltByBit's categories in our catalogue's words, for products we do not list.
+  var AN_BBB_CAT = { 'Roblox models': 'Assets', 'Roblox maps': 'Maps', 'Roblox scripts': 'Scripts & UI', 'Roblox graphics & UI': 'Scripts & UI',
+    'Roblox animations & VFX': 'Animations & VFX', 'Roblox clothing': 'Uniforms & Gear', 'Roblox vehicles': 'Vehicles',
+    'Roblox game setups': 'Finished Games & Templates', 'Roblox weapons': 'Weapons', 'Minecraft builds': 'Minecraft' };
+  var AN_ITEMS = null;
+  function anAllItems() {
+    var prods = allProducts();
+    if (AN_ITEMS && AN_ITEMS.a === ORDERS && AN_ITEMS.b === BBB.purchases && AN_ITEMS.c === PSALES && AN_ITEMS.d === prods && AN_ITEMS.e === BBB.resources && AN_ITEMS.f === FX_KEYS) return AN_ITEMS.list;
+    var list = [], resById = {}, resByTitle = {};
+    (BBB.resources || []).forEach(function (r) { resById[String(r.resource_id)] = r; var k = bbbNorm(r.title); if (k && !resByTitle[k]) resByTitle[k] = r; });
+    function add(o) {
+      var p = matchProduct(o.id, o.title);
+      var res = o.res || resByTitle[bbbNorm(o.title)] || null;
+      var cat = p && p.cat ? p.cat : res && res.category ? (AN_BBB_CAT[res.category] || res.category) : '';
+      list.push({ pf: o.pf, t: o.t, aud: o.aud || 0, robux: o.robux || 0, title: p ? p.title : (o.title || 'Unknown product'),
+        key: p ? 'p:' + p.id : 't:' + bbbNorm(o.title), image: p && p.image ? window.imgUrl(p.image) : (res && res.cover_image_url) || '',
+        cat: cat || 'Uncategorised', buyer: o.buyer || '', buyerName: o.buyerName || '', order: o.order });
     }
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
-      var t = Date.parse(o.paidAt || o.date); if (t < s || t >= e) return;
+      var t = Date.parse(o.paidAt || o.date), rb = o.currency === 'robux', who = o.userId || o.userEmail;
       var items = o.items && o.items.length ? o.items : [{ slug: o.productId, title: o.title }];
-      var rb = o.currency === 'robux';
-      var wts = items.map(function (it) { var p = findProduct(it.slug); return p && p.priceNum > 0 ? p.priceNum : 1; });
-      var wsum = wts.reduce(function (a, b) { return a + b; }, 0) || 1;
+      var sh = items.length > 1 ? orderShares(items.map(function (it) { var p = findProduct(it.slug); return p && p.priceNum > 0 ? p.priceNum : 0; })) : [1];
       items.forEach(function (it, j) {
-        var share = wts[j] / wsum;
-        add(it.slug, it.title, 'site', rb ? 0 : usdToAudAt(o.total * share, t), rb ? (Number(o.totalRobux) || 0) * share : 0, 1, '');
+        add({ pf: 'site', t: t, id: it.slug, title: it.title, aud: rb ? 0 : usdToAudAt((Number(o.total) || 0) * sh[j], t), robux: rb ? (Number(o.totalRobux) || 0) * sh[j] : 0,
+          buyer: who ? 'site:' + who : '', buyerName: o.userName, order: 'site:' + o.id });
       });
     });
-    if (BBB.configured) {
-      var titles = bbbResourceTitleById(), covers = {};
-      BBB.resources.forEach(function (r) { if (r.cover_image_url) covers[String(r.resource_id)] = r.cover_image_url; });
-      BBB.purchases.forEach(function (p) {
-        if (!bbbIsUsd(p)) return;
-        var t = Date.parse(p.purchased_at); if (t < s || t >= e) return;
-        add(null, titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id), 'builtbybit', usdToAudAt(p.price, t), 0, 1, covers[String(p.resource_id)] || '');
-      });
-    }
-    PSALES.forEach(function (x) {
-      if (x.status === 'refunded' || x.t < s || x.t >= e) return;
-      var rb = x.currency === 'ROBUX';
-      var names = splitOrderNames(x.name, x.qty || 1);
-      if (names.length < 2) { add(x.productId, x.name, x.platform, rb ? 0 : usdToAudAt(x.usd, x.t), rb ? x.amount : 0, x.qty || 1, ''); return; }
-      var sh = saleShares(x, names);
-      names.forEach(function (nm, j) { add(null, nm, x.platform, rb ? 0 : usdToAudAt(x.usd * sh[j], x.t), rb ? x.amount * sh[j] : 0, 1, ''); });
+    if (BBB.configured) BBB.purchases.forEach(function (p) {
+      if (!bbbIsUsd(p)) return;
+      var t = Date.parse(p.purchased_at), res = resById[String(p.resource_id)];
+      add({ pf: 'builtbybit', t: t, id: null, title: res ? res.title : 'BuiltByBit listing ' + p.resource_id, res: res, aud: usdToAudAt(p.price, t),
+        buyer: p.buyer_id ? 'bbb:' + p.buyer_id : '', buyerName: p.buyer_name, order: 'bbb:' + p.purchase_id });
     });
-    var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux); }).slice(0, 8);
-    box.innerHTML = list.length ? list.map(function (p, i) {
+    PSALES.forEach(function (s) {
+      if (s.status === 'refunded') return;
+      var rb = s.currency === 'ROBUX', names = splitOrderNames(s.name, s.qty || 1), sh = saleShares(s, names);
+      names.forEach(function (nm, j) {
+        add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? s.amount * sh[j] : 0,
+          buyer: s.buyer ? s.platform + ':' + String(s.buyer).toLowerCase() : '', buyerName: s.buyer, order: s.platform + ':' + s.id });
+      });
+    });
+    AN_ITEMS = { a: ORDERS, b: BBB.purchases, c: PSALES, d: prods, e: BBB.resources, f: FX_KEYS, list: list };
+    return list;
+  }
+  function anIn(list, s, e) {
+    s = s ? s.getTime() : -Infinity; e = e ? e.getTime() : Infinity;
+    return list.filter(function (x) { return x.t >= s && x.t < e; });
+  }
+  function anSum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+  // How evenly something is spread over n slots, 0 (all in one) to 100 (even):
+  // the Shannon entropy of the shares over its maximum.
+  function divScore(vals) {
+    var tot = anSum(vals);
+    if (!(tot > 0) || vals.length < 2) return null;
+    var h = 0;
+    vals.forEach(function (v) { if (v > 0) { var p = v / tot; h -= p * Math.log(p); } });
+    return Math.round(h / Math.log(vals.length) * 100);
+  }
+  function ptsDelta(cur, prev, w) {
+    if (!w.prevStart || cur == null || prev == null) return '';
+    var d = cur - prev;
+    if (Math.abs(d) < 1) return '';
+    var cls = d > 0 ? 'up' : 'down';
+    return '<span class="adm-kpi-delta ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 13) + Math.abs(d) + ' pts</span><span class="adm-kpi-cmp">vs previous ' + anRangeWord() + '</span>';
+  }
+  function chgChip(cur, prev) {
+    if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '';
+    var p = (cur - prev) / prev * 100;
+    if (Math.abs(p) < 0.5) return '';
+    var cls = p > 0 ? 'up' : 'down';
+    return '<span class="adm-chg ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 12) + fmtPctAbs(p) + '</span>';
+  }
+  // One headline figure inside a panel.
+  function anFig(label, value, suffix, delta, sub) {
+    return '<div class="adm-an-fig"><span class="adm-an-fig-label">' + esc(label) + '</span>' +
+      '<span class="adm-an-fig-val"><b>' + value + '</b>' + (suffix ? '<em>' + suffix + '</em>' : '') + '</span>' +
+      (delta ? '<span class="adm-kpi-line">' + delta + '</span>' : '') +
+      '<span class="adm-an-fig-sub">' + (sub || '&nbsp;') + '</span></div>';
+  }
+  function anEmpty(msg) { return '<p class="adm-empty">' + esc(msg) + '</p>'; }
+  function moneyBoth(aud, robux) { return robux ? (aud ? fmtA(aud) + '<span class="adm-rbx"> | ' + robuxRaw(robux) + '</span>' : robuxRaw(robux)) : fmtA(aud); }
+
+  // Best sellers across every platform; the same product on several platforms shares a row.
+  function renderAnTop(w) {
+    var box = $('admBestSellers'); if (!box) return;
+    var map = {};
+    anIn(anAllItems(), w.start, w.end).forEach(function (x) {
+      var m = map[x.key] = map[x.key] || { title: x.title, image: '', pfs: {}, aud: 0, robux: 0, units: 0 };
+      if (!m.image) m.image = x.image;
+      m.pfs[x.pf] = true; m.aud += x.aud; m.robux += x.robux; m.units++;
+    });
+    var all = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux) || (b.units - a.units); });
+    var cnt = $('admBestCount'); if (cnt) cnt.textContent = all.length ? plural(all.length, 'product') : '';
+    box.innerHTML = all.length ? all.slice(0, 150).map(function (p, i) {
+      var img = p.image || bbbCoverFor(p.title);
       var pfs = HOME_PLATFORMS.filter(function (x) { return p.pfs[x.key]; }).map(function (x) { return '<span title="' + esc(x.label) + '">' + pfMark(x.key) + '</span>'; }).join('');
       return '<div class="adm-an-prod"><span class="adm-an-rank">' + (i + 1) + '</span>' +
-        '<span class="adm-or-thumb"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>' +
+        '<span class="adm-or-thumb"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '></span>' +
         '<span class="adm-an-pname"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><span class="adm-an-pfs">' + pfs + '<em>' + plural(p.units, 'sale') + '</em></span></span>' +
         '<span class="adm-an-pval">' + (p.aud || !p.robux ? fmtA(p.aud) : '') + (p.robux ? (p.aud ? '<small>' : '') + robuxRaw(p.robux) + (p.aud ? '</small>' : '') : '') + '</span></div>';
-    }).join('') : '<p class="adm-empty">No sales in this range.</p>';
+    }).join('') : anEmpty('No sales in this range.');
   }
-  function renderAnTraffic() {
-    var rows = TRAFFIC.slice(Math.max(0, TRAFFIC.length - (RANGE_DAYS || 120)));
-    var views = rows.reduce(function (s, r) { return s + r.pageviews; }, 0);
-    var sessions = rows.reduce(function (s, r) { return s + r.sessions; }, 0);
-    var st = $('admTrafficStats');
-    if (st) st.innerHTML = anMini('Page views', num(views), RANGE_DAYS ? '' : 'Last 120 days') + anMini('Visits', num(sessions), '') +
-      anMini('Returning visitors', TRAFFIC_VISITORS ? pct(TRAFFIC_VISITORS.rate) : '–',
-        TRAFFIC_VISITORS ? num(TRAFFIC_VISITORS.returning) + ' of ' + num(TRAFFIC_VISITORS.total) + ', last 120 days' : 'Gathering data');
-    var ch = $('admTrafficChart');
-    if (ch) { ch.innerHTML = svgBars(trafficSeries(), { height: 120, color: 'var(--info)' }); attachChartTooltip(ch); }
-    var body = $('admTopPagesBody');
-    if (body) {
-      var tpShow = TOP_PAGES_OPEN ? TRAFFIC_PAGES.slice(0, 50) : TRAFFIC_PAGES.slice(0, 5);
-      body.innerHTML = tpShow.map(function (p) {
-        var label = p.path === '/' ? '/ <span class="adm-sub">Home page</span>' : esc(p.path);
-        return '<tr><td class="dt-mono">' + label + '</td><td class="is-num">' + num(p.views) + '</td><td class="is-num">' + num(p.sessions) + '</td></tr>';
-      }).join('') || '<tr><td colspan="3" class="adm-empty">No traffic yet.</td></tr>';
-      var tpBtn = $('admTopPagesMore');
-      if (tpBtn) { tpBtn.hidden = TRAFFIC_PAGES.length <= 5; tpBtn.textContent = TOP_PAGES_OPEN ? 'Show fewer' : 'Show all ' + Math.min(TRAFFIC_PAGES.length, 50) + ' pages'; }
+
+  // Platform mix: how much of the revenue and of the orders each platform carries.
+  function renderAnMix(sales, w) {
+    var box = $('admAnMix'); if (!box) return;
+    var keys = HOME_PLATFORMS.map(function (p) { return p.key; });
+    function tally(s, e) { return keys.map(function (k) { return sumSales(sales, s, e, k); }); }
+    var cur = tally(w.start, w.end), prev = w.prevStart ? tally(w.prevStart, w.prevEnd) : null;
+    var rev = cur.map(function (r) { return r.aud; }), ord = cur.map(function (r) { return r.n; });
+    var totA = anSum(rev), totN = anSum(ord);
+    if (!totN) { box.innerHTML = anEmpty('No sales in this range.'); return; }
+    var revS = divScore(rev), ordS = divScore(ord);
+    var revP = prev ? divScore(prev.map(function (r) { return r.aud; })) : null, ordP = prev ? divScore(prev.map(function (r) { return r.n; })) : null;
+    function lead(vals, tot, verb) {
+      if (!tot) return 'No AU$ sales in this range';
+      var i = vals.indexOf(Math.max.apply(null, vals));
+      return esc(HOME_PLATFORMS[i].label) + ' ' + verb + ' ' + sharePct(vals[i] / tot * 100);
     }
+    function bar(vals, tot, label) {
+      var segs = tot ? keys.map(function (k, i) {
+        var v = vals[i] / tot * 100;
+        return v > 0 ? '<i style="flex:' + v.toFixed(3) + ' 1 0;--pf:' + pfVar(k) + '" title="' + esc(HOME_PLATFORMS[i].label + ': ' + sharePct(v)) + '"></i>' : '';
+      }).join('') : '';
+      return '<div class="adm-mix-bar" role="img" aria-label="' + esc(label) + '">' + segs + '</div>';
+    }
+    box.innerHTML = '<div class="adm-an-figs">' +
+        anFig('Revenue spread', revS == null ? '–' : revS, revS == null ? '' : '/ 100', ptsDelta(revS, revP, w), lead(rev, totA, 'brings in')) +
+        anFig('Order spread', ordS == null ? '–' : ordS, ordS == null ? '' : '/ 100', ptsDelta(ordS, ordP, w), lead(ord, totN, 'takes')) + '</div>' +
+      '<div class="adm-mix-bars"><span>Revenue</span>' + bar(rev, totA, 'Revenue share by platform') + '<span>Orders</span>' + bar(ord, totN, 'Order share by platform') + '</div>' +
+      '<div class="adm-mix-table" role="table" aria-label="Share of revenue and orders by platform">' +
+        '<div class="adm-mix-row is-head" role="row"><span role="columnheader">Platform</span><span role="columnheader">Revenue</span><span role="columnheader">Orders</span></div>' +
+        keys.map(function (k, i) {
+          return '<div class="adm-mix-row" role="row" style="--pf:' + pfVar(k) + '"><span role="cell" class="adm-pf"><i></i>' + pfMark(k) + esc(HOME_PLATFORMS[i].label) + '</span>' +
+            '<span role="cell">' + (totA ? sharePct(rev[i] / totA * 100) : '–') + '</span><span role="cell">' + sharePct(ord[i] / totN * 100) + '</span></div>';
+        }).join('') + '</div>' +
+      '<p class="adm-an-note">100 means sales are spread evenly over all ' + keys.length + ' platforms, 0 means they all come from one. Revenue is AU$ sales; Robux sales count as orders.</p>';
   }
-  function renderAnFunnel() {
-    var box = $('admFunnel'); if (!box) return;
-    var fn = funnelCounts();
-    var steps = [
-      { label: 'Visited the site', v: fn.visitors },
-      { label: 'Viewed a product', v: fn.product },
-      { label: 'Added to cart', v: fn.cart },
-      { label: 'Started checkout', v: fn.checkout },
-      { label: 'Paid', v: fn.paid }
-    ];
-    var top = Math.max.apply(null, steps.map(function (st) { return st.v; }).concat([1]));
-    var rows = steps.map(function (st, i) {
-      var prev = i ? steps[i - 1].v : 0;
-      var note = i === 0 ? '' : (prev ? pct(st.v / prev * 100) + ' of the step above' : '');
-      var w = st.v ? Math.max(1.5, st.v / top * 100) : 0;
-      return '<div class="adm-funnel-row"><div class="adm-funnel-label">' + esc(st.label) + '</div>' +
-        '<div class="adm-funnel-track"><i style="width:' + w.toFixed(1) + '%"></i></div>' +
-        '<div class="adm-funnel-num">' + num(st.v) + '</div>' +
-        '<div class="adm-funnel-note">' + note + '</div></div>';
+
+  // Order volume: orders per hour (24h), day (7 to 90 days) or month (all time), stacked by platform.
+  function renderAnVolume(sales, w) {
+    var box = $('admVolChart'); if (!box) return;
+    var b = anBuckets(sales), buckets = b.buckets, n = buckets.length;
+    var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
+    var series = HOME_PLATFORMS.map(function (p) { return { key: p.key, label: p.label, data: buckets.map(function () { return 0; }) }; });
+    var at = {}; series.forEach(function (s, i) { at[s.key] = i; });
+    sales.forEach(function (x) {
+      if (x.t < first || x.t >= last || at[x.pf] == null) return;
+      var lo = 0, hi = n - 1;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
+      series[at[x.pf]].data[lo] += x.n;
+    });
+    box.__vol = { buckets: buckets, series: series, step: b.step };
+    drawVolChart(box);
+    var totals = buckets.map(function (_, i) { return anSum(series.map(function (s) { return s.data[i]; })); });
+    var cur = sumSales(sales, w.start, w.end), prev = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd) : null;
+    var unit = RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS ? 'day' : 'month';
+    var per = RANGE_DAYS === 1 ? cur.n / 24 : RANGE_DAYS ? cur.n / RANGE_DAYS : cur.n / Math.max(1, n);
+    var bi = totals.indexOf(Math.max.apply(null, totals));
+    var stats = $('admVolStats');
+    if (stats) stats.innerHTML = anFig('Orders', num(cur.n), '', anDelta(cur.n, prev && prev.n, w), '') +
+      anFig('A' + (unit === 'hour' ? 'n hour' : ' ' + unit) + ' on average', per >= 10 ? num(Math.round(per)) : (Math.round(per * 10) / 10).toString(), '', '', RANGE_DAYS ? '' : 'Since the first sale') +
+      anFig('Busiest ' + unit, totals[bi] ? num(totals[bi]) : '–', totals[bi] ? (totals[bi] === 1 ? 'order' : 'orders') : '', '', totals[bi] ? esc(buckets[bi].long) : '');
+    var leg = $('admVolLegend');
+    if (leg) leg.innerHTML = series.map(function (s) {
+      return '<span style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + num(anSum(s.data)) + '</b></span>';
     }).join('');
-    box.innerHTML = '<div class="adm-an-mini">' +
-      anMini('Visit to paid', steps[0].v ? pct(fn.paid / steps[0].v * 100) : '–', '') +
-      anMini('Cart to checkout', fn.cart ? pct(fn.checkout / fn.cart * 100) : '–', '') +
-      anMini('Checkout to paid', fn.checkout ? pct(fn.paid / fn.checkout * 100) : '–', '') + '</div>' +
-      '<div class="adm-funnel">' + rows + '</div>';
   }
-  function renderAnLists() {
-    var sb = $('admSearchBody');
-    if (sb) sb.innerHTML = topSearches(15).map(function (sq) {
-      return '<tr><td>' + esc(sq.q) + '</td><td class="is-num">' + num(sq.count) + '</td><td class="is-num">' + (sq.noResults ? '<span class="dt-badge warn">' + num(sq.noResults) + '</span>' : '') + '</td></tr>';
-    }).join('') || '<tr><td colspan="3" class="adm-empty">No searches logged yet.</td></tr>';
-    var hb = $('admHowHeardBody');
-    if (hb) hb.innerHTML = howHeard().map(function (r) {
-      return '<tr><td>' + esc(r.label) + '</td><td class="is-num">' + num(r.count) + '</td><td class="is-num">' + r.pct + '%</td></tr>';
-    }).join('') || '<tr><td colspan="3" class="adm-empty">No survey answers yet.</td></tr>';
-
-    var ab = $('admAbandonedBody');
-    if (ab) {
-      var abShow = ABANDONED_OPEN ? ABANDONED.slice(0, 50) : ABANDONED.slice(0, 5);
-      ab.innerHTML = abShow.map(function (a) {
-        var sent = a.recoveryEmailSentAt
-          ? '<span class="dt-badge ok">Email sent</span><span class="adm-po-sub">' + (a.abandonedStep != null ? 'Step ' + a.abandonedStep + ' · ' : '') + fmtDate(new Date(a.recoveryEmailSentAt)) + '</span>'
-          : (a.abandonedStep > 0 ? '<span class="dt-badge mute">Step ' + a.abandonedStep + ' handled</span>'
-            : (a.email ? '<span class="dt-badge warn">Not sent yet</span>' : '<span class="dt-badge mute">No email</span>'));
-        return '<tr><td>' + fmtDate(new Date(a.date)) + '</td><td>' + esc(a.title) + '</td><td class="is-num">' + fmtA(usdToAudAt(a.value, Date.parse(a.date))) + '</td><td>' + (a.email ? esc(a.email) : '<span class="adm-sub">Unknown</span>') + '</td><td>' + sent + '</td></tr>';
-      }).join('') || '<tr><td colspan="5" class="adm-empty">No abandoned carts.</td></tr>';
-      var atRisk = ABANDONED.reduce(function (sum, a) { return sum + usdToAudAt(a.value, Date.parse(a.date)); }, 0);
-      var tot = $('admAbandonedTotal'); if (tot) tot.textContent = ABANDONED.length ? fmtA(atRisk) + ' across ' + plural(ABANDONED.length, 'cart') : '';
-      var abBtn = $('admAbandonedMore');
-      if (abBtn) { abBtn.hidden = ABANDONED.length <= 5; abBtn.textContent = ABANDONED_OPEN ? 'Show fewer' : 'Show all ' + Math.min(ABANDONED.length, 50) + ' carts'; }
+  function drawVolChart(box) {
+    var V = box && box.__vol; if (!V) return;
+    var n = V.buckets.length, W = Math.max(300, box.clientWidth || 640), H = 210, narrow = W < 560;
+    var padL = 38, padR = 4, padT = 10, padB = 26, iw = W - padL - padR, ih = H - padT - padB;
+    var totals = V.buckets.map(function (_, i) { return anSum(V.series.map(function (s) { return s.data[i]; })); });
+    var sc = niceScale(Math.max(4, Math.max.apply(null, totals)));
+    var bw = iw / n, gap = Math.min(8, Math.max(1, bw * 0.28)), barW = Math.max(1.5, bw - gap);
+    function Y(v) { return padT + ih - v / sc.top * ih; }
+    var svg = '';
+    sc.ticks.forEach(function (t) {
+      if (t % 1) return;
+      var y = Y(t).toFixed(1);
+      svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
+        '<text class="pc-axis" x="' + (padL - 8) + '" y="' + y + '" dy="4" text-anchor="end">' + esc(axisNum(t)) + '</text>';
+    });
+    var step = (V.step || 1) * (narrow ? 2 : 1);
+    V.buckets.forEach(function (m, i) {
+      if ((n - 1 - i) % step) return;
+      svg += '<text class="pc-axis" x="' + (padL + i * bw + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(m.short) + '</text>';
+    });
+    svg += '<rect class="vc-hover" x="0" y="' + padT + '" width="' + bw.toFixed(2) + '" height="' + ih + '" rx="4" visibility="hidden"/>';
+    V.buckets.forEach(function (m, i) {
+      var x = (padL + i * bw + gap / 2).toFixed(2), y0 = padT + ih;
+      V.series.forEach(function (s) {
+        var v = s.data[i]; if (!v) return;
+        var h = v / sc.top * ih, y = y0 - h;
+        // A hairline of surface between stacked segments, so each platform reads on its own.
+        svg += '<rect class="vc-seg" x="' + x + '" y="' + y.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + Math.max(0.6, h - (h > 3 ? 1 : 0)).toFixed(2) + '" style="fill:' + pfVar(s.key) + '"/>';
+        y0 = y;
+      });
+    });
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Orders over the selected range, stacked by platform">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
+    box.__vc = { padL: padL, iw: iw, bw: bw, n: n, W: W };
+  }
+  (function wireVolChart(box) {
+    if (!box) return;
+    function hide() {
+      var tip = box.querySelector('.adm-pc-tip'); if (tip) tip.hidden = true;
+      var hv = box.querySelector('.vc-hover'); if (hv) hv.setAttribute('visibility', 'hidden');
     }
+    box.addEventListener('mousemove', function (e) {
+      var vc = box.__vc, V = box.__vol, svg = box.querySelector('svg');
+      if (!vc || !V || !svg) return;
+      var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (vc.W / r.width);
+      if (x < vc.padL || x > vc.padL + vc.iw) { hide(); return; }
+      var i = Math.max(0, Math.min(vc.n - 1, Math.floor((x - vc.padL) / vc.bw)));
+      var hv = box.querySelector('.vc-hover');
+      hv.setAttribute('x', (vc.padL + i * vc.bw).toFixed(2)); hv.setAttribute('visibility', 'visible');
+      var m = V.buckets[i], total = anSum(V.series.map(function (s) { return s.data[i]; }));
+      var tip = box.querySelector('.adm-pc-tip');
+      tip.innerHTML = '<h4>' + esc(m.long) + (i === vc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
+        V.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + num(s.data[i]) + '</b></div>'; }).join('') +
+        '<div class="adm-pc-tip-total">All platforms<b>' + plural(total, 'order') + '</b></div>';
+      tip.hidden = false;
+      var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
+      if (left + tip.offsetWidth > bx.width) left = (e.clientX - bx.left) - tip.offsetWidth - 16;
+      tip.style.left = Math.max(0, left) + 'px';
+      tip.style.top = Math.max(0, Math.min(box.clientHeight - tip.offsetHeight, (e.clientY - bx.top) - tip.offsetHeight / 2)) + 'px';
+    });
+    box.addEventListener('mouseleave', hide);
+    if (window.ResizeObserver) {
+      var lastW = 0, t = null;
+      new ResizeObserver(function () {
+        var wd = box.clientWidth;
+        if (!wd || Math.abs(wd - lastW) < 4) return;
+        lastW = wd;
+        clearTimeout(t); t = setTimeout(function () { drawVolChart(box); }, 80);
+      }).observe(box);
+    }
+  })($('admVolChart'));
 
-    var cs = couponStats();
-    var ct = cs.reduce(function (a, c) { a.disc += c.discountGiven; a.rev += c.revenue; return a; }, { disc: 0, rev: 0 });
-    var cTot = $('admCouponTotals');
-    if (cTot) cTot.innerHTML = anMini('Sales with a code', fmtA(usdToAud(ct.rev)), '') + anMini('Discount given', fmtA(usdToAud(ct.disc)), '') + anMini('After discount', fmtA(usdToAud(ct.rev - ct.disc)), '');
-    var cb = $('admCouponAnBody');
-    if (cb) cb.innerHTML = cs.map(function (c) {
-      var codeCell = c.label ? esc(c.label) + '<span class="adm-po-sub">' + plural(c.issued, 'code') + ' issued, one per signup</span>' : esc(c.code);
-      var usesCell = c.issued ? c.uses + ' of ' + c.issued + ' used' : c.uses + (c.limit ? ' / ' + c.limit : '');
-      return '<tr><td class="dt-mono">' + codeCell + '</td><td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge mute">Off</span>') + '</td><td>' + usesCell + '</td><td class="is-num">' + fmtA(usdToAud(c.discountGiven)) + '</td><td class="is-num">' + fmtA(usdToAud(c.revenue)) + '</td></tr>';
-    }).join('') || '<tr><td colspan="5" class="adm-empty">No coupons yet.</td></tr>';
+  // Categories: revenue by product category, our catalogue's categories (BuiltByBit's for products we don't list).
+  function renderAnCats(w) {
+    var box = $('admAnCats'); if (!box) return;
+    var all = anAllItems(), cur = anIn(all, w.start, w.end), prev = w.prevStart ? anIn(all, w.prevStart, w.prevEnd) : null;
+    function group(list) { var g = {}; list.forEach(function (x) { var c = g[x.cat] = g[x.cat] || { aud: 0, robux: 0, n: 0 }; c.aud += x.aud; c.robux += x.robux; c.n++; }); return g; }
+    var g = group(cur), gp = prev ? group(prev) : null;
+    if (!cur.length) { box.innerHTML = anEmpty('No sales in this range.'); return; }
+    var known = {};
+    allProducts().forEach(function (p) { if (p.cat) known[p.cat] = 1; });
+    Object.keys(g).forEach(function (c) { if (c !== 'Uncategorised') known[c] = 1; });
+    var catList = Object.keys(known);
+    var score = divScore(catList.map(function (c) { return g[c] ? g[c].aud : 0; }));
+    var scoreP = gp ? divScore(catList.map(function (c) { return gp[c] ? gp[c].aud : 0; })) : null;
+    var cats = Object.keys(g).sort(function (a, b) { return ((a === 'Uncategorised') - (b === 'Uncategorised')) || (g[b].aud - g[a].aud) || (g[b].robux - g[a].robux); });
+    var tot = anSum(cats.map(function (c) { return g[c].aud; }));
+    var named = cats.filter(function (c) { return c !== 'Uncategorised' && g[c].aud > 0; });
+    var selling = catList.filter(function (c) { return g[c] && g[c].n; }).length;
+    var maxA = Math.max.apply(null, cats.map(function (c) { return g[c].aud; }).concat([0.0001]));
+    box.innerHTML = '<div class="adm-an-figs">' +
+        anFig('Category spread', score == null ? '–' : score, score == null ? '' : '/ 100', ptsDelta(score, scoreP, w),
+          named.length ? esc(named[0]) + ' brings in ' + sharePct(g[named[0]].aud / tot * 100) : 'No AU$ sales in this range') +
+        anFig('Categories selling', num(selling), 'of ' + catList.length, '', selling < catList.length ? (catList.length - selling) + (catList.length - selling === 1 ? ' category' : ' categories') + ' with no sales' : 'Every category sold') + '</div>' +
+      '<div class="adm-bars" role="table" aria-label="Revenue by category">' + cats.map(function (c) {
+        var x = g[c], share = tot ? x.aud / tot * 100 : 0;
+        return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + esc(c) + '<small>' + plural(x.n, 'sale') + '</small></span>' +
+          '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (x.aud ? Math.max(1.5, x.aud / maxA * 100) : 0).toFixed(1) + '%"></i></span>' +
+          '<span class="adm-bar-val" role="cell">' + moneyBoth(x.aud, x.robux) + '<small>' + (tot ? sharePct(share) : '') + (gp ? ' ' + chgChip(x.aud, gp[c] ? gp[c].aud : 0) : '') + '</small></span></div>';
+      }).join('') + '</div>' +
+      '<p class="adm-an-note">100 means revenue is spread evenly over all ' + catList.length + ' categories. Products we don\'t list here take their BuiltByBit category.</p>';
+  }
+
+  // Price points: what each product sold for, in AU$ bands.
+  var AN_BANDS = [[0, 5, 'Under A$5'], [5, 10, 'A$5 to A$10'], [10, 20, 'A$10 to A$20'], [20, 40, 'A$20 to A$40'], [40, 80, 'A$40 to A$80'], [80, Infinity, 'A$80 and up']];
+  function renderAnPrices(w) {
+    var box = $('admAnPrices'); if (!box) return;
+    var list = anIn(anAllItems(), w.start, w.end).filter(function (x) { return x.aud > 0; });
+    if (!list.length) { box.innerHTML = anEmpty('No AU$ sales in this range.'); return; }
+    var b = AN_BANDS.map(function () { return { n: 0, aud: 0 }; });
+    list.forEach(function (x) { for (var i = 0; i < AN_BANDS.length; i++) if (x.aud < AN_BANDS[i][1]) { b[i].n++; b[i].aud += x.aud; break; } });
+    var totA = anSum(b.map(function (x) { return x.aud; })), maxN = Math.max.apply(null, b.map(function (x) { return x.n; }));
+    var sorted = list.map(function (x) { return x.aud; }).sort(function (x, y) { return x - y; }), med = sorted[sorted.length >> 1];
+    var avg = totA / list.length;
+    var topRev = 0; b.forEach(function (x, i) { if (x.aud > b[topRev].aud) topRev = i; });
+    box.innerHTML = '<div class="adm-an-figs">' +
+        anFig('Typical price', fmtA(med), '', '', 'Half sold for less, half for more') +
+        anFig('Most revenue from', esc(AN_BANDS[topRev][2]), '', '', sharePct(b[topRev].aud / totA * 100) + ' of AU$ sales, average sale ' + fmtA(avg)) + '</div>' +
+      '<div class="adm-bars" role="table" aria-label="Sales by price">' + b.map(function (x, i) {
+        return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + esc(AN_BANDS[i][2]) + '<small>' + plural(x.n, 'sale') + '</small></span>' +
+          '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (x.n ? Math.max(1.5, x.n / maxN * 100) : 0).toFixed(1) + '%"></i></span>' +
+          '<span class="adm-bar-val" role="cell">' + fmtA(x.aud) + '<small>' + sharePct(x.aud / totA * 100) + ' of revenue</small></span></div>';
+      }).join('') + '</div>' +
+      '<p class="adm-an-note">Bars show how many products sold at each price. A product in a multi-product order counts at its share of the order.</p>';
+  }
+
+  // When people buy: orders by weekday and hour, in the viewer's own time zone.
+  // Sales recorded with a date but no time (some emailed orders) are left out.
+  var AN_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  function anHour(h) { return new Date(2000, 0, 1, h).toLocaleTimeString('en-AU', { hour: 'numeric' }).replace(/\s/g, ' '); }
+  function renderAnHeat(sales, w) {
+    var box = $('admAnHeat'); if (!box) return;
+    var s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), grid = [], d, h, total = 0;
+    for (d = 0; d < 7; d++) { grid.push([]); for (h = 0; h < 24; h++) grid[d].push(0); }
+    sales.forEach(function (x) {
+      if (x.t < s || x.t >= e || x.t % 86400000 === 0) return;
+      var dt = new Date(x.t);
+      grid[(dt.getDay() + 6) % 7][dt.getHours()] += x.n; total += x.n;
+    });
+    if (!total) { box.innerHTML = anEmpty('No sales in this range.'); return; }
+    var max = 0, bd = 0, bh = 0;
+    for (d = 0; d < 7; d++) for (h = 0; h < 24; h++) if (grid[d][h] > max) { max = grid[d][h]; bd = d; bh = h; }
+    var days = grid.map(function (r) { return anSum(r); }), topDay = days.indexOf(Math.max.apply(null, days));
+    var hours = []; for (h = 0; h < 24; h++) hours.push(anSum(grid.map(function (r) { return r[h]; })));
+    var quiet = days.indexOf(Math.min.apply(null, days));
+    var rows = grid.map(function (r, di) {
+      return '<div class="adm-heat-row"><span>' + AN_DAYS[di].slice(0, 3) + '</span>' + r.map(function (v, hi) {
+        return '<i data-d="' + di + '" data-h="' + hi + '" data-v="' + v + '" style="--a:' + (v ? (0.14 + 0.86 * v / max).toFixed(3) : 0) + '"></i>';
+      }).join('') + '</div>';
+    }).join('');
+    var axis = '<div class="adm-heat-axis" aria-hidden="true"><span></span>';
+    for (h = 0; h < 24; h++) axis += '<span>' + (h % 6 ? '' : anHour(h)) + '</span>';
+    axis += '</div>';
+    box.innerHTML = '<div class="adm-an-figs">' +
+        anFig('Busiest time', esc(AN_DAYS[bd].slice(0, 3) + ', ' + anHour(bh)), '', '', plural(max, 'order') + ' in that hour') +
+        anFig('Busiest day', esc(AN_DAYS[topDay]), '', '', sharePct(days[topDay] / total * 100) + ' of orders; quietest is ' + AN_DAYS[quiet]) + '</div>' +
+      '<div class="adm-heat" role="img" aria-label="Orders by weekday and hour; busiest ' + esc(AN_DAYS[bd] + ' ' + anHour(bh)) + '">' + rows + axis + '<div class="adm-pc-tip" hidden></div></div>' +
+      '<div class="adm-heat-key" aria-hidden="true"><span>Fewer</span><i style="--a:.14"></i><i style="--a:.42"></i><i style="--a:.71"></i><i style="--a:1"></i><span>More orders</span></div>';
+  }
+  (function wireHeat(box) {
+    if (!box) return;
+    box.addEventListener('mouseover', function (e) {
+      var c = e.target.closest('.adm-heat i[data-d]'), heat = box.querySelector('.adm-heat'), tip = heat && heat.querySelector('.adm-pc-tip');
+      if (!tip) return;
+      if (!c) { tip.hidden = true; return; }
+      var hh = +c.getAttribute('data-h'), v = +c.getAttribute('data-v');
+      tip.innerHTML = '<h4>' + esc(AN_DAYS[+c.getAttribute('data-d')]) + ', ' + esc(anHour(hh)) + ' to ' + esc(anHour((hh + 1) % 24)) + '</h4><div>Orders<b>' + num(v) + '</b></div>';
+      tip.hidden = false;
+      var hb = heat.getBoundingClientRect(), cb = c.getBoundingClientRect();
+      var left = cb.left - hb.left + cb.width / 2 - tip.offsetWidth / 2;
+      tip.style.left = Math.max(0, Math.min(hb.width - tip.offsetWidth, left)) + 'px';
+      tip.style.top = Math.max(0, cb.top - hb.top - tip.offsetHeight - 8) + 'px';
+    });
+    box.addEventListener('mouseleave', function () { var tip = box.querySelector('.adm-heat .adm-pc-tip'); if (tip) tip.hidden = true; });
+  })($('admAnHeat'));
+
+  // Customers: buyers, how many come back, and the biggest spenders. A buyer
+  // is matched within one platform (a BuiltByBit member, a Creator Store
+  // username, a ClearlyDev email, a coldd.dev account).
+  function renderAnCust(w) {
+    var box = $('admAnCust'); if (!box) return;
+    var all = anAllItems(), s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), first = {}, by = {}, items = 0, named = 0;
+    all.forEach(function (x) { if (x.buyer && (!(x.buyer in first) || x.t < first[x.buyer])) first[x.buyer] = x.t; });
+    all.forEach(function (x) {
+      if (x.t < s || x.t >= e) return;
+      items++;
+      if (!x.buyer) return;
+      named++;
+      var b = by[x.buyer] = by[x.buyer] || { name: x.buyerName || 'Unknown', pf: x.pf, orders: {}, aud: 0, robux: 0, first: first[x.buyer] };
+      b.orders[x.order] = 1; b.aud += x.aud; b.robux += x.robux;
+    });
+    var list = Object.keys(by).map(function (k) { var b = by[k]; b.n = Object.keys(b.orders).length; b.back = b.first < s || b.n > 1; return b; });
+    if (!list.length) { box.innerHTML = anEmpty(items ? 'None of the sales in this range name a buyer.' : 'No sales in this range.'); return; }
+    var back = list.filter(function (b) { return b.back; }), totA = anSum(list.map(function (b) { return b.aud; })), backA = anSum(back.map(function (b) { return b.aud; }));
+    var top = list.slice().sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux) || (b.n - a.n); }).slice(0, 8);
+    box.innerHTML = '<div class="adm-an-figs is-3">' +
+        anFig('Buyers', num(list.length), '', '', sharePct(named / items * 100) + ' of sales name the buyer') +
+        anFig('Returning', sharePct(back.length / list.length * 100), '', '', plural(back.length, 'buyer') + ' bought before or more than once') +
+        anFig('From returning', totA ? sharePct(backA / totA * 100) : '–', '', '', totA ? fmtA(backA) + ' of ' + fmtA(totA) : '') + '</div>' +
+      '<div class="adm-cust-list">' + top.map(function (b, i) {
+        var label = (HOME_PLATFORMS.filter(function (p) { return p.key === b.pf; })[0] || {}).label || b.pf;
+        return '<div class="adm-cust-row"><span class="adm-an-rank">' + (i + 1) + '</span><span class="adm-cust-pf" title="' + esc(label) + '">' + pfMark(b.pf) + '</span>' +
+          '<span class="adm-cust-name"><b title="' + esc(b.name) + '">' + esc(b.name) + '</b><small>' + plural(b.n, 'order') + (b.back ? ' · returning' : '') + '</small></span>' +
+          '<span class="adm-an-pval">' + moneyBoth(b.aud, b.robux) + '</span></div>';
+      }).join('') + '</div>';
   }
   function renderAnalytics() {
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
@@ -4161,10 +4406,12 @@
     renderPlatTable(sales, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
       curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label });
     renderAnTop(w);
-    renderRobuxAnalytics();
-    renderAnTraffic();
-    renderAnFunnel();
-    renderAnLists();
+    renderAnMix(sales, w);
+    renderAnVolume(sales, w);
+    renderAnCats(w);
+    renderAnPrices(w);
+    renderAnHeat(sales, w);
+    renderAnCust(w);
   }
 
   /* ================================================================
@@ -6980,25 +7227,6 @@
     }
     return out;
   }
-  function renderRobuxAnalytics() {
-    var box = $('admRobux');
-    if (!box) return;
-    var range = RANGE_DAYS, d = robuxStats(range);
-    if (!d) { robuxLoad(range); box.innerHTML = '<p class="adm-empty">Loading…</p>'; return; }
-    if (d.error) { box.innerHTML = '<p class="adm-empty">Robux sales are not available right now.</p>'; return; }
-    var total = Number(d.total) || 0, sales = Number(d.sales) || 0;
-    // The ledger records what reached the group (70%); buyers paid about total / 0.7.
-    var stats = '<div class="adm-an-mini">' +
-      anMini('Buyers paid', '≈ ' + robuxRaw(total / 0.7), robuxRaw(total) + ' reached the group after Roblox\'s 30%') +
-      anMini('Sales', num(sales), d.buyers ? plural(Number(d.buyers), 'buyer') : '') +
-      anMini('Pending', robuxRaw(d.pending), 'Not cleared yet') + '</div>';
-    if (!sales) { box.innerHTML = stats + '<p class="adm-empty">No Robux sales in this range.</p>'; return; }
-    var items = (d.top_items || []).slice(0, 6).map(function (it) {
-      return '<tr><td>' + esc(it.name) + '<span class="adm-po-sub">' + esc(ROBUX_TYPE_LABELS[it.type] || it.type) + '</span></td><td class="is-num">' + num(it.sales) + '</td><td class="is-num">' + robuxRaw(it.robux) + '</td></tr>';
-    }).join('');
-    box.innerHTML = stats + '<table class="adm-an-table"><thead><tr><th>Top items</th><th class="is-num">Sales</th><th class="is-num">Received</th></tr></thead><tbody>' + items + '</tbody></table>';
-  }
-
   var mpProductDD = makeDropdown($('admMpProductDD'), { valueInput: $('admMpProduct'), placeholder: 'Product', searchable: true });
   var mpMarketDD = makeDropdown($('admMpMarketDD'), { valueInput: $('admMpMarket'), placeholder: 'Marketplace' });
   mpMarketDD.setOptions(MP_TASK_TARGETS.map(function (m) { return { value: m.key, label: m.label }; }), '');

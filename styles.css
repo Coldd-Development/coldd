@@ -5863,6 +5863,105 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
 @media (max-width: 1100px) { .adm-an-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .adm-an-stat b { font-size: 18px; } }
 
+/* Analytics below the platform chart (2026-11-24) ------------------------------
+   Top products (scrolls), platform mix, order volume, categories, price
+   points, when people buy, customers. Headline figures sit at the top of each
+   panel; bars are one neutral hue, platform colours only where a platform is
+   the thing shown. */
+.adm-an-top .adm-hp-head { margin-bottom: 10px; }
+.adm-an-count { font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.adm-an-scroll { max-height: 560px; overflow-y: auto; margin: 0 -20px; padding: 0 20px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--hairline-strong) transparent; }
+.adm-an-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-ctl); }
+.adm-an-scroll .adm-an-prod:last-child { padding-bottom: 2px; }
+.adm-an-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0 -20px 14px; border-bottom: 1px solid var(--hairline); }
+.adm-an-figs.is-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.adm-an-fig { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 2px 20px 14px; }
+.adm-an-fig + .adm-an-fig { border-left: 1px solid var(--hairline); }
+.adm-an-fig-label { font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-an-fig-val { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.adm-an-fig-val b { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-an-fig-val em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--fg-3); white-space: nowrap; }
+.adm-an-fig .adm-kpi-line { min-height: 0; }
+.adm-an-fig-sub { font-size: 12px; line-height: 1.45; color: var(--fg-3); }
+.adm-an-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg-3); }
+
+/* Platform mix */
+.adm-mix-bars { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px 12px; margin-bottom: 14px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-mix-bar { display: flex; gap: 2px; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: rgba(255,255,255,0.05); }
+.adm-mix-bar i { display: block; min-width: 3px; background: var(--pf); }
+.adm-mix-table { display: flex; flex-direction: column; font-size: 13px; }
+.adm-mix-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 72px; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--hairline); }
+.adm-mix-row.is-head { padding: 0 0 7px; border-top: 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-mix-row > span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-1); }
+.adm-mix-row.is-head > span { color: var(--fg-3); }
+.adm-mix-row .adm-pf { min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; }
+
+/* Order volume */
+.adm-an-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 -20px 12px; border-bottom: 1px solid var(--hairline); }
+.adm-vol-chart { position: relative; height: 210px; }
+.adm-vol-chart svg { display: block; max-width: 100%; overflow: visible; }
+.adm-vol-chart text { font-family: inherit; }
+.adm-vol-chart .adm-skel-chart { height: 210px; }
+.vc-hover { fill: rgba(255,255,255,0.05); }
+.vc-seg { shape-rendering: crispEdges; }
+.adm-vol-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--fg-2); }
+.adm-vol-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.adm-vol-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--pf); }
+.adm-vol-legend b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* Categories and price points: one neutral bar per row */
+.adm-bars { display: flex; flex-direction: column; }
+.adm-bar-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(60px, 1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--hairline); }
+.adm-bar-row:first-child { border-top: 0; padding-top: 0; }
+.adm-bar-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
+.adm-bar-name, .adm-bar-name small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-bar-name small, .adm-bar-val small { font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.adm-bar-track { height: 6px; border-radius: var(--r-pill); background: rgba(255,255,255,0.05); overflow: hidden; }
+.adm-bar-track i { display: block; height: 100%; border-radius: inherit; background: var(--info); }
+.adm-bar-val { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 92px; font-size: 13px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-bar-val small { display: inline-flex; align-items: center; gap: 6px; }
+.adm-bar-val .adm-chg { font-size: 12px; }
+
+/* When people buy */
+.adm-heat { position: relative; display: flex; flex-direction: column; gap: 3px; }
+.adm-heat-row, .adm-heat-axis { display: grid; grid-template-columns: 34px repeat(24, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.adm-heat-row > span, .adm-heat-axis span { font-size: 11px; color: var(--fg-3); white-space: nowrap; }
+.adm-heat-row i { display: block; aspect-ratio: 1; min-height: 8px; max-height: 22px; border-radius: 3px; background: rgba(255,255,255,0.04); }
+.adm-heat-row i[style*="--a:0."], .adm-heat-row i[style*="--a:1"] { background: color-mix(in srgb, var(--info) calc(var(--a) * 100%), rgba(255,255,255,0.04)); }
+.adm-heat-axis { margin-top: 2px; }
+.adm-heat-axis span { overflow: visible; }
+.adm-heat .adm-pc-tip { min-width: 0; white-space: nowrap; }
+.adm-heat-key { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: 11px; color: var(--fg-3); }
+.adm-heat-key i { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--info) calc(var(--a) * 100%), rgba(255,255,255,0.04)); }
+.adm-heat-key span:first-child { margin-right: 2px; } .adm-heat-key span:last-child { margin-left: 2px; }
+
+/* Customers */
+.adm-cust-list { display: flex; flex-direction: column; }
+.adm-cust-row { display: grid; grid-template-columns: 18px 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--hairline); }
+.adm-cust-row:first-child { border-top: 0; padding-top: 0; }
+.adm-cust-pf { display: inline-flex; } .adm-cust-pf .adm-pf-logo { width: 18px; height: 18px; }
+.adm-cust-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.adm-cust-name b { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-cust-name small { font-size: 12px; color: var(--fg-3); }
+
+html[data-theme="light"] .adm-mix-bar, html[data-theme="light"] .adm-bar-track { background: rgba(0,0,0,0.06); }
+html[data-theme="light"] .vc-hover { fill: rgba(0,0,0,0.05); }
+html[data-theme="light"] .adm-heat-row i { background: rgba(0,0,0,0.05); }
+html[data-theme="light"] .adm-heat-row i[style*="--a:0."], html[data-theme="light"] .adm-heat-row i[style*="--a:1"],
+html[data-theme="light"] .adm-heat-key i { background: color-mix(in srgb, var(--info) calc(var(--a) * 100%), rgba(0,0,0,0.05)); }
+@media (max-width: 720px) {
+  .adm-an-figs.is-3, .adm-an-facts { grid-template-columns: minmax(0, 1fr); }
+  .adm-an-figs.is-3 .adm-an-fig + .adm-an-fig, .adm-an-facts .adm-an-fig + .adm-an-fig { border-left: 0; border-top: 1px solid var(--hairline); padding-top: 12px; }
+  .adm-heat-row, .adm-heat-axis { grid-template-columns: 30px repeat(24, minmax(0, 1fr)); gap: 2px; }
+  .adm-heat-row i { border-radius: 2px; }
+}
+@media (max-width: 480px) {
+  .adm-an-figs { grid-template-columns: minmax(0, 1fr); }
+  .adm-an-figs .adm-an-fig + .adm-an-fig { border-left: 0; border-top: 1px solid var(--hairline); padding-top: 12px; }
+  .adm-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .adm-bar-track { grid-column: 1 / -1; grid-row: 2; }
+}
+
 /* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
    was 20px narrower, so every column drifted right), one-line product names,
    date over time, the ⋮ info button, and the order info popup. */

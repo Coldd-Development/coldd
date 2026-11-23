@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261124e" />
+  <link rel="stylesheet" href="/styles.css?v=20261124f" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -226,53 +226,43 @@
             </div>
 
             <div class="adm-an-grid">
-              <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top products</h2><span>Every platform</span></div></div>
-                <div class="adm-an-list" id="admBestSellers"></div>
+              <div class="adm-hp adm-an-top">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top products</h2><span>Every platform</span></div><span class="adm-an-count" id="admBestCount"></span></div>
+                <div class="adm-an-list adm-an-scroll" id="admBestSellers" tabindex="0" role="region" aria-label="Top products"></div>
               </div>
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Robux sales</h2><span>Roblox group</span></div></div>
-                <div id="admRobux"></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Platform mix</h2><span>How spread out sales are</span></div></div>
+                <div id="admAnMix"></div>
               </div>
             </div>
 
             <div class="adm-hp">
-              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Site traffic</h2><span>coldd.dev</span></div></div>
-              <div class="adm-an-mini" id="admTrafficStats"></div>
-              <div class="adm-an-bars" id="admTrafficChart"></div>
-              <table class="adm-an-table">
-                <thead><tr><th>Top pages</th><th class="is-num">Views</th><th class="is-num">Sessions</th></tr></thead>
-                <tbody id="admTopPagesBody"></tbody>
-              </table>
-              <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admTopPagesMore" hidden>Show all pages</button>
-            </div>
-
-            <div class="adm-hp">
-              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Checkout funnel</h2><span>coldd.dev visits</span></div></div>
-              <div id="admFunnel"></div>
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Order volume</h2><span>Orders on every platform</span></div></div>
+              <div class="adm-an-facts" id="admVolStats"></div>
+              <div class="adm-vol-chart" id="admVolChart"><div class="adm-skel adm-skel-chart"></div></div>
+              <div class="adm-vol-legend" id="admVolLegend"></div>
             </div>
 
             <div class="adm-an-grid">
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top searches</h2><span>No results means people want something we don't sell</span></div></div>
-                <table class="adm-an-table"><thead><tr><th>Search</th><th class="is-num">Times</th><th class="is-num">No results</th></tr></thead><tbody id="admSearchBody"></tbody></table>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Categories</h2><span>Revenue by product category</span></div></div>
+                <div id="admAnCats"></div>
               </div>
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>How buyers found us</h2><span>Thank-you page survey</span></div></div>
-                <table class="adm-an-table"><thead><tr><th>Answer</th><th class="is-num">Count</th><th class="is-num">Share</th></tr></thead><tbody id="admHowHeardBody"></tbody></table>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Price points</h2><span>What each product sold for</span></div></div>
+                <div id="admAnPrices"></div>
               </div>
             </div>
 
-            <div class="adm-hp">
-              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Abandoned carts</h2><span id="admAbandonedTotal"></span></div></div>
-              <div class="adm-po-wrap"><table class="adm-an-table"><thead><tr><th>Date</th><th>Item</th><th class="is-num">Value</th><th>Customer</th><th>Recovery email</th></tr></thead><tbody id="admAbandonedBody"></tbody></table></div>
-              <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admAbandonedMore" hidden>Show all carts</button>
-            </div>
-
-            <div class="adm-hp">
-              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Coupons</h2></div></div>
-              <div class="adm-an-mini" id="admCouponTotals"></div>
-              <div class="adm-po-wrap"><table class="adm-an-table"><thead><tr><th>Code</th><th>Status</th><th>Uses</th><th class="is-num">Discount given</th><th class="is-num">Sales with code</th></tr></thead><tbody id="admCouponAnBody"></tbody></table></div>
+            <div class="adm-an-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>When people buy</h2><span>Orders by day and hour, your time</span></div></div>
+                <div id="admAnHeat"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Customers</h2><span>Buyers are matched within each platform</span></div></div>
+                <div id="admAnCust"></div>
+              </div>
             </div>
           </section>
 
@@ -1693,6 +1683,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261124e" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124e"></script>
+  <script src="/catalog-loader.php?v=20261124f" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124f"></script>
 </body>
 </html>
