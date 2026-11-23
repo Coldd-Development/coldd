@@ -234,6 +234,25 @@ Deno.serve(async (req: Request) => {
         } catch (e) { balance = { ok: false, status: (e as ApiFail).status || 0 }; }
       }
       if (Object.keys(sums).length) patch.summary = { fetched_at: new Date().toISOString(), ...sums, balance };
+      // Daily spending for the Robux panel's graph (Roblox only gives rolling totals):
+      // in the first hour after midnight Sydney, the "past day" figures are the day
+      // that just ended. Missed that hour (sync down)? The day is left out, not guessed.
+      if (sums.Day?.all) {
+        const sydDate = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+        const sydHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Australia/Sydney", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+        const today = sydDate(new Date());
+        if (sydHour < 1 && rc.snap_day !== today) {
+          let robuxIn = 0, robuxOut = 0;
+          for (const [k, v] of Object.entries(sums.Day.all as Obj)) {
+            if (k === "pendingRobux") continue;
+            const n = Number(v) || 0;
+            if (n > 0) robuxIn += n; else robuxOut -= n;
+          }
+          const day = sydDate(new Date(Date.now() - 2 * 3600000));
+          const { error } = await admin.from("robux_daily").upsert({ day, robux_out: Math.round(robuxOut), robux_in: Math.round(robuxIn), captured_at: new Date().toISOString() }, { onConflict: "day" });
+          if (!error) patch.reconcile = { ...(patch.reconcile || rc), snap_day: today };
+        }
+      }
     } catch (e) { if ((e as ApiFail).status !== 408) errors.push("summary: " + (e as Error).message); }
     // Money going out shows in the summary (groupPayoutRobux is negative). The group
     // sale ledger has no spending types: Purchase, GroupPayout, AdSpend and DevEx all
