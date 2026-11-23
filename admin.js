@@ -2125,7 +2125,7 @@
     // Background marketplace syncs (platform_sync_state): flag a dead cookie or one never set.
     [
       { key: 'creatorstore', label: 'Creator Store', secret: 'ROBLOX_CREATOR_COOKIE', dead: 'Creator Store sync cookie expired', fix: 'Sign in to Roblox in an incognito window and replace ROBLOX_CREATOR_COOKIE in Supabase secrets' },
-      { key: 'clearlydev', label: 'ClearlyDev email', secret: 'SALES_IMAP_PASSWORD', dead: 'Can\'t log in to sales@coldd.dev', fix: 'Check the mailbox password in Migadu and update SALES_IMAP_PASSWORD in Supabase secrets' }
+      { key: 'clearlydev', label: 'ClearlyDev email', secret: 'SALES_IMAP_PASSWORD', dead: 'Can\'t log in to the sales mailbox', fix: 'Check the noreply@coldd.dev password in Migadu and update SALES_IMAP_PASSWORD in Supabase secrets' }
     ].forEach(function (sy) {
       var st = PSYNC[sy.key];
       if (st && st.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: sy.dead, sub: sy.fix });

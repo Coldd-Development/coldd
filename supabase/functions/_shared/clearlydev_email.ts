@@ -18,6 +18,9 @@ export interface ParsedOrder {
   total: number;
   items: ParsedItem[];
   buyer: string | null;
+  // The order date printed in the subject ("... - 28th August 2025"), noon in
+  // Sydney. Used instead of the email's own date when the email was forwarded.
+  subjectDate: string | null;
 }
 export type ParseResult = ParsedOrder | { ok: false; error: string };
 
@@ -112,5 +115,8 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
     });
   }
   const buyer = (text.match(/([^\n]{2,80}?) has just placed a new order/i) || [])[1] || null;
-  return { ok: true, orderId, currency, total: amount, items, buyer: buyer ? buyer.trim() : null };
+  const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  const dm = subject.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i);
+  const subjectDate = dm ? new Date(Date.UTC(Number(dm[3]), MONTHS.indexOf(dm[2].toLowerCase()), Number(dm[1]), 1, 0, 0)).toISOString() : null;
+  return { ok: true, orderId, currency, total: amount, items, buyer: buyer ? buyer.trim() : null, subjectDate };
 }

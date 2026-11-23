@@ -189,9 +189,12 @@ Deno.serve(async (req) => {
           const perUnit = await usdPerUnit(parsed.currency, rates);
           const names = parsed.items.map((i) => i.name).filter(Boolean);
           const qty = parsed.items.reduce((s, i) => s + (i.qty || 1), 0) || 1;
+          // A forwarded order email (e.g. a test forward of an old one) carries the
+          // forward's date; the real order date is the one in the subject.
+          const forwarded = /^\s*(fwd?|fw)\s*:/i.test(mail.subject || "") || !/clearlydev\.com$/i.test(mail.from?.address || "");
           const up = await admin.from("platform_sales").upsert({
             platform: "clearlydev", source: "email", external_id: parsed.orderId,
-            sold_at: row.sent_at || new Date().toISOString(),
+            sold_at: (forwarded && parsed.subjectDate) || row.sent_at || new Date().toISOString(),
             product_id: names.length === 1 && qty === 1 ? byTitle.get(norm(names[0])) || null : null,
             product_name: (names.join(", ") || "ClearlyDev order").slice(0, 300),
             currency: parsed.currency, amount: parsed.total, amount_usd: Math.round(parsed.total * perUnit * 10000) / 10000,
