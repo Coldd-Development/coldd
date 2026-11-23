@@ -5864,3 +5864,42 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
 .adm-an .adm-funnel { margin-top: 0; }
 @media (max-width: 1100px) { .adm-an-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .adm-an-stat b { font-size: 18px; } }
+
+/* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
+   was 20px narrower, so every column drifted right), one-line product names,
+   date over time, the ⋮ info button, and the order info popup. */
+.adm-or-head { position: relative; margin: 0 -10px; padding: 0 10px 8px; border-bottom: 0; }
+.adm-or-head::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 1px; background: var(--hairline); }
+.adm-or-prod > .adm-or-title { min-width: 0; }
+.adm-or-date { display: flex; flex-direction: column; gap: 1px; line-height: 1.35; }
+.adm-or-date span { color: var(--fg-2); }
+.adm-or-date small { font-size: 11px; color: var(--fg-3); }
+@media (max-width: 1100px) { .adm-or-date { display: none; } }
+.adm-or-info { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--fg-3); cursor: pointer; transition: color .18s, background .18s, border-color .18s; }
+@media (hover: hover) and (pointer: fine) { .adm-or-info:hover { color: var(--fg); background: rgba(255,255,255,0.06); border-color: var(--hairline); } }
+.adm-or-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+body.adm-oi-open { overflow: hidden; }
+.adm-oi-back { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(4,5,7,0.62); }
+.adm-oi-back[hidden] { display: none; }
+.adm-oi { width: min(560px, 100%); max-height: min(86vh, 780px); overflow: auto; padding: 18px 20px 20px; background: var(--bg-3); border: 1px solid var(--hairline-strong); border-radius: var(--r-sm); box-shadow: var(--e-3); }
+@media (prefers-reduced-motion: no-preference) { .adm-oi-back:not([hidden]) .adm-oi { animation: admOiIn .22s var(--ease-out) both; } }
+@keyframes admOiIn { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.adm-oi-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.adm-oi-head .adm-or-thumb { width: 48px; height: 48px; }
+.adm-oi-titles { flex: 1; min-width: 0; }
+.adm-oi-titles h3 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.3; color: var(--fg); overflow-wrap: anywhere; }
+.adm-oi-titles p { margin: 3px 0 0; font-size: 13px; color: var(--fg-3); }
+.adm-oi-close { flex: 0 0 auto; display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 1px solid var(--hairline); background: none; color: var(--fg-2); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .adm-oi-close:hover { color: var(--fg); background: rgba(255,255,255,0.06); } }
+.adm-oi-list { margin: 0; }
+.adm-oi-row { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 1.45; }
+.adm-oi-row:first-child { border-top: 0; }
+.adm-oi-row dt { font-weight: 600; color: var(--fg-3); }
+.adm-oi-row dd { margin: 0; min-width: 0; color: var(--fg); overflow-wrap: anywhere; }
+.adm-oi-row dd .adm-pf-logo { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
+.adm-oi-row dd a { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
+.adm-oi-row .dt-badge { font-size: 11px; padding: 2px 8px; }
+.adm-oi-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+.adm-oi-actions .is-danger { color: #ff6b6b; }
+html[data-theme="light"] .adm-oi-back { background: rgba(10,12,16,0.35); }
+@media (max-width: 560px) { .adm-oi { padding: 16px; } .adm-oi-row { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

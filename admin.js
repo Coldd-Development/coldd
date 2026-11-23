@@ -1869,14 +1869,14 @@
       renderWork();
     });
     return fetchAllRows(function () {
-      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
+      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status, source').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
       PSALES_LOADED = true;
       if (res.error) { console.error('[admin] platform sales:', res.error.message); return; }
       if (curPanel === 'orders') setTimeout(renderOrders, 0);
       if (curPanel === 'analytics') renderAnalytics();
       PSALES = (res.data || []).map(function (r) {
-        return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status };
+        return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
       });
       if (curPanel === 'home') renderHome();
     });
@@ -3986,12 +3986,13 @@
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
       var t = Date.parse(o.paidAt || o.date); if (t < s || t >= e) return;
-      var items = o.items && o.items.length ? o.items : [{ product_slug: o.productId, title: o.title, qty: 1, unit_price_usd: o.total }];
-      var rb = o.currency === 'robux', usdSum = items.reduce(function (a, it) { return a + (Number(it.unit_price_usd) || 0) * (it.qty || 1); }, 0);
-      items.forEach(function (it) {
-        var u = (Number(it.unit_price_usd) || 0) * (it.qty || 1);
-        var share = usdSum ? u / usdSum : 1 / items.length;
-        add(it.product_slug, it.title, 'site', rb ? 0 : usdToAudAt(u, t), rb ? (Number(o.totalRobux) || 0) * share : 0, it.qty || 1, '');
+      var items = o.items && o.items.length ? o.items : [{ slug: o.productId, title: o.title }];
+      var rb = o.currency === 'robux';
+      var wts = items.map(function (it) { var p = findProduct(it.slug); return p && p.priceNum > 0 ? p.priceNum : 1; });
+      var wsum = wts.reduce(function (a, b) { return a + b; }, 0) || 1;
+      items.forEach(function (it, j) {
+        var share = wts[j] / wsum;
+        add(it.slug, it.title, 'site', rb ? 0 : usdToAudAt(o.total * share, t), rb ? (Number(o.totalRobux) || 0) * share : 0, 1, '');
       });
     });
     if (BBB.configured) {
@@ -6515,7 +6516,7 @@
     if (!window.coldSupabase) return Promise.resolve();
     var sb = window.coldSupabase;
     return Promise.all([
-      bbbPaged(function () { return sb.from('bbb2_purchases').select('purchase_id, resource_id, created_at, price_final, fee, currency, gateway').order('created_at', { ascending: false }).order('purchase_id'); }),
+      bbbPaged(function () { return sb.from('bbb2_purchases').select('purchase_id, resource_id, created_at, price_final, price_list, fee, currency, gateway, bundle_id, sale_event_id, buyer_id, buyer_name, external_tid').order('created_at', { ascending: false }).order('purchase_id'); }),
       bbbPaged(function () { return sb.from('bbb2_resources').select('resource_id, title, url, summary, description, list_price, final_price, cover_image_url, carousel_count, category, latest_version').order('resource_id'); }),
       sb.from('bbb2_funnel').select('*').limit(5000),
       sb.from('bbb2_state').select('*').eq('id', true).maybeSingle(),
@@ -6523,7 +6524,8 @@
       Promise.all([bbbSiteLoad(BBB_RANGE), bbbSiteLoad(RANGE_DAYS)])
     ]).then(function (r) {
       BBB.purchases = r[0].map(function (p) {
-        return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, fee: Number(p.fee) || 0, currency: p.currency, gateway: p.gateway };
+        return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, list_price: Number(p.price_list) || 0, fee: Number(p.fee) || 0, currency: p.currency, gateway: p.gateway,
+          bundle_id: p.bundle_id, sale_event_id: p.sale_event_id, buyer_id: p.buyer_id, buyer_name: p.buyer_name || '', external_tid: p.external_tid || '' };
       });
       BBB.resources = r[1];
       BBB.funnel = {};
@@ -7095,67 +7097,60 @@
     { value: 'refunded', label: 'Refunded' },
     { value: 'revoked', label: 'Revoked' }
   ], 'all');
-  function orderRowMenuHtml(o) {
-    var items = ['<button type="button" class="adm-row-menu-item" data-action="view">View details</button>'];
-    if (o.status === 'pending' && can('support')) items.push('<button type="button" class="adm-row-menu-item" data-action="complete">Mark completed</button>');
-    if (!o.isTest && o.status === 'completed' && can('support')) {
-      items.push('<button type="button" class="adm-row-menu-item" data-action="refund">Refund</button>');
-      items.push('<button type="button" class="adm-row-menu-item danger" data-action="revoke">Revoke license</button>');
-    }
-    return '<div class="adm-row-menu" data-id="' + esc(o.id) + '">' +
-      '<button type="button" class="adm-row-menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Order actions">' +
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>' +
-      '<div class="adm-row-menu-list" hidden>' + items.join('') + '</div></div>';
-  }
   // Orders, redesigned 2026-11-23: every sale from every platform in one list.
   // Platform filter (Global by default) with each platform's own logo and
   // count, search, status, and a summary of what is showing. Website orders
   // keep their row menu (view / complete / refund / revoke) and open the
   // detail page on click; other platforms are read-only rows.
-  var ORDER_CHANNEL = 'all', ORDERS_SHOWN = 100;
+  var ORDER_CHANNEL = 'all', ORDERS_SHOWN = 100, ORDER_ROWS = [];
   // Owner's order: Global, coldd.dev, BuiltByBit, ClearlyDev, Creator Store, Parcel, Payhip.
   var ORDER_TABS = [{ key: 'all', label: 'Global' }].concat(['site', 'builtbybit', 'clearlydev', 'creatorstore', 'parcel', 'payhip'].map(function (k) { return HOME_PLATFORMS.filter(function (p) { return p.key === k; })[0]; }));
   function orderTabMark(key) {
     if (key === 'all') return '<span class="adm-pf-logo adm-pf-globe">' + mpLogo('site') + '</span>';
     return pfMark(key);
   }
-  // One normalised row per order: { pf, t, id, title, buyer, meta, status, amount, net, thumb, o }
+  // One normalised row per order: { kind, pf, t, id, title, buyer, search, status, amount, thumb, src }
+  // A row with no picture of its own borrows one: the matching coldd.dev
+  // product's image, else the matching BuiltByBit listing cover.
+  function orderThumb(direct, id, title) {
+    if (direct) return direct;
+    var p = matchProduct(id, title);
+    if (p && p.image) return window.imgUrl(p.image);
+    return bbbCoverFor(title) || '';
+  }
   function allOrderRows() {
     var out = [];
-    var prodImg = {};
-    allProducts().forEach(function (p) { if (p.dbId && p.image) prodImg[p.dbId] = p.image; });
     ORDERS.forEach(function (o) {
       if (o.status === 'failed') return;
       var robux = o.currency === 'robux';
       out.push({
-        pf: 'site', t: Date.parse(o.date), id: o.id, title: o.title, buyer: o.userName,
-        meta: (robux ? 'Robux' : paymentMethodLabel(o)) + (o.licence === 'resell' ? ' · resell' : ''),
+        kind: 'site', pf: 'site', t: Date.parse(o.date), id: o.id, title: o.title, buyer: o.userName,
+        search: [o.userEmail, robux ? 'Robux' : paymentMethodLabel(o), o.couponCode].join(' '),
         status: o.source === 'granted' ? 'gifted' : o.status, test: o.isTest, gift: !!o.purchasedByUserId,
-        amount: robux ? robuxRaw(o.totalRobux) : fmtA(usdToAudAt(o.total, Date.parse(o.paidAt || o.date))), net: null,
-        thumb: o.image ? window.imgUrl(o.image) : '', o: o
+        amount: robux ? robuxRaw(o.totalRobux) : fmtA(usdToAudAt(o.total, Date.parse(o.paidAt || o.date))),
+        thumb: orderThumb(o.image ? window.imgUrl(o.image) : '', o.productId, o.title), src: o
       });
     });
     if (BBB.configured) {
       var titles = bbbResourceTitleById(), covers = {};
       BBB.resources.forEach(function (r) { if (r.cover_image_url) covers[String(r.resource_id)] = r.cover_image_url; });
       BBB.purchases.forEach(function (p) {
-        var usdP = bbbIsUsd(p);
+        var usdP = bbbIsUsd(p), title = titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id);
         out.push({
-          pf: 'builtbybit', t: Date.parse(p.purchased_at), id: 'BBB-' + p.purchase_id,
-          title: titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id), buyer: '', meta: bbbMethodName(p.gateway),
+          kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: 'BBB-' + p.purchase_id, title: title, buyer: p.buyer_name || '',
+          search: bbbMethodName(p.gateway) + ' ' + (p.external_tid || ''),
           status: 'completed', amount: usdP ? fmtA(usdToAudAt(p.price, Date.parse(p.purchased_at))) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
-          net: null, thumb: covers[String(p.resource_id)] || ''
+          thumb: orderThumb(covers[String(p.resource_id)] || '', null, title), src: p
         });
       });
     }
     PSALES.forEach(function (s) {
       var robux = s.currency === 'ROBUX';
       out.push({
-        pf: s.platform, t: s.t, id: s.ext || s.id, title: s.name || 'Order', buyer: s.buyer || '',
-        meta: (s.qty > 1 ? s.qty + ' items' : ''), status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
+        kind: 'ps', pf: s.platform, t: s.t, id: s.ext || s.id, title: s.name || 'Order', buyer: s.buyer || '', search: '',
+        status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
         amount: robux ? robuxRaw(s.amount) : fmtA(usdToAudAt(s.usd, s.t)),
-        net: null,
-        thumb: s.productId && prodImg[s.productId] ? prodImg[s.productId] : ''
+        thumb: orderThumb('', s.productId, s.name), src: s
       });
     });
     out.sort(function (a, b) { return b.t - a.t; });
@@ -7188,14 +7183,15 @@
       if (ORDER_CHANNEL !== 'all' && r.pf !== ORDER_CHANNEL) return false;
       if (!q) return true;
       var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || '';
-      return [r.id, r.title, r.buyer, r.meta, label].join(' ').toLowerCase().indexOf(q) >= 0;
+      return [r.id, r.title, r.buyer, r.search, label].join(' ').toLowerCase().indexOf(q) >= 0;
     });
     var sum = $('admOrderSum');
     if (sum) sum.textContent = plural(rows.length, 'order');
     var shown = rows.slice(0, ORDERS_SHOWN);
     if (!ORDERS_LOADED) { body.innerHTML = '<p class="adm-empty">Loading orders…</p>'; return; }
     if (!shown.length) { body.innerHTML = '<p class="adm-empty">No orders match.</p>'; return; }
-    body.innerHTML = shown.map(function (r) {
+    ORDER_ROWS = shown;
+    body.innerHTML = shown.map(function (r, k) {
       var st = ORDER_STATUS_LABEL[r.status] || [r.status, 'mute'];
       var badges = '<span class="dt-badge ' + st[1] + '">' + esc(st[0]) + '</span>' +
         (r.test ? ' <span class="dt-badge warn">Test</span>' : '') + (r.gift ? ' <span class="dt-badge warn" title="Bought as a gift for a different account">Gift</span>' : '');
@@ -7203,83 +7199,155 @@
       var thumb = r.thumb
         ? '<span class="adm-or-thumb" style="background-image:url(\'' + esc(r.thumb) + '\')"></span>'
         : '<span class="adm-or-thumb is-logo">' + pfMark(r.pf) + '</span>';
-      var site = r.pf === 'site';
-      return '<div class="adm-or-row' + (site ? ' is-link' : '') + '"' + (site ? ' data-order="' + esc(r.id) + '" tabindex="0" role="button"' : '') + '>' +
-        '<span class="adm-or-prod">' + thumb + '<span class="adm-or-name"><span class="adm-or-title">' + esc(r.title) + '</span>' +
-          '<span class="adm-or-id">' + esc(r.id) + (r.meta ? ' · ' + esc(r.meta) : '') + '</span></span></span>' +
+      var d = new Date(r.t);
+      return '<div class="adm-or-row is-link" data-k="' + k + '" tabindex="0" role="button" aria-label="' + esc(r.title + ', ' + label) + '">' +
+        '<span class="adm-or-prod">' + thumb + '<span class="adm-or-title" title="' + esc(r.title) + '">' + esc(r.title) + '</span></span>' +
         '<span class="adm-or-pf" style="--pf:' + pfVar(r.pf) + '">' + pfMark(r.pf) + '<span>' + esc(label) + '</span></span>' +
         '<span class="adm-or-buyer">' + (r.buyer ? esc(r.buyer) : '<span class="adm-sub">–</span>') + '</span>' +
         '<span class="adm-or-status">' + badges + '</span>' +
-        '<span class="adm-or-date" title="' + esc(fmtDateTime(new Date(r.t))) + '">' + esc(fmtDate(new Date(r.t))) + '</span>' +
-        '<span class="adm-or-amt">' + r.amount + (r.net ? '<small>net ' + r.net + '</small>' : '') + '</span>' +
-        '<span class="adm-or-act">' + (site ? orderRowMenuHtml(r.o) : '') + '</span>' +
+        '<span class="adm-or-date"><span>' + esc(fmtDate(d)) + '</span><small>' + esc(d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })) + '</small></span>' +
+        '<span class="adm-or-amt">' + r.amount + '</span>' +
+        '<span class="adm-or-act"><button type="button" class="adm-or-info" aria-label="Order info" title="Order info">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></span>' +
       '</div>';
     }).join('') + (rows.length > shown.length ? '<div class="adm-or-more"><button type="button" class="btn btn-ghost adm-btn-sm" id="admOrdersMore">Show 100 more (' + num(rows.length - shown.length) + ' left)</button></div>' : '');
   }
-  // Website rows open their detail page (the row menu keeps its own clicks).
+  // Website rows open their detail page; every other row, and the ⋮ on any
+  // row, opens the order info popup.
   (function () {
     var body = $('admOrdersBody');
     if (!body) return;
-    function open(row) { viewOrderId = row.getAttribute('data-order'); showPanel('order-detail', { extra: viewOrderId }); }
+    function act(row, info) {
+      var r = ORDER_ROWS[+row.getAttribute('data-k')]; if (!r) return;
+      if (r.kind === 'site' && !info) { viewOrderId = r.id; showPanel('order-detail', { extra: r.id }); return; }
+      openOrderInfo(r);
+    }
     body.addEventListener('click', function (e) {
-      if (e.target.closest('.adm-row-menu')) return;
-      var row = e.target.closest('.adm-or-row[data-order]');
-      if (row) open(row);
+      var row = e.target.closest('.adm-or-row[data-k]');
+      if (row) act(row, !!e.target.closest('.adm-or-info'));
     });
     body.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter' || e.target.closest('.adm-row-menu')) return;
-      var row = e.target.closest('.adm-or-row[data-order]');
-      if (row) { e.preventDefault(); open(row); }
+      if (e.key !== 'Enter') return;
+      var row = e.target.closest('.adm-or-row[data-k]');
+      if (row) { e.preventDefault(); act(row, !!e.target.closest('.adm-or-info')); }
     });
   })();
-  var ordersBody = $('admOrdersBody');
-  // Listens on document, not ordersBody: openRowMenu() portals the open
-  // .adm-row-menu-list to <body> (see its own comment for why), so a click
-  // on one of its action items no longer bubbles through ordersBody at
-  // all once that's happened. The .contains(menuEl) checks below stand in
-  // for the scoping ordersBody used to provide for free - menuEl (the
-  // .adm-row-menu wrapper holding the trigger button) never itself moves,
-  // only its .adm-row-menu-list child does.
-  if (ordersBody) document.addEventListener('click', async function (e) {
-    var menuBtn = e.target.closest('.adm-row-menu-btn');
-    if (menuBtn) {
-      var menu = menuBtn.closest('.adm-row-menu');
-      if (!ordersBody.contains(menu)) return;
-      var wasOpen = menu.classList.contains('open');
-      closeAllRowMenus();
-      if (!wasOpen) openRowMenu(menu);
-      return;
-    }
-    var actionBtn = e.target.closest('.adm-row-menu-item');
-    if (!actionBtn) return;
-    var listEl = actionBtn.closest('.adm-row-menu-list');
-    var menuEl = listEl && listEl.__ownerMenu;
-    if (!menuEl || !ordersBody.contains(menuEl)) return;
-    var id = menuEl.getAttribute('data-id');
-    var o = ORDERS.filter(function (x) { return x.id === id; })[0]; if (!o) return;
-    closeAllRowMenus();
-    var action = actionBtn.getAttribute('data-action');
+  // The Orders page keeps itself current: website orders and marketplace sales
+  // every 30 seconds, BuiltByBit (synced on the server every 15 minutes) every 2 minutes.
+  setInterval(function () { if (!document.hidden && curPanel === 'orders') { refreshOrders(); refreshPlatformSales(); } }, 30000);
+  setInterval(function () { if (!document.hidden && curPanel === 'orders') refreshBbbData(); }, 120000);
 
-    if (action === 'view') {
-      viewOrderId = id;
-      showPanel('order-detail', { extra: id });
-      return;
+  // ---- Order info popup: everything we know about one order ----
+  var OI_EL = null, OI_RETURN = null;
+  var PS_SOURCE = { email: 'Order email', userscript: 'Creator Store page', api: 'Imported from the platform', webhook: 'Payhip webhook', manual: 'Added by hand', csv: 'Sales export', ingest: 'Sales feed' };
+  function oiRow(label, value) { return value == null || value === '' ? '' : '<div class="adm-oi-row"><dt>' + esc(label) + '</dt><dd>' + value + '</dd></div>'; }
+  function oiMono(v) { return v ? '<span class="dt-mono">' + esc(v) + '</span>' : ''; }
+  function oiUsd(n) { return 'US$' + (Number(n) || 0).toFixed(2); }
+  // What it cost in AU$, the US$ it was, and the rate of that day.
+  function oiMoney(usdV, t) {
+    var rate = audRateOn(t);
+    return '<b>' + fmtA((Number(usdV) || 0) * rate) + '</b> <span class="adm-sub">' + oiUsd(usdV) + ', US$1 = A$' + rate.toFixed(4) + ' that day</span>';
+  }
+  function closeOrderInfo() {
+    if (!OI_EL || OI_EL.hidden) return;
+    OI_EL.hidden = true;
+    document.body.classList.remove('adm-oi-open');
+    if (OI_RETURN && OI_RETURN.focus && document.contains(OI_RETURN)) OI_RETURN.focus();
+  }
+  function openOrderInfo(r) {
+    if (!OI_EL) {
+      OI_EL = document.createElement('div');
+      OI_EL.className = 'adm-oi-back';
+      OI_EL.hidden = true;
+      OI_EL.innerHTML = '<div class="adm-oi" role="dialog" aria-modal="true" aria-labelledby="admOiTitle"></div>';
+      document.body.appendChild(OI_EL);
+      OI_EL.addEventListener('click', function (e) {
+        if (e.target === OI_EL || e.target.closest('.adm-oi-close')) { closeOrderInfo(); return; }
+        var a = e.target.closest('[data-oi-action]');
+        if (a && OI_EL.__order) { var o = OI_EL.__order; closeOrderInfo(); siteOrderAction(o, a.getAttribute('data-oi-action')); }
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOrderInfo(); });
     }
+    var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || r.pf;
+    var st = ORDER_STATUS_LABEL[r.status] || [r.status, 'mute'];
+    var rows = oiRow('Platform', pfMark(r.pf) + esc(label)) + oiRow('Status', '<span class="dt-badge ' + st[1] + '">' + esc(st[0]) + '</span>');
+    var actions = '', t = r.t;
+    if (r.kind === 'site') {
+      var o = r.src;
+      rows += oiRow('Order', oiMono(o.id)) +
+        oiRow('Buyer', esc(o.userName) + (o.userEmail ? ' <span class="adm-sub">' + esc(o.userEmail) + '</span>' : '')) +
+        oiRow('Gift', o.purchasedByUserId ? 'Bought for a different account' : '') +
+        oiRow('Products', (o.items || []).map(function (it) { return esc(it.title) + (it.licence && it.licence !== 'standard' ? ' <span class="adm-sub">' + esc(it.licence) + ' licence</span>' : ''); }).join('<br>')) +
+        oiRow('Add-ons', (o.addons || []).map(function (a) { return esc(a.title); }).join('<br>')) +
+        oiRow('Placed', esc(fmtDateTime(new Date(o.date)))) +
+        oiRow('Paid', o.paidAt ? esc(fmtDateTime(new Date(o.paidAt))) : '') +
+        oiRow('Payment', esc(o.currency === 'robux' ? 'Robux' : paymentMethodLabel(o))) +
+        oiRow('Amount', o.currency === 'robux' ? '<b>' + robuxRaw(o.totalRobux) + '</b>' : oiMoney(o.total, Date.parse(o.paidAt || o.date))) +
+        oiRow('Discount', o.discount ? fmtA(usdToAudAt(o.discount, t)) + (o.couponCode ? ' <span class="adm-sub">code ' + esc(o.couponCode) + '</span>' : '') : '') +
+        oiRow('Store credit', o.storeCreditApplied ? fmtA(usdToAudAt(o.storeCreditApplied, t)) : '') +
+        oiRow('Stripe payment', oiMono(o.stripePaymentIntentId)) +
+        oiRow('PayPal order', oiMono(o.paypalOrderId)) + oiRow('PayPal capture', oiMono(o.paypalCaptureId)) +
+        oiRow('Crypto charge', oiMono(o.cryptoChargeId || o.cryptoPaymentId)) +
+        oiRow('Transaction', oiMono(o.externalTransactionId)) +
+        oiRow('Roblox gamepass', oiMono(o.robloxGamepassId)) + oiRow('Roblox buyer', oiMono(o.robloxBuyerId)) +
+        oiRow('Refund reason', o.refundReason ? esc(o.refundReason) : '') +
+        oiRow('Test order', o.isTest ? 'Yes, not a real sale' : '');
+      actions = '<button type="button" class="btn btn-primary adm-btn-sm" data-oi-action="view">Open full order</button>';
+      if (o.status === 'pending' && can('support')) actions += '<button type="button" class="btn btn-ghost adm-btn-sm" data-oi-action="complete">Mark completed</button>';
+      if (!o.isTest && o.status === 'completed' && can('support')) actions += '<button type="button" class="btn btn-ghost adm-btn-sm" data-oi-action="refund">Refund</button><button type="button" class="btn btn-ghost adm-btn-sm is-danger" data-oi-action="revoke">Revoke licence</button>';
+    } else if (r.kind === 'bbb') {
+      var p = r.src, res = (BBB.resources || []).filter(function (x) { return String(x.resource_id) === String(p.resource_id); })[0];
+      rows += oiRow('Purchase', oiMono(String(p.purchase_id))) +
+        oiRow('Listing', res && res.url ? '<a href="' + esc(res.url) + '" target="_blank" rel="noopener">' + esc(r.title) + '</a>' : esc(r.title)) +
+        oiRow('Buyer', p.buyer_name ? (p.buyer_id ? '<a href="https://builtbybit.com/members/' + encodeURIComponent(p.buyer_id) + '/" target="_blank" rel="noopener">' + esc(p.buyer_name) + '</a>' : esc(p.buyer_name)) : '<span class="adm-sub">Not synced yet</span>') +
+        oiRow('Bought', esc(fmtDateTime(new Date(p.purchased_at)))) +
+        oiRow('Payment', esc(bbbMethodName(p.gateway))) +
+        oiRow('Amount', bbbIsUsd(p) ? oiMoney(p.price, t) : '<b>' + esc(p.price + ' ' + String(p.currency || '').toUpperCase()) + '</b>') +
+        oiRow('List price', p.list_price && p.list_price > p.price ? oiUsd(p.list_price) + ' <span class="adm-sub">sold at a discount</span>' : '') +
+        oiRow('BuiltByBit fee', p.fee ? oiUsd(p.fee) : '') +
+        oiRow('Bundle', p.bundle_id ? oiMono(String(p.bundle_id)) : '') +
+        oiRow('Sale event', p.sale_event_id ? oiMono(String(p.sale_event_id)) : '') +
+        oiRow('Transaction', oiMono(p.external_tid));
+    } else {
+      var s = r.src, rb = s.currency === 'ROBUX';
+      rows += oiRow('Reference', oiMono(s.ext || s.id)) +
+        oiRow('Product', esc(s.name || '')) +
+        oiRow('Buyer', s.buyer ? esc(s.buyer) : '') +
+        oiRow('Quantity', s.qty > 1 ? num(s.qty) : '') +
+        oiRow('Sold', esc(fmtDateTime(new Date(s.t)))) +
+        oiRow('Amount', rb ? '<b>' + robuxRaw(s.amount) + '</b>' : oiMoney(s.usd, s.t)) +
+        oiRow('Charged in', !rb && s.currency && s.currency !== 'USD' ? esc(Number(s.amount).toFixed(2) + ' ' + s.currency) : '') +
+        oiRow('Platform fee', !rb && s.net != null && s.usd - s.net > 0.004 ? oiUsd(s.usd - s.net) : '') +
+        oiRow('Recorded from', esc(PS_SOURCE[s.source] || s.source || ''));
+    }
+    var thumb = r.thumb ? '<span class="adm-or-thumb" style="background-image:url(\'' + esc(r.thumb) + '\')"></span>' : '<span class="adm-or-thumb is-logo">' + pfMark(r.pf) + '</span>';
+    OI_EL.firstChild.innerHTML = '<div class="adm-oi-head">' + thumb +
+      '<div class="adm-oi-titles"><h3 id="admOiTitle">' + esc(r.title) + '</h3><p>' + esc(label) + ' · ' + esc(r.amount.replace(/<[^>]+>/g, '')) + '</p></div>' +
+      '<button type="button" class="adm-oi-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>' +
+      '<dl class="adm-oi-list">' + rows + '</dl>' + (actions ? '<div class="adm-oi-actions">' + actions + '</div>' : '');
+    OI_EL.__order = r.kind === 'site' ? r.src : null;
+    OI_RETURN = document.activeElement;
+    OI_EL.hidden = false;
+    document.body.classList.add('adm-oi-open');
+    OI_EL.querySelector('.adm-oi-close').focus();
+  }
+  // Website order actions (from the info popup).
+  async function siteOrderAction(o, action) {
+    var id = o.id;
+    if (action === 'view') { viewOrderId = id; showPanel('order-detail', { extra: id }); return; }
+    if (!can('support')) return;
     if (action === 'complete') {
-      if (!can('support')) return;
       callManageOrder(o.dbId, 'complete').then(function () {
         logAudit('Marked order ' + id + ' completed');
         return refreshOrders();
       }).catch(function (err) { alert(err.message || 'Could not update the order.'); });
     } else if (action === 'refund') {
-      if (!can('support')) return;
       var reason = await dialogPrompt('This refund is recorded against order ' + id + '.', 'Requested by customer', { title: 'Issue refund', inputLabel: 'Internal reason', acceptLabel: 'Issue refund' }); if (reason === null) return;
       callManageOrder(o.dbId, 'refund', reason || 'Requested by customer').then(function () {
         logAudit('Refunded order ' + id + ' (' + orderAmount(o) + ')');
         return refreshOrders();
       }).catch(function (err) { alert(err.message || 'Could not process the refund.'); });
     } else if (action === 'revoke') {
-      if (!can('support')) return;
       if (!(await dialogConfirm('The buyer will immediately lose download access. This does not refund their payment.', { title: 'Revoke licence for order ' + id, acceptLabel: 'Continue' }))) return;
       var revReason = await dialogPrompt('Add the internal reason for this revocation.', 'Policy violation', { title: 'Revoke licence', inputLabel: 'Internal reason', acceptLabel: 'Revoke licence' }); if (revReason === null) return;
       callManageOrder(o.dbId, 'revoke', revReason || 'Policy violation').then(function () {
@@ -7287,7 +7355,7 @@
         return refreshOrders();
       }).catch(function (err) { alert(err.message || 'Could not revoke the license.'); });
     }
-  });
+  }
   document.addEventListener('click', function (e) {
     if (e.target.closest('.adm-row-menu') || e.target.closest('.adm-row-menu-list')) return;
     closeAllRowMenus();
