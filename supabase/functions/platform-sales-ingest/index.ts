@@ -69,7 +69,7 @@ async function usdPerUnit(cur: string, cache: Map<string, number>) {
   if (cur === "USD") return 1;
   if (cur === "ROBUX") return DEVEX_USD_PER_ROBUX;
   if (cache.has(cur)) return cache.get(cur)!;
-  const res = await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(cur)}&to=USD`);
+  const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(cur)}&symbols=USD`);
   if (!res.ok) throw new Error(`No ${cur}/USD rate`);
   const rate = Number((await res.json())?.rates?.USD);
   if (!Number.isFinite(rate) || rate <= 0) throw new Error(`Bad ${cur}/USD rate`);

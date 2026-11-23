@@ -90,7 +90,23 @@
   }
   var ROBUX_PER_USD = 80;
   var DEVEX_USD_PER_ROBUX = 0.0038;
+  // Every admin AU$ figure converts from USD at this rate. 1.52 is only the
+  // fallback: the live ECB rate (frankfurter.dev, cached 12 hours) replaces it
+  // as soon as it loads, then the open panel redraws.
   var AUD_RATE = 1.52;
+  (function loadAudRate() {
+    var KEY = 'coldd_admin_fx_v1', cached = null;
+    try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) {}
+    if (cached && cached.rate > 0) AUD_RATE = cached.rate;
+    if (cached && Date.now() - cached.at < 12 * 3600000) return;
+    fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=AUD').then(function (r) { return r.json(); }).then(function (d) {
+      var rate = Number(d && d.rates && d.rates.AUD);
+      if (!(rate > 0)) return;
+      AUD_RATE = rate;
+      try { localStorage.setItem(KEY, JSON.stringify({ rate: rate, at: Date.now() })); } catch (_) {}
+      if (typeof renderAll === 'function') renderAll();
+    }).catch(function () {});
+  })();
   function usd(n) { return '$' + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function usd0(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
   function aud(n) { return 'A$' + (Math.round((Number(n) || 0) * AUD_RATE * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -1649,6 +1665,9 @@
     { key: 'creatorstore', label: 'Creator Store' },
     { key: 'payhip', label: 'Payhip' }
   ];
+  // Platforms that also take Robux: their AU$ is real-money sales only, and the
+  // Robux they took is shown beside it ("A$10.00 | R$ 1,000"), never converted.
+  var PF_ROBUX = { site: true, parcel: true };
   var HOME_ICON = {
     redeem: 'M160-280v80h640v-80H160Zm0-440h88q-5-9-6.5-19t-1.5-21q0-50 35-85t85-35q30 0 55.5 15.5T460-826l20 26 20-26q18-24 44-39t56-15q50 0 85 35t35 85q0 11-1.5 21t-6.5 19h88q33 0 56.5 23.5T880-640v440q0 33-23.5 56.5T800-120H160q-33 0-56.5-23.5T80-200v-440q0-33 23.5-56.5T160-720Zm0 320h640v-240H596l84 114-64 46-136-184-136 184-64-46 82-114H160v240Zm228.5-331.5Q400-743 400-760t-11.5-28.5Q377-800 360-800t-28.5 11.5Q320-777 320-760t11.5 28.5Q343-720 360-720t28.5-11.5ZM600-720q17 0 28.5-11.5T640-760q0-17-11.5-28.5T600-800q-17 0-28.5 11.5T560-760q0 17 11.5 28.5T600-720Z',
     payments: 'M560-440q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35ZM280-320q-33 0-56.5-23.5T200-400v-320q0-33 23.5-56.5T280-800h560q33 0 56.5 23.5T920-720v320q0 33-23.5 56.5T840-320H280Zm80-80h400q0-33 23.5-56.5T840-480v-160q-33 0-56.5-23.5T760-720H360q0 33-23.5 56.5T280-640v160q33 0 56.5 23.5T360-400Zm440 240H120q-33 0-56.5-23.5T40-240v-440h80v440h680v80ZM280-400v-320 320Z',
@@ -1657,7 +1676,6 @@
     close: 'm256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z',
     add: 'M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z',
     chevron_right: 'M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z',
-    storefront: 'M841-518v318q0 33-23.5 56.5T761-120H201q-33 0-56.5-23.5T121-200v-318q-23-21-35.5-54t-.5-72l42-136q8-26 28.5-43t47.5-17h556q27 0 47 16.5t29 43.5l42 136q12 39-.5 71T841-518Zm-272-42q27 0 41-18.5t11-41.5l-22-140h-78v148q0 21 14 36.5t34 15.5Zm-180 0q23 0 37.5-15.5T441-612v-148h-78l-22 140q-4 24 10.5 42t37.5 18Zm-178 0q18 0 31.5-13t16.5-33l22-154h-78l-40 134q-6 20 6.5 43t41.5 23Zm540 0q29 0 42-23t6-43l-42-134h-76l22 154q3 20 16.5 33t31.5 13ZM201-200h560v-282q-5 2-6.5 2H751q-27 0-47.5-9T663-518q-18 18-41 28t-49 10q-27 0-50.5-10T481-518q-17 18-39.5 28T393-480q-29 0-52.5-10T299-518q-21 21-41.5 29.5T211-480h-4.5q-2.5 0-5.5-2v282Zm560 0H201h560Z',
     arrow_upward: 'M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z',
     arrow_downward: 'M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z'
   };
@@ -1670,7 +1688,6 @@
   function pfVar(key) { return 'var(--pf-' + key + ')'; }
   function pfMark(key) {
     if (key === 'site') return '<img class="adm-pf-logo" src="/logo.png" alt="" width="18" height="18" loading="lazy" />';
-    if (key === 'payhip') return '<span class="adm-pf-logo adm-pf-blank">' + homeIcon('storefront', 13) + '</span>';
     return '<img class="adm-pf-logo" src="/mp-logos/' + key + '.png" alt="" width="18" height="18" loading="lazy" />';
   }
 
@@ -1682,29 +1699,33 @@
     var w = whole || Math.abs(v) >= 10000;
     return 'A$' + v.toLocaleString('en-AU', { minimumFractionDigits: w ? 0 : 2, maximumFractionDigits: w ? 0 : 2 });
   }
+  function pfValue(key, aud, robux, whole) { return PF_ROBUX[key] ? fmtA(aud, whole) + '<span class="adm-rbx"> | ' + robuxRaw(robux) + '</span>' : fmtA(aud, whole); }
   function plural(n, word) { return num(n) + ' ' + word + (n === 1 ? '' : 's'); }
   function fmtPctAbs(p) { p = Math.abs(p); return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%'; }
-  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 
-  // Every sale on every platform as { pf, t, aud, robux, n }. Website orders
-  // count once paid (no tests, no admin grants); BuiltByBit at what the buyer
-  // paid in USD; platform_sales (ClearlyDev, Parcel, Creator Store, Payhip)
-  // minus refunds.
+  // Every sale on every platform as { pf, t, aud, robux, n }, NET: what reaches
+  // us after the platform's own fee wherever that fee is known. Website orders
+  // count once paid (no tests, no admin grants; card fees are not tracked);
+  // BuiltByBit is FinalPrice minus BuiltByBit's fee; platform_sales rows use
+  // net_usd when the feed sends it (Creator Store does), otherwise the sale
+  // amount. Refunds are left out.
   function homeSales() {
     var out = [];
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
-      var rb = o.currency === 'robux';
-      out.push({ pf: 'site', t: Date.parse(o.paidAt || o.date), aud: rb ? robuxToAud(o.totalRobux) : usdToAud(o.total), robux: rb ? o.totalRobux : 0, n: 1 });
+      var t = Date.parse(o.paidAt || o.date);
+      if (o.currency === 'robux') out.push({ pf: 'site', t: t, aud: 0, robux: o.totalRobux, n: 1 });
+      else out.push({ pf: 'site', t: t, aud: usdToAud(o.total), robux: 0, n: 1 });
     });
     if (BBB.configured) BBB.purchases.forEach(function (p) {
       if (!bbbIsUsd(p)) return;
-      out.push({ pf: 'builtbybit', t: Date.parse(p.purchased_at), aud: usdToAud(p.price), robux: 0, n: 1 });
+      out.push({ pf: 'builtbybit', t: Date.parse(p.purchased_at), aud: usdToAud(p.price - p.fee), robux: 0, n: 1 });
     });
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
       // One row is one order, however many items it held (a ClearlyDev cart can carry several).
-      out.push({ pf: s.platform, t: s.t, aud: usdToAud(s.usd), robux: s.currency === 'ROBUX' ? s.amount : 0, n: 1 });
+      if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: s.amount, n: 1 });
+      else out.push({ pf: s.platform, t: s.t, aud: usdToAud(s.net != null ? s.net : s.usd), robux: 0, n: 1 });
     });
     return out;
   }
@@ -1773,12 +1794,12 @@
   function refreshPlatformSales() {
     if (!window.coldSupabase) return Promise.resolve();
     return fetchAllRows(function () {
-      return window.coldSupabase.from('platform_sales').select('id, platform, sold_at, product_name, currency, amount, amount_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
+      return window.coldSupabase.from('platform_sales').select('id, platform, sold_at, product_name, currency, amount, amount_usd, net_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
       PSALES_LOADED = true;
       if (res.error) { console.error('[admin] platform sales:', res.error.message); return; }
       PSALES = (res.data || []).map(function (r) {
-        return { id: r.id, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, qty: r.quantity || 1, status: r.status };
+        return { id: r.id, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status };
       });
       if (curPanel === 'home') renderHome();
     });
@@ -1844,7 +1865,8 @@
     var all = sumSales(sales, w.start, w.end), allP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd) : null;
     var v = w.start ? viewsIn(w.start, w.end) : null, vP = w.prevStart ? viewsIn(w.prevStart, w.prevEnd) : null;
     var c = cartsIn(w.start, w.end), cP = w.prevStart ? cartsIn(w.prevStart, w.prevEnd) : null;
-    function robuxSub(r) { return r.robux ? 'incl. ' + robuxRaw(r.robux) + ' from Robux sales' : 'No Robux sales'; }
+    // AU$ is money actually paid; Robux sales are listed beside it, never converted.
+    function robuxSub(r) { return r.robux ? '+ ' + robuxRaw(r.robux) + ' in Robux sales' : 'No Robux sales'; }
 
     var viewsCell;
     if (w.start) {
@@ -1871,7 +1893,7 @@
     foot.innerHTML =
       '<span><i class="adm-live-dot' + (LIVE_SESSIONS ? ' is-on' : '') + '"></i><b>' + num(LIVE_SESSIONS) + '</b> on the site right now</span>' +
       '<span>Referrals owed <b>' + fmtA(owedAud) + '</b>' + (owed.count ? ' across ' + plural(owed.count, 'request') : '') + '</span>' +
-      '<span>US$1 = <b>A$' + AUD_RATE.toFixed(2) + '</b> · R$1 = US$' + DEVEX_USD_PER_ROBUX + '</span>';
+      '<span>US$1 = <b>A$' + AUD_RATE.toFixed(2) + '</b></span>';
   }
 
   /* ---- Recent orders (website only) ---- */
@@ -1914,10 +1936,10 @@
   }
   var PLAT_CHART = null; // last chart data, so a resize can redraw without recomputing
   function renderPlatforms(sales) {
-    var sum = $('admPlatSummary'), legend = $('admPlatLegend'), chart = $('admPlatChart'), table = $('admPlatTable'), foot = $('admPlatFoot');
+    var legend = $('admPlatLegend'), chart = $('admPlatChart'), table = $('admPlatTable');
     if (!chart) return;
     if (!ORDERS_LOADED) {
-      sum.textContent = 'Loading sales…'; legend.innerHTML = ''; table.innerHTML = ''; foot.textContent = '';
+      legend.innerHTML = ''; table.innerHTML = '';
       chart.innerHTML = '<div class="adm-skel adm-skel-chart"></div>';
       return;
     }
@@ -1936,35 +1958,13 @@
       return { key: p.key, label: p.label, data: data, robux: byPfR[p.key], total: data.reduce(add, 0), robuxTotal: byPfR[p.key].reduce(add, 0) };
     });
 
-    // Month to date against the same stretch of last month.
-    var now = new Date(), mStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    var pStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    var pEnd = new Date(Math.min(pStart.getTime() + (now - mStart), mStart.getTime()));
-    var mtd = sumSales(sales, mStart, null), prevMtd = sumSales(sales, pStart, pEnd);
-    var monthName = mStart.toLocaleDateString('en-AU', { month: 'long' }), prevName = pStart.toLocaleDateString('en-AU', { month: 'long' });
-    var top = null;
-    HOME_PLATFORMS.forEach(function (p) { var v = sumSales(sales, mStart, null, p.key).aud; if (v > 0 && (!top || v > top.v)) top = { label: p.label, v: v }; });
-    var line;
-    if (!mtd.aud) line = 'No sales yet in ' + esc(monthName) + '.';
-    else {
-      line = '<b>' + esc(monthName) + '</b> is at <b>' + fmtA(mtd.aud) + '</b> on the ' + ordinal(now.getDate());
-      if (prevMtd.aud) {
-        var pct = (mtd.aud - prevMtd.aud) / prevMtd.aud * 100;
-        line += Math.abs(pct) < 0.5 ? ', level with the same point in ' + esc(prevName) + '.'
-          : ', <b>' + fmtPctAbs(pct) + (pct > 0 ? ' higher' : ' lower') + '</b> than the same point in ' + esc(prevName) + '.';
-      } else line += '. ' + esc(prevName) + ' had no sales by this point.';
-      if (top) line += ' <b>' + esc(top.label) + '</b> is the top seller.';
-    }
-    sum.innerHTML = line;
-
     legend.innerHTML = series.map(function (s) {
-      return '<span style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + ' <b>' + fmtA(s.total, true) + '</b>' + (s.robuxTotal ? '<em>' + robuxRaw(s.robuxTotal) + '</em>' : '') + '</span>';
+      return '<span style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + ' <b>' + pfValue(s.key, s.total, s.robuxTotal, true) + '</b></span>';
     }).join('');
 
     PLAT_CHART = { months: months, series: series };
     drawPlatChart();
     renderPlatTable(sales);
-    foot.textContent = 'The current month is still running, so its dotted stretch is not a full month. The table compares the last 30 days with the 30 days before. Robux sales count at the DevEx rate.';
   }
 
   function drawPlatChart() {
@@ -2043,7 +2043,7 @@
       var rows = PLAT_CHART.series.map(function (s) { total += s.data[i]; return s; }).slice().sort(function (a, b) { return b.data[i] - a.data[i]; });
       var tip = box.querySelector('.adm-pc-tip');
       tip.innerHTML = '<h4>' + esc(m.long) + (i === pc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
-        rows.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + (s.robux[i] ? '<em>' + robuxRaw(s.robux[i]) + '</em>' : '') + '<b>' + fmtA(s.data[i]) + '</b></div>'; }).join('') +
+        rows.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i]) + '</b></div>'; }).join('') +
         '<div class="adm-pc-tip-total">All platforms<b>' + fmtA(total) + '</b></div>';
       tip.hidden = false;
       var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
@@ -2070,8 +2070,7 @@
     var cS = new Date(now - 30 * DAY_MS), cE = new Date(now + 60000), pS = new Date(now - 60 * DAY_MS), pE = cS;
     var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: sumSales(sales, pS, pE, p.key) }; });
     var tot = sumSales(sales, cS, cE), totP = sumSales(sales, pS, pE);
-    // Robux sales are already inside the AU$ figure (DevEx rate); the R$ line underneath shows how much.
-    function rbx(n) { return n ? '<small>' + robuxRaw(n) + '</small>' : ''; }
+    function cell(key, r) { return pfValue(key, r.aud, r.robux); }
     function change(cur, prev) {
       if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '<span class="adm-chg flat">–</span>';
       var pct = (cur - prev) / prev * 100, cls = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
@@ -2081,13 +2080,13 @@
       rows.map(function (r) {
         var share = tot.aud ? r.cur.aud / tot.aud * 100 : 0;
         return '<tr style="--pf:' + pfVar(r.p.key) + '"><th scope="row"><span class="adm-pf"><i></i>' + pfMark(r.p.key) + esc(r.p.label) + '</span></th>' +
-          '<td class="is-strong">' + fmtA(r.cur.aud) + rbx(r.cur.robux) + '</td>' +
-          '<td class="is-muted">' + fmtA(r.prev.aud) + rbx(r.prev.robux) + '</td>' +
+          '<td class="is-strong">' + cell(r.p.key, r.cur) + '</td>' +
+          '<td class="is-muted">' + cell(r.p.key, r.prev) + '</td>' +
           '<td>' + change(r.cur.aud, r.prev.aud) + '</td>' +
           '<td><span class="adm-share"><span class="adm-share-bar"><i style="width:' + share.toFixed(1) + '%"></i></span><span>' + Math.round(share) + '%</span></span></td>' +
           '<td>' + num(r.cur.n) + '</td></tr>';
       }).join('') + '</tbody>' +
-      '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + rbx(tot.robux) + '</td><td class="is-muted">' + fmtA(totP.aud) + rbx(totP.robux) + '</td><td>' + change(tot.aud, totP.aud) + '</td><td></td><td>' + num(tot.n) + '</td></tr></tfoot>';
+      '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + (tot.robux ? '<span class="adm-rbx"> | ' + robuxRaw(tot.robux) + '</span>' : '') + '</td><td class="is-muted">' + fmtA(totP.aud) + (totP.robux ? '<span class="adm-rbx"> | ' + robuxRaw(totP.robux) + '</span>' : '') + '</td><td>' + change(tot.aud, totP.aud) + '</td><td></td><td>' + num(tot.n) + '</td></tr></tfoot>';
   }
 
   /* ---- Today's work ----

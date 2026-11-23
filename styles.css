@@ -5468,13 +5468,17 @@ body.adm-uploading .adm-toast { bottom: calc(var(--adm-uptray-h, 0px) + 20px); }
    hairline, figures in tabular numerals, platform colours only on chart
    marks and keys (text always stays in the ink tokens). */
 :root {
-  /* Platform series, fixed order, validated as a set on --bg-3 (CVD-safe adjacent pairs). */
-  --pf-site: #3987e5; --pf-builtbybit: #d95926; --pf-clearlydev: #199e70;
-  --pf-parcel: #c98500; --pf-creatorstore: #d55181; --pf-payhip: #0ca30c;
+  /* Platform series colours (picked by the owner): coldd.dev red, BuiltByBit blue,
+     ClearlyDev purple, Parcel yellow, Creator Store white, Payhip bright blue.
+     Blue and purple merge for protan colour-blindness, so every line also
+     carries its name (end label, legend, table row). */
+  --pf-site: #ff5a4f; --pf-builtbybit: #2f6ee8; --pf-clearlydev: #b65ff2;
+  --pf-parcel: #f2c230; --pf-creatorstore: #eef0f4; --pf-payhip: #2cc9ff;
 }
 html[data-theme="light"] {
-  --pf-site: #2a78d6; --pf-builtbybit: #eb6834; --pf-clearlydev: #1baf7a;
-  --pf-parcel: #eda100; --pf-creatorstore: #e87ba4; --pf-payhip: #008300;
+  /* White would vanish on the light surface, so Creator Store turns ink there. */
+  --pf-site: #e2382f; --pf-builtbybit: #1d5fd6; --pf-clearlydev: #9b3fe0;
+  --pf-parcel: #c99400; --pf-creatorstore: #2b2e35; --pf-payhip: #0ea5e9;
 }
 .adm-home { display: flex; flex-direction: column; gap: 16px; }
 .adm-home .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: baseline; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; }
@@ -5557,7 +5561,7 @@ html[data-theme="light"] {
 .adm-plat-summary { margin: -4px 0 14px; font-size: 14px; line-height: 1.5; color: var(--fg-2); }
 .adm-plat-summary b { color: var(--fg); font-weight: 700; }
 .adm-plat-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 6px; font-size: 12px; color: var(--fg-2); }
-.adm-plat-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.adm-plat-legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .adm-plat-legend i, .adm-pf > i { flex: 0 0 auto; width: 12px; height: 2px; border-radius: 1px; background: var(--pf); }
 .adm-plat-legend b { color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; }
 .adm-plat-legend em, .adm-pc-tip em { font-style: normal; color: var(--fg-3); font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -5594,7 +5598,9 @@ html[data-theme="light"] {
 .adm-plat-table tfoot th, .adm-plat-table tfoot td { color: var(--fg); font-weight: 700; border-top-color: var(--hairline-strong); }
 .adm-pf { display: inline-flex; align-items: center; gap: 8px; color: var(--fg); }
 .adm-pf-logo { flex: 0 0 auto; width: 18px; height: 18px; border-radius: var(--r-xs); object-fit: contain; }
-.adm-pf-blank { display: inline-grid; place-items: center; color: var(--fg-2); background: rgba(255,255,255,0.06); border: 1px solid var(--hairline); }
+/* The Robux half of "A$10.00 | R$ 1,000": same line, quieter. */
+.adm-rbx { font-weight: 500; color: var(--fg-3); white-space: nowrap; }
+.adm-plat-legend b .adm-rbx, .adm-pc-tip b .adm-rbx { font-weight: 500; }
 .adm-share { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .adm-share-bar { width: 60px; height: 4px; border-radius: var(--r-pill); background: rgba(255,255,255,0.07); overflow: hidden; }
 .adm-share-bar i { display: block; height: 100%; border-radius: inherit; background: var(--pf); }
@@ -5636,7 +5642,7 @@ html[data-theme="light"] .adm-seg { background: rgba(0,0,0,0.04); }
 html[data-theme="light"] .adm-seg button.active { background: rgba(0,0,0,0.07); color: var(--fg); }
 html[data-theme="light"] .adm-kpi-cell[data-panel]:hover, html[data-theme="light"] .adm-ro-row:hover, html[data-theme="light"] .adm-work-item:hover { background: rgba(0,0,0,0.035); }
 html[data-theme="light"] .adm-share-bar, html[data-theme="light"] .adm-skel { background: rgba(0,0,0,0.07); }
-html[data-theme="light"] .adm-ro-method, html[data-theme="light"] .adm-work-ico, html[data-theme="light"] .adm-pf-blank, html[data-theme="light"] .adm-work-add input { background: rgba(0,0,0,0.03); }
+html[data-theme="light"] .adm-ro-method, html[data-theme="light"] .adm-work-ico, html[data-theme="light"] .adm-work-add input { background: rgba(0,0,0,0.03); }
 
 @media (max-width: 1279px) { .adm-home-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1100px) {
