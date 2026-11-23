@@ -272,3 +272,6 @@ verify_jwt = false
 
 [functions.creator-store-sync]
 verify_jwt = false
+
+[functions.clearlydev-sync]
+verify_jwt = false

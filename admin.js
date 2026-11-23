@@ -2119,9 +2119,15 @@
     if (ROBLOX_CONTAINERS.length && ROBLOX_CONTAINERS.every(function (c) { return !c.active || c.gamepass_count >= 50; })) {
       items.push({ tone: 'err', icon: 'error', text: 'All Roblox container games are full', sub: 'Add one before creating more Robux products', panel: 'sitemgmt' });
     }
-    var cs = PSYNC.creatorstore;
-    if (cs && cs.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: 'Creator Store sync cookie expired', sub: 'Sign in to Roblox in an incognito window and replace ROBLOX_CREATOR_COOKIE in Supabase secrets' });
-    else if (cs && /not set/.test(cs.last_error || '')) items.push({ icon: 'error', text: 'Creator Store background sync is off', sub: 'Add ROBLOX_CREATOR_COOKIE in Supabase secrets to turn it on' });
+    // Background marketplace syncs (platform_sync_state): flag a dead cookie or one never set.
+    [
+      { key: 'creatorstore', label: 'Creator Store', secret: 'ROBLOX_CREATOR_COOKIE', fix: 'Sign in to Roblox in an incognito window and replace ROBLOX_CREATOR_COOKIE in Supabase secrets' },
+      { key: 'clearlydev', label: 'ClearlyDev', secret: 'CLEARLYDEV_COOKIE', fix: 'Copy a fresh Cookie header from the ClearlyDev dashboard into CLEARLYDEV_COOKIE in Supabase secrets' }
+    ].forEach(function (sy) {
+      var st = PSYNC[sy.key];
+      if (st && st.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: sy.label + ' sync cookie expired', sub: sy.fix });
+      else if (st && /not set/.test(st.last_error || '')) items.push({ icon: 'error', text: sy.label + ' background sync is off', sub: 'Add ' + sy.secret + ' in Supabase secrets to turn it on' });
+    });
     var claims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
     if (claims) items.push({ icon: 'redeem', text: plural(claims, 'prize claim') + ' to check', sub: 'Giveaways', panel: 'giveaways' });
     var payouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
