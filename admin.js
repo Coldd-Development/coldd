@@ -2869,6 +2869,20 @@
     });
   }
 
+  // Marketing overview change line: "+120 (3.2%) last 30 days".
+  function mktDelta(d) {
+    if (!d || !d.abs) return '';
+    var cls = d.abs > 0 ? 'up' : 'down';
+    return '<span class="adm-kpi-delta ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 13) + num(Math.abs(d.abs)) + (d.pct != null ? ' (' + fmtPctAbs(d.pct) + ')' : '') + '</span>' +
+      '<span class="adm-kpi-cmp">' + (RANGE_DAYS ? 'last ' + anRangeWord() : 'since tracking began') + '</span>';
+  }
+  // A channel row's growth over the selected range, beside its count.
+  function chanDelta(key) {
+    var ch = connectedChannels().filter(function (x) { return x.key === key; })[0];
+    var d = ch ? histDelta(ch.history, function (r) { return r.followers; }) : null;
+    if (!d || !d.abs) return '';
+    return '<span class="adm-chg ' + (d.abs > 0 ? 'up' : 'down') + '">' + (d.abs > 0 ? '+' : '-') + num(Math.abs(d.abs)) + '</span>';
+  }
   function channelRow(c) {
     var connected = false, value = '', sub = c.note;
     if (c.key === 'discord' && DISCORD_STATS.memberCount != null) {
@@ -2895,7 +2909,7 @@
       '<span class="adm-sub">' + esc(sub) + '</span></div>' +
       '<span class="adm-channel-trail">' +
       (connected
-        ? '<span class="adm-channel-val">' + esc(value) + '</span><span class="dt-badge ok">Connected</span>'
+        ? '<span class="adm-channel-val">' + esc(value) + '</span>' + chanDelta(c.key)
         : (c.key === 'tiktok'
             ? '<a class="btn btn-ghost adm-btn-sm" href="' + esc(tiktokAuthorizeUrl()) + '">Connect TikTok</a>'
             : '<span class="dt-badge">Not connected</span>')) +
@@ -3041,14 +3055,23 @@
     var owed = REFERRALS.reduce(function (s, r) { return s + (r.earnedUSD - r.paidUSD); }, 0);
 
     if ($('admMktStats')) {
+      var ta = totalAudience();
+      var robuxOwed = REFERRALS.reduce(function (s, r) { return s + Math.max(0, (r.earnedRobux || 0) - (r.paidRobux || 0)); }, 0);
+      var rates = ta.channels.filter(function (c) { return c.engRate != null; });
+      var eng = rates.length ? Math.round(rates.reduce(function (s, c) { return s + c.engRate; }, 0) / rates.length * 100) / 100 : null;
+      var dc = ta.channels.filter(function (c) { return c.key === 'discord'; })[0];
       $('admMktStats').innerHTML = [
-        statTile('Discord members', DISCORD_STATS.memberCount != null ? DISCORD_STATS.memberCount.toLocaleString('en-US') : '–', DISCORD_STATS.onlineCount != null ? (DISCORD_STATS.onlineCount.toLocaleString('en-US') + ' online') : '', ''),
-        statTile('Referral sales', sales.toLocaleString('en-US'), null, ''),
-        statTile('Owed to affiliates', usd(owed) + ' USD + R$ ' + REFERRALS.reduce(function(s,r){return s+Math.max(0,(r.earnedRobux||0)-(r.paidRobux||0));},0).toLocaleString(), null, '')
+        kpiCell({ label: 'Audience', value: ta.channels.length ? num(ta.total) : '–', count: ta.channels.length ? plural(ta.channels.length, 'channel') : '',
+          delta: mktDelta(ta.delta), sub: eng != null ? eng + '% average engagement' : 'Every connected channel' }),
+        kpiCell({ label: 'Discord members', value: DISCORD_STATS.memberCount != null ? num(DISCORD_STATS.memberCount) : '–',
+          delta: mktDelta(dc ? histDelta(dc.history, function (r) { return r.followers; }) : null),
+          sub: DISCORD_STATS.onlineCount != null ? num(DISCORD_STATS.onlineCount) + ' online now' : '' }),
+        kpiCell({ label: 'Email subscribers', value: num(EMAIL_STATS.optedIn), delta: '', sub: num(EMAIL_STATS.allAccounts) + ' accounts in total' }),
+        kpiCell({ label: 'Referral sales', value: num(sales), delta: '',
+          sub: owed > 0.004 || robuxOwed ? fmtA(usdToAud(owed)) + (robuxOwed ? ' | ' + robuxRaw(robuxOwed) : '') + ' owed to affiliates' : 'Nothing owed to affiliates' })
       ].join('');
     }
 
-    renderAudienceOverview();
 
     if ($('admMktChannels')) {
       setHtmlPreservingCollapse($('admMktChannels'), MKT_CHANNELS.map(channelRow).join(''));
@@ -3109,9 +3132,9 @@
 
     if ($('admReferralBody')) {
       $('admReferralBody').innerHTML = REFERRALS.map(function (r) {
-        return '<tr><td class="dt-mono">' + esc(r.code) + '</td><td>' + esc(r.owner) + '</td><td>' + r.sales + '</td><td>' + usd(r.earnedUSD) + ' USD + R$ ' + Number(r.earnedRobux||0).toLocaleString() + '</td></tr>';
+        return '<tr><td class="dt-mono">' + esc(r.code) + '</td><td>' + esc(r.owner) + '</td><td>' + r.sales + '</td><td>' + fmtA(usdToAud(r.earnedUSD)) + (r.earnedRobux ? '<span class="adm-rbx"> | ' + robuxRaw(r.earnedRobux) + '</span>' : '') + '</td></tr>';
       }).join('') || '<tr><td colspan="4" class="adm-empty">No referral codes yet.</td></tr>';
-      if ($('admAffiliateOwed')) $('admAffiliateOwed').textContent = usd(owed)+' USD + R$ '+Math.max(0,REFERRALS.reduce(function(s,r){return s+r.earnedRobux-r.paidRobux;},0));
+      if ($('admAffiliateOwed')) $('admAffiliateOwed').textContent = fmtA(usdToAud(owed)) + ' | ' + robuxRaw(Math.max(0, REFERRALS.reduce(function (s, r) { return s + r.earnedRobux - r.paidRobux; }, 0)));
       renderPayouts();
     }
   }
@@ -3324,10 +3347,10 @@
     if ($('admEmailStats')) {
       var att = emailAttributedRevenue();
       $('admEmailStats').innerHTML = [
-        statTile('Opted in', EMAIL_STATS.optedIn.toLocaleString('en-US'), 'consented - every marketing send goes here', ''),
-        statTile('Unsubscribed', EMAIL_STATS.unsubscribed.toLocaleString('en-US'), 'opted in, then withdrew', ''),
-        statTile('All accounts', EMAIL_STATS.allAccounts.toLocaleString('en-US'), 'reachable by an announcement, regardless of opt-in', ''),
-        statTile('Revenue from email', usd(att.usd), att.count + ' order' + (att.count === 1 ? '' : 's') + ' within 7d of a send', '')
+        statTile('Opted in', EMAIL_STATS.optedIn.toLocaleString('en-US'), 'Every marketing email goes here', ''),
+        statTile('Unsubscribed', EMAIL_STATS.unsubscribed.toLocaleString('en-US'), 'Opted in, then left', ''),
+        statTile('All accounts', EMAIL_STATS.allAccounts.toLocaleString('en-US'), 'Reachable by announcements', ''),
+        statTile('Sales from email', fmtA(usdToAud(att.usd)), plural(att.count, 'order') + ' within 7 days of a send', '')
       ].join('');
     }
 

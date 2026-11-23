@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261123p" />
+  <link rel="stylesheet" href="/styles.css?v=20261123q" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -276,39 +276,36 @@
             </div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-marketing" hidden>
-            <div class="dash-head adm-head-row">
-              <div><h1>Marketing</h1><p>Audience, channels, referrals and email. Store performance lives in Analytics.</p></div>
-              <div class="adm-range" role="group" aria-label="Date range">
+          <section class="dash-panel adm-mkt" id="adm-panel-marketing" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Marketing</h1>
+              <div class="adm-seg adm-range" role="group" aria-label="Date range">
                 <button type="button" data-range="1">24h</button>
-                <button type="button" data-range="7">7D</button>
-                <button type="button" data-range="30" class="active">30D</button>
-                <button type="button" data-range="90">90D</button>
-                <button type="button" data-range="0">All</button>
+                <button type="button" data-range="7">7d</button>
+                <button type="button" data-range="30" class="active">30d</button>
+                <button type="button" data-range="90">90d</button>
+                <button type="button" data-range="0">All time</button>
               </div>
             </div>
 
-            <div class="dash-stats" id="admMktStats"></div>
-
-            <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Audience overview</h2><span class="adm-sub">Every connected channel combined, over the selected range.</span></div></div>
-              <div id="admAudienceOverview"></div>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admMktStats"></div>
             </div>
 
             <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Channels</h2><span class="adm-sub">Connect a channel to pull its numbers in automatically.</span></div>
+              <div class="dash-card-head"><div><h2>Audience</h2><span class="adm-sub">Open a channel for its charts</span></div></div>
               <div id="admMktChannels"></div>
             </div>
 
             <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Campaigns</h2><span class="adm-sub">Trackable links for partners, sponsors, and anywhere else you're promoting coldd.</span></div></div>
+              <div class="dash-card-head"><div><h2>Campaign links</h2><span class="adm-sub">Trackable links for partners and promotions</span></div></div>
               <form class="adm-form" id="admCampaignCreateForm" style="flex-wrap:wrap;">
                 <input type="text" id="admCampaignCode" class="adm-input adm-input-sm" placeholder="Code, e.g. partner" required maxlength="60" />
                 <input maxlength="120" type="text" id="admCampaignLabel" class="adm-input" placeholder="Label, e.g. Partner program" required style="flex:1;min-width:180px;" />
                 <input maxlength="300" type="text" id="admCampaignDestination" class="adm-input adm-input-sm" placeholder="Page (default /)" style="min-width:140px;" />
                 <button class="btn btn-primary adm-btn-sm" type="submit">+ Add campaign</button>
               </form>
-              <p class="adm-note" style="margin-top:6px;">Page is where the link should send people, e.g. <code>/</code>, <code>/shop</code>, or <code>/product/all-brawl-full-game</code>. Leave blank for the homepage.</p>
+              <p class="adm-note" style="margin-top:6px;">Page is where the link sends people, like <code>/shop</code>. Leave it blank for the homepage.</p>
               <div class="adm-edit-msg" id="admCampaignCreateMsg"></div>
               <div class="dash-tablewrap" style="margin-top:14px;">
                 <table class="dash-table">
@@ -319,7 +316,7 @@
             </div>
 
             <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Advertisements</h2><span class="adm-sub">Discord ad delivery via AdBlox.</span></div><div style="display:flex;gap:8px;"><button class="btn btn-ghost adm-btn-sm" id="admAdbloxRefresh" type="button"><span class="btn-label">Refresh</span><span class="btn-spinner" hidden></span></button><a class="btn btn-ghost adm-btn-sm" href="https://adblox.xyz/dashboard/ads" target="_blank" rel="noopener">Edit Advertisements</a></div></div>
+              <div class="dash-card-head"><div><h2>Ads</h2><span class="adm-sub">AdBlox on Discord</span></div><div style="display:flex;gap:8px;"><button class="btn btn-ghost adm-btn-sm" id="admAdbloxRefresh" type="button"><span class="btn-label">Refresh</span><span class="btn-spinner" hidden></span></button><a class="btn btn-ghost adm-btn-sm" href="https://adblox.xyz/dashboard/ads" target="_blank" rel="noopener">Edit ads</a></div></div>
               <div class="dash-stats" id="admAdbloxStats"></div>
               <div class="adm-edit-msg" id="admAdbloxMsg"></div>
 
@@ -346,8 +343,8 @@
             </div>
 
             <div class="dash-card glass dash-tablewrap">
-              <div class="dash-card-head"><h2>Referral link tracking</h2><span class="adm-sub">Total currently owed to affiliates: <strong id="admAffiliateOwed"></strong></span></div>
-              <p class="adm-sub" style="margin:-4px 0 12px;">Per-product only - a link only earns 20% on the exact product it points to, not the rest of that order.</p>
+              <div class="dash-card-head"><div><h2>Referral links</h2><span class="adm-sub">Owed to affiliates: <strong id="admAffiliateOwed"></strong></span></div></div>
+              <p class="adm-note" style="margin:-6px 0 10px;">A link earns 20% on the exact product it points to.</p>
               <table class="dash-table">
                 <thead><tr><th>Code</th><th>Owner</th><th>Sales</th><th>Earned</th></tr></thead>
                 <tbody id="admReferralBody"></tbody>
@@ -355,12 +352,12 @@
             </div>
 
             <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Email marketing</h2><span class="adm-sub">Sent via Resend from noreply@coldd.dev.</span></div>
+              <div class="dash-card-head"><div><h2>Email</h2><span class="adm-sub">From noreply@coldd.dev</span></div></div>
               <div id="admEmailConfigWarning"></div>
               <div class="dash-stats" id="admEmailStats"></div>
 
               <details class="adm-collapse" style="margin-top:22px;">
-                <summary class="dash-card-head"><div><h2>Subscriber list</h2><span class="adm-sub">Every account with an email address. Campaigns skip anyone Unsubscribed or Banned.</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+                <summary class="dash-card-head"><div><h2>Subscriber list</h2><span class="adm-sub">Campaigns skip unsubscribed and banned accounts</span></div><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
                 <div class="adm-collapse-body">
               <div class="adm-form" style="flex-wrap:wrap;gap:8px;">
                 <input maxlength="200" type="text" id="admEmailListSearch" class="adm-input" placeholder="Search by email address…" style="flex:1;min-width:200px;" />
@@ -376,7 +373,7 @@
                 </div>
               </details>
 
-              <div class="dash-card-head" style="margin-top:22px;"><div><h2>Templates</h2><span class="adm-sub">Reusable subject + body. Saved to the account, not this browser.</span></div></div>
+              <div class="dash-card-head" style="margin-top:22px;"><div><h2>Templates</h2><span class="adm-sub">Saved to your account</span></div></div>
               <div class="adm-form" id="admTemplateBar" style="flex-wrap:wrap;gap:8px;">
                 <div class="adm-dd" id="admTemplateDD" style="flex:1;min-width:200px;">
                   <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -434,7 +431,7 @@
             </div>
 
             <div class="dash-card glass">
-              <div class="dash-card-head"><div><h2>Broadcast notification</h2><span class="adm-sub">Sends an in-app "bell" notification to everyone at once. Not email - it shows next time they load the site.</span></div></div>
+              <div class="dash-card-head"><div><h2>Broadcast notification</h2><span class="adm-sub">An in-app bell notification, not an email</span></div></div>
               <form class="adm-form" id="admBroadcastForm" style="flex-direction:column;align-items:stretch;gap:10px;">
                 <div style="display:flex;gap:14px;flex-wrap:wrap;">
                   <div>
@@ -465,7 +462,7 @@
             </div>
 
             <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Lifecycle automations</h2><span class="adm-sub">Runs every 30 minutes. Off by default - nothing sends until you turn each one on.</span></div>
+              <div class="dash-card-head"><div><h2>Automated emails</h2><span class="adm-sub">Checked every 30 minutes; each one stays off until you turn it on</span></div></div>
               <div id="admAutomationsBody"></div>
             </div>
           </section>
@@ -1703,6 +1700,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261123p" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123p"></script>
+  <script src="/catalog-loader.php?v=20261123q" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123q"></script>
 </body>
 </html>
