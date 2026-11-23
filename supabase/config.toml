@@ -275,3 +275,6 @@ verify_jwt = false
 
 [functions.sales-mail-poll]
 verify_jwt = false
+
+[functions.payhip-webhook]
+verify_jwt = false
