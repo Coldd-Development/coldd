@@ -266,3 +266,6 @@ verify_jwt = true
 
 [functions.admin-prize-claims]
 verify_jwt = true
+
+[functions.platform-sales-ingest]
+verify_jwt = false

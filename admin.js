@@ -829,6 +829,7 @@
           recoveryEmailSentAt: row.abandoned_email_sent_at || null
         };
       });
+      if (curPanel === 'home') renderHome();
       if (curPanel === 'analytics') renderAnalytics();
     if (curPanel === 'marketing') renderMarketing();
     });
@@ -1629,69 +1630,575 @@
     var one = '<div class="dash-stat glass"><span class="ds-label">Loading…</span><span class="ds-num"> - </span></div>';
     return new Array(n + 1).join(one);
   }
-  function renderHome() {
-    if (!ORDERS_LOADED) { $('admHomeStatsTop').innerHTML = loadingStats(4); return; }
-    var curOrders = completedInRange();
-    var curRev = websiteRevenue(curOrders);
-    var win = RANGE_DAYS ? prevRangeWindow() : null;
-    var prevOrders = win ? completedInWindow(win.start, win.end) : [];
-    var prevRev = websiteRevenue(prevOrders);
-
-    var curVisits = RANGE_DAYS ? pageviewsInWindow(rangeStart(), new Date()) : TRAFFIC.reduce(function (s, r) { return s + r.pageviews; }, 0);
-    var prevVisits = win ? pageviewsInWindow(win.start, win.end) : 0;
-
-    // "Overall" and "Website" were both computed from the same websiteRevenue()
-    // call, so the dashboard showed each figure twice under two names and
-    // implied an off-site revenue stream that is not tracked anywhere. One
-    // set of numbers, named for what they are.
-    $('admHomeStatsTop').innerHTML = [
-      statTile('Revenue', aud(curRev.usd), usd(curRev.usd) + ' USD', pctDelta(curRev.usd, prevRev.usd)),
-      statTile('Robux revenue', robuxRaw(curRev.robux), null, pctDelta(curRev.robux, prevRev.robux)),
-      statTile('Order count', curOrders.length, null, pctDelta(curOrders.length, prevOrders.length)),
-      bbbRevTile()
-    ].join('');
-
-    var owed = referralsOwedInfo();
-    // Audience and Discord growth live in the Marketing tab; the home row
-    // shows marketplace orders and site traffic instead.
-    $('admHomeStatsSecondary').innerHTML = [
-      statTile('Live sessions', LIVE_SESSIONS, 'active in the last 5 min', ''),
-      bbbOrdersTile(),
-      statTile('Site visits', curVisits.toLocaleString('en-US'), null, pctDelta(curVisits, prevVisits)),
-      statTile('Referrals owed', usd(owed.usdTotal)+' USD + R$ '+owed.robuxTotal, owed.count ? (owed.count + ' request' + (owed.count === 1 ? '' : 's') + ' pending') : 'Nothing pending', '', { panel: 'marketing', title: owed.names.length ? 'Requested by: ' + owed.names.join(', ') : '' })
-    ].join('');
-
-    var todo = [];
-    var pendingClaims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
-    if (pendingClaims) todo.push({ text: pendingClaims + ' prize claim' + (pendingClaims > 1 ? 's' : '') + ' awaiting confirmation', panel: 'giveaways', badge: 'warn' });
-    var newReviews = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length;
-    if (newReviews) todo.push({ text: newReviews + ' new review' + (newReviews > 1 ? 's' : '') + ' to look at', panel: 'reviews', badge: 'warn' });
-    var pendingPayouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
-    if (pendingPayouts) todo.push({ text: pendingPayouts + ' referral payout request' + (pendingPayouts > 1 ? 's' : '') + ' pending', panel: 'marketing', badge: 'warn' });
-    mpTodoLines().forEach(function (t) { todo.push(t); });
-    if (UNRELEASED_FILES.length) todo.push({ text: 'You have ' + UNRELEASED_FILES.length + ' product' + (UNRELEASED_FILES.length > 1 ? 's' : '') + ' to release', panel: 'unreleased', badge: 'warn' });
-    if (ROBLOX_COOKIE_BROKEN) todo.push({ text: 'Robux fallback cookie is broken - group-transaction verification won\'t work until it\'s refreshed', panel: 'sitemgmt', badge: 'err' });
-    if (ROBLOX_CONTAINERS.length && ROBLOX_CONTAINERS.every(function (c) { return !c.active || c.gamepass_count >= 50; })) {
-      todo.push({ text: 'All Roblox container games are full - add a new one before creating more Robux products', panel: 'sitemgmt', badge: 'err' });
-    }
-    $('admHomeTodo').innerHTML = todo.length ? todo.map(function (t) {
-      return '<div class="adm-todo-row"><span class="adm-todo-text">' + esc(t.text) + '</span><a href="#" class="btn btn-ghost adm-btn-sm" data-panel="' + t.panel + '">Review</a></div>';
-    }).join('') : '<p class="adm-empty">Nothing needs your attention right now.</p>';
-
-    // Recent orders is meant as a snapshot of real sales activity - a free
-    // admin-granted comp isn't that, and mixing $0.00 "Completed" rows in
-    // with actual purchases made the widget read as broken/fake ("orders
-    // showing free grants"). Grants still show up in full in the Orders
-    // panel itself, just not on this home-page summary.
-    var recent = feedEntries({ completedOnly: true }).slice(0, 6);
-    $('admHomeRecent').innerHTML = recent.map(feedRowHtml).join('') || '<p class="adm-empty">No completed orders yet.</p>';
-
-    // Keep the range buttons in sync with the persisted RANGE_DAYS. The
-    // markup hard-codes 30D as active, so without this the Home dashboard
-    // could show 30D highlighted while actually rendering a different
-    // stored range - the figures looked "stuck" until a click ran setRange.
-    document.querySelectorAll('#admHomeRange button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
+  /* ----------------------------------------------------------------
+     Dashboard home (2026-11-23 redesign). Overview cards with their own
+     24h / 7d / 30d / Lifetime filter, the latest website orders, Sales by
+     platform (AU$ per month per marketplace, plus a rolling 30-day table)
+     and Today's work. Every money figure is AU$: USD at AUD_RATE, Robux at
+     the DevEx rate first (same conversion the rest of the admin uses).
+     ---------------------------------------------------------------- */
+  var HOME_PERIOD = lsGet('coldd_admin_home_period_v1', 30); // 1, 7, 30, 0 (= lifetime)
+  if ([1, 7, 30, 0].indexOf(HOME_PERIOD) < 0) HOME_PERIOD = 30;
+  var DAY_MS = 86400000;
+  // Fixed order: a platform keeps its colour (--pf-<key>) whatever the data does.
+  var HOME_PLATFORMS = [
+    { key: 'site', label: 'coldd.dev' },
+    { key: 'builtbybit', label: 'BuiltByBit' },
+    { key: 'clearlydev', label: 'ClearlyDev' },
+    { key: 'parcel', label: 'Parcel' },
+    { key: 'creatorstore', label: 'Creator Store' },
+    { key: 'payhip', label: 'Payhip' }
+  ];
+  var HOME_ICON = {
+    redeem: 'M160-280v80h640v-80H160Zm0-440h88q-5-9-6.5-19t-1.5-21q0-50 35-85t85-35q30 0 55.5 15.5T460-826l20 26 20-26q18-24 44-39t56-15q50 0 85 35t35 85q0 11-1.5 21t-6.5 19h88q33 0 56.5 23.5T880-640v440q0 33-23.5 56.5T800-120H160q-33 0-56.5-23.5T80-200v-440q0-33 23.5-56.5T160-720Zm0 320h640v-240H596l84 114-64 46-136-184-136 184-64-46 82-114H160v240Zm228.5-331.5Q400-743 400-760t-11.5-28.5Q377-800 360-800t-28.5 11.5Q320-777 320-760t11.5 28.5Q343-720 360-720t28.5-11.5ZM600-720q17 0 28.5-11.5T640-760q0-17-11.5-28.5T600-800q-17 0-28.5 11.5T560-760q0 17 11.5 28.5T600-720Z',
+    payments: 'M560-440q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35ZM280-320q-33 0-56.5-23.5T200-400v-320q0-33 23.5-56.5T280-800h560q33 0 56.5 23.5T920-720v320q0 33-23.5 56.5T840-320H280Zm80-80h400q0-33 23.5-56.5T840-480v-160q-33 0-56.5-23.5T760-720H360q0 33-23.5 56.5T280-640v160q33 0 56.5 23.5T360-400Zm440 240H120q-33 0-56.5-23.5T40-240v-440h80v440h680v80ZM280-400v-320 320Z',
+    rocket_launch: 'm226-559 78 33q14-28 29-54t33-52l-56-11-84 84Zm142 83 114 113q42-16 90-49t90-75q70-70 109.5-155.5T806-800q-72-5-158 34.5T492-656q-42 42-75 90t-49 90Zm155-121.5q0-33.5 23-56.5t57-23q34 0 57 23t23 56.5q0 33.5-23 56.5t-57 23q-34 0-57-23t-23-56.5ZM565-220l84-84-11-56q-26 18-52 32.5T532-299l33 79Zm313-653q19 121-23.5 235.5T708-419l20 99q4 20-2 39t-20 33L538-80l-84-197-171-171-197-84 167-168q14-14 33.5-20t39.5-2l99 20q104-104 218-147t235-24ZM157-321q35-35 85.5-35.5T328-322q35 35 34.5 85.5T327-151q-25 25-83.5 43T82-76q14-103 32-161.5t43-83.5Zm57 56q-10 10-20 36.5T180-175q27-4 53.5-13.5T270-208q12-12 13-29t-11-29q-12-12-29-11.5T214-265Z',
+    error: 'M508.5-291.5Q520-303 520-320t-11.5-28.5Q497-360 480-360t-28.5 11.5Q440-337 440-320t11.5 28.5Q463-280 480-280t28.5-11.5ZM440-440h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z',
+    close: 'm256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z',
+    add: 'M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z',
+    chevron_right: 'M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z',
+    storefront: 'M841-518v318q0 33-23.5 56.5T761-120H201q-33 0-56.5-23.5T121-200v-318q-23-21-35.5-54t-.5-72l42-136q8-26 28.5-43t47.5-17h556q27 0 47 16.5t29 43.5l42 136q12 39-.5 71T841-518Zm-272-42q27 0 41-18.5t11-41.5l-22-140h-78v148q0 21 14 36.5t34 15.5Zm-180 0q23 0 37.5-15.5T441-612v-148h-78l-22 140q-4 24 10.5 42t37.5 18Zm-178 0q18 0 31.5-13t16.5-33l22-154h-78l-40 134q-6 20 6.5 43t41.5 23Zm540 0q29 0 42-23t6-43l-42-134h-76l22 154q3 20 16.5 33t31.5 13ZM201-200h560v-282q-5 2-6.5 2H751q-27 0-47.5-9T663-518q-18 18-41 28t-49 10q-27 0-50.5-10T481-518q-17 18-39.5 28T393-480q-29 0-52.5-10T299-518q-21 21-41.5 29.5T211-480h-4.5q-2.5 0-5.5-2v282Zm560 0H201h560Z',
+    arrow_upward: 'M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z',
+    arrow_downward: 'M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z'
+  };
+  function homeIcon(name, size) {
+    var d = HOME_ICON[name] || (window.MSYM && window.MSYM[name]);
+    if (!d) return '';
+    var s = size || 16;
+    return '<svg class="msym" viewBox="0 -960 960 960" width="' + s + '" height="' + s + '" fill="currentColor" aria-hidden="true"><path d="' + d + '"/></svg>';
   }
+  function pfVar(key) { return 'var(--pf-' + key + ')'; }
+  function pfMark(key) {
+    if (key === 'site') return '<img class="adm-pf-logo" src="/logo.png" alt="" width="18" height="18" loading="lazy" />';
+    if (key === 'payhip') return '<span class="adm-pf-logo adm-pf-blank">' + homeIcon('storefront', 13) + '</span>';
+    return '<img class="adm-pf-logo" src="/mp-logos/' + key + '.png" alt="" width="18" height="18" loading="lazy" />';
+  }
+
+  function usdToAud(n) { return (Number(n) || 0) * AUD_RATE; }
+  function robuxToAud(n) { return (Number(n) || 0) * DEVEX_USD_PER_ROBUX * AUD_RATE; }
+  // Formats a figure that is already AU$ (aud() above converts from USD).
+  function fmtA(v, whole) {
+    v = Number(v) || 0;
+    var w = whole || Math.abs(v) >= 10000;
+    return 'A$' + v.toLocaleString('en-AU', { minimumFractionDigits: w ? 0 : 2, maximumFractionDigits: w ? 0 : 2 });
+  }
+  function plural(n, word) { return num(n) + ' ' + word + (n === 1 ? '' : 's'); }
+  function fmtPctAbs(p) { p = Math.abs(p); return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%'; }
+  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+  // Every sale on every platform as { pf, t, aud, robux, n }. Website orders
+  // count once paid (no tests, no admin grants); BuiltByBit at what the buyer
+  // paid in USD; platform_sales (ClearlyDev, Parcel, Creator Store, Payhip)
+  // minus refunds.
+  function homeSales() {
+    var out = [];
+    ORDERS.forEach(function (o) {
+      if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
+      var rb = o.currency === 'robux';
+      out.push({ pf: 'site', t: Date.parse(o.paidAt || o.date), aud: rb ? robuxToAud(o.totalRobux) : usdToAud(o.total), robux: rb ? o.totalRobux : 0, n: 1 });
+    });
+    if (BBB.configured) BBB.purchases.forEach(function (p) {
+      if (!bbbIsUsd(p)) return;
+      out.push({ pf: 'builtbybit', t: Date.parse(p.purchased_at), aud: usdToAud(p.price), robux: 0, n: 1 });
+    });
+    PSALES.forEach(function (s) {
+      if (s.status === 'refunded') return;
+      // One row is one order, however many items it held (a ClearlyDev cart can carry several).
+      out.push({ pf: s.platform, t: s.t, aud: usdToAud(s.usd), robux: s.currency === 'ROBUX' ? s.amount : 0, n: 1 });
+    });
+    return out;
+  }
+  function sumSales(list, start, end, pf) {
+    var r = { aud: 0, robux: 0, n: 0 };
+    var s = start ? start.getTime() : -Infinity, e = end ? end.getTime() : Infinity;
+    list.forEach(function (x) {
+      if (x.t < s || x.t >= e || (pf && x.pf !== pf)) return;
+      r.aud += x.aud; r.robux += x.robux; r.n += x.n;
+    });
+    return r;
+  }
+  // Rolling windows: the last 24 hours / 7 / 30 days against the same length before it.
+  function homeWindow() {
+    var now = Date.now(), p = HOME_PERIOD;
+    if (!p) return { start: null, end: new Date(now + 60000), prevStart: null, prevEnd: null };
+    return { start: new Date(now - p * DAY_MS), end: new Date(now + 60000), prevStart: new Date(now - 2 * p * DAY_MS), prevEnd: new Date(now - p * DAY_MS) };
+  }
+  function periodWord() { return HOME_PERIOD === 1 ? '24 hours' : HOME_PERIOD + ' days'; }
+  function homeDelta(cur, prev, w) {
+    if (!w.prevStart) return '<span class="adm-kpi-cmp">All time</span>';
+    var against = 'previous ' + periodWord();
+    if (!prev) return cur
+      ? '<span class="adm-kpi-delta up">New</span><span class="adm-kpi-cmp">nothing in the ' + against + '</span>'
+      : '<span class="adm-kpi-delta flat">–</span><span class="adm-kpi-cmp">same as the ' + against + '</span>';
+    var pct = (cur - prev) / prev * 100;
+    if (Math.abs(pct) < 0.5) return '<span class="adm-kpi-delta flat">–</span><span class="adm-kpi-cmp">level with the ' + against + '</span>';
+    var cls = pct > 0 ? 'up' : 'down';
+    return '<span class="adm-kpi-delta ' + cls + '">' + homeIcon(cls === 'up' ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(pct) + '</span><span class="adm-kpi-cmp">vs ' + against + '</span>';
+  }
+  function viewsIn(start, end) {
+    var s = start ? start.getTime() : -Infinity, e = end ? end.getTime() : Infinity, n = 0, ses = {};
+    TRAFFIC_ROWS.forEach(function (r) {
+      var t = r.t || (r.t = Date.parse(r.d));
+      if (t >= s && t < e) { n++; ses[r.s] = 1; }
+    });
+    return { views: n, sessions: Object.keys(ses).length };
+  }
+  // cart_snapshots rows are deleted the moment an order is created, so every
+  // row is a cart that has not been bought (yet). "Active" = touched in the window.
+  function cartsIn(start, end) {
+    var s = start ? start.getTime() : -Infinity, e = end ? end.getTime() : Infinity, r = { n: 0, aud: 0 };
+    ABANDONED.forEach(function (c) { var t = Date.parse(c.date); if (t >= s && t < e) { r.n++; r.aud += usdToAud(c.value); } });
+    return r;
+  }
+
+  // Lifetime page views: the traffic pull only covers 120 days, so the all-time
+  // count is its own head-only count query (same internal paths excluded).
+  var VIEWS_ALL = null;
+  function refreshLifetimeViews() {
+    var sb = window.coldSupabase;
+    if (!sb) return Promise.resolve();
+    var q = sb.from('page_views').select('created_at', { count: 'exact', head: true });
+    ['admin', 'lock', 'callback', 'roblox-callback', 'tiktok-callback', 'youtube-callback', 'signin', 'signup', 'forgot', 'reset'].forEach(function (p) { q = q.not('path', 'ilike', '/' + p + '%'); });
+    var first = sb.from('page_views').select('created_at').order('created_at', { ascending: true }).limit(1);
+    return Promise.all([q, first]).then(function (r) {
+      if (r[0].error) throw r[0].error;
+      VIEWS_ALL = { views: r[0].count || 0, since: r[1] && r[1].data && r[1].data[0] ? r[1].data[0].created_at : null };
+      if (curPanel === 'home') renderHomeKpis();
+    }).catch(function (e) { console.error('[admin] lifetime views:', e && e.message); });
+  }
+
+  // public.platform_sales: ClearlyDev / Parcel / Creator Store / Payhip sales,
+  // written by platform-sales-ingest (userscript, bots, email) or by hand.
+  var PSALES = [], PSALES_LOADED = false;
+  function refreshPlatformSales() {
+    if (!window.coldSupabase) return Promise.resolve();
+    return fetchAllRows(function () {
+      return window.coldSupabase.from('platform_sales').select('id, platform, sold_at, product_name, currency, amount, amount_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
+    }).then(function (res) {
+      PSALES_LOADED = true;
+      if (res.error) { console.error('[admin] platform sales:', res.error.message); return; }
+      PSALES = (res.data || []).map(function (r) {
+        return { id: r.id, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, qty: r.quantity || 1, status: r.status };
+      });
+      if (curPanel === 'home') renderHome();
+    });
+  }
+
+  function syncHomePeriod() {
+    document.querySelectorAll('#admHomePeriod button').forEach(function (b) {
+      var on = +b.getAttribute('data-period') === HOME_PERIOD;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  var homePeriodEl = $('admHomePeriod');
+  if (homePeriodEl) homePeriodEl.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-period]');
+    if (!b) return;
+    HOME_PERIOD = +b.getAttribute('data-period');
+    lsSet('coldd_admin_home_period_v1', HOME_PERIOD);
+    syncHomePeriod();
+    renderHomeKpis();
+  });
+  // Clickable cards are divs with role=link; Enter/Space opens them like a click.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target;
+    if (!t || !t.matches || !t.matches('[data-panel][role="link"]')) return;
+    e.preventDefault();
+    t.click();
+  });
+
+  function renderHome() {
+    var d = $('admHomeDate');
+    if (d) d.textContent = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    syncHomePeriod();
+    var sales = ORDERS_LOADED ? homeSales() : [];
+    renderHomeKpis(sales);
+    renderHomeRecent();
+    renderPlatforms(sales);
+    renderWork();
+  }
+
+  function kpiCell(o) {
+    var link = o.panel ? ' data-panel="' + o.panel + '" role="link" tabindex="0"' : '';
+    return '<div class="adm-kpi-cell"' + link + (o.title ? ' title="' + esc(o.title) + '"' : '') + '>' +
+      '<span class="adm-kpi-label">' + esc(o.label) + '</span>' +
+      '<span class="adm-kpi-value"><b>' + o.value + '</b>' + (o.count ? '<em>' + o.count + '</em>' : '') + '</span>' +
+      '<span class="adm-kpi-line">' + o.delta + '</span>' +
+      '<span class="adm-kpi-sub">' + (o.sub || '&nbsp;') + '</span></div>';
+  }
+  function renderHomeKpis(sales) {
+    var grid = $('admKpiGrid');
+    if (!grid) return;
+    if (!ORDERS_LOADED) {
+      grid.innerHTML = ['Site revenue', 'Site views', 'Active carts', 'Global sales'].map(function (l) {
+        return '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"><span class="adm-skel adm-skel-sm"></span></span><span class="adm-kpi-sub">&nbsp;</span></div>';
+      }).join('');
+      renderKpiFoot();
+      return;
+    }
+    sales = sales || homeSales();
+    var w = homeWindow();
+    var site = sumSales(sales, w.start, w.end, 'site'), siteP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd, 'site') : null;
+    var all = sumSales(sales, w.start, w.end), allP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd) : null;
+    var v = w.start ? viewsIn(w.start, w.end) : null, vP = w.prevStart ? viewsIn(w.prevStart, w.prevEnd) : null;
+    var c = cartsIn(w.start, w.end), cP = w.prevStart ? cartsIn(w.prevStart, w.prevEnd) : null;
+    function robuxSub(r) { return r.robux ? 'incl. ' + robuxRaw(r.robux) + ' from Robux sales' : 'No Robux sales'; }
+
+    var viewsCell;
+    if (w.start) {
+      viewsCell = kpiCell({ label: 'Site views', value: num(v.views), delta: homeDelta(v.views, vP.views, w), sub: plural(v.sessions, 'session'), panel: 'analytics' });
+    } else {
+      viewsCell = kpiCell({ label: 'Site views', value: VIEWS_ALL ? num(VIEWS_ALL.views) : '–', delta: homeDelta(0, 0, w),
+        sub: VIEWS_ALL && VIEWS_ALL.since ? 'Since ' + fmtDate(new Date(VIEWS_ALL.since)) : 'Loading…', panel: 'analytics' });
+    }
+    var platformsNote = BBB.configured === null || !PSALES_LOADED ? 'Still loading some platforms' : robuxSub(all);
+    grid.innerHTML = [
+      kpiCell({ label: 'Site revenue', value: fmtA(site.aud, site.aud >= 1000), count: plural(site.n, 'order'), delta: homeDelta(site.aud, siteP && siteP.aud, w), sub: robuxSub(site), panel: 'orders' }),
+      viewsCell,
+      kpiCell({ label: 'Active carts', value: num(c.n), delta: homeDelta(c.n, cP && cP.n, w), sub: c.n ? fmtA(c.aud) + ' sitting in carts' : 'No open carts', panel: 'analytics' }),
+      kpiCell({ label: 'Global sales', value: fmtA(all.aud, all.aud >= 1000), count: plural(all.n, 'sale'), delta: homeDelta(all.aud, allP && allP.aud, w), sub: platformsNote,
+        title: 'coldd.dev, BuiltByBit, ClearlyDev, Parcel, Creator Store and Payhip together' })
+    ].join('');
+    renderKpiFoot();
+  }
+  function renderKpiFoot() {
+    var foot = $('admKpiFoot');
+    if (!foot) return;
+    var owed = referralsOwedInfo();
+    var owedAud = usdToAud(owed.usdTotal) + robuxToAud(owed.robuxTotal);
+    foot.innerHTML =
+      '<span><i class="adm-live-dot' + (LIVE_SESSIONS ? ' is-on' : '') + '"></i><b>' + num(LIVE_SESSIONS) + '</b> on the site right now</span>' +
+      '<span>Referrals owed <b>' + fmtA(owedAud) + '</b>' + (owed.count ? ' across ' + plural(owed.count, 'request') : '') + '</span>' +
+      '<span>US$1 = <b>A$' + AUD_RATE.toFixed(2) + '</b> · R$1 = US$' + DEVEX_USD_PER_ROBUX + '</span>';
+  }
+
+  /* ---- Recent orders (website only) ---- */
+  function renderHomeRecent() {
+    var box = $('admHomeRecent');
+    if (!box) return;
+    if (!ORDERS_LOADED) { box.innerHTML = '<p class="adm-empty">Loading orders…</p>'; return; }
+    // Real sales only: an admin grant is a $0 comp and a test order is not a sale.
+    var list = ORDERS.filter(function (o) { return !o.isTest && o.status === 'completed' && o.source !== 'granted'; }).slice(0, 5);
+    if (!list.length) { box.innerHTML = '<p class="adm-empty">No website orders yet.</p>'; return; }
+    box.innerHTML = list.map(function (o) {
+      var amount = o.currency === 'robux' ? robuxRaw(o.totalRobux) : fmtA(usdToAud(o.total));
+      var method = paymentMethodLabel(o);
+      return '<button type="button" class="adm-ro-row" data-order="' + esc(o.id) + '">' +
+        '<span class="adm-ro-prod"><span class="adm-ro-thumb"' + (o.image ? ' style="background-image:url(\'' + esc(o.image) + '\')"' : '') + '></span>' +
+          '<span class="adm-ro-name"><span class="adm-ro-title">' + esc(o.title) + '</span><span class="adm-ro-meta">' + esc(o.userName) + ' · ' + esc(method) + '</span></span></span>' +
+        '<span class="adm-ro-buyer">' + esc(o.userName) + '</span>' +
+        '<span class="adm-ro-method">' + esc(method) + '</span>' +
+        '<span class="adm-ro-amt">' + amount + '</span>' +
+        '<span class="adm-ro-time" title="' + esc(fmtDateTime(new Date(o.date))) + '">' + esc(relTime(o.paidAt || o.date)) + '</span>' +
+      '</button>';
+    }).join('');
+  }
+  var homeRecentEl = $('admHomeRecent');
+  if (homeRecentEl) homeRecentEl.addEventListener('click', function (e) {
+    var row = e.target.closest('[data-order]');
+    if (!row) return;
+    viewOrderId = row.getAttribute('data-order');
+    showPanel('order-detail', { extra: viewOrderId });
+  });
+
+  /* ---- Sales by platform ---- */
+  function homeMonths(n) {
+    var now = new Date(), out = [];
+    for (var i = n - 1; i >= 0; i--) {
+      var s = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push({ start: s, end: new Date(s.getFullYear(), s.getMonth() + 1, 1), short: s.toLocaleDateString('en-AU', { month: 'short' }), long: s.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }) });
+    }
+    return out;
+  }
+  var PLAT_CHART = null; // last chart data, so a resize can redraw without recomputing
+  function renderPlatforms(sales) {
+    var sum = $('admPlatSummary'), legend = $('admPlatLegend'), chart = $('admPlatChart'), table = $('admPlatTable'), foot = $('admPlatFoot');
+    if (!chart) return;
+    if (!ORDERS_LOADED) {
+      sum.textContent = 'Loading sales…'; legend.innerHTML = ''; table.innerHTML = ''; foot.textContent = '';
+      chart.innerHTML = '<div class="adm-skel adm-skel-chart"></div>';
+      return;
+    }
+    var months = homeMonths(12);
+    var first = months[0].start.getTime(), byPf = {};
+    var byPfR = {}; // Robux part of each month, so Robux-taking platforms (Parcel, coldd.dev) show both units
+    HOME_PLATFORMS.forEach(function (p) { byPf[p.key] = months.map(function () { return 0; }); byPfR[p.key] = months.map(function () { return 0; }); });
+    sales.forEach(function (x) {
+      if (x.t < first || !byPf[x.pf]) return;
+      var d = new Date(x.t), i = (d.getFullYear() - months[0].start.getFullYear()) * 12 + d.getMonth() - months[0].start.getMonth();
+      if (i >= 0 && i < months.length) { byPf[x.pf][i] += x.aud; byPfR[x.pf][i] += x.robux; }
+    });
+    var series = HOME_PLATFORMS.map(function (p) {
+      var data = byPf[p.key];
+      var add = function (a, b) { return a + b; };
+      return { key: p.key, label: p.label, data: data, robux: byPfR[p.key], total: data.reduce(add, 0), robuxTotal: byPfR[p.key].reduce(add, 0) };
+    });
+
+    // Month to date against the same stretch of last month.
+    var now = new Date(), mStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    var pStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    var pEnd = new Date(Math.min(pStart.getTime() + (now - mStart), mStart.getTime()));
+    var mtd = sumSales(sales, mStart, null), prevMtd = sumSales(sales, pStart, pEnd);
+    var monthName = mStart.toLocaleDateString('en-AU', { month: 'long' }), prevName = pStart.toLocaleDateString('en-AU', { month: 'long' });
+    var top = null;
+    HOME_PLATFORMS.forEach(function (p) { var v = sumSales(sales, mStart, null, p.key).aud; if (v > 0 && (!top || v > top.v)) top = { label: p.label, v: v }; });
+    var line;
+    if (!mtd.aud) line = 'No sales yet in ' + esc(monthName) + '.';
+    else {
+      line = '<b>' + esc(monthName) + '</b> is at <b>' + fmtA(mtd.aud) + '</b> on the ' + ordinal(now.getDate());
+      if (prevMtd.aud) {
+        var pct = (mtd.aud - prevMtd.aud) / prevMtd.aud * 100;
+        line += Math.abs(pct) < 0.5 ? ', level with the same point in ' + esc(prevName) + '.'
+          : ', <b>' + fmtPctAbs(pct) + (pct > 0 ? ' higher' : ' lower') + '</b> than the same point in ' + esc(prevName) + '.';
+      } else line += '. ' + esc(prevName) + ' had no sales by this point.';
+      if (top) line += ' <b>' + esc(top.label) + '</b> is the top seller.';
+    }
+    sum.innerHTML = line;
+
+    legend.innerHTML = series.map(function (s) {
+      return '<span style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + ' <b>' + fmtA(s.total, true) + '</b>' + (s.robuxTotal ? '<em>' + robuxRaw(s.robuxTotal) + '</em>' : '') + '</span>';
+    }).join('');
+
+    PLAT_CHART = { months: months, series: series };
+    drawPlatChart();
+    renderPlatTable(sales);
+    foot.textContent = 'The current month is still running, so its dotted stretch is not a full month. The table compares the last 30 days with the 30 days before. Robux sales count at the DevEx rate.';
+  }
+
+  function drawPlatChart() {
+    var box = $('admPlatChart');
+    if (!box || !PLAT_CHART) return;
+    var months = PLAT_CHART.months, series = PLAT_CHART.series, n = months.length;
+    var W = Math.max(320, box.clientWidth || 640), H = 236;
+    var narrow = W < 560;
+    var padL = 56, padR = narrow ? 16 : 118, padT = 12, padB = 28;
+    var iw = W - padL - padR, ih = H - padT - padB;
+    var max = 0;
+    series.forEach(function (s) { s.data.forEach(function (v) { if (v > max) max = v; }); });
+    var sc = niceScale(max);
+    function X(i) { return padL + (n === 1 ? iw / 2 : i / (n - 1) * iw); }
+    function Y(v) { return padT + ih - (v / sc.top) * ih; }
+    var svg = '';
+    sc.ticks.forEach(function (t) {
+      var y = Y(t).toFixed(1);
+      svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
+        '<text class="pc-axis" x="' + (padL - 10) + '" y="' + y + '" dy="4" text-anchor="end">' + esc('A$' + axisNum(t)) + '</text>';
+    });
+    months.forEach(function (m, i) {
+      if (narrow && i % 2 !== (n - 1) % 2) return;
+      svg += '<text class="pc-axis" x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(m.short) + '</text>';
+    });
+    // Flat-at-zero platforms first, so a platform with sales is never hidden under one without.
+    var order = series.slice().sort(function (a, b) { return (a.total > 0) - (b.total > 0); });
+    order.forEach(function (s) {
+      var pts = s.data.map(function (v, i) { return X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
+      var color = pfVar(s.key);
+      svg += '<path class="pc-line" style="stroke:' + color + '" d="M' + pts.slice(0, n - 1).join('L') + '"/>' +
+        '<path class="pc-line is-part" style="stroke:' + color + '" d="M' + pts.slice(n - 2).join('L') + '"/>';
+    });
+    // End labels with a short key line, nudged apart so they never overlap.
+    if (!narrow) {
+      var labels = series.map(function (s) { return { s: s, y: Y(s.data[n - 1]) }; }).sort(function (a, b) { return a.y - b.y; });
+      var gap = 16, bottom = padT + ih + 4;
+      for (var i = 1; i < labels.length; i++) if (labels[i].y < labels[i - 1].y + gap) labels[i].y = labels[i - 1].y + gap;
+      var over = labels[labels.length - 1].y - bottom;
+      if (over > 0) labels.forEach(function (l) { l.y -= over; });
+      for (var j = labels.length - 2; j >= 0; j--) if (labels[j].y > labels[j + 1].y - gap) labels[j].y = labels[j + 1].y - gap;
+      var lx = padL + iw + 12;
+      labels.forEach(function (l) {
+        svg += '<line class="pc-key" style="stroke:' + pfVar(l.s.key) + '" x1="' + lx + '" x2="' + (lx + 10) + '" y1="' + l.y.toFixed(1) + '" y2="' + l.y.toFixed(1) + '"/>' +
+          '<text class="pc-end" x="' + (lx + 16) + '" y="' + l.y.toFixed(1) + '" dy="4">' + esc(l.s.label) + '</text>';
+      });
+    }
+    svg += '<line class="pc-cross" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + ih) + '" visibility="hidden"/>';
+    series.forEach(function (s) { svg += '<circle class="pc-dot" data-pf="' + s.key + '" r="4" cx="0" cy="0" style="fill:' + pfVar(s.key) + '" visibility="hidden"/>'; });
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Monthly sales in AU$ for each platform over the last 12 months">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
+    box.__pc = { X: X, Y: Y, n: n, padL: padL, iw: iw, W: W };
+  }
+  (function () {
+    var box = $('admPlatChart');
+    if (!box) return;
+    function hide() {
+      var tip = box.querySelector('.adm-pc-tip'); if (tip) tip.hidden = true;
+      box.querySelectorAll('.pc-cross, .pc-dot').forEach(function (el) { el.setAttribute('visibility', 'hidden'); });
+    }
+    box.addEventListener('mousemove', function (e) {
+      var pc = box.__pc, svg = box.querySelector('svg');
+      if (!pc || !svg || !PLAT_CHART) return;
+      var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (pc.W / r.width);
+      if (x < pc.padL - 20 || x > pc.padL + pc.iw + 20) { hide(); return; }
+      var i = Math.max(0, Math.min(pc.n - 1, Math.round((x - pc.padL) / (pc.iw / Math.max(1, pc.n - 1)))));
+      var cx = pc.X(i).toFixed(1);
+      var cross = box.querySelector('.pc-cross');
+      cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+      PLAT_CHART.series.forEach(function (s) {
+        var dot = box.querySelector('.pc-dot[data-pf="' + s.key + '"]');
+        if (!dot) return;
+        dot.setAttribute('cx', cx); dot.setAttribute('cy', pc.Y(s.data[i]).toFixed(1));
+        dot.setAttribute('visibility', s.data[i] > 0 ? 'visible' : 'hidden');
+      });
+      var m = PLAT_CHART.months[i], total = 0;
+      var rows = PLAT_CHART.series.map(function (s) { total += s.data[i]; return s; }).slice().sort(function (a, b) { return b.data[i] - a.data[i]; });
+      var tip = box.querySelector('.adm-pc-tip');
+      tip.innerHTML = '<h4>' + esc(m.long) + (i === pc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
+        rows.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + (s.robux[i] ? '<em>' + robuxRaw(s.robux[i]) + '</em>' : '') + '<b>' + fmtA(s.data[i]) + '</b></div>'; }).join('') +
+        '<div class="adm-pc-tip-total">All platforms<b>' + fmtA(total) + '</b></div>';
+      tip.hidden = false;
+      var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
+      if (left + tip.offsetWidth > bx.width) left = (e.clientX - bx.left) - tip.offsetWidth - 16;
+      tip.style.left = Math.max(0, left) + 'px';
+      tip.style.top = Math.max(0, Math.min(box.clientHeight - tip.offsetHeight, (e.clientY - bx.top) - tip.offsetHeight / 2)) + 'px';
+    });
+    box.addEventListener('mouseleave', hide);
+    if (window.ResizeObserver) {
+      var lastW = 0, t = null;
+      new ResizeObserver(function () {
+        var w = box.clientWidth;
+        if (!w || Math.abs(w - lastW) < 4) return;
+        lastW = w;
+        clearTimeout(t); t = setTimeout(drawPlatChart, 80);
+      }).observe(box);
+    }
+  })();
+
+  function renderPlatTable(sales) {
+    var table = $('admPlatTable');
+    if (!table) return;
+    var now = Date.now();
+    var cS = new Date(now - 30 * DAY_MS), cE = new Date(now + 60000), pS = new Date(now - 60 * DAY_MS), pE = cS;
+    var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: sumSales(sales, pS, pE, p.key) }; });
+    var tot = sumSales(sales, cS, cE), totP = sumSales(sales, pS, pE);
+    // Robux sales are already inside the AU$ figure (DevEx rate); the R$ line underneath shows how much.
+    function rbx(n) { return n ? '<small>' + robuxRaw(n) + '</small>' : ''; }
+    function change(cur, prev) {
+      if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '<span class="adm-chg flat">–</span>';
+      var pct = (cur - prev) / prev * 100, cls = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
+      return '<span class="adm-chg ' + cls + '">' + (cls === 'up' ? homeIcon('arrow_upward', 12) : cls === 'down' ? homeIcon('arrow_downward', 12) : '') + fmtPctAbs(pct) + '</span>';
+    }
+    table.innerHTML = '<thead><tr><th scope="col">Platform</th><th scope="col">Last 30d</th><th scope="col">Previous 30d</th><th scope="col">Change</th><th scope="col">Share</th><th scope="col">Orders</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var share = tot.aud ? r.cur.aud / tot.aud * 100 : 0;
+        return '<tr style="--pf:' + pfVar(r.p.key) + '"><th scope="row"><span class="adm-pf"><i></i>' + pfMark(r.p.key) + esc(r.p.label) + '</span></th>' +
+          '<td class="is-strong">' + fmtA(r.cur.aud) + rbx(r.cur.robux) + '</td>' +
+          '<td class="is-muted">' + fmtA(r.prev.aud) + rbx(r.prev.robux) + '</td>' +
+          '<td>' + change(r.cur.aud, r.prev.aud) + '</td>' +
+          '<td><span class="adm-share"><span class="adm-share-bar"><i style="width:' + share.toFixed(1) + '%"></i></span><span>' + Math.round(share) + '%</span></span></td>' +
+          '<td>' + num(r.cur.n) + '</td></tr>';
+      }).join('') + '</tbody>' +
+      '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + rbx(tot.robux) + '</td><td class="is-muted">' + fmtA(totP.aud) + rbx(totP.robux) + '</td><td>' + change(tot.aud, totP.aud) + '</td><td></td><td>' + num(tot.n) + '</td></tr></tfoot>';
+  }
+
+  /* ---- Today's work ----
+     Automatic items (anything waiting on staff) first, then the tasks typed
+     in here (public.admin_todos, shared by every admin). Ticked tasks stay
+     visible, struck through, for the rest of the day. */
+  var TODOS = [], TODOS_LOADED = false;
+  function refreshTodos() {
+    if (!window.coldSupabase) return Promise.resolve();
+    var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    return window.coldSupabase.from('admin_todos').select('*')
+      .or('done.eq.false,done_at.gte."' + dayStart.toISOString() + '"')
+      .order('created_at', { ascending: true }).limit(500).then(function (res) {
+        TODOS_LOADED = true;
+        if (res.error) { console.error('[admin] todos:', res.error.message); return; }
+        TODOS = res.data || [];
+        if (curPanel === 'home') renderWork();
+      });
+  }
+  function workAutoItems() {
+    var items = [];
+    if (ROBLOX_COOKIE_BROKEN) items.push({ tone: 'err', icon: 'error', text: 'Robux fallback cookie is broken', sub: 'Group-transaction checks are off until it is refreshed', panel: 'sitemgmt' });
+    if (ROBLOX_CONTAINERS.length && ROBLOX_CONTAINERS.every(function (c) { return !c.active || c.gamepass_count >= 50; })) {
+      items.push({ tone: 'err', icon: 'error', text: 'All Roblox container games are full', sub: 'Add one before creating more Robux products', panel: 'sitemgmt' });
+    }
+    var claims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
+    if (claims) items.push({ icon: 'redeem', text: plural(claims, 'prize claim') + ' to check', sub: 'Giveaways', panel: 'giveaways' });
+    var payouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
+    if (payouts) items.push({ icon: 'payments', text: plural(payouts, 'referral payout') + ' to send', sub: 'Marketing', panel: 'marketing' });
+    var reviews = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length;
+    if (reviews) items.push({ icon: 'reviews', text: plural(reviews, 'new review') + ' to read', sub: 'Reviews', panel: 'reviews' });
+    if (UNRELEASED_FILES.length) items.push({ icon: 'rocket_launch', text: plural(UNRELEASED_FILES.length, 'product') + ' to release', sub: 'Products', panel: 'unreleased' });
+    var open = mpOpenItems();
+    MP_TASK_TARGETS.forEach(function (m) {
+      var n = open.filter(function (i) { return i.mk === m.key; }).length;
+      if (n) items.push({ mk: m.key, text: num(n) + ' ' + m.label + ' task' + (n === 1 ? '' : 's'), sub: 'Marketplaces', panel: 'marketplaces' });
+    });
+    return items;
+  }
+  function renderWork() {
+    var list = $('admWorkList'), count = $('admWorkCount');
+    if (!list) return;
+    var auto = workAutoItems();
+    var open = TODOS.filter(function (t) { return !t.done; }), done = TODOS.filter(function (t) { return t.done; });
+    if (count) count.textContent = (auto.length + open.length) ? (auto.length + open.length) + ' open' : '';
+    var html = auto.map(function (it) {
+      var ico = it.mk ? (it.mk === 'site' ? mpLogo('site') : '<img src="/mp-logos/' + esc(it.mk) + '.png" alt="" width="18" height="18" loading="lazy" />') : homeIcon(it.icon, 17);
+      return '<a class="adm-work-item is-auto' + (it.tone ? ' tone-' + it.tone : '') + '" href="' + esc(urlForPanel(it.panel)) + '" data-panel="' + it.panel + '"' + (it.mk ? ' data-mp-filter="' + esc(it.mk) + '"' : '') + '>' +
+        '<span class="adm-work-ico">' + ico + '</span>' +
+        '<span class="adm-work-text">' + esc(it.text) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span>' +
+        '<span class="adm-work-go">' + homeIcon('chevron_right', 18) + '</span></a>';
+    }).join('');
+    if (auto.length && (open.length || done.length)) html += '<div class="adm-work-sep" role="separator"></div>';
+    html += open.concat(done).map(function (t) {
+      return '<div class="adm-work-item is-task' + (t.done ? ' is-done' : '') + '" data-todo="' + esc(t.id) + '">' +
+        '<button type="button" class="adm-work-check" aria-pressed="' + (t.done ? 'true' : 'false') + '" aria-label="' + (t.done ? 'Mark not done' : 'Mark done') + '"><span></span></button>' +
+        '<span class="adm-work-text">' + esc(t.title) + '<small>' + esc((t.done ? 'Done' + (t.done_by_name ? ' by ' + t.done_by_name : '') : 'Added' + (t.created_by_name ? ' by ' + t.created_by_name : '')) + ' · ' + relTime(t.done ? t.done_at : t.created_at)) + '</small></span>' +
+        '<button type="button" class="adm-work-del" aria-label="Delete task">' + homeIcon('close', 16) + '</button></div>';
+    }).join('');
+    if (!html) html = '<p class="adm-work-empty">' + (TODOS_LOADED ? 'Nothing needs you today.' : 'Loading…') + '</p>';
+    list.innerHTML = html;
+  }
+  function todoPatch(id, patch) {
+    var t = TODOS.filter(function (x) { return x.id === id; })[0];
+    if (t) Object.assign(t, patch);
+    renderWork();
+  }
+  var workForm = $('admWorkForm');
+  if (workForm) workForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = $('admWorkInput'), title = (input.value || '').trim().slice(0, 300);
+    if (!title || !window.coldSupabase) return;
+    input.value = '';
+    var temp = { id: 'tmp-' + Date.now(), title: title, done: false, created_at: new Date().toISOString(), created_by_name: currentRole().name };
+    TODOS.push(temp); renderWork();
+    window.coldSupabase.from('admin_todos').insert({ title: title, created_by: ADMIN.id, created_by_name: currentRole().name }).select().single().then(function (res) {
+      if (res.error) {
+        TODOS = TODOS.filter(function (x) { return x !== temp; }); renderWork();
+        input.value = title;
+        admToast('Could not add the task: ' + res.error.message, false);
+        return;
+      }
+      Object.assign(temp, res.data); renderWork();
+    });
+  });
+  var workList = $('admWorkList');
+  if (workList) workList.addEventListener('click', function (e) {
+    // Marketplace counts open the Marketplaces panel already filtered to that platform.
+    var mp = e.target.closest('[data-mp-filter]');
+    if (mp) { MP_FILTER = mp.getAttribute('data-mp-filter'); return; }
+    var item = e.target.closest('[data-todo]');
+    if (!item) return;
+    var id = item.getAttribute('data-todo');
+    if (/^tmp-/.test(id)) return;
+    var t = TODOS.filter(function (x) { return x.id === id; })[0];
+    if (!t) return;
+    if (e.target.closest('.adm-work-check')) {
+      var before = { done: t.done, done_at: t.done_at, done_by_name: t.done_by_name };
+      var patch = t.done ? { done: false, done_at: null, done_by_name: null } : { done: true, done_at: new Date().toISOString(), done_by_name: currentRole().name };
+      todoPatch(id, patch);
+      window.coldSupabase.from('admin_todos').update(patch).eq('id', id).then(function (res) {
+        if (res.error) { todoPatch(id, before); admToast('Could not update the task.', false); }
+      });
+    } else if (e.target.closest('.adm-work-del')) {
+      var idx = TODOS.indexOf(t);
+      TODOS.splice(idx, 1); renderWork();
+      window.coldSupabase.from('admin_todos').delete().eq('id', id).then(function (res) {
+        if (res.error) { TODOS.splice(idx, 0, t); renderWork(); admToast('Could not delete the task.', false); }
+      });
+    }
+  });
   // ---- One merged sales feed: website orders + BuiltByBit purchases, newest first.
   function feedEntries(opts) {
     opts = opts || {};
@@ -5631,13 +6138,6 @@
     });
     return items;
   }
-  function mpTodoLines() {
-    var items = mpOpenItems();
-    return MP_TASK_TARGETS.map(function (m) {
-      var n = items.filter(function (i) { return i.mk === m.key; }).length;
-      return n ? { text: n + ' thing' + (n === 1 ? '' : 's') + ' to do on ' + m.label, panel: 'marketplaces', badge: 'warn' } : null;
-    }).filter(Boolean);
-  }
 
   /* Trend chart shared by the Analytics revenue chart. */
   // Trend chart: each line is the real daily figure (faint) with a moving average on top
@@ -6690,6 +7190,7 @@
       PRIZE_CLAIMS_LOADED = true;
       PRIZE_CLAIMS_AT = Date.now();
       updateGwNavCount();
+      if (curPanel === 'home') renderWork();
       if (curPanel === 'giveaways') renderGiveaways();
       if (curPanel === 'giveaway-detail') renderGiveawayDetail();
       if (curPanel === 'home') renderHome();
@@ -9323,6 +9824,13 @@
   // Keeps the Giveaways nav count and the home to-do current while the
   // panel sits open in a tab.
   setInterval(function () { if (!document.hidden) refreshPrizeClaims(); }, 120000);
+  // Dashboard home: marketplace sales outside BuiltByBit, Today's work tasks
+  // (shared between admins, so re-read every minute) and the all-time view count.
+  refreshPlatformSales();
+  refreshTodos();
+  refreshLifetimeViews();
+  setInterval(function () { if (!document.hidden && curPanel === 'home') refreshTodos(); }, 60000);
+  setInterval(function () { if (!document.hidden && curPanel === 'home') { refreshPlatformSales(); refreshLifetimeViews(); refreshAbandoned(); } }, 5 * 60 * 1000);
   refreshEmailConfigStatus();
   refreshAutomations();
   var admAdbloxLoadMoreBtn = $('admAdbloxLoadMore');

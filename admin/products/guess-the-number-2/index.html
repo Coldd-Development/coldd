@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261113-claims" />
+  <link rel="stylesheet" href="/styles.css?v=20261123-home" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -125,25 +125,57 @@
 
         <div class="dash-main">
 
-          <section class="dash-panel" id="adm-panel-home">
-            <div class="dash-head adm-head-row">
-              <div><h1>Dashboard</h1><p>A snapshot of coldd right now.</p></div>
-              <div class="adm-range" role="group" aria-label="Date range" id="admHomeRange">
-                <button type="button" data-range="1">24h</button>
-                <button type="button" data-range="7">7D</button>
-                <button type="button" data-range="30" class="active">30D</button>
-                <button type="button" data-range="0">All</button>
+          <section class="dash-panel adm-home" id="adm-panel-home">
+            <div class="dash-head adm-home-head">
+              <h1>Dashboard</h1>
+              <p id="admHomeDate"></p>
+            </div>
+
+            <div class="adm-hp adm-kpi">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Overview</h2><span id="admKpiNote">Every figure in AU$</span></div>
+                <div class="adm-seg" role="group" aria-label="Time period" id="admHomePeriod">
+                  <button type="button" data-period="1">24h</button>
+                  <button type="button" data-period="7">7d</button>
+                  <button type="button" data-period="30">30d</button>
+                  <button type="button" data-period="0">Lifetime</button>
+                </div>
               </div>
+              <div class="adm-kpi-grid" id="admKpiGrid"></div>
+              <div class="adm-kpi-foot" id="admKpiFoot"></div>
             </div>
-            <div class="dash-stats adm-stats-4" id="admHomeStatsTop"></div>
-            <div class="dash-stats adm-stats-4" id="admHomeStatsSecondary" style="margin-top:14px;"></div>
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>To do</h2></div>
-              <div class="dash-rows" id="admHomeTodo"></div>
+
+            <div class="adm-hp adm-ro">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Recent orders</h2><span>coldd.dev</span></div>
+                <a href="/admin/orders/" class="adm-hp-link" data-panel="orders">All orders</a>
+              </div>
+              <div class="adm-ro-list" id="admHomeRecent"></div>
             </div>
-            <div class="dash-card glass">
-              <div class="dash-card-head"><h2>Recent orders</h2><a href="#" data-panel="orders">View all</a></div>
-              <div class="dash-rows" id="admHomeRecent"></div>
+
+            <div class="adm-home-grid">
+              <div class="adm-hp adm-plat">
+                <div class="adm-hp-head">
+                  <div class="adm-hp-title"><h2>Sales by platform</h2><span>AU$ per month</span></div>
+                  <a href="/admin/analytics/" class="adm-hp-link" data-panel="analytics">Open analytics</a>
+                </div>
+                <p class="adm-plat-summary" id="admPlatSummary"></p>
+                <div class="adm-plat-legend" id="admPlatLegend"></div>
+                <div class="adm-plat-chart" id="admPlatChart"></div>
+                <div class="adm-plat-tablewrap"><table class="adm-plat-table" id="admPlatTable"></table></div>
+                <p class="adm-plat-foot" id="admPlatFoot"></p>
+              </div>
+
+              <aside class="adm-hp adm-work" aria-labelledby="admWorkTitle">
+                <div class="adm-hp-head">
+                  <div class="adm-hp-title"><h2 id="admWorkTitle">Today's work</h2><span id="admWorkCount"></span></div>
+                </div>
+                <form class="adm-work-add" id="admWorkForm" autocomplete="off">
+                  <input type="text" id="admWorkInput" maxlength="300" placeholder="Add a task" aria-label="Add a task" />
+                  <kbd aria-hidden="true">Enter</kbd>
+                </form>
+                <div class="adm-work-list" id="admWorkList"></div>
+              </aside>
             </div>
           </section>
 
@@ -1676,6 +1708,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261114-freeflag" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261114-freeflag"></script>
+  <script src="/catalog-loader.php?v=20261123-home" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261123-home"></script>
 </body>
 </html>
