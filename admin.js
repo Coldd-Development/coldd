@@ -4038,7 +4038,10 @@
     PSALES.forEach(function (x) {
       if (x.status === 'refunded' || x.t < s || x.t >= e) return;
       var rb = x.currency === 'ROBUX';
-      add(x.productId, x.name, x.platform, rb ? 0 : usdToAudAt(x.usd, x.t), rb ? x.amount : 0, x.qty || 1, '');
+      var names = splitOrderNames(x.name, x.qty || 1);
+      if (names.length < 2) { add(x.productId, x.name, x.platform, rb ? 0 : usdToAudAt(x.usd, x.t), rb ? x.amount : 0, x.qty || 1, ''); return; }
+      var sh = nameShares(names);
+      names.forEach(function (nm, j) { add(null, nm, x.platform, rb ? 0 : usdToAudAt(x.usd * sh[j], x.t), rb ? x.amount * sh[j] : 0, 1, ''); });
     });
     var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux); }).slice(0, 8);
     box.innerHTML = list.length ? list.map(function (p, i) {
@@ -6436,14 +6439,16 @@
   function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
   // Finds the coldd.dev product a sale on any platform is for: by id, then by
   // name (exact, then the longest name one contains, then most words shared).
-  var PM = { n: -1, list: [], memo: {} };
+  var PM = { src: null, list: [], memo: {} };
   var PM_STOP = ['the', 'a', 'an', 'and', 'of', 'for', 'with', 'roblox'];
   function pmWords(s) { return String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(function (w) { return w && PM_STOP.indexOf(w) < 0; }); }
   function matchProduct(id, title) {
     if (id) { var byId = findProduct(id); if (byId) return byId; }
     var t = bbbNorm(title); if (!t) return null;
     var prods = allProducts();
-    if (PM.n !== prods.length) PM = { n: prods.length, memo: {}, list: prods.map(function (p) { return { p: p, n: bbbNorm(p.title), w: pmWords(p.title) }; }) };
+    // A fresh product list (every refreshProducts) resets the cache, so a product
+    // added or renamed in the database is matched on the next render.
+    if (PM.src !== prods) PM = { src: prods, memo: {}, list: prods.map(function (p) { return { p: p, n: bbbNorm(p.title), w: pmWords(p.title) }; }) };
     if (Object.prototype.hasOwnProperty.call(PM.memo, t)) return PM.memo[t];
     var hit = null, best = 0, tw = pmWords(title);
     PM.list.forEach(function (x) { if (!hit && x.n === t) hit = x.p; });
@@ -7140,17 +7145,95 @@
     if (p && p.image) return window.imgUrl(p.image);
     return bbbCoverFor(title) || '';
   }
+  // Multi-product orders become one row per product. ClearlyDev and Payhip
+  // only give the order total with the product names comma-joined, and some
+  // names hold a comma of their own ("Gold Coast Airport, Australia"), so the
+  // names are split back into exactly as many products as the order holds,
+  // preferring names we know. The total is shared by each product's price in
+  // our product database, else what it sells for on its own there, else evenly.
+  var ORDER_NAMES = null;
+  function orderNameIndex() {
+    var prods = allProducts(), res = BBB.resources || [];
+    if (ORDER_NAMES && ORDER_NAMES.a === PSALES && ORDER_NAMES.b === BBB.resources && ORDER_NAMES.c === prods) return ORDER_NAMES;
+    var known = {}, single = {}, price = {};
+    prods.forEach(function (p) { known[bbbNorm(p.title)] = true; });
+    res.forEach(function (r) { known[bbbNorm(r.title)] = true; });
+    PSALES.forEach(function (s) {
+      if ((s.qty || 1) !== 1 || !s.name) return;
+      var k = bbbNorm(s.name); known[k] = true;
+      if (s.currency !== 'ROBUX' && s.usd > 0 && s.status !== 'refunded') (single[k] = single[k] || []).push(s.usd);
+    });
+    Object.keys(single).forEach(function (k) { var a = single[k].sort(function (x, y) { return x - y; }); price[k] = a[a.length >> 1]; });
+    return (ORDER_NAMES = { a: PSALES, b: BBB.resources, c: prods, known: known, price: price });
+  }
+  function splitOrderNames(name, qty) {
+    var parts = String(name || '').split(', ').filter(Boolean), k = parts.length;
+    if (!(qty > 1) || k <= 1) return [name];
+    if (qty >= k) return parts;
+    var known = orderNameIndex().known, best = [], from = [], i, g, j;
+    function isKnown(a, b) { return known[bbbNorm(parts.slice(a, b).join(', '))] ? 1 : 0; }
+    for (i = 0; i <= k; i++) { best.push([]); from.push([]); }
+    best[0][0] = 0;
+    // best[i][g]: the most known names when the first i parts make g products.
+    for (i = 1; i <= k; i++) for (g = 1; g <= Math.min(i, qty); g++) for (j = g - 1; j < i; j++) {
+      if (best[j][g - 1] == null) continue;
+      var v = best[j][g - 1] + isKnown(j, i);
+      if (best[i][g] == null || v > best[i][g]) { best[i][g] = v; from[i][g] = j; }
+    }
+    var out = [], at = k;
+    for (g = qty; g > 0; g--) { var st = from[at][g]; out.unshift(parts.slice(st, at).join(', ')); at = st; }
+    return out;
+  }
+  // Each product's share of an order total, from its usual price.
+  function orderShares(prices) {
+    var known = prices.filter(function (x) { return x > 0; });
+    var avg = known.length ? known.reduce(function (a, b) { return a + b; }, 0) / known.length : 1;
+    var w = prices.map(function (x) { return x > 0 ? x : avg; });
+    var sum = w.reduce(function (a, b) { return a + b; }, 0) || 1;
+    return w.map(function (x) { return x / sum; });
+  }
+  function nameShares(names) {
+    var price = orderNameIndex().price;
+    return orderShares(names.map(function (nm) {
+      var p = matchProduct(null, nm);
+      if (p && p.priceNum > 0) return p.priceNum;
+      return price[bbbNorm(nm)] || 0;
+    }));
+  }
+  // One order ID per sale, whatever the platform calls it: BuiltByBit's TBX
+  // transaction, ClearlyDev's and Payhip's own order number, ours on coldd.dev.
+  // Creator Store (and hand-entered Parcel sales) have none, so they get a
+  // short one of ours, made from the sale's stored key so it never changes.
+  function ownOrderId(prefix, key) {
+    key = String(key || '');
+    function h(seed) { var x = seed >>> 0; for (var i = 0; i < key.length; i++) { x ^= key.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; } return x; }
+    return prefix + ('00000' + h(2166136261).toString(36)).slice(-5).toUpperCase() + ('0000' + h(0x9747b28c).toString(36)).slice(-4).toUpperCase();
+  }
+  function saleOrderId(kind, src) {
+    if (kind === 'site') return src.id;
+    if (kind === 'bbb') return src.external_tid || ('BBB-' + src.purchase_id);
+    if (src.platform === 'creatorstore') return ownOrderId('CS-', src.ext || src.id);
+    if (src.platform === 'parcel' && /^manual-/.test(String(src.ext || ''))) return ownOrderId('PC-', src.ext);
+    return String(src.ext || src.id);
+  }
   function allOrderRows() {
     var out = [];
     ORDERS.forEach(function (o) {
       if (o.status === 'failed') return;
-      var robux = o.currency === 'robux';
-      out.push({
-        kind: 'site', pf: 'site', t: Date.parse(o.date), id: o.id, title: o.title, buyer: o.userName,
-        search: [o.userEmail, robux ? 'Robux' : paymentMethodLabel(o), o.couponCode].join(' '),
-        status: o.source === 'granted' ? 'gifted' : o.status, test: o.isTest, gift: !!o.purchasedByUserId,
-        amount: robux ? robuxRaw(o.totalRobux) : fmtA(usdToAudAt(o.total, Date.parse(o.paidAt || o.date))),
-        thumb: orderThumb(o.image ? window.imgUrl(o.image) : '', o.productId, o.title), src: o
+      var robux = o.currency === 'robux', pt = Date.parse(o.paidAt || o.date);
+      var items = o.items && o.items.length > 1 ? o.items : [{ slug: o.productId, title: o.title, whole: true }];
+      var shares = items.length > 1 ? orderShares(items.map(function (it) { var p = findProduct(it.slug); return p && p.priceNum > 0 ? p.priceNum : 0; })) : [1];
+      items.forEach(function (it, j) {
+        var usd = robux ? null : (Number(o.total) || 0) * shares[j];
+        var p = it.whole ? null : findProduct(it.slug);
+        out.push({
+          kind: 'site', pf: 'site', t: Date.parse(o.date), id: o.id, title: it.title || o.title, buyer: o.userName,
+          search: [o.userEmail, robux ? 'Robux' : paymentMethodLabel(o), o.couponCode].join(' '),
+          status: o.source === 'granted' ? 'gifted' : o.status, test: o.isTest, gift: !!o.purchasedByUserId,
+          amount: robux ? robuxRaw((Number(o.totalRobux) || 0) * shares[j]) : fmtA(usdToAudAt(usd, pt)), usd: usd,
+          thumb: it.whole ? orderThumb(o.image ? window.imgUrl(o.image) : '', o.productId, o.title) : orderThumb(p && p.image ? window.imgUrl(p.image) : '', it.slug, it.title),
+          slug: it.slug, src: o
+        });
       });
     });
     if (BBB.configured) {
@@ -7159,34 +7242,47 @@
       BBB.purchases.forEach(function (p) {
         var usdP = bbbIsUsd(p), title = titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id);
         out.push({
-          kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: 'BBB-' + p.purchase_id, title: title, buyer: p.buyer_name || '',
-          search: bbbMethodName(p.gateway) + ' ' + (p.external_tid || ''),
+          kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: saleOrderId('bbb', p), title: title, buyer: p.buyer_name || '',
+          search: bbbMethodName(p.gateway) + ' ' + p.purchase_id,
           status: 'completed', amount: usdP ? fmtA(usdToAudAt(p.price, Date.parse(p.purchased_at))) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
+          usd: usdP ? p.price : null,
           thumb: orderThumb(covers[String(p.resource_id)] || '', null, title), src: p
         });
       });
     }
     PSALES.forEach(function (s) {
       var robux = s.currency === 'ROBUX';
-      out.push({
-        kind: 'ps', pf: s.platform, t: s.t, id: s.ext || s.id, title: s.name || 'Order', buyer: s.buyer || '', search: '',
-        status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
-        amount: robux ? robuxRaw(s.amount) : fmtA(usdToAudAt(s.usd, s.t)),
-        thumb: orderThumb('', s.productId, s.name), src: s
+      var names = splitOrderNames(s.name || 'Order', s.qty || 1);
+      var shares = names.length > 1 ? nameShares(names) : [1];
+      names.forEach(function (nm, j) {
+        var usd = robux ? null : s.usd * shares[j];
+        out.push({
+          kind: 'ps', pf: s.platform, t: s.t, id: saleOrderId('ps', s), title: nm, buyer: s.buyer || '', search: names.length > 1 ? s.name : '',
+          status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
+          amount: robux ? robuxRaw(s.amount * shares[j]) : fmtA(usdToAudAt(usd, s.t)), usd: usd,
+          thumb: orderThumb('', names.length > 1 ? null : s.productId, nm), src: s
+        });
       });
     });
     out.sort(function (a, b) { return b.t - a.t; });
     return out;
   }
   var ORDER_STATUS_LABEL = { completed: ['Completed', 'ok'], pending: ['Pending', 'warn'], refunded: ['Refunded', 'err'], revoked: ['Revoked', 'err'], gifted: ['Gifted', 'info'] };
+  // Under the A$: the US$ the buyer paid, and a refunded/revoked/gifted note.
+  function orderAmtSub(r, flag) {
+    var bits = [];
+    if (r.usd != null && isFinite(r.usd)) bits.push('US$' + r.usd.toFixed(2));
+    if (flag) bits.push(flag);
+    return bits.length ? '<small>' + bits.join(' · ') + '</small>' : '';
+  }
   // Where a product name goes: the coldd.dev product editor when the order
   // matches one of our products, else the listing on the platform it sold on.
   function orderProdLink(r, bbbUrls) {
     var src = r.src || {};
-    var p = matchProduct(r.kind === 'bbb' ? null : src.productId, r.title);
+    var p = matchProduct(r.slug || (r.kind === 'site' || (r.kind === 'ps' && r.title === src.name) ? src.productId : null), r.title);
     if (p && p.slug) return { href: '/admin/products/' + encodeURIComponent(p.slug) + '/', pid: p.id };
     if (r.kind === 'bbb' && bbbUrls[String(src.resource_id)]) return { href: bbbUrls[String(src.resource_id)] };
-    if (r.pf === 'creatorstore' && /^\d+$/.test(String(src.productId || ''))) return { href: 'https://create.roblox.com/store/asset/' + src.productId };
+    if (r.pf === 'creatorstore' && r.title === src.name && /^\d+$/.test(String(src.productId || ''))) return { href: 'https://create.roblox.com/store/asset/' + src.productId };
     return null;
   }
   document.addEventListener('click', function (e) {
@@ -7242,7 +7338,7 @@
         '<span class="adm-or-pf" style="--pf:' + pfVar(r.pf) + '">' + pfMark(r.pf) + '<span>' + esc(label) + '</span></span>' +
         '<span class="adm-or-buyer">' + (r.buyer ? esc(r.buyer) : '<span class="adm-sub">–</span>') + '</span>' +
         '<span class="adm-or-date"><span>' + esc(fmtDate(d)) + '</span><small>' + esc(d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })) + '</small></span>' +
-        '<span class="adm-or-amt">' + r.amount + (flag ? '<small>' + flag + '</small>' : '') + '</span>' +
+        '<span class="adm-or-amt">' + r.amount + orderAmtSub(r, flag) + '</span>' +
         '<span class="adm-or-act"><button type="button" class="adm-or-info" aria-label="Order info" title="Order info">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></span>' +
       '</div>';
@@ -7277,7 +7373,13 @@
   // The Orders page keeps itself current: website orders and marketplace sales
   // every 30 seconds, BuiltByBit (synced on the server every 15 minutes) every 2 minutes.
   setInterval(function () { if (!document.hidden && curPanel === 'orders') { refreshOrders(); refreshPlatformSales(); } }, 30000);
-  setInterval(function () { if (!document.hidden && curPanel === 'orders') refreshBbbData(); }, 120000);
+  setInterval(function () { if (!document.hidden && (curPanel === 'orders' || curPanel === 'analytics')) refreshBbbData(); }, 120000);
+  // Analytics keeps itself current the same way, every minute.
+  setInterval(function () { if (!document.hidden && curPanel === 'analytics') { refreshOrders(); refreshPlatformSales(); } }, 60000);
+  // Products are still being added: every 5 minutes the pages that match sales
+  // to products (pictures, links, prices, categories) reload the product list,
+  // so a new match shows up without a page refresh.
+  setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'orders' || curPanel === 'analytics')) refreshProducts(); }, 5 * 60 * 1000);
 
   // ---- Order info popup: everything we know about one order ----
   var OI_EL = null, OI_RETURN = null;
@@ -7311,12 +7413,12 @@
     }
     var label = (HOME_PLATFORMS.filter(function (p) { return p.key === r.pf; })[0] || {}).label || r.pf;
     var st = ORDER_STATUS_LABEL[r.status] || [r.status, 'mute'];
-    var rows = oiRow('Platform', pfMark(r.pf) + esc(label)) + oiRow('Status', '<span class="dt-badge ' + st[1] + '">' + esc(st[0]) + '</span>');
+    var rows = oiRow('Order ID', oiMono(r.id)) + oiRow('Platform', pfMark(r.pf) + esc(label)) +
+      oiRow('Status', r.status !== 'completed' ? '<span class="dt-badge ' + st[1] + '">' + esc(st[0]) + '</span>' : '');
     var actions = '', t = r.t;
     if (r.kind === 'site') {
       var o = r.src;
-      rows += oiRow('Order', oiMono(o.id)) +
-        oiRow('Buyer', esc(o.userName) + (o.userEmail ? ' <span class="adm-sub">' + esc(o.userEmail) + '</span>' : '')) +
+      rows += oiRow('Buyer', esc(o.userName) + (o.userEmail ? ' <span class="adm-sub">' + esc(o.userEmail) + '</span>' : '')) +
         oiRow('Gift', o.purchasedByUserId ? 'Bought for a different account' : '') +
         oiRow('Products', (o.items || []).map(function (it) { return esc(it.title) + (it.licence && it.licence !== 'standard' ? ' <span class="adm-sub">' + esc(it.licence) + ' licence</span>' : ''); }).join('<br>')) +
         oiRow('Add-ons', (o.addons || []).map(function (a) { return esc(a.title); }).join('<br>')) +
@@ -7329,7 +7431,7 @@
         oiRow('Stripe payment', oiMono(o.stripePaymentIntentId)) +
         oiRow('PayPal order', oiMono(o.paypalOrderId)) + oiRow('PayPal capture', oiMono(o.paypalCaptureId)) +
         oiRow('Crypto charge', oiMono(o.cryptoChargeId || o.cryptoPaymentId)) +
-        oiRow('Transaction', oiMono(o.externalTransactionId)) +
+        oiRow('Payment transaction', oiMono(o.externalTransactionId)) +
         oiRow('Roblox gamepass', oiMono(o.robloxGamepassId)) + oiRow('Roblox buyer', oiMono(o.robloxBuyerId)) +
         oiRow('Refund reason', o.refundReason ? esc(o.refundReason) : '') +
         oiRow('Test order', o.isTest ? 'Yes, not a real sale' : '');
@@ -7338,8 +7440,7 @@
       if (!o.isTest && o.status === 'completed' && can('support')) actions += '<button type="button" class="btn btn-ghost adm-btn-sm" data-oi-action="refund">Refund</button><button type="button" class="btn btn-ghost adm-btn-sm is-danger" data-oi-action="revoke">Revoke licence</button>';
     } else if (r.kind === 'bbb') {
       var p = r.src, res = (BBB.resources || []).filter(function (x) { return String(x.resource_id) === String(p.resource_id); })[0];
-      rows += oiRow('Purchase', oiMono(String(p.purchase_id))) +
-        oiRow('Listing', res && res.url ? '<a href="' + esc(res.url) + '" target="_blank" rel="noopener">' + esc(r.title) + '</a>' : esc(r.title)) +
+      rows += oiRow('Listing', res && res.url ? '<a href="' + esc(res.url) + '" target="_blank" rel="noopener">' + esc(r.title) + '</a>' : esc(r.title)) +
         oiRow('Buyer', p.buyer_name ? (p.buyer_id ? '<a href="https://builtbybit.com/members/' + encodeURIComponent(p.buyer_id) + '/" target="_blank" rel="noopener">' + esc(p.buyer_name) + '</a>' : esc(p.buyer_name)) : '<span class="adm-sub">Not synced yet</span>') +
         oiRow('Bought', esc(fmtDateTime(new Date(p.purchased_at)))) +
         oiRow('Payment', esc(bbbMethodName(p.gateway))) +
@@ -7347,12 +7448,10 @@
         oiRow('List price', p.list_price && p.list_price > p.price ? oiUsd(p.list_price) + ' <span class="adm-sub">sold at a discount</span>' : '') +
         oiRow('BuiltByBit fee', p.fee ? oiUsd(p.fee) : '') +
         oiRow('Bundle', p.bundle_id ? oiMono(String(p.bundle_id)) : '') +
-        oiRow('Sale event', p.sale_event_id ? oiMono(String(p.sale_event_id)) : '') +
-        oiRow('Transaction', oiMono(p.external_tid));
+        oiRow('Sale event', p.sale_event_id ? oiMono(String(p.sale_event_id)) : '');
     } else {
       var s = r.src, rb = s.currency === 'ROBUX';
-      rows += oiRow('Reference', oiMono(s.ext || s.id)) +
-        oiRow('Product', esc(s.name || '')) +
+      rows += oiRow(s.qty > 1 ? 'Products' : 'Product', esc(s.name || '')) +
         oiRow('Buyer', s.buyer ? esc(s.buyer) : '') +
         oiRow('Quantity', s.qty > 1 ? num(s.qty) : '') +
         oiRow('Sold', esc(fmtDateTime(new Date(s.t)))) +
