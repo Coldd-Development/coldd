@@ -1791,8 +1791,15 @@
   // public.platform_sales: ClearlyDev / Parcel / Creator Store / Payhip sales,
   // written by platform-sales-ingest (userscript, bots, email) or by hand.
   var PSALES = [], PSALES_LOADED = false;
+  var PSYNC = {}; // platform_sync_state rows by platform (background syncs, e.g. creator-store-sync)
   function refreshPlatformSales() {
     if (!window.coldSupabase) return Promise.resolve();
+    window.coldSupabase.from('platform_sync_state').select('*').then(function (r) {
+      if (r.error) return;
+      PSYNC = {};
+      (r.data || []).forEach(function (row) { PSYNC[row.platform] = row; });
+      if (curPanel === 'home') renderWork();
+    });
     return fetchAllRows(function () {
       return window.coldSupabase.from('platform_sales').select('id, platform, sold_at, product_name, currency, amount, amount_usd, net_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
@@ -2112,6 +2119,9 @@
     if (ROBLOX_CONTAINERS.length && ROBLOX_CONTAINERS.every(function (c) { return !c.active || c.gamepass_count >= 50; })) {
       items.push({ tone: 'err', icon: 'error', text: 'All Roblox container games are full', sub: 'Add one before creating more Robux products', panel: 'sitemgmt' });
     }
+    var cs = PSYNC.creatorstore;
+    if (cs && cs.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: 'Creator Store sync cookie expired', sub: 'Sign in to Roblox in an incognito window and replace ROBLOX_CREATOR_COOKIE in Supabase secrets' });
+    else if (cs && /not set/.test(cs.last_error || '')) items.push({ icon: 'error', text: 'Creator Store background sync is off', sub: 'Add ROBLOX_CREATOR_COOKIE in Supabase secrets to turn it on' });
     var claims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
     if (claims) items.push({ icon: 'redeem', text: plural(claims, 'prize claim') + ' to check', sub: 'Giveaways', panel: 'giveaways' });
     var payouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
@@ -2134,6 +2144,7 @@
     if (count) count.textContent = (auto.length + open.length) ? (auto.length + open.length) + ' open' : '';
     var html = auto.map(function (it) {
       var ico = it.mk ? (it.mk === 'site' ? mpLogo('site') : '<img src="/mp-logos/' + esc(it.mk) + '.png" alt="" width="18" height="18" loading="lazy" />') : homeIcon(it.icon, 17);
+      if (!it.panel) return '<div class="adm-work-item is-auto' + (it.tone ? ' tone-' + it.tone : '') + '"><span class="adm-work-ico">' + ico + '</span><span class="adm-work-text">' + esc(it.text) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span></div>';
       return '<a class="adm-work-item is-auto' + (it.tone ? ' tone-' + it.tone : '') + '" href="' + esc(urlForPanel(it.panel)) + '" data-panel="' + it.panel + '"' + (it.mk ? ' data-mp-filter="' + esc(it.mk) + '"' : '') + '>' +
         '<span class="adm-work-ico">' + ico + '</span>' +
         '<span class="adm-work-text">' + esc(it.text) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span>' +

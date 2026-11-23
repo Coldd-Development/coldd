@@ -269,3 +269,6 @@ verify_jwt = true
 
 [functions.platform-sales-ingest]
 verify_jwt = false
+
+[functions.creator-store-sync]
+verify_jwt = false
