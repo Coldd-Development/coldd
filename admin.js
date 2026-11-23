@@ -10016,11 +10016,34 @@
   function renderCoupons() {
     var cs = couponStats();
     $('admCouponsBody').innerHTML = COUPONS.map(function (c) {
-      var stat = cs.filter(function (x) { return x.code === c.code; })[0] || { uses: 0, discountGiven: null };
-      return '<tr data-code="' + esc(c.code) + '"><td class="dt-mono">' + esc(c.code) + '</td><td>' + (c.type === 'pct' ? c.val + '%' : usd(c.val)) + '</td><td>' + esc(scopeLabel(c)) + '</td><td>' + (c.expiresAt ? esc(c.expiresAt) : '–') + '</td><td>' + stat.uses + (c.limit ? ' / ' + c.limit : '') + '</td><td>' + (stat.discountGiven == null ? '–' : usd(stat.discountGiven)) + '</td>' +
+      var stat = cs.filter(function (x) { return x.code === c.code; })[0] || { uses: 0, discountGiven: null, revenue: null };
+      return '<tr data-code="' + esc(c.code) + '"><td class="dt-mono">' + esc(c.code) + '</td><td>' + (c.type === 'pct' ? c.val + '%' : 'US$' + Number(c.val).toFixed(2)) + '</td><td>' + esc(scopeLabel(c)) + '</td><td>' + (c.expiresAt ? esc(c.expiresAt) : '–') + '</td><td>' + stat.uses + (c.limit ? ' / ' + c.limit : '') + '</td>' +
+        '<td>' + (stat.discountGiven == null ? '–' : fmtA(usdToAud(stat.discountGiven))) + '</td><td>' + (stat.revenue == null ? '–' : fmtA(usdToAud(stat.revenue))) + '</td>' +
         '<td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge err">Inactive</span>') + '</td>' +
         '<td class="adm-row-actions">' + (can('admin') ? '<button class="btn btn-ghost adm-btn-sm adm-coupon-edit" type="button">Edit</button><button class="btn btn-ghost adm-btn-sm adm-coupon-toggle" type="button">' + (c.active ? 'Deactivate' : 'Activate') + '</button><button class="btn btn-ghost adm-btn-sm adm-coupon-del" type="button">Delete</button>' : '') + '</td></tr>';
-    }).join('') || '<tr><td colspan="8" class="adm-empty">No discount codes yet.</td></tr>';
+    }).join('') || '<tr><td colspan="9" class="adm-empty">No discount codes yet.</td></tr>';
+    renderSdKpis();
+  }
+  // Sales & Discounts overview: what is discounting right now, and what the codes gave away in 30 days.
+  function renderSdKpis() {
+    var grid = $('admSdKpis'); if (!grid) return;
+    var live = SALE_EVENTS.filter(function (ev) { return eventStatus(ev) === 'live'; });
+    var soon = SALE_EVENTS.filter(function (ev) { return eventStatus(ev) === 'scheduled'; });
+    var codes = COUPONS.filter(function (c) { return c.active && !/^WELCOME-/i.test(c.code); });
+    var welcome = COUPONS.filter(function (c) { return /^WELCOME-/i.test(c.code); }).length;
+    var since = Date.now() - 30 * DAY_MS, disc = 0, n = 0, after = 0;
+    ORDERS.forEach(function (o) {
+      if (o.isTest || o.status !== 'completed' || !(o.discount > 0)) return;
+      var t = Date.parse(o.paidAt || o.date); if (t < since) return;
+      disc += usdToAudAt(o.discount, t); after += usdToAudAt(o.total, t); n++;
+    });
+    var deals = allProducts().filter(function (p) { return p.weeklyDeal; }).length;
+    grid.innerHTML = [
+      kpiCell({ label: 'Sale events', value: num(live.length), count: 'live', delta: '', sub: live.length ? esc(live[0].title) + ', ' + live[0].percentOff + '% off' : soon.length ? plural(soon.length, 'scheduled') : 'None running' }),
+      kpiCell({ label: 'Discount codes', value: num(codes.length), count: 'active', delta: '', sub: welcome ? plural(welcome, 'welcome code') + ' issued' : '' }),
+      kpiCell({ label: 'Discount given, 30 days', value: fmtA(disc), delta: '', sub: n ? 'On ' + plural(n, 'order') + ' worth ' + fmtA(after) : 'No discounted orders' }),
+      kpiCell({ label: 'Weekly deals', value: num(deals), count: 'live', delta: '', sub: 'Picked every Monday' })
+    ].join('');
   }
   function resetCouponForm() {
     $('admCouponEditId').value = '';

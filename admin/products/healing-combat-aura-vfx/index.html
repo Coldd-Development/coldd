@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261124m" />
+  <link rel="stylesheet" href="/styles.css?v=20261124n" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -1066,10 +1066,16 @@
             </div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-sales" hidden>
-            <div class="dash-head"><h1>Sales &amp; discounts</h1><p>Run sitewide sale events or create discount codes.</p></div>
+          <section class="dash-panel adm-sd" id="adm-panel-sales" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Sales &amp; Discounts</h1>
+            </div>
 
-            <div class="adm-tabs" id="admSalesTypeToggle" style="margin-bottom:22px;">
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admSdKpis"></div>
+            </div>
+
+            <div class="adm-seg adm-sd-tabs" id="admSalesTypeToggle" role="group" aria-label="Section">
               <button type="button" class="adm-tab adm-sales-type-btn active" data-type="events">Sale Events</button>
               <button type="button" class="adm-tab adm-sales-type-btn" data-type="codes">Discount Codes</button>
               <button type="button" class="adm-tab adm-sales-type-btn" data-type="bundles">Bundle Deals</button>
@@ -1077,13 +1083,13 @@
             </div>
 
             <div id="admSalesEventsView">
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table">
                   <thead><tr><th>Title</th><th>Discount</th><th>Scope</th><th>Dates</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admEventsBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2 id="admEventFormTitle">Create sale event</h2></div>
                 <form class="adm-form" id="admEventForm" style="flex-wrap:wrap;">
                   <input type="hidden" id="admEventEditId" />
@@ -1107,13 +1113,13 @@
             </div>
 
             <div id="admDiscountCodesView" hidden>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table">
-                  <thead><tr><th>Code</th><th>Discount</th><th>Scope</th><th>Expires</th><th>Uses</th><th>Discount given</th><th>Status</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Code</th><th>Discount</th><th>Scope</th><th>Expires</th><th>Uses</th><th>Discount given</th><th>Sales with code</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admCouponsBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2 id="admCouponFormTitle">Create discount code</h2></div>
                 <form class="adm-form" id="admAddCouponForm" style="flex-wrap:wrap;">
                   <input type="hidden" id="admCouponEditId" />
@@ -1144,7 +1150,7 @@
             </div>
 
             <div id="admBundleDealsView" hidden>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <div class="dash-card-head adm-head-actions">
                   <div><h2>Bundles</h2><span class="adm-sub">Products sold together at a discount. The discount applies on its own once every product in the bundle is in the cart, and never takes a product below its price limits.</span></div>
                   <button class="btn btn-primary adm-btn-sm" type="button" id="admBundleNew">New bundle</button>
@@ -1155,7 +1161,7 @@
                 </table>
               </div>
 
-              <div class="dash-card glass" id="admBundleEditor" hidden>
+              <div class="adm-hp adm-sd-card" id="admBundleEditor" hidden>
                 <div class="dash-card-head"><h2 id="admBundleFormTitle">New bundle</h2></div>
                 <form id="admBundleForm" novalidate>
                   <input type="hidden" id="admBundleToken" />
@@ -1199,7 +1205,7 @@
                 </form>
               </div>
 
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head adm-head-actions">
                   <div><h2>Suggested bundles</h2><span class="adm-sub">Matched from each product's genre and keywords, most relevant first. A set that can't be discounted without breaking a product's price limits is never suggested.</span></div>
                   <button class="btn btn-ghost adm-btn-sm" type="button" id="admBundleSuggestRefresh">Refresh</button>
@@ -1207,7 +1213,7 @@
                 <div class="adm-sugg-list" id="admBundleSuggestions"><p class="adm-hint">Open this tab to load suggestions.</p></div>
               </div>
 
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <div class="dash-card-head"><h2>Auto-minted bundle deals</h2><span class="adm-sub">Created by the post-purchase "Build more for less" upsell and the wishlist reminder email, not by hand.</span></div>
                 <table class="dash-table">
                   <thead><tr><th>Products</th><th>Item / Bundle</th><th>Source</th><th>Minted</th><th>Expires</th></tr></thead>
@@ -1217,7 +1223,7 @@
             </div>
 
             <div id="admHomepageView" hidden>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <div class="dash-card-head"><h2>Featured products</h2><span class="adm-sub">Shown on the homepage's "Featured products" section, in this order.</span></div>
                 <table class="dash-table">
                   <thead><tr><th>Order</th><th>Title</th><th>Price</th><th></th></tr></thead>
@@ -1236,7 +1242,7 @@
                 </form>
                 <div class="adm-edit-msg" id="admFeaturedMsg"></div>
               </div>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <div class="dash-card-head"><h2>Homepage bundles</h2><span class="adm-sub">Shown on the homepage's "Bundle &amp; save" section, in this order (the first 4).</span></div>
                 <table class="dash-table">
                   <thead><tr><th>Order</th><th>Bundle</th><th>Price</th><th></th></tr></thead>
@@ -1255,7 +1261,7 @@
                 </form>
                 <div class="adm-edit-msg" id="admHomeBundlesMsg"></div>
               </div>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <div class="adm-wd-head">
                   <div class="adm-wd-title"><h2>This week's deals</h2><p class="adm-sub">Picked automatically every Monday by a revenue-maximizing algorithm. Never above <span id="admWeeklyMaxPctLabel">40</span>% off and never below a product's minimum sale price. See "How this works" below.</p></div>
                   <div class="adm-wd-actions">
@@ -1274,14 +1280,14 @@
                   <tbody id="admWeeklyDealsBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass dash-tablewrap" id="admWeeklyExcludedCard" hidden>
+              <div class="adm-hp adm-sd-card dash-tablewrap" id="admWeeklyExcludedCard" hidden>
                 <div class="dash-card-head"><h2>Excluded from weekly deals</h2></div>
                 <table class="dash-table">
                   <thead><tr><th>Title</th><th>Price</th><th></th></tr></thead>
                   <tbody id="admWeeklyExcludedBody"></tbody>
                 </table>
               </div>
-              <details class="adm-collapse" style="margin-top:20px;">
+              <details class="adm-collapse adm-hp adm-sd-card">
                 <summary class="dash-card-head"><h2>How this works</h2><svg class="adm-collapse-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
                 <div class="adm-collapse-body">
                   <p class="adm-note"><strong>Which products.</strong> Every Monday at 00:00 UTC each eligible product gets a demand score blended from real signals: BuiltByBit sales of the same listing and of similar listings (recent sales count more), product page views on this site over the last 14 days, and paid units on this site over the last 30 days. The weights re-balance over whichever signals have data, so site sales take over as they build up. The runaway best seller is held back (it sells without help), anything discounted in the last two weeks is rotated out, and no more than two products come from one category. Products marked "Disallow from all sales" or excluded below are skipped.</p>
@@ -1748,6 +1754,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261124m" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124m"></script>
+  <script src="/catalog-loader.php?v=20261124n" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124n"></script>
 </body>
 </html>

@@ -6131,6 +6131,26 @@ html[data-theme="light"] .adm-mp-cov-bar .is-none, html[data-theme="light"] .adm
 @media (max-width: 1100px) { .adm-mps-grid { grid-template-columns: minmax(0, 1fr); } .adm-kpi-grid.is-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .adm-kpi-grid.is-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* Admin Sales & Discounts (2026-11-24) ---------------------------------------
+   Overview, tabs as a segmented control, every card as a dashboard panel. */
+.adm-sd:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-sd .dash-head.adm-home-head { margin-bottom: 2px; }
+.adm-sd-tabs { align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.adm-sd-tabs button { flex: 0 0 auto; white-space: nowrap; }
+#admSalesEventsView:not([hidden]), #admDiscountCodesView:not([hidden]), #admBundleDealsView:not([hidden]), #admHomepageView:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-sd .adm-sd-card { margin: 0; }
+.adm-sd .adm-sd-card[hidden] { display: none; }
+.adm-sd .adm-sd-card > .dash-card-head, .adm-sd .adm-sd-card > summary.dash-card-head, .adm-sd .adm-wd-head { margin-bottom: 14px; }
+.adm-sd .adm-sd-card .dash-card-head h2, .adm-sd .adm-wd-title h2 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.adm-sd .adm-sd-card .dash-card-head .adm-sub, .adm-sd .adm-wd-title .adm-sub { font-size: 12px; line-height: 1.5; color: var(--fg-3); }
+.adm-sd .dash-table { font-size: 13px; }
+.adm-sd .dash-table th { padding: 0 12px 8px 0; font-size: 12px; text-transform: none; letter-spacing: 0; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+.adm-sd .dash-table td { padding: 10px 12px 10px 0; color: var(--fg-1); vertical-align: middle; }
+.adm-sd .dash-table tbody tr:first-child td { border-top: 0; }
+.adm-sd .dash-table td:first-child { color: var(--fg); font-weight: 600; }
+.adm-sd details.adm-sd-card > summary { margin-bottom: 0; }
+.adm-sd details.adm-sd-card[open] > summary { margin-bottom: 12px; }
+
 /* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
    was 20px narrower, so every column drifted right), one-line product names,
    date over time, the ⋮ info button, and the order info popup. */
