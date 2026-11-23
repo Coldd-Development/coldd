@@ -1905,8 +1905,7 @@
     var owedAud = usdToAud(owed.usdTotal) + robuxToAud(owed.robuxTotal);
     foot.innerHTML =
       '<span><i class="adm-live-dot' + (LIVE_SESSIONS ? ' is-on' : '') + '"></i><b>' + num(LIVE_SESSIONS) + '</b> on the site right now</span>' +
-      '<span>Referrals owed <b>' + fmtA(owedAud) + '</b>' + (owed.count ? ' across ' + plural(owed.count, 'request') : '') + '</span>' +
-      '<span>US$1 = <b>A$' + AUD_RATE.toFixed(2) + '</b></span>';
+      '<span>Referrals owed <b>' + fmtA(owedAud) + '</b>' + (owed.count ? ' across ' + plural(owed.count, 'request') : '') + '</span>';
   }
 
   /* ---- Recent orders (website only) ---- */
