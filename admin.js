@@ -716,7 +716,7 @@
     var t = e.target && e.target.closest ? e.target.closest('#admTopPagesMore, #admAbandonedMore') : null;
     if (!t) return;
     if (t.id === 'admTopPagesMore') TOP_PAGES_OPEN = !TOP_PAGES_OPEN; else ABANDONED_OPEN = !ABANDONED_OPEN;
-    renderAnalytics();
+    if (curPanel === 'marketing') renderMarketing(); else renderAnalytics();
   });
   var TRAFFIC_VISITORS = null; // { total, returning, rate } over the 120d pull
   var TRAFFIC_ROWS = [];    // [{ s: session_id, p: path, d: created_at }] - for the range-aware funnel
@@ -2959,11 +2959,11 @@
       var rate = c.conversionRate == null ? '–' : (c.conversionRate * 100).toFixed(1) + '%';
       return '<tr data-id="' + esc(c.id) + '" data-code="' + esc(c.code) + '">' +
         '<td><strong>' + esc(c.label) + '</strong><div class="adm-sub adm-campaign-url">' + esc(campaignUrl(c)) + '</div></td>' +
-        '<td>' + c.clicks.toLocaleString('en-US') + '</td>' +
-        '<td>' + c.conversions.toLocaleString('en-US') + '</td>' +
-        '<td>' + rate + '</td>' +
-        '<td>' + usd(c.revenue) + '</td>' +
-        '<td>' + (c.active ? statusBadge('completed') : statusBadge('refunded')) + '</td>' +
+        '<td class="is-num">' + num(c.clicks) + '</td>' +
+        '<td class="is-num">' + num(c.conversions) + '</td>' +
+        '<td class="is-num">' + rate + '</td>' +
+        '<td class="is-num">' + fmtA(usdToAud(c.revenue)) + '</td>' +
+        '<td>' + (c.active ? '<span class="dt-badge ok">Active</span>' : '<span class="dt-badge mute">Paused</span>') + '</td>' +
         '<td class="adm-row-actions">' +
           '<button class="adm-icon-btn adm-campaign-copy" type="button" title="Copy link" aria-label="Copy link">' + ADM_ICON_COPY + '</button>' +
           '<button class="adm-icon-btn adm-campaign-info" type="button" title="Details" aria-label="Details">' + ADM_ICON_INFO + '</button>' +
@@ -2971,7 +2971,8 @@
           '<button class="adm-icon-btn adm-campaign-rename" type="button" title="Rename">' + ADM_ICON_EDIT + '</button>' +
           '<button class="adm-icon-btn adm-campaign-delete" type="button" title="Delete">' + ADM_ICON_TRASH + '</button>' +
         '</td></tr>';
-    }).join('') || '<tr><td colspan="7" class="adm-empty">No campaign links yet - add one above.</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="adm-empty">No campaign links yet. Add one with + New link.</td></tr>';
+    renderCampaignFigs();
   }
 
   var campaignCreateForm = $('admCampaignCreateForm');
@@ -3060,6 +3061,115 @@
   var campaignDetailOverlay = $('admCampaignDetailOverlay');
   if (campaignDetailOverlay) campaignDetailOverlay.addEventListener('click', function (e) { if (e.target === campaignDetailOverlay) campaignDetailOverlay.hidden = true; });
 
+  /* ---- Marketing panels (rebuilt 2026-11-24) ----
+     How buyers found us, campaign link totals, what people search for,
+     abandoned carts, and email open / click rates. */
+  function renderCampaignFigs() {
+    var box = $('admCampaignFigs'); if (!box) return;
+    if (!CAMPAIGNS.length) { box.innerHTML = ''; box.hidden = true; return; }
+    box.hidden = false;
+    var t = CAMPAIGNS.reduce(function (a, c) { a.clicks += c.clicks || 0; a.conv += c.conversions || 0; a.rev += c.revenue || 0; if (c.active) a.live++; return a; }, { clicks: 0, conv: 0, rev: 0, live: 0 });
+    var best = CAMPAIGNS.slice().sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0) || (b.conversions || 0) - (a.conversions || 0); })[0];
+    box.innerHTML = [
+      anFig('Clicks', num(t.clicks), '', '', plural(t.live, 'active link')),
+      anFig('Orders', num(t.conv), '', '', t.clicks ? sharePct(t.conv / t.clicks * 100) + ' of clicks' : ''),
+      anFig('Revenue', fmtA(usdToAud(t.rev)), '', '', 'All time'),
+      anFig('Best link', best && (best.revenue || best.conversions) ? esc(best.label) : '–', '', '', best && best.revenue ? fmtA(usdToAud(best.revenue)) : '')
+    ].join('');
+  }
+  var campaignNewToggle = $('admCampaignNewToggle');
+  if (campaignNewToggle) campaignNewToggle.addEventListener('click', function () {
+    var box = $('admCampaignNew'), open = box.hidden;
+    box.hidden = !open;
+    campaignNewToggle.setAttribute('aria-expanded', String(open));
+    campaignNewToggle.textContent = open ? 'Close' : '+ New link';
+    if (open && $('admCampaignCode')) $('admCampaignCode').focus();
+  });
+  // Opened / clicked across every tracked send, over what was delivered.
+  function emailRates() {
+    var base = 0, opens = 0, clicks = 0, n = 0;
+    EMAIL_CAMPAIGNS.forEach(function (c) {
+      var ev = EMAIL_EVENTS_BY_CAMPAIGN[c.id]; if (!ev) return;
+      var b = ev.delivered || ev.sent || c.sent_count || 0; if (!b) return;
+      base += b; opens += Object.keys(ev.openers || {}).length; clicks += Object.keys(ev.clickers || {}).length; n++;
+    });
+    return base ? { open: opens / base * 100, click: clicks / base * 100, n: n } : null;
+  }
+  // How buyers found us: the thank-you page survey, as a pie with one colour per answer.
+  var HEARD_SLOT = { 'Google / search': 1, 'A friend': 3, 'In a Roblox game': 4, 'TikTok': 5, 'Discord': 7, 'YouTube': 8 };
+  function renderMktHeard() {
+    var box = $('admMktHeard'); if (!box) return;
+    var rows = howHeard(), tot = anSum(rows.map(function (r) { return r.count; }));
+    if (!tot) { box.innerHTML = anEmpty('No survey answers in this range.'); return; }
+    function col(l) { return HEARD_SLOT[l] ? 'var(--cat-' + HEARD_SLOT[l] + ')' : 'var(--cat-other)'; }
+    var slices = rows.map(function (r) { return { v: r.count, color: col(r.label), label: r.label, tip: sharePct(r.count / tot * 100) + ', ' + plural(r.count, 'answer') }; });
+    box.innerHTML = '<div class="adm-cat-wrap">' +
+      '<figure class="adm-pie">' + donutSvg(slices, { size: 176, aria: 'How buyers found us', center: num(tot), sub: tot === 1 ? 'answer' : 'answers' }) + '</figure>' +
+      '<div class="adm-cat-list" role="table" aria-label="How buyers found us">' + rows.map(function (r) {
+        return '<div class="adm-cat-row" role="row"><span class="adm-cat-name" role="cell"><b class="adm-dot" style="--pf:' + col(r.label) + '"></b><span>' + esc(r.label) + '<small>' + plural(r.count, 'answer') + '</small></span></span>' +
+          '<span class="adm-bar-val" role="cell">' + sharePct(r.count / tot * 100) + '</span></div>';
+      }).join('') + '</div></div>';
+  }
+  // What people search for on coldd.dev; a search with no results is something we don't sell yet.
+  function renderMktSearches() {
+    var box = $('admMktSearches'); if (!box) return;
+    var start = RANGE_DAYS ? rangeStart() : new Date(0), total = 0, empty = 0;
+    CLIENT_EVENT_ROWS.forEach(function (e) {
+      if (e.type !== 'search' || !e.meta || !e.meta.q || new Date(e.d) < start) return;
+      total++; if (e.meta.results === 0) empty++;
+    });
+    if (!total) { box.innerHTML = anEmpty('No searches in this range.'); return; }
+    var list = topSearches(10), max = Math.max.apply(null, list.map(function (x) { return x.count; }));
+    box.innerHTML = '<div class="adm-an-figs">' +
+        anFig('Searches', num(total), '', '', plural(list.length, 'different search', 'different searches').replace('searchs', 'searches')) +
+        anFig('No results', sharePct(empty / total * 100), '', '', plural(empty, 'search') .replace('searchs', 'searches') + ' found nothing') + '</div>' +
+      '<div class="adm-bars">' + list.map(function (x) {
+        return '<div class="adm-bar-row"><span class="adm-bar-name">' + esc(x.q) + '<small>' + (x.noResults ? (x.noResults === x.count ? 'Never found anything' : num(x.noResults) + ' with no results') : 'Found results') + '</small></span>' +
+          '<span class="adm-bar-track" aria-hidden="true"><i style="width:' + Math.max(2, x.count / max * 100).toFixed(1) + '%' + (x.noResults === x.count ? ';background:var(--warn, #e0a83a)' : '') + '"></i></span>' +
+          '<span class="adm-bar-val">' + num(x.count) + '<small>' + (x.count === 1 ? 'time' : 'times') + '</small></span></div>';
+      }).join('') + '</div>' +
+      '<p class="adm-an-note">Amber bars are searches that never found anything: products people want that we don\'t sell.</p>';
+  }
+  // Abandoned carts: carts touched but not bought (each row goes the moment it is bought).
+  function renderMktCarts() {
+    var figs = $('admCartFigs'), body = $('admAbandonedBody'); if (!body) return;
+    var worth = ABANDONED.reduce(function (s, a) { return s + usdToAudAt(a.value, Date.parse(a.date)); }, 0);
+    var mailed = ABANDONED.filter(function (a) { return a.recoveryEmailSentAt; }).length, withEmail = ABANDONED.filter(function (a) { return a.email; }).length;
+    if (figs) figs.innerHTML = anFig('Open carts', num(ABANDONED.length), '', '', num(withEmail) + ' with an email') +
+      anFig('Waiting', fmtA(worth), '', '', 'In carts right now') +
+      anFig('Reminders sent', num(mailed), '', '', withEmail ? sharePct(mailed / withEmail * 100) + ' of carts with an email' : '');
+    var show = ABANDONED_OPEN ? ABANDONED.slice(0, 50) : ABANDONED.slice(0, 6);
+    body.innerHTML = show.map(function (a) {
+      var state = a.recoveryEmailSentAt ? 'Reminder sent ' + fmtDate(new Date(a.recoveryEmailSentAt)) : a.email ? 'No reminder yet' : 'No email';
+      return '<div class="adm-cust-row"><span class="adm-or-thumb"' + (a.image ? ' style="background-image:url(\'' + esc(window.imgUrl ? window.imgUrl(a.image) : a.image) + '\')"' : '') + '></span>' +
+        '<span class="adm-cust-name"><b title="' + esc(a.title) + '">' + esc(a.title) + '</b><small>' + esc(a.email || 'Guest') + ' · ' + esc(fmtDate(new Date(a.date))) + '</small></span>' +
+        '<span class="adm-an-pval">' + fmtA(usdToAudAt(a.value, Date.parse(a.date))) + '<small>' + esc(state) + '</small></span></div>';
+    }).join('') || anEmpty('No open carts.');
+    var more = $('admAbandonedMore');
+    if (more) { more.hidden = ABANDONED.length <= 6; more.textContent = ABANDONED_OPEN ? 'Show fewer' : 'Show all ' + Math.min(ABANDONED.length, 50) + ' carts'; }
+  }
+  // Hover text for the Marketing pie (Analytics wires its own).
+  (function () {
+    var panel = $('adm-panel-marketing'); if (!panel) return;
+    var tip = document.createElement('div');
+    tip.className = 'adm-pc-tip adm-donut-tip'; tip.hidden = true;
+    document.body.appendChild(tip);
+    panel.addEventListener('mouseover', function (e) {
+      var s = e.target.closest && e.target.closest('.adm-donut [data-tip]');
+      if (!s) { tip.hidden = true; return; }
+      var parts = s.getAttribute('data-tip').split('|');
+      tip.innerHTML = '<h4>' + parts[0] + '</h4><div>' + (parts[1] || '') + '</div>';
+      tip.hidden = false;
+    });
+    panel.addEventListener('mousemove', function (e) {
+      if (tip.hidden) return;
+      var x = e.clientX + 14, y = e.clientY + 14;
+      if (x + tip.offsetWidth > innerWidth - 8) x = e.clientX - tip.offsetWidth - 14;
+      if (y + tip.offsetHeight > innerHeight - 8) y = e.clientY - tip.offsetHeight - 14;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    });
+    panel.addEventListener('mouseleave', function () { tip.hidden = true; });
+  })();
   function renderMarketing() {
     var sales = REFERRALS.reduce(function (s, r) { return s + r.sales; }, 0);
     var owed = REFERRALS.reduce(function (s, r) { return s + (r.earnedUSD - r.paidUSD); }, 0);
@@ -3100,10 +3210,10 @@
         var adNow = { today: s ? s.today : 0, last7d: s ? s.last_7d : 0, last30d: s ? s.last_30d : 0, allTime: s ? s.all_time : 0 };
         var adPrev = ADBLOX_STAT_PREV;
         $('admAdbloxStats').innerHTML = [
-          statTile('Ads sent today', adNow.today.toLocaleString('en-US'), s ? (s.yesterday.toLocaleString('en-US') + ' yesterday') : null, '', { flash: adPrev && adPrev.today !== adNow.today }),
-          statTile('Ads sent (7d)', adNow.last7d.toLocaleString('en-US'), null, '', { flash: adPrev && adPrev.last7d !== adNow.last7d }),
-          statTile('Ads sent (30d)', adNow.last30d.toLocaleString('en-US'), null, '', { flash: adPrev && adPrev.last30d !== adNow.last30d }),
-          statTile('Ads sent (all-time)', adNow.allTime.toLocaleString('en-US'), null, '', { flash: adPrev && adPrev.allTime !== adNow.allTime })
+          anFig('Sent today', num(adNow.today), '', '', s ? num(s.yesterday) + ' yesterday' : ''),
+          anFig('Last 7 days', num(adNow.last7d), '', '', ''),
+          anFig('Last 30 days', num(adNow.last30d), '', '', ''),
+          anFig('All time', num(adNow.allTime), '', '', '')
         ].join('');
         ADBLOX_STAT_PREV = adNow;
       } else {
@@ -3139,6 +3249,9 @@
 
     renderEmailMarketing();
     renderAutomations();
+    renderMktHeard();
+    renderMktSearches();
+    renderMktCarts();
 
     if ($('admReferralBody')) {
       $('admReferralBody').innerHTML = REFERRALS.map(function (r) {
@@ -3356,11 +3469,12 @@
 
     if ($('admEmailStats')) {
       var att = emailAttributedRevenue();
+      var er = emailRates();
       $('admEmailStats').innerHTML = [
-        statTile('Opted in', EMAIL_STATS.optedIn.toLocaleString('en-US'), 'Every marketing email goes here', ''),
-        statTile('Unsubscribed', EMAIL_STATS.unsubscribed.toLocaleString('en-US'), 'Opted in, then left', ''),
-        statTile('All accounts', EMAIL_STATS.allAccounts.toLocaleString('en-US'), 'Reachable by announcements', ''),
-        statTile('Sales from email', fmtA(usdToAud(att.usd)), plural(att.count, 'order') + ' within 7 days of a send', '')
+        anFig('Subscribers', num(EMAIL_STATS.optedIn), '', '', num(EMAIL_STATS.unsubscribed) + ' unsubscribed, ' + num(EMAIL_STATS.allAccounts) + ' accounts in all'),
+        anFig('Opened', er ? sharePct(er.open) : '–', '', '', er ? 'Across ' + plural(er.n, 'campaign') : 'No tracked sends yet'),
+        anFig('Clicked', er ? sharePct(er.click) : '–', '', '', er ? 'Of delivered emails' : ''),
+        anFig('Sales from email', fmtA(usdToAud(att.usd)), '', '', plural(att.count, 'order') + ' within 7 days of a send')
       ].join('');
     }
 
@@ -4372,7 +4486,8 @@
   }
 
   // When people buy: orders by weekday and hour, in the viewer's own time zone.
-  // Sales recorded with a date but no time (some emailed orders) are left out.
+  // Sales recorded with a date but no time (emailed orders, the Payhip CSV import)
+  // land exactly on the hour, so those are left out.
   var AN_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   function anHour(h) { return new Date(2000, 0, 1, h).toLocaleTimeString('en-AU', { hour: 'numeric' }).replace(/\s/g, ' '); }
   function renderAnHeat(sales, w) {
@@ -4380,7 +4495,7 @@
     var s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), grid = [], d, h, total = 0;
     for (d = 0; d < 7; d++) { grid.push([]); for (h = 0; h < 24; h++) grid[d].push(0); }
     sales.forEach(function (x) {
-      if (x.t < s || x.t >= e || x.t % 86400000 === 0) return;
+      if (x.t < s || x.t >= e || x.t % 3600000 === 0) return;
       var dt = new Date(x.t);
       grid[(dt.getDay() + 6) % 7][dt.getHours()] += x.n; total += x.n;
     });

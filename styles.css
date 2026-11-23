@@ -5966,8 +5966,8 @@ html[data-theme="light"] .adm-heat-key i { background: color-mix(in srgb, var(--
 /* Pie charts on Analytics (2026-11-24): Platform mix and Categories as donuts.
    Category colours: the chart skill's validated 8-slot categorical palette,
    fixed per category; everything else is a neutral "Other". */
-.adm-an { --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #0ca30c; --cat-7: #9085e9; --cat-8: #e66767; --cat-other: #6b6e78; }
-html[data-theme="light"] .adm-an { --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #6250d6; --cat-8: #e34948; --cat-other: #a3a6ae; }
+.adm-an, .adm-mkt { --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #0ca30c; --cat-7: #9085e9; --cat-8: #e66767; --cat-other: #6b6e78; }
+html[data-theme="light"] .adm-an, html[data-theme="light"] .adm-mkt { --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #6250d6; --cat-8: #e34948; --cat-other: #a3a6ae; }
 .adm-donut { display: block; overflow: visible; }
 .adm-donut-wrap { position: relative; flex: 0 0 auto; }
 .adm-donut-mark { position: absolute; display: grid; place-items: center; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: var(--bg-3); box-shadow: 0 0 0 1px var(--hairline); pointer-events: none; }
@@ -5997,6 +5997,40 @@ html[data-theme="light"] .adm-an { --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: 
 .adm-cat-name small { font-size: 12px; font-weight: 500; color: var(--fg-3); }
 html[data-theme="light"] .adm-donut-empty { stroke: rgba(0,0,0,0.06) !important; }
 @media (max-width: 560px) { .adm-cat-wrap { flex-direction: column; align-items: center; } .adm-cat-list { width: 100%; } }
+
+/* Admin Marketing, rebuilt (2026-11-24) ----------------------------------------
+   Panels in the dashboard style: Audience + How buyers found us, Campaign links,
+   Referral links + What people search for, Email, Abandoned carts + Ads, then
+   the Broadcast and Automated email tools. */
+.adm-mkt:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
+.adm-mkt-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.adm-an-figs.is-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.adm-mkt .adm-an-figs[hidden] { display: none; }
+.adm-mkt-h3 { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 8px; font-size: 13px; font-weight: 700; color: var(--fg); }
+.adm-mkt-h3 span { font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.adm-mkt-new { margin: 0 0 14px; padding: 14px; border-radius: var(--r-ctl); background: rgba(255,255,255,0.025); border: 1px solid var(--hairline); }
+.adm-mkt-new .adm-form { margin: 0; }
+.adm-mkt-table td { vertical-align: middle; }
+.adm-mkt-table .adm-campaign-url { font-size: 12px; }
+.adm-mkt-more { margin-top: 14px; border-top: 1px solid var(--hairline); }
+.adm-mkt-more > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0 0; list-style: none; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--fg); }
+.adm-mkt-more > summary::-webkit-details-marker { display: none; }
+.adm-mkt-more > summary svg { color: var(--fg-3); transition: transform .2s var(--ease-out); }
+.adm-mkt-more[open] > summary svg { transform: rotate(180deg); }
+.adm-mkt-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.adm-mkt-more-body { padding-top: 10px; }
+.adm-mkt-more-body .adm-mkt-h3:first-child { margin-top: 4px; }
+.adm-cart-list .adm-cust-row { grid-template-columns: 38px minmax(0, 1fr) auto; }
+.adm-cart-list .adm-an-pval small { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.adm-mkt .adm-hp-head .btn { flex: 0 0 auto; }
+.adm-mkt #admMktChannels > :first-child { margin-top: 0; }
+html[data-theme="light"] .adm-mkt-new { background: rgba(0,0,0,0.02); }
+@media (max-width: 1100px) { .adm-mkt-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) {
+  .adm-an-figs.is-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adm-an-figs.is-4 .adm-an-fig:nth-child(3) { border-left: 0; }
+  .adm-an-figs.is-4 .adm-an-fig:nth-child(n+3) { border-top: 1px solid var(--hairline); padding-top: 12px; }
+}
 
 /* Orders fixes (2026-11-23): the column header shares the rows' geometry (it
    was 20px narrower, so every column drifted right), one-line product names,
