@@ -4021,10 +4021,11 @@
     (BBB.resources || []).forEach(function (r) { resById[String(r.resource_id)] = r; var k = bbbNorm(r.title); if (k && !resByTitle[k]) resByTitle[k] = r; });
     function add(o) {
       var p = matchProduct(o.id, o.title);
-      var res = o.res || resByTitle[bbbNorm(o.title)] || null;
+      var res = o.res || resByTitle[bbbNorm(canonName(o.title))] || null;
       var cat = p && p.cat ? p.cat : res && res.category ? (AN_BBB_CAT[res.category] || res.category) : '';
-      list.push({ pf: o.pf, t: o.t, aud: o.aud || 0, robux: o.robux || 0, title: p ? p.title : (o.title || 'Unknown product'),
-        key: p ? 'p:' + p.id : 't:' + bbbNorm(o.title), image: p && p.image ? window.imgUrl(p.image) : (res && res.cover_image_url) || '',
+      var shown = p ? p.title : res && !o.res ? res.title : canonName(o.title || 'Unknown product');
+      list.push({ pf: o.pf, t: o.t, aud: o.aud || 0, robux: o.robux || 0, title: shown,
+        key: p ? 'p:' + p.id : 't:' + bbbNorm(shown), image: p && p.image ? window.imgUrl(p.image) : (res && res.cover_image_url) || '',
         cat: cat || 'Uncategorised', buyer: o.buyer || '', buyerName: o.buyerName || '', order: o.order });
     }
     ORDERS.forEach(function (o) {
@@ -4136,7 +4137,14 @@
     }
     out += '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" class="adm-donut-num">' + esc(o.center || '') + '</text>' +
       '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" class="adm-donut-sub">' + esc(o.sub || '') + '</text></svg>';
-    return out;
+    var marks = '', b0 = -Math.PI / 2;
+    if (tot > 0) slices.forEach(function (s) {
+      if (!(s.v > 0)) return;
+      var b1 = b0 + s.v / tot * Math.PI * 2, mid = (b0 + b1) / 2, rr = (r + ri) / 2;
+      if (s.mark && s.v / tot >= 0.06) marks += '<span class="adm-donut-mark" style="left:' + (cx + rr * Math.cos(mid)).toFixed(1) + 'px;top:' + (cy + rr * Math.sin(mid)).toFixed(1) + 'px">' + s.mark + '</span>';
+      b0 = b1;
+    });
+    return '<div class="adm-donut-wrap" style="width:' + size + 'px;height:' + size + 'px">' + out + marks + '</div>';
   }
   // Hover text for any donut slice on the Analytics page.
   (function wireDonuts() {
@@ -4179,7 +4187,7 @@
     }
     function slices(vals, tot, money) {
       return keys.map(function (k, i) {
-        return { v: vals[i], color: pfVar(k), label: HOME_PLATFORMS[i].label, tip: sharePct(tot ? vals[i] / tot * 100 : 0) + ', ' + (money ? fmtA(vals[i]) : plural(vals[i], 'order')) };
+        return { v: vals[i], color: pfVar(k), label: HOME_PLATFORMS[i].label, mark: pfMark(k), tip: sharePct(tot ? vals[i] / tot * 100 : 0) + ', ' + (money ? fmtA(vals[i]) : plural(vals[i], 'order')) };
       });
     }
     box.innerHTML = '<div class="adm-an-figs">' +
@@ -5431,7 +5439,7 @@
     $('admLegalDisallowSales').checked = !!legal.disallowSales;
     setLicenseTypeFields(legal);
 
-    showPanel('product-edit', Object.assign({ extra: p.slug }, opts));
+    showPanel('product-edit', Object.assign({ extra: p.slug || p.id }, opts));
   }
 
   function wireDropzone(dropEl, inputEl, onFiles) {
@@ -6746,6 +6754,34 @@
   }
 
   function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+  // Names a platform uses that differ from ours (public.product_name_aliases,
+  // added by hand as they turn up). Each points to the coldd.dev name, or the
+  // BuiltByBit name for a product not on the site yet; once the product is on
+  // coldd.dev, matching finds it there under that name with no further change.
+  var NAME_ALIAS = {};
+  function canonName(t) { return NAME_ALIAS[bbbNorm(t)] || t; }
+  function refreshNameAliases() {
+    if (!window.coldSupabase) return Promise.resolve();
+    return window.coldSupabase.from('product_name_aliases').select('alias, canonical').then(function (res) {
+      if (res.error) { console.error('[admin] name aliases:', res.error.message); return; }
+      var m = {};
+      (res.data || []).forEach(function (r) { if (r.alias && r.canonical) m[bbbNorm(r.alias)] = r.canonical; });
+      NAME_ALIAS = m;
+      PM = { src: null, list: [], memo: {} }; ORDER_NAMES = null; AN_ITEMS = null;
+      if (curPanel === 'orders') renderOrders();
+      if (curPanel === 'analytics') renderAnalytics();
+      if (curPanel === 'home') renderHome();
+    });
+  }
+  // The name a sale shows: the coldd.dev product's, else the alias's, else the
+  // BuiltByBit listing's with that name, else the platform's own.
+  function saleDisplayName(id, title) {
+    var p = matchProduct(id, title);
+    if (p) return p.title;
+    var c = canonName(title), k = bbbNorm(c), hit = null;
+    (BBB.resources || []).forEach(function (r) { if (!hit && bbbNorm(r.title) === k) hit = r.title; });
+    return hit || c;
+  }
   // Finds the coldd.dev product a sale on any platform is for: by id, then by
   // name (exact, then the longest name one contains, then most words shared).
   var PM = { src: null, list: [], memo: {} };
@@ -6753,6 +6789,7 @@
   function pmWords(s) { return String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(function (w) { return w && PM_STOP.indexOf(w) < 0; }); }
   function matchProduct(id, title) {
     if (id) { var byId = findProduct(id); if (byId) return byId; }
+    title = canonName(title);
     var t = bbbNorm(title); if (!t) return null;
     var prods = allProducts();
     // A fresh product list (every refreshProducts) resets the cache, so a product
@@ -6780,7 +6817,7 @@
   }
   // A BuiltByBit listing's cover for a product name sold elsewhere.
   function bbbCoverFor(title) {
-    var t = bbbNorm(title); if (!t || !BBB.resources) return '';
+    var t = bbbNorm(canonName(title)); if (!t || !BBB.resources) return '';
     var hit = '', best = 0;
     BBB.resources.forEach(function (r) {
       if (!r.cover_image_url) return;
@@ -7460,6 +7497,7 @@
     var prods = allProducts(), res = BBB.resources || [];
     if (ORDER_NAMES && ORDER_NAMES.a === PSALES && ORDER_NAMES.b === BBB.resources && ORDER_NAMES.c === prods && ORDER_NAMES.d === BBB.purchases) return ORDER_NAMES;
     var known = {}, byPf = {}, anyP = {}, any = {}, bbbList = {};
+    Object.keys(NAME_ALIAS).forEach(function (k) { known[k] = true; });
     prods.forEach(function (p) { known[bbbNorm(p.title)] = true; });
     res.forEach(function (r) {
       var k = bbbNorm(r.title); known[k] = true;
@@ -7589,8 +7627,8 @@
       BBB.purchases.forEach(function (p) {
         var usdP = bbbIsUsd(p), title = titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id);
         out.push({
-          kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: saleOrderId('bbb', p), title: title, buyer: p.buyer_name || '',
-          search: bbbMethodName(p.gateway) + ' ' + p.purchase_id,
+          kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: saleOrderId('bbb', p), title: saleDisplayName(null, title), buyer: p.buyer_name || '',
+          search: bbbMethodName(p.gateway) + ' ' + p.purchase_id + ' ' + title,
           status: 'completed', amount: usdP ? fmtA(usdToAudAt(p.price, Date.parse(p.purchased_at))) : (p.price + ' ' + String(p.currency || '').toUpperCase()),
           usd: usdP ? p.price : null,
           thumb: orderThumb(covers[String(p.resource_id)] || '', null, title), src: p
@@ -7604,7 +7642,7 @@
       names.forEach(function (nm, j) {
         var usd = robux ? null : s.usd * shares[j];
         out.push({
-          kind: 'ps', pf: s.platform, t: s.t, id: saleOrderId('ps', s), title: nm, buyer: s.buyer || '', search: names.length > 1 ? s.name : '',
+          kind: 'ps', pf: s.platform, t: s.t, id: saleOrderId('ps', s), title: saleDisplayName(names.length > 1 ? null : s.productId, nm), buyer: s.buyer || '', search: s.name || '', single: names.length === 1,
           status: s.status === 'refunded' ? 'refunded' : s.status === 'pending' ? 'pending' : 'completed',
           amount: robux ? robuxRaw(s.amount * shares[j]) : fmtA(usdToAudAt(usd, s.t)), usd: usd,
           thumb: orderThumb('', names.length > 1 ? null : s.productId, nm), src: s
@@ -7626,10 +7664,10 @@
   // matches one of our products, else the listing on the platform it sold on.
   function orderProdLink(r, bbbUrls) {
     var src = r.src || {};
-    var p = matchProduct(r.slug || (r.kind === 'site' || (r.kind === 'ps' && r.title === src.name) ? src.productId : null), r.title);
-    if (p && p.slug) return { href: '/admin/products/' + encodeURIComponent(p.slug) + '/', pid: p.id };
+    var p = matchProduct(r.slug || (r.kind === 'site' || (r.kind === 'ps' && r.single) ? src.productId : null), r.title);
+    if (p && p.id) return { href: '/admin/products/' + encodeURIComponent(p.id) + '/', pid: p.id };
     if (r.kind === 'bbb' && bbbUrls[String(src.resource_id)]) return { href: bbbUrls[String(src.resource_id)] };
-    if (r.pf === 'creatorstore' && r.title === src.name && /^\d+$/.test(String(src.productId || ''))) return { href: 'https://create.roblox.com/store/asset/' + src.productId };
+    if (r.pf === 'creatorstore' && r.single && /^\d+$/.test(String(src.productId || ''))) return { href: 'https://create.roblox.com/store/asset/' + src.productId };
     return null;
   }
   document.addEventListener('click', function (e) {
@@ -7738,7 +7776,7 @@
   // Products are still being added: every 5 minutes the pages that match sales
   // to products (pictures, links, prices, categories) reload the product list,
   // so a new match shows up without a page refresh.
-  setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'orders' || curPanel === 'analytics')) refreshProducts(); }, 5 * 60 * 1000);
+  setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'orders' || curPanel === 'analytics')) { refreshProducts(); refreshNameAliases(); } }, 5 * 60 * 1000);
 
   // ---- Order info popup: everything we know about one order ----
   var OI_EL = null, OI_RETURN = null;
@@ -10671,6 +10709,7 @@
   setInterval(function () { if (!document.hidden) refreshPrizeClaims(); }, 120000);
   // Dashboard home: marketplace sales outside BuiltByBit, Today's work tasks
   // (shared between admins, so re-read every minute) and the all-time view count.
+  refreshNameAliases();
   refreshPlatformSales();
   refreshTodos();
   refreshLifetimeViews();
