@@ -8592,6 +8592,19 @@
   }
   function renderResellers() {
     var body = $('admResellersBody'); if (!body) return;
+    var rk = $('admReslKpis');
+    if (rk) {
+      var need = RESELLERS.filter(function (r) { return !r.onboarded; }).length;
+      var selling = RESELLERS.filter(function (r) { return r.onboarded && r.status === 'active'; }).length;
+      var places = RESELLERS.reduce(function (s, r) { return s + (r.sellingLocations || []).length; }, 0);
+      var recent = RESELLERS.filter(function (r) { return Date.now() - Date.parse(r.createdAt || '') < 30 * DAY_MS; }).length;
+      rk.innerHTML = [
+        kpiCell({ label: 'Resell licences', value: num(RESELLERS.length), delta: '', sub: recent ? num(recent) + ' in the last 30 days' : 'None in the last 30 days' }),
+        kpiCell({ label: 'Need seller info', value: num(need), delta: '', sub: need ? 'Listed first below' : 'All filled in' }),
+        kpiCell({ label: 'Selling', value: num(selling), delta: '', sub: 'Active sellers with their info in' }),
+        kpiCell({ label: 'Places they sell', value: num(places), delta: '', sub: 'Links sellers gave us' })
+      ].join('');
+    }
     var q = (($('admResellerSearch') || {}).value || '').trim().toLowerCase();
     var rows = RESELLERS.filter(function (r) {
       if (!q) return true;
@@ -10242,6 +10255,7 @@
   };
   function applySiteModeUI(mode) {
     var copy = SITE_MODE_COPY[mode] || SITE_MODE_COPY.open;
+    if (typeof renderSiteKpis === 'function') setTimeout(renderSiteKpis, 0);
     var cur = $('admSiteCurrentStatus');
     if (cur) { cur.textContent = copy.status; cur.className = 'dt-badge ' + copy.badge; }
     var modeHint = $('admSiteModeHint');
@@ -10326,6 +10340,7 @@
   }
   function renderRobloxContainers() {
     var body = $('admRobloxContainersBody'); if (!body) return;
+    renderSiteKpis();
     body.innerHTML = ROBLOX_CONTAINERS.map(function (c) {
       var full = c.gamepass_count >= 50;
       var statusBadge = !c.active ? '<span class="dt-badge warn">Disabled</span>' : full ? '<span class="dt-badge err">Full</span>' : '<span class="dt-badge ok">Open</span>';
@@ -10413,7 +10428,21 @@
   function callDeleteContent(id) {
     return invokeAdminFn('admin-delete-content', { id: id }, 'Could not delete.');
   }
+  // Blog & Tutorials overview.
+  function renderBlogKpis() {
+    var grid = $('admBlogKpis'); if (!grid) return;
+    function split(list) { var live = list.filter(function (x) { return x.visible !== false; }).length; return { live: live, draft: list.length - live }; }
+    var p = split(POSTS), t = split(TUTORIALS);
+    var latest = POSTS.concat(TUTORIALS, RELEASES).map(function (x) { return Date.parse(x.updatedAt || x.createdAt || x.date || x.publishedAt || '') || 0; }).reduce(function (m, v) { return v > m ? v : m; }, 0);
+    grid.innerHTML = [
+      kpiCell({ label: 'Blog posts', value: num(p.live), count: 'live', delta: '', sub: p.draft ? plural(p.draft, 'draft') : 'No drafts' }),
+      kpiCell({ label: 'Tutorials', value: num(t.live), count: 'live', delta: '', sub: t.draft ? plural(t.draft, 'draft') : 'No drafts' }),
+      kpiCell({ label: 'Releases', value: num(RELEASES.length), delta: '', sub: 'Release notes' }),
+      kpiCell({ label: 'Last update', value: latest ? esc(fmtDate(new Date(latest))) : '–', delta: '', sub: 'Across posts, tutorials and releases' })
+    ].join('');
+  }
   function renderPosts() {
+    renderBlogKpis();
     var q = ($('admPostSearch') || {}).value || '';
     q = q.trim().toLowerCase();
     var rows = POSTS.filter(function (p) { return !q || p.title.toLowerCase().indexOf(q) >= 0; });
@@ -10527,6 +10556,7 @@
     });
   }
   function renderTutorials() {
+    renderBlogKpis();
     var q = ($('admTutSearch') || {}).value || '';
     q = q.trim().toLowerCase();
     var rows = TUTORIALS.filter(function (t) { return !q || t.title.toLowerCase().indexOf(q) >= 0; });
@@ -10647,6 +10677,7 @@
     });
   }
   function renderReleases() {
+    renderBlogKpis();
     var q = ($('admRelSearch') || {}).value || '';
     q = q.trim().toLowerCase();
     var rows = RELEASES.filter(function (r) { return !q || r.title.toLowerCase().indexOf(q) >= 0; });
@@ -10751,7 +10782,21 @@
   function callSetStaffRole(email, role) {
     return invokeAdminFn('admin-set-staff-role', { email: email, role: role }, 'Could not update staff access.');
   }
+  // Site Management overview.
+  function renderSiteKpis() {
+    var grid = $('admSiteKpis'); if (!grid) return;
+    var copy = SITE_MODE_COPY[siteMode] || SITE_MODE_COPY.open;
+    var open = ROBLOX_CONTAINERS.filter(function (c) { return c.active && c.gamepass_count < 50; }).length;
+    var passes = ROBLOX_CONTAINERS.reduce(function (s, c) { return s + (c.gamepass_count || 0); }, 0);
+    grid.innerHTML = [
+      kpiCell({ label: 'Site', value: '<span class="dt-badge ' + copy.badge + ' adm-site-kpi">' + esc(copy.status) + '</span>', delta: '', sub: siteMode === 'maintenance' ? 'Only staff can use the site' : 'Everyone can browse and buy' }),
+      kpiCell({ label: 'Robux containers', value: num(open), count: 'of ' + num(ROBLOX_CONTAINERS.length) + ' open', delta: '', sub: num(passes) + ' gamepasses made' }),
+      kpiCell({ label: 'Staff', value: num(STAFF.length), delta: '', sub: 'With admin access' }),
+      kpiCell({ label: 'Accounts', value: num(USERS.length), delta: '', sub: 'Signed up on coldd.dev' })
+    ].join('');
+  }
   function renderStaff() {
+    renderSiteKpis();
     $('admStaffBody').innerHTML = STAFF.map(function (s) {
       var isSelf = s.id === (window.__ADMIN_ID || null);
       var editable = can('owner') && !isSelf;

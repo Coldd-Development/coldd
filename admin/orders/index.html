@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261124n" />
+  <link rel="stylesheet" href="/styles.css?v=20261124o" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -933,14 +933,21 @@
             <div id="admGwDetailBody"></div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-resellers" hidden>
-            <div class="dash-head"><h1>Resellers</h1><p>Every resell licence sold, whether or not the seller has filled in their info yet. Rows still waiting on seller info are listed first.</p></div>
-            <div class="adm-toolbar">
-              <input maxlength="200" type="text" id="admResellerSearch" class="adm-input" placeholder="Search by email, name, or product…" />
-              <button class="btn btn-primary adm-btn-sm" type="button" id="admOpenResellerCreate">+ Add reseller</button>
-              <span class="adm-sub" id="admResellerCount"></span>
+          <section class="dash-panel adm-pg" id="adm-panel-resellers" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Resellers</h1>
+              <div class="adm-head-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admOpenResellerCreate">+ Add reseller</button></div>
             </div>
-            <div class="dash-card glass">
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admReslKpis"></div>
+            </div>
+
+            <div class="adm-hp adm-sd-card">
+              <div class="adm-or-tools">
+                <div class="adm-or-search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input maxlength="200" type="text" id="admResellerSearch" placeholder="Search by email, name or product" aria-label="Search resellers" /></div>
+                <span class="adm-or-sum" id="admResellerCount"></span>
+              </div>
+              <p class="adm-note" style="margin:0 0 10px;">Every resell licence sold, whether or not the seller has filled in their info yet. Sellers still waiting on info come first.</p>
               <div class="dash-rows" id="admResellersBody"><p class="dash-empty-note">Loading…</p></div>
             </div>
           </section>
@@ -1298,9 +1305,13 @@
             </div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-content" hidden>
-            <div class="dash-head"><h1>Blog &amp; Tutorials</h1><p>Write, edit, and publish articles and tutorials.</p></div>
-            <div class="adm-tabs" id="admContentTypeToggle" style="margin-bottom:22px;">
+          <section class="dash-panel adm-pg" id="adm-panel-content" hidden>
+            <div class="dash-head adm-home-head"><h1>Blog &amp; Tutorials</h1></div>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admBlogKpis"></div>
+            </div>
+
+            <div class="adm-seg adm-sd-tabs" id="admContentTypeToggle" role="group" aria-label="Section">
               <button type="button" class="adm-tab adm-content-type-btn active" data-type="posts">Blog Posts</button>
               <button type="button" class="adm-tab adm-content-type-btn" data-type="tutorials">Tutorials</button>
               <button type="button" class="adm-tab adm-content-type-btn" data-type="releases">Releases</button>
@@ -1310,13 +1321,13 @@
               <div class="adm-toolbar">
                 <input maxlength="200" type="text" id="admPostSearch" class="adm-input" placeholder="Search posts…" />
               </div>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table adm-table-tight">
                   <thead><tr><th>Title</th><th>Category</th><th>Author</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admPostBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2 id="admPostFormTitle">Add post</h2></div>
                 <form class="adm-form" id="admAddPostForm">
                   <input type="hidden" id="admPostEditId" value="" />
@@ -1345,13 +1356,13 @@
               <div class="adm-toolbar">
                 <input maxlength="200" type="text" id="admTutSearch" class="adm-input" placeholder="Search tutorials…" />
               </div>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table adm-table-tight">
                   <thead><tr><th>Title</th><th>Track</th><th>Difficulty</th><th>Platform</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admTutBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2 id="admTutFormTitle">Add tutorial</h2></div>
                 <form class="adm-form" id="admAddTutForm">
                   <input type="hidden" id="admTutEditId" value="" />
@@ -1395,13 +1406,13 @@
               <div class="adm-toolbar">
                 <input maxlength="200" type="text" id="admRelSearch" class="adm-input" placeholder="Search releases…" />
               </div>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table adm-table-tight">
                   <thead><tr><th>Version</th><th>Kind</th><th>Title</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admRelBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2 id="admRelFormTitle">Add release</h2></div>
                 <form class="adm-form" id="admAddRelForm">
                   <input type="hidden" id="admRelEditId" value="" />
@@ -1425,9 +1436,13 @@
             </div>
           </section>
 
-          <section class="dash-panel" id="adm-panel-sitemgmt" hidden>
-            <div class="dash-head"><h1>Site Management</h1><p>Site access, Robux gamepass containers, staff access, users, and the audit log.</p></div>
-            <div class="adm-tabs" id="admSiteMgmtToggle" style="margin-bottom:22px;">
+          <section class="dash-panel adm-pg" id="adm-panel-sitemgmt" hidden>
+            <div class="dash-head adm-home-head"><h1>Site Management</h1></div>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admSiteKpis"></div>
+            </div>
+
+            <div class="adm-seg adm-sd-tabs" id="admSiteMgmtToggle" role="group" aria-label="Section">
               <button type="button" class="adm-tab adm-sitemgmt-btn active" data-view="access">Site Access</button>
               <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="roblox">Roblox</button>
               <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="staff">Staff &amp; Whitelist</button>
@@ -1436,7 +1451,7 @@
             </div>
 
             <div id="admSiteMgmtAccessView">
-              <div class="dash-card glass" style="max-width:640px;">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head">
                   <h2>Site status</h2>
                   <span class="dt-badge ok" id="admSiteCurrentStatus">Loading…</span>
@@ -1472,7 +1487,7 @@
             <div id="admSiteMgmtRobloxView" hidden>
               <div class="dt-badge err" id="admRobloxCookieWarning" hidden style="margin-bottom:16px;"></div>
 
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2>Robux checkout pool</h2></div>
                 <p class="adm-hint">One shared pool of gamepasses is leased out per order (priced to that order's exact total) instead of every product owning its own pass. This grows automatically when a checkout finds the pool empty - seeding it ahead of time just avoids the first buyer of the day paying that extra latency. Passes named <code>coldd order pass …</code> are managed here. To use one in the game yourself, just <strong>rename it</strong> off that auto-name - the next checkout that would draw it drops it from the pool automatically. <strong>Retire</strong> does the same on demand (and takes it off sale on Roblox).</p>
                 <div class="adm-stat-row" id="admRobloxPoolStats" style="display:flex;gap:22px;margin:12px 0;flex-wrap:wrap;">
@@ -1493,13 +1508,13 @@
                 </div>
               </div>
 
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table">
                   <thead><tr><th>Universe ID</th><th>Label</th><th>Gamepasses</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admRobloxContainersBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2 id="admRobloxContainerFormTitle">Add container game</h2></div>
                 <p class="adm-hint">Create an empty experience in Roblox Studio first, add it to your Open Cloud API key's <code>game-passes</code> permission list at <a href="https://create.roblox.com/dashboard/credentials" target="_blank" rel="noopener">create.roblox.com/dashboard/credentials</a>, then register its Universe ID here.</p>
                 <form class="adm-form" id="admRobloxContainerForm" style="flex-wrap:wrap;">
@@ -1515,13 +1530,13 @@
 
             <div id="admSiteMgmtStaffView" hidden>
               <p class="adm-note">Access is granted by role on the account's real profile - not a separate list. Only owners can grant or change staff access.</p>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table">
                   <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
                   <tbody id="admStaffBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2>Grant staff access</h2></div>
                 <p class="adm-note">The account must have signed in to coldd at least once already.</p>
                 <form class="adm-form" id="admAddStaffForm">
@@ -1544,13 +1559,13 @@
               <div class="adm-toolbar">
                 <input maxlength="200" type="text" id="admUserSearch" class="adm-input" placeholder="Search username, email, Discord or Roblox ID…" />
               </div>
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table">
                   <thead><tr><th>Name</th><th>Email</th><th>Joined</th><th>Orders</th><th>Spent</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="admUsersBody"></tbody>
                 </table>
               </div>
-              <div class="dash-card glass">
+              <div class="adm-hp adm-sd-card">
                 <div class="dash-card-head"><h2>Manual product grant</h2></div>
                 <form class="adm-form" id="admGrantForm">
                   <div class="adm-dd adm-dd-inline" id="admGrantUserDD">
@@ -1603,7 +1618,7 @@
                 <span class="adm-sub" id="admAuditCount"></span>
               </div>
 
-              <div class="dash-card glass dash-tablewrap">
+              <div class="adm-hp adm-sd-card dash-tablewrap">
                 <table class="dash-table">
                   <thead><tr><th>When</th><th>Staff / Code</th><th>Action</th></tr></thead>
                   <tbody id="admAuditBody"></tbody>
@@ -1754,6 +1769,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog-loader.php?v=20261124n" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124n"></script>
+  <script src="/catalog-loader.php?v=20261124o" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261124o"></script>
 </body>
 </html>
