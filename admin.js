@@ -7266,10 +7266,9 @@
   function oiRow(label, value) { return value == null || value === '' ? '' : '<div class="adm-oi-row"><dt>' + esc(label) + '</dt><dd>' + value + '</dd></div>'; }
   function oiMono(v) { return v ? '<span class="dt-mono">' + esc(v) + '</span>' : ''; }
   function oiUsd(n) { return 'US$' + (Number(n) || 0).toFixed(2); }
-  // What it cost in AU$, the US$ it was, and the rate of that day.
+  // What it cost in AU$ at that day's rate, with the US$ it was beside it.
   function oiMoney(usdV, t) {
-    var rate = audRateOn(t);
-    return '<b>' + fmtA((Number(usdV) || 0) * rate) + '</b> <span class="adm-sub">' + oiUsd(usdV) + ', US$1 = A$' + rate.toFixed(4) + ' that day</span>';
+    return '<b>' + fmtA((Number(usdV) || 0) * audRateOn(t)) + '</b> <span class="adm-sub">(' + oiUsd(usdV) + ')</span>';
   }
   function closeOrderInfo() {
     if (!OI_EL || OI_EL.hidden) return;
