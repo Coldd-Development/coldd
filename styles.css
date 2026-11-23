@@ -5735,3 +5735,26 @@ html[data-theme="light"] .adm-or-row:hover { background: rgba(0,0,0,0.03); }
   .adm-or-amt { grid-row: 1; grid-column: 2; } .adm-or-act { grid-row: 1; grid-column: 3; }
   .adm-or-sum { margin-left: 0; }
 }
+
+/* Admin sidebar (2026-11-23) --------------------------------------------------
+   Brand header, sections (Store / Community / Utility), and the current page
+   as a raised neutral pill with a small ember dot: ember as "you are here",
+   never as a fill. Scoped to .adm-side so the customer dashboard keeps its own nav. */
+.adm-side { padding: 14px 12px; gap: 4px; border-radius: var(--r-sm); }
+.adm-side-brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 14px; margin-bottom: 6px; border-bottom: 1px solid var(--hairline); color: inherit; text-decoration: none; }
+.adm-side-brand img { flex: 0 0 auto; width: 36px; height: 36px; padding: 5px; border-radius: var(--r-ctl); object-fit: contain; background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--hairline); }
+.adm-side-brand span { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.adm-side-brand b { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }
+.adm-side-brand small { font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-nav { gap: 2px; }
+.adm-nav a { position: relative; padding: 9px 12px; border: 1px solid transparent; font-size: 14px; font-weight: 500; transition: color .18s, background .18s, border-color .18s; }
+.adm-nav a.active { color: var(--fg); font-weight: 600; background: rgba(255,255,255,0.07); border-color: var(--hairline-strong); box-shadow: var(--e-2); }
+.adm-nav a.active svg { color: var(--fg); opacity: 1; }
+.adm-nav a.active:not(:has(.adm-nav-count:not([hidden])))::after { content: ""; position: absolute; right: 13px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--accent); }
+.adm-nav-label { display: block; margin: 12px 4px 4px; padding: 12px 8px 0; border-top: 1px solid var(--hairline); font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-side .dash-admin-link { margin-top: 10px; }
+html[data-theme="light"] .adm-nav a.active { color: var(--fg); background: rgba(0,0,0,0.05); }
+html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
+@media (max-width: 900px) {
+  .adm-nav-label { grid-column: 1 / -1; }
+}

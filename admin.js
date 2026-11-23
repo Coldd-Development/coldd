@@ -428,7 +428,7 @@
           var prof = byId[p.user_id];
           return Object.assign({ owner: prof ? (prof.username || prof.email || 'user') : 'user' }, p);
         });
-        if (curPanel === 'analytics' || curPanel === 'marketing') renderPayouts();
+        if (curPanel === 'analytics' || curPanel === 'marketing' || curPanel === 'giveaways') renderPayouts();
         if (curPanel === 'home') renderHome();
       }
       if (!userIds.length) { apply({}); return; }
@@ -1510,7 +1510,7 @@
   /* ================================================================
      NAV / PANEL SWITCHING
      ================================================================ */
-  var PANELS = ['home', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
+  var PANELS = ['home', 'tasks', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
   var curPanel = 'home';
 
   /* ---- URL routing ----
@@ -1525,7 +1525,7 @@
      own - those IDs are unbounded and not worth pre-rendering, so a hard
      refresh on one of those exact deep URLs falls back to its parent list. */
   var PANEL_PATH = {
-    home: '/admin/', products: '/admin/products/', sales: '/admin/sales/',
+    home: '/admin/', tasks: '/admin/tasks/', products: '/admin/products/', sales: '/admin/sales/',
     marketing: '/admin/marketing/', marketplaces: '/admin/marketplaces/', analytics: '/admin/analytics/', orders: '/admin/orders/',
     giveaways: '/admin/giveaways/', resellers: '/admin/resellers/', reviews: '/admin/reviews/', content: '/admin/content/',
     sitemgmt: '/admin/sitemgmt/'
@@ -1593,6 +1593,7 @@
   window.addEventListener('popstate', function () { routeFromLocation(); });
   function renderPanel(name) {
     if (name === 'home') renderHome();
+    else if (name === 'tasks') renderWork();
     else if (name === 'analytics') renderAnalytics();
     else if (name === 'marketing') renderMarketing();
     else if (name === 'marketplaces') renderMarketplaces();
@@ -1600,7 +1601,7 @@
     else if (name === 'unreleased') renderUnreleasedFiles();
     else if (name === 'orders') renderOrders();
     else if (name === 'order-detail') renderOrderDetail();
-    else if (name === 'giveaways') { renderGiveaways(); if (Date.now() - PRIZE_CLAIMS_AT > 60000) refreshPrizeClaims(); }
+    else if (name === 'giveaways') { renderGiveaways(); renderPayouts(); if (Date.now() - PRIZE_CLAIMS_AT > 60000) refreshPrizeClaims(); }
     else if (name === 'giveaway-detail') renderGiveawayDetail();
     else if (name === 'resellers') renderResellers();
     else if (name === 'reviews') renderReviews();
@@ -1653,6 +1654,8 @@
      and Today's work. Every money figure is AU$: USD at AUD_RATE, Robux at
      the DevEx rate first (same conversion the rest of the admin uses).
      ---------------------------------------------------------------- */
+  var sideWho = $('admSideWho');
+  if (sideWho) sideWho.textContent = (ADMIN.username || 'Staff') + ' · ' + ({ owner: 'Owner', admin: 'Admin', support: 'Support' }[ADMIN.role] || 'Staff');
   var HOME_PERIOD = lsGet('coldd_admin_home_period_v1', 30); // 1, 7, 30, 0 (= lifetime)
   if ([1, 7, 30, 0].indexOf(HOME_PERIOD) < 0) HOME_PERIOD = 30;
   var DAY_MS = 86400000;
@@ -1798,13 +1801,13 @@
     window.coldSupabase.from('inbound_emails').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('received_at', new Date(Date.now() - 7 * DAY_MS).toISOString()).then(function (r) {
       if (r.error) return;
       MAIL_FAILED = r.count || 0;
-      if (curPanel === 'home') renderWork();
+      renderWork();
     });
     window.coldSupabase.from('platform_sync_state').select('*').then(function (r) {
       if (r.error) return;
       PSYNC = {};
       (r.data || []).forEach(function (row) { PSYNC[row.platform] = row; });
-      if (curPanel === 'home') renderWork();
+      renderWork();
     });
     return fetchAllRows(function () {
       return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status').order('sold_at', { ascending: false }).order('id');
@@ -2114,7 +2117,7 @@
         TODOS_LOADED = true;
         if (res.error) { console.error('[admin] todos:', res.error.message); return; }
         TODOS = res.data || [];
-        if (curPanel === 'home') renderWork();
+        renderWork();
       });
   }
   function workAutoItems() {
@@ -2134,9 +2137,9 @@
     });
     if (MAIL_FAILED) items.push({ tone: 'err', icon: 'error', text: plural(MAIL_FAILED, 'ClearlyDev email') + " couldn't be read", sub: 'Kept in inbound_emails (last 7 days) for a re-read' });
     var claims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
-    if (claims) items.push({ icon: 'redeem', text: plural(claims, 'prize claim') + ' to check', sub: 'Giveaways', panel: 'giveaways' });
+    if (claims) items.push({ icon: 'redeem', text: plural(claims, 'prize claim') + ' to check', sub: 'Prizes & Payouts', panel: 'giveaways' });
     var payouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
-    if (payouts) items.push({ icon: 'payments', text: plural(payouts, 'referral payout') + ' to send', sub: 'Marketing', panel: 'marketing' });
+    if (payouts) items.push({ icon: 'payments', text: plural(payouts, 'referral payout') + ' to send', sub: 'Prizes & Payouts', panel: 'giveaways' });
     var reviews = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length;
     if (reviews) items.push({ icon: 'reviews', text: plural(reviews, 'new review') + ' to read', sub: 'Reviews', panel: 'reviews' });
     if (UNRELEASED_FILES.length) items.push({ icon: 'rocket_launch', text: plural(UNRELEASED_FILES.length, 'product') + ' to release', sub: 'Products', panel: 'unreleased' });
@@ -2147,12 +2150,15 @@
     });
     return items;
   }
+  // Draws Today's work everywhere it appears: the dashboard box, the Tasks
+  // page, and the count beside Tasks in the sidebar.
   function renderWork() {
-    var list = $('admWorkList'), count = $('admWorkCount');
-    if (!list) return;
     var auto = workAutoItems();
     var open = TODOS.filter(function (t) { return !t.done; }), done = TODOS.filter(function (t) { return t.done; });
-    if (count) count.textContent = (auto.length + open.length) ? (auto.length + open.length) + ' open' : '';
+    var openN = auto.length + open.length;
+    ['admWorkCount', 'admTasksCount'].forEach(function (id) { var c = $(id); if (c) c.textContent = openN ? openN + ' open' : ''; });
+    var navCount = $('admTaskNavCount');
+    if (navCount) { navCount.hidden = !openN; navCount.textContent = openN ? String(openN) : ''; }
     var html = auto.map(function (it) {
       var ico = it.mk ? (it.mk === 'site' ? mpLogo('site') : '<img src="/mp-logos/' + esc(it.mk) + '.png" alt="" width="18" height="18" loading="lazy" />') : homeIcon(it.icon, 17);
       if (!it.panel) return '<div class="adm-work-item is-auto' + (it.tone ? ' tone-' + it.tone : '') + '"><span class="adm-work-ico">' + ico + '</span><span class="adm-work-text">' + esc(it.text) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span></div>';
@@ -2169,17 +2175,18 @@
         '<button type="button" class="adm-work-del" aria-label="Delete task">' + homeIcon('close', 16) + '</button></div>';
     }).join('');
     if (!html) html = '<p class="adm-work-empty">' + (TODOS_LOADED ? 'Nothing needs you today.' : 'Loading…') + '</p>';
-    list.innerHTML = html;
+    ['admWorkList', 'admTasksList'].forEach(function (id) { var l = $(id); if (l) l.innerHTML = html; });
   }
   function todoPatch(id, patch) {
     var t = TODOS.filter(function (x) { return x.id === id; })[0];
     if (t) Object.assign(t, patch);
     renderWork();
   }
-  var workForm = $('admWorkForm');
+  function bindWorkForm(formId, inputId) {
+  var workForm = $(formId);
   if (workForm) workForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    var input = $('admWorkInput'), title = (input.value || '').trim().slice(0, 300);
+    var input = $(inputId), title = (input.value || '').trim().slice(0, 300);
     if (!title || !window.coldSupabase) return;
     input.value = '';
     var temp = { id: 'tmp-' + Date.now(), title: title, done: false, created_at: new Date().toISOString(), created_by_name: currentRole().name };
@@ -2194,8 +2201,10 @@
       Object.assign(temp, res.data); renderWork();
     });
   });
-  var workList = $('admWorkList');
-  if (workList) workList.addEventListener('click', function (e) {
+  }
+  bindWorkForm('admWorkForm', 'admWorkInput');
+  bindWorkForm('admTasksForm', 'admTasksInput');
+  function onWorkListClick(e) {
     // Marketplace counts open the Marketplaces panel already filtered to that platform.
     var mp = e.target.closest('[data-mp-filter]');
     if (mp) { MP_FILTER = mp.getAttribute('data-mp-filter'); return; }
@@ -2219,7 +2228,8 @@
         if (res.error) { TODOS.splice(idx, 0, t); renderWork(); admToast('Could not delete the task.', false); }
       });
     }
-  });
+  }
+  ['admWorkList', 'admTasksList'].forEach(function (id) { var l = $(id); if (l) l.addEventListener('click', onWorkListClick); });
   // ---- One merged sales feed: website orders + BuiltByBit purchases, newest first.
   function feedEntries(opts) {
     opts = opts || {};
@@ -7291,7 +7301,7 @@
       PRIZE_CLAIMS_LOADED = true;
       PRIZE_CLAIMS_AT = Date.now();
       updateGwNavCount();
-      if (curPanel === 'home') renderWork();
+      renderWork();
       if (curPanel === 'giveaways') renderGiveaways();
       if (curPanel === 'giveaway-detail') renderGiveawayDetail();
       if (curPanel === 'home') renderHome();
@@ -9930,7 +9940,7 @@
   refreshPlatformSales();
   refreshTodos();
   refreshLifetimeViews();
-  setInterval(function () { if (!document.hidden && curPanel === 'home') refreshTodos(); }, 60000);
+  setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'tasks')) refreshTodos(); }, 60000);
   setInterval(function () { if (!document.hidden && curPanel === 'home') { refreshPlatformSales(); refreshLifetimeViews(); refreshAbandoned(); } }, 5 * 60 * 1000);
   refreshEmailConfigStatus();
   refreshAutomations();
