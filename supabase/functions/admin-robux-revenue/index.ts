@@ -199,7 +199,17 @@ Deno.serve(async (req: Request) => {
         for (const [k, v] of Object.entries(d)) if (typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v))) all[k] = Number(v);
         sums[tf] = { itemSaleRobux: Number(d.itemSaleRobux) || 0, pendingRobux: Number(d.pendingRobux) || 0, all };
       }
-      if (Object.keys(sums).length) patch.summary = { fetched_at: new Date().toISOString(), ...sums };
+      // The group's Robux balance right now, for the "minimum balance before DevEx"
+      // figure. Needs the account to see group funds; when it can't, the admin just
+      // leaves the balance out.
+      let balance: Obj = { ok: false };
+      if (!overBudget()) {
+        try {
+          const b = await roblox(cookie, `/v1/groups/${groupId}/currency`);
+          if (typeof b.robux === "number") balance = { ok: true, robux: b.robux, fetched_at: new Date().toISOString() };
+        } catch (e) { balance = { ok: false, status: (e as ApiFail).status || 0 }; }
+      }
+      if (Object.keys(sums).length) patch.summary = { fetched_at: new Date().toISOString(), ...sums, balance };
     } catch (e) { if ((e as ApiFail).status !== 408) errors.push("summary: " + (e as Error).message); }
     // Money going out shows in the summary (groupPayoutRobux is negative). The group
     // sale ledger has no spending types: Purchase, GroupPayout, AdSpend and DevEx all
