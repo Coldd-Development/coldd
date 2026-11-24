@@ -2305,8 +2305,10 @@
      in here (public.admin_todos, shared by every admin). Ticked tasks stay
      visible, struck through, for the rest of the day. */
   var TODOS = [], TODOS_LOADED = false;
+  var MAILBOX_STATE = [];
   function refreshTodos() {
     if (!window.coldSupabase) return Promise.resolve();
+    window.coldSupabase.from('mailbox_poll_state').select('account, login_ok').then(function (r) { if (!r.error) { MAILBOX_STATE = r.data || []; renderWork(); } });
     var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
     return window.coldSupabase.from('admin_todos').select('*')
       .or('done.eq.false,done_at.gte."' + dayStart.toISOString() + '"')
@@ -2331,6 +2333,9 @@
       var st = PSYNC[sy.key];
       if (st && st.cookie_ok === false) items.push({ tone: 'err', icon: 'error', text: sy.dead, sub: sy.fix });
       else if (st && /not set/.test(st.last_error || '')) items.push({ icon: 'error', text: sy.label + ' sync is off', sub: 'Add ' + sy.secret + ' in Supabase secrets to turn it on' });
+    });
+    MAILBOX_STATE.filter(function (m) { return m.login_ok === false; }).forEach(function (m) {
+      items.push({ tone: 'err', icon: 'error', text: "Can't log in to " + m.account + '@coldd.dev', sub: 'Copy the new password message and run node scripts/set-mailbox-secrets.cjs' });
     });
     if (MAIL_FAILED) items.push({ tone: 'err', icon: 'error', text: plural(MAIL_FAILED, 'ClearlyDev email') + " couldn't be read", sub: 'Kept in inbound_emails (last 7 days) for a re-read' });
     var claims = (PRIZE_CLAIMS || []).filter(function (c) { return c.status === 'pending'; }).length;
@@ -2368,7 +2373,7 @@
     html += open.concat(done).map(function (t) {
       return '<div class="adm-work-item is-task' + (t.done ? ' is-done' : '') + '" data-todo="' + esc(t.id) + '">' +
         '<button type="button" class="adm-work-check" aria-pressed="' + (t.done ? 'true' : 'false') + '" aria-label="' + (t.done ? 'Mark not done' : 'Mark done') + '"><span></span></button>' +
-        '<span class="adm-work-text">' + esc(t.title) + '<small>' + esc((t.done ? 'Done' + (t.done_by_name ? ' by ' + t.done_by_name : '') : 'Added' + (t.created_by_name ? ' by ' + t.created_by_name : '')) + ' · ' + relTime(t.done ? t.done_at : t.created_at)) + '</small></span>' +
+        '<span class="adm-work-text">' + esc(t.title) + '<small>' + esc((t.done ? 'Done' + (t.done_by_name ? ' by ' + t.done_by_name : '') : t.kind === 'email' ? (t.label || 'Email') + (t.mail_from ? ' from ' + t.mail_from : '') : 'Added' + (t.created_by_name ? ' by ' + t.created_by_name : '')) + ' · ' + relTime(t.done ? t.done_at : t.created_at)) + '</small></span>' +
         '<button type="button" class="adm-work-del" aria-label="Delete task">' + homeIcon('close', 16) + '</button></div>';
     }).join('');
     if (!html) html = '<p class="adm-work-empty">' + (TODOS_LOADED ? 'Nothing needs you today.' : 'Loading…') + '</p>';
@@ -12035,13 +12040,15 @@
       sb.from('finance_weeks').select('*').order('week_ending'),
       sb.from('finance_expenses').select('*').order('spent_on', { ascending: false }).order('created_at', { ascending: false }),
       sb.from('finance_expense_categories').select('name').order('name'),
-      sb.from('finance_instalments').select('*')
+      sb.from('finance_instalments').select('*'),
+      sb.from('finance_receipt_inbox').select('id, message_id, account, sent_at, mail_from, subject, vendor, status, expense_id, files, error').in('status', ['waiting', 'unmatched', 'failed']).order('sent_at', { ascending: false }).limit(100),
+      sb.from('mailbox_poll_state').select('account, login_ok, last_error, last_run_at, last_ok_at')
     ]).then(function (res) {
       var bad = res.filter(function (r) { return r.error; })[0];
       if (bad) throw bad.error;
       if (!res[0].data) throw new Error('No settings row');
       FIN.settings = res[0].data; FIN.weeks = res[1].data || []; FIN.expenses = res[2].data || [];
-      FIN.cats = res[3].data || []; FIN.instalments = res[4].data || []; FIN.loaded = true;
+      FIN.cats = res[3].data || []; FIN.instalments = res[4].data || []; FIN.inbox = res[5].data || []; FIN.mailState = res[6].data || []; FIN.loaded = true;
     });
     return FIN.loading;
   }
@@ -12069,7 +12076,7 @@
     finRenderMonthDD();
     $('admFinSettingsBtn').textContent = main ? 'Settings' : 'Back to finances';
     if (main) { finRenderOverview(); finRenderSheet(); finRenderExpForm(); finRenderExpList(); }
-    else { finRenderSettings(); finRenderInstalments(); finRenderIncomeTax(); finRenderGst(); }
+    else { finRenderSettings(); finRenderInstalments(); finRenderIncomeTax(); finRenderGst(); finRenderInbox(); }
   }
 
   /* ---- Periods: last week, this month, this year ---- */
@@ -12422,7 +12429,7 @@
     box.innerHTML = st.receipts.map(function (r, i) {
       var img = /^image\//.test(r.type || '');
       return '<div class="adm-fin-rcpt"><button type="button" class="adm-fin-rcpt-open" data-fin-rcpt-view="' + i + '" title="' + esc(r.name || 'Receipt') + '">' +
-        (img ? '<img alt="' + esc(r.name || 'Receipt') + '" data-fin-rcpt-img="' + esc(r.path) + '" />' : '<span class="adm-fin-pdf">PDF</span>') + '</button>' +
+        (img ? '<img alt="' + esc(r.name || 'Receipt') + '" data-fin-rcpt-img="' + esc(r.path) + '" />' : '<span class="adm-fin-pdf">' + (r.type === 'text/html' ? 'EMAIL' : 'PDF') + '</span>') + '</button>' +
         '<button type="button" class="adm-fin-rcpt-del" data-fin-rcpt-del="' + esc(r.path) + '" aria-label="Remove receipt">×</button></div>';
     }).join('') + (st.uploading ? '<div class="adm-fin-rcpt is-loading" aria-label="Uploading"><span class="adm-fin-spin"></span></div>' : '');
     box.querySelectorAll('[data-fin-rcpt-img]').forEach(function (im) {
@@ -12514,6 +12521,14 @@
         if (box.__i !== i) return;
         if (!url) { body.innerHTML = '<p class="adm-empty">Could not open this receipt.</p>'; return; }
         box.querySelector('.adm-fin-viewer-orig').href = url;
+        if (r.type === 'text/html') {
+          fetch(url).then(function (x) { return x.text(); }).then(function (html) {
+            if (box.__i !== i) return;
+            body.innerHTML = '<iframe sandbox="" class="adm-fin-mailframe" title="' + esc(r.name || 'Email') + '"></iframe>';
+            body.querySelector('iframe').srcdoc = html;
+          }).catch(function () { body.innerHTML = '<p class="adm-empty">Could not open this email.</p>'; });
+          return;
+        }
         body.innerHTML = /^image\//.test(r.type || '') ? '<img alt="' + esc(r.name || 'Receipt') + '" src="' + esc(url) + '" />' : '<iframe title="' + esc(r.name || 'Receipt') + '" src="' + esc(url) + '"></iframe>';
       });
     };
@@ -12729,6 +12744,26 @@
       finRenderInstalments();
     });
   }
+  /* ---- Emailed receipts (mailbox-poll) ---- */
+  var FIN_INBOX_STATUS = { waiting: 'Waiting for the bank charge', unmatched: 'No matching expense', failed: 'Could not be saved' };
+  function finRenderInbox() {
+    var box = $('admFinInbox'); if (!box) return;
+    var st = FIN.mailState || [], rows = FIN.inbox || [];
+    var on = st.filter(function (m) { return m.login_ok === true; }), bad = st.filter(function (m) { return m.login_ok === false; });
+    var last = st.reduce(function (m, s) { return s.last_run_at && (!m || s.last_run_at > m) ? s.last_run_at : m; }, null);
+    box.innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Emailed receipts</h2><span>' +
+        (st.length ? esc(on.length + ' mailbox' + (on.length === 1 ? '' : 'es') + (last ? ', checked ' + relTime(last) : '')) : 'not set up yet') + '</span></div></div>' +
+      (bad.length ? '<p class="adm-fin-warn">Can\'t log in to ' + esc(bad.map(function (m) { return m.account + '@coldd.dev'; }).join(', ')) + '. Run the mailbox command again with the new password.</p>' : '') +
+      (!st.length ? '<p class="adm-hint">Copy the message with the mailbox passwords, then run <code>node scripts/set-mailbox-secrets.cjs</code> in the repo folder. Receipts that reach billing@, frchrono@, management@, noreply@ or sales@ are then attached to their bank charge automatically.</p>' : '') +
+      (rows.length ? '<div class="adm-plat-tablewrap"><table class="adm-plat-table adm-fin-inbox"><thead><tr><th scope="col">Received</th><th scope="col">Vendor</th><th scope="col">Subject</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Files</span></th></tr></thead><tbody>' +
+        rows.map(function (r) {
+          var n = Array.isArray(r.files) ? r.files.length : 0;
+          return '<tr><th scope="row">' + esc(r.sent_at ? finLong(r.sent_at.slice(0, 10)) : '') + '</th><td>' + esc(r.vendor || '') + '</td><td class="adm-fin-note">' + esc(r.subject || '') + '<small class="adm-fin-charge">' + esc(r.mail_from || '') + '</small></td>' +
+            '<td>' + esc(FIN_INBOX_STATUS[r.status] || r.status) + (r.error ? '<small class="adm-fin-charge">' + esc(r.error) + '</small>' : '') + '</td>' +
+            '<td class="adm-fin-rowact">' + (n ? '<button type="button" class="adm-fin-clip" data-fin-inbox-rcpt="' + esc(r.id) + '" title="Open">' + FIN_CLIP + (n > 1 ? '<span>' + n + '</span>' : '') + '</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : (st.length ? '<p class="adm-empty">Every emailed receipt is attached to its expense.</p>' : ''));
+  }
   function finRenderSettings() {
     var box = $('admFinSettings'); if (!box) return;
     var s = FIN.settings;
@@ -12798,6 +12833,7 @@
       if (e.target.closest('#admFinExpCancel')) { finCancelExpense(); return; }
       if ((b = e.target.closest('[data-fin-rcpt-del]'))) { finRemoveReceipt(b.getAttribute('data-fin-rcpt-del')); return; }
       if ((b = e.target.closest('[data-fin-rcpt-view]'))) { finViewReceipts(FIN.form ? FIN.form.receipts : [], +b.getAttribute('data-fin-rcpt-view')); return; }
+      if ((b = e.target.closest('[data-fin-inbox-rcpt]'))) { var ib = (FIN.inbox || []).filter(function (x) { return x.id === b.getAttribute('data-fin-inbox-rcpt'); })[0]; if (ib) finViewReceipts(ib.files, 0); return; }
       if ((b = e.target.closest('[data-fin-list-rcpt]'))) { var ex = FIN.expenses.filter(function (x) { return x.id === b.getAttribute('data-fin-list-rcpt'); })[0]; if (ex) finViewReceipts(ex.receipts, 0); return; }
       if ((b = e.target.closest('[data-fin-del-exp]'))) { finDeleteExpense(b.getAttribute('data-fin-del-exp')); return; }
       if ((b = e.target.closest('[data-fin-edit]'))) { if (FIN.form && FIN.form.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(FIN.form.added); FIN.form = null; FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); finRenderExpList(); $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }

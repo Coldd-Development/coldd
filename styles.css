@@ -6553,3 +6553,9 @@ html[data-theme="light"] .adm-range-dock .adm-fin-tools { background: color-mix(
   .adm-range-dock .adm-fin-tools .adm-seg button { white-space: nowrap; }
   .adm-range-dock .adm-dd-menu { top: auto; bottom: calc(100% + 8px); }
 }
+
+/* Finances: emailed receipts (mailbox-poll) */
+.adm-fin-viewer-body .adm-fin-mailframe { width: min(860px, 100%); background: #fff; }
+.adm-fin-warn { margin: 0 0 12px; padding: 10px 12px; font-size: 13px; color: var(--fg); background: rgba(255,77,68,0.1); border: 1px solid rgba(255,77,68,0.35); border-radius: var(--r-ctl); }
+.adm-fin-inbox td, .adm-fin-inbox th { white-space: normal; text-align: left; }
+.adm-fin-inbox td.adm-fin-note { min-width: 200px; }
