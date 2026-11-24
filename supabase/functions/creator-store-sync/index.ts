@@ -132,6 +132,10 @@ Deno.serve(async (req) => {
 
   // Product match by title, then upsert (re-sending the same sale updates it).
   let written = 0;
+  // Listings uploaded by mistake (platform_sale_ignores) are never written.
+  const { data: ign } = await admin.from("platform_sale_ignores").select("product_name").eq("platform", "creatorstore");
+  const ignored = new Set(((ign || []) as Obj[]).map((r) => String(r.product_name).toLowerCase()));
+  if (ignored.size) for (let i = rows.length - 1; i >= 0; i--) if (ignored.has(String(rows[i].product_name || "").toLowerCase())) rows.splice(i, 1);
   if (rows.length) {
     const byTitle = new Map<string, string>();
     const { data: prods } = await admin.from("products").select("id, title").limit(5000);

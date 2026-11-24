@@ -2231,6 +2231,12 @@
 
   // A share as people read it: whole numbers from 10%, one decimal from 1%,
   // two below that, so a small platform never shows a flat 0%.
+  // A BuiltByBit purchase's name: its listing's title; an add-on's title next to it.
+  function bbbTitle(p, titles) {
+    var base = p.resource_id != null ? titles[String(p.resource_id)] : '';
+    if (p.addon) return base ? base + ' (' + p.addon + ' add-on)' : p.addon + ' (add-on)';
+    return base || 'BuiltByBit listing ' + p.resource_id;
+  }
   function sharePct(s) {
     if (!s) return '0%';
     if (s >= 9.95) return Math.round(s) + '%';
@@ -2417,7 +2423,7 @@
     if (opts.channel !== 'site' && BBB.configured === true) {
       var titles = bbbResourceTitleById();
       BBB.purchases.forEach(function (p) {
-        out.push({ ch: 'bbb', date: p.purchased_at, p: p, title: titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id) });
+        out.push({ ch: 'bbb', date: p.purchased_at, p: p, title: bbbTitle(p, titles) });
       });
     }
     if (opts.since) out = out.filter(function (e) { return new Date(e.date) >= opts.since; });
@@ -4229,7 +4235,7 @@
     function add(o) {
       var p = matchProduct(o.id, o.title);
       var res = o.res || resByTitle[bbbNorm(canonName(o.title))] || null;
-      var cat = p && p.cat ? p.cat : res && res.category ? (AN_BBB_CAT[res.category] || res.category) : '';
+      var cat = p && p.cat ? p.cat : res && res.category ? (AN_BBB_CAT[res.category] || res.category) : nameCat(o.title);
       var shown = p ? p.title : res && !o.res ? res.title : canonName(o.title || 'Unknown product');
       list.push({ pf: o.pf, t: o.t, aud: o.aud || 0, robux: o.robux || 0, title: shown,
         key: p ? 'p:' + p.id : 't:' + bbbNorm(shown), image: p && p.image ? window.imgUrl(p.image) : (res && res.cover_image_url) || '',
@@ -4248,7 +4254,7 @@
     if (BBB.configured) BBB.purchases.forEach(function (p) {
       if (!bbbIsUsd(p)) return;
       var t = Date.parse(p.purchased_at), res = resById[String(p.resource_id)];
-      add({ pf: 'builtbybit', t: t, id: null, title: res ? res.title : 'BuiltByBit listing ' + p.resource_id, res: res, aud: usdToAudAt(p.price, t),
+      add({ pf: 'builtbybit', t: t, id: null, title: res ? res.title : bbbTitle(p, {}), res: res, aud: usdToAudAt(p.price, t),
         buyer: p.buyer_id ? 'bbb:' + p.buyer_id : '', buyerName: p.buyer_name, order: 'bbb:' + p.purchase_id });
     });
     PSALES.forEach(function (s) {
@@ -4512,26 +4518,20 @@
   }
   wirePlatChart($('admVolChart'));
 
-  // Categories: revenue by product category (our catalogue's; BuiltByBit's for
-  // products we don't list). Colours follow the category, not its rank in the
-  // range: the 7 categories with the most revenue all time get their own colour,
-  // the rest share "Other categories". Robux counts at the DevEx rate.
-  // Uncategorised and Other categories open to show what is in them.
-  var AN_CAT_COLORED = 7, AN_CAT_OPEN = {}, AN_CAT_COL = { src: null, map: {} };
+  // Categories: revenue by product category (our catalogue's; BuiltByBit's for listings
+  // we don't sell here; the category set on a marketplace-only name in
+  // product_name_aliases). Ranked like BuiltByBit's Top categories: revenue and sales,
+  // the rank's move and the change against the previous period. Every category keeps
+  // its own colour; Minecraft isn't counted. Uncategorised sits last and opens to list
+  // its products with a way to fix them.
+  var AN_CAT_COLOR = { 'Finished Games & Templates': 1, 'Maps': 2, 'Scripts & UI': 3, 'Graphics': 4, 'Buildings': 5, 'Assets': 6,
+    'Uniforms & Gear': 7, 'Boats': 8, 'Weapons': 9, 'Vehicles': 10, 'Animations & VFX': 11 };
+  var AN_CAT_OPEN = {};
   var AN_CAT_CHEV = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
   function anVal(aud, robux) { return (aud || 0) + (robux || 0) * DEVEX_USD_PER_ROBUX * audRateOn(Date.now()); }
-  function anCatColors(all) {
-    if (AN_CAT_COL.src === all) return AN_CAT_COL.map;
-    var by = {}, map = {};
-    all.forEach(function (x) { if (x.cat !== 'Uncategorised') by[x.cat] = (by[x.cat] || 0) + anVal(x.aud, x.robux); });
-    Object.keys(by).sort(function (a, b) { return by[b] - by[a] || (a < b ? -1 : 1); }).slice(0, AN_CAT_COLORED)
-      .forEach(function (c, i) { map[c] = 'var(--cat-' + (i + 1) + ')'; });
-    AN_CAT_COL = { src: all, map: map };
-    return map;
-  }
   function catColor(c) {
     if (c === 'Uncategorised') return 'var(--cat-unc)';
-    return anCatColors(anAllItems())[c] || 'var(--cat-other)';
+    return AN_CAT_COLOR[c] ? 'var(--cat-' + AN_CAT_COLOR[c] + ')' : 'var(--cat-other)';
   }
   function anCatItems(x) {
     return Object.keys(x.items).map(function (k) { return x.items[k]; }).sort(function (a, b) { return b.v - a.v; });
@@ -4539,7 +4539,7 @@
   // What is in Uncategorised: each product, where it sold, and a way to fix it.
   function anCatUncList(x) {
     var items = anCatItems(x), shown = items.slice(0, 40);
-    return '<div class="adm-cat-sub"><p class="adm-cat-hint">No category on coldd.dev, and no BuiltByBit listing with one. Set a category on the product to sort it.</p>' +
+    return '<div class="adm-cat-sub"><p class="adm-cat-hint">No category on coldd.dev, on BuiltByBit or in the name list. Set a category on the product to sort it.</p>' +
       shown.map(function (it) {
         var pid = it.key.indexOf('p:') === 0 ? it.key.slice(2) : '';
         var logos = Object.keys(it.pfs).map(pfMark).join('');
@@ -4551,20 +4551,11 @@
           : '<div class="adm-cat-sub-row">' + inner + '</div>';
       }).join('') + (items.length > shown.length ? '<p class="adm-cat-hint">And ' + num(items.length - shown.length) + ' more</p>' : '') + '</div>';
   }
-  // What is in Other categories: each category on its own.
-  function anCatOtherList(cats, g, tot) {
-    return '<div class="adm-cat-sub">' + cats.map(function (c) {
-      var x = g[c];
-      return '<div class="adm-cat-sub-row is-cat"><span class="adm-cat-thumb is-dot"><b class="adm-dot" style="--pf:var(--cat-other)"></b></span>' +
-        '<span class="adm-cat-sub-name"><b>' + esc(c) + '</b><small>' + plural(x.n, 'sale') + '</small></span>' +
-        '<span class="adm-cat-sub-val">' + moneyBoth(x.aud, x.robux) + '</span><span class="adm-cat-sub-share">' + (tot ? sharePct(x.v / tot * 100) : '') + '</span></div>';
-    }).join('') + '</div>';
-  }
   function renderAnCats(w) {
     var box = $('admAnCats'); if (!box) return;
-    var all = anAllItems(), cur = anIn(all, w.start, w.end), prev = w.prevStart ? anIn(all, w.prevStart, w.prevEnd) : null;
+    var all = anAllItems().filter(function (x) { return !/minecraft/i.test(x.cat); });
+    var cur = anIn(all, w.start, w.end), prev = w.prevStart ? anIn(all, w.prevStart, w.prevEnd) : null;
     if (!cur.length) { box.innerHTML = anEmpty('No sales in this range.'); return; }
-    var col = anCatColors(all);
     function group(list) {
       var g = {};
       list.forEach(function (x) {
@@ -4576,47 +4567,36 @@
       });
       return g;
     }
-    function sumOf(src, keys) {
-      var o = { aud: 0, robux: 0, n: 0, v: 0 };
-      keys.forEach(function (c) { var x = src && src[c]; if (x) { o.aud += x.aud; o.robux += x.robux; o.n += x.n; o.v += x.v; } });
-      return o;
-    }
+    function ranked(g) { return g ? Object.keys(g).filter(function (c) { return c !== 'Uncategorised'; }).sort(function (a, b) { return g[b].v - g[a].v; }) : []; }
     var g = group(cur), gp = prev ? group(prev) : null;
     var tot = anSum(Object.keys(g).map(function (c) { return g[c].v; }));
-    var named = Object.keys(g).filter(function (c) { return c !== 'Uncategorised'; }).sort(function (a, b) { return g[b].v - g[a].v; });
-    var own = named.filter(function (c) { return col[c]; }), rest = named.filter(function (c) { return !col[c]; });
-    var rows = own.map(function (c) { return { id: 'c:' + c, label: c, color: col[c], x: g[c], p: gp ? sumOf(gp, [c]) : null }; });
-    if (rest.length) rows.push({ id: 'other', label: rest.length === 1 ? rest[0] : 'Other categories', color: 'var(--cat-other)', x: sumOf(g, rest), p: gp ? sumOf(gp, rest) : null, others: rest.length > 1 ? rest : null });
-    if (g.Uncategorised) rows.push({ id: 'unc', label: 'Uncategorised', color: 'var(--cat-unc)', x: g.Uncategorised, p: gp ? sumOf(gp, ['Uncategorised']) : null, unc: true });
-
-    var known = {};
-    allProducts().forEach(function (p) { if (p.cat) known[p.cat] = 1; });
-    named.forEach(function (c) { known[c] = 1; });
-    var unc = g.Uncategorised, uncN = unc ? Object.keys(unc.items).length : 0, top = named[0];
-    var maxV = Math.max.apply(null, rows.map(function (r) { return r.x.v; }));
-    var slices = rows.map(function (r) { return { v: r.x.v, color: r.color, label: r.label, tip: sharePct(tot ? r.x.v / tot * 100 : 0) + ', ' + moneyBoth(r.x.aud, r.x.robux) }; });
-
-    box.innerHTML = '<div class="adm-an-figs is-3">' +
-        anFig('Top category', top ? esc(top) : '–', '', '', top && tot ? sharePct(g[top].v / tot * 100) + ' of revenue' : '') +
-        anFig('Categories selling', num(named.length), 'of ' + Object.keys(known).length, '', '') +
-        anFig('Uncategorised', unc ? sharePct(unc.v / tot * 100) : '0%', '', '', unc ? plural(uncN, 'product') + ' to sort' : 'Every sale has a category') +
-      '</div>' +
-      '<div class="adm-cat-wrap">' +
-        '<figure class="adm-pie">' + donutSvg(slices, { size: 176, aria: 'Revenue share by category', center: tot ? fmtA(tot, true) : 'A$0', sub: 'revenue' }) + '</figure>' +
-        '<div class="adm-cat-list" role="list" aria-label="Revenue by category">' + rows.map(function (r) {
-          var openable = !!(r.others || r.unc), open = openable && !!AN_CAT_OPEN[r.id];
-          var share = tot ? r.x.v / tot * 100 : 0;
-          var head = '<span class="adm-cat-name"><b class="adm-dot' + (r.unc ? ' is-unc' : '') + '" style="--pf:' + r.color + '"></b><span>' + esc(r.label) + '<small>' + plural(r.x.n, 'sale') + '</small></span></span>' +
-            '<span class="adm-cat-bar" aria-hidden="true"><i style="width:' + Math.max(1.5, maxV ? r.x.v / maxV * 100 : 0).toFixed(1) + '%;background:' + r.color + '"></i></span>' +
-            '<span class="adm-bar-val">' + (r.x.aud || !r.x.robux ? fmtA(r.x.aud) : robuxRaw(r.x.robux)) +
-              '<small>' + (r.x.aud && r.x.robux ? robuxRaw(r.x.robux) + ' · ' : '') + sharePct(share) + (r.p ? ' ' + chgChip(r.x.v, r.p.v) : '') + '</small></span>' +
-            '<span class="adm-cat-chev">' + (openable ? AN_CAT_CHEV : '') + '</span>';
-          return '<div class="adm-cat-item' + (open ? ' is-open' : '') + (r.unc ? ' is-unc' : '') + '" role="listitem">' +
-            (openable ? '<button type="button" class="adm-cat-head" data-cat-open="' + esc(r.id) + '" aria-expanded="' + open + '">' + head + '</button>'
-              : '<div class="adm-cat-head">' + head + '</div>') +
-            (open ? (r.unc ? anCatUncList(r.x) : anCatOtherList(r.others, g, tot)) : '') + '</div>';
-        }).join('') + '</div>' +
-      '</div>';
+    var was = {}; ranked(gp).forEach(function (c, i) { was[c] = i + 1; });
+    function money(x) { return x.aud || !x.robux ? fmtA(x.aud) : robuxRaw(x.robux); }
+    function sub(x) { return (x.aud && x.robux ? robuxRaw(x.robux) + ' · ' : '') + plural(x.n, 'sale'); }
+    function change(c, rank) {
+      if (!gp) return '';
+      var move = !was[c] ? '<b class="up">New</b>' : was[c] > rank ? '<b class="up">▲ ' + (was[c] - rank) + '</b>' : was[c] < rank ? '<b class="down">▼ ' + (rank - was[c]) + '</b>' : '<b class="same">–</b>';
+      var pv = gp[c] ? gp[c].v : 0, pct = pv ? (g[c].v - pv) / pv * 100 : null;
+      return '<span class="adm-catr-chg">' + move + (pct == null ? '' : '<small class="' + (pct >= 0 ? 'up' : 'down') + '">' + (pct >= 0 ? '+' : '−') + fmtPctAbs(pct) + '</small>') + '</span>';
+    }
+    var rows = ranked(g).map(function (c, i) {
+      return '<div class="adm-catr-row" role="listitem">' +
+        '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
+        '<span class="adm-catr-name"><b><i class="adm-dot" style="--pf:' + catColor(c) + '"></i>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em></span>' +
+        '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span>' + change(c, i + 1) + '</div>';
+    });
+    var unc = g.Uncategorised;
+    if (unc) {
+      var open = !!AN_CAT_OPEN.unc, nItems = Object.keys(unc.items).length;
+      rows.push('<div class="adm-catr-unc' + (open ? ' is-open' : '') + '" role="listitem">' +
+        '<button type="button" class="adm-catr-row is-btn" data-cat-open="unc" aria-expanded="' + open + '">' +
+          '<span class="adm-catr-rank"></span>' +
+          '<span class="adm-catr-name"><b><i class="adm-dot is-unc"></i>Uncategorised</b><em>' + plural(nItems, 'product') + ' to sort</em></span>' +
+          '<span class="adm-catr-val"><b>' + money(unc) + '</b><small>' + sub(unc) + '</small></span>' +
+          '<span class="adm-catr-chg adm-catr-chev">' + AN_CAT_CHEV + '</span>' +
+        '</button>' + (open ? anCatUncList(unc) : '') + '</div>');
+    }
+    box.innerHTML = '<div class="adm-catr' + (gp ? '' : ' no-chg') + '" role="list" aria-label="Revenue by category">' + rows.join('') + '</div>';
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-cat-open]');
@@ -7084,6 +7064,18 @@
   // NAME_ALIAS[normalised alias] = { any: name or null, priced: [{ price, name }] }.
   // A priced alias only applies to a sale within 10% (at least US$0.50) of its price.
   var NAME_ALIAS = {};
+  // Categories set on names that only sell on the marketplaces (product_name_aliases.category),
+  // by normalised name.
+  var NAME_CAT = {};
+  function nameCat(t) {
+    if (!t) return '';
+    var c = NAME_CAT[bbbNorm(t)];
+    if (c) return c;
+    // A ClearlyDev order can name a product as "City, Country": try each part.
+    var parts = String(t).split(/\s*,\s*/);
+    for (var i = 0; i < parts.length && parts.length > 1; i++) { c = NAME_CAT[bbbNorm(parts[i])]; if (c) return c; }
+    return '';
+  }
   function canonName(t, usd) {
     var e = NAME_ALIAS[bbbNorm(t)]; if (!e) return t;
     if (usd > 0) for (var i = 0; i < e.priced.length; i++) {
@@ -7094,16 +7086,17 @@
   }
   function refreshNameAliases() {
     if (!window.coldSupabase) return Promise.resolve();
-    return window.coldSupabase.from('product_name_aliases').select('alias, canonical, price_usd').then(function (res) {
+    return window.coldSupabase.from('product_name_aliases').select('alias, canonical, price_usd, category').then(function (res) {
       if (res.error) { console.error('[admin] name aliases:', res.error.message); return; }
-      var m = {};
+      var m = {}, cats = {};
       (res.data || []).forEach(function (r) {
         if (!r.alias || !r.canonical) return;
+        if (r.category) { cats[bbbNorm(r.alias)] = r.category; cats[bbbNorm(r.canonical)] = r.category; }
         var e = m[bbbNorm(r.alias)] = m[bbbNorm(r.alias)] || { any: null, priced: [] };
         if (r.price_usd != null && Number(r.price_usd) > 0) e.priced.push({ price: Number(r.price_usd), name: r.canonical });
         else e.any = r.canonical;
       });
-      NAME_ALIAS = m;
+      NAME_ALIAS = m; NAME_CAT = cats;
       PM = { src: null, list: [], memo: {} }; ORDER_NAMES = null; AN_ITEMS = null;
       if (curPanel === 'orders') renderOrders();
       if (curPanel === 'analytics') renderAnalytics();
@@ -7278,7 +7271,7 @@
     if (!window.coldSupabase) return Promise.resolve();
     var sb = window.coldSupabase;
     return Promise.all([
-      bbbPaged(function () { return sb.from('bbb2_purchases').select('purchase_id, resource_id, created_at, price_final, price_list, fee, currency, gateway, bundle_id, sale_event_id, buyer_id, buyer_name, external_tid').order('created_at', { ascending: false }).order('purchase_id'); }),
+      bbbPaged(function () { return sb.from('bbb2_purchases').select('purchase_id, resource_id, created_at, price_final, price_list, fee, currency, gateway, bundle_id, sale_event_id, buyer_id, buyer_name, external_tid, addon_title').order('created_at', { ascending: false }).order('purchase_id'); }),
       bbbPaged(function () { return sb.from('bbb2_resources').select('resource_id, title, url, summary, description, list_price, final_price, cover_image_url, carousel_count, category, latest_version').order('resource_id'); }),
       sb.from('bbb2_funnel').select('*').limit(5000),
       sb.from('bbb2_state').select('*').eq('id', true).maybeSingle(),
@@ -7291,7 +7284,7 @@
       BBB.sig = sig;
       BBB.purchases = r[0].map(function (p) {
         return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, list_price: Number(p.price_list) || 0, fee: Number(p.fee) || 0, currency: p.currency, gateway: p.gateway,
-          bundle_id: p.bundle_id, sale_event_id: p.sale_event_id, buyer_id: p.buyer_id, buyer_name: p.buyer_name || '', external_tid: p.external_tid || '' };
+          bundle_id: p.bundle_id, sale_event_id: p.sale_event_id, buyer_id: p.buyer_id, buyer_name: p.buyer_name || '', external_tid: p.external_tid || '', addon: p.addon_title || '' };
       });
       BBB.resources = r[1];
       BBB.funnel = {};
@@ -8295,7 +8288,7 @@
       var titles = bbbResourceTitleById(), covers = {};
       BBB.resources.forEach(function (r) { if (r.cover_image_url) covers[String(r.resource_id)] = r.cover_image_url; });
       BBB.purchases.forEach(function (p) {
-        var usdP = bbbIsUsd(p), title = titles[String(p.resource_id)] || ('BuiltByBit listing ' + p.resource_id);
+        var usdP = bbbIsUsd(p), title = bbbTitle(p, titles);
         out.push({
           key: 'bbb:' + p.purchase_id, kind: 'bbb', pf: 'builtbybit', t: Date.parse(p.purchased_at), id: saleOrderId('bbb', p), title: saleDisplayName(null, title), buyer: p.buyer_name || '',
           search: bbbMethodName(p.gateway) + ' ' + p.purchase_id + ' ' + title,

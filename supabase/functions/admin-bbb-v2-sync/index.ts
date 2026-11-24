@@ -206,8 +206,9 @@ Deno.serve(async (req: Request) => {
         for (const r of (data ?? []) as Obj[]) known.add(Number(r.purchase_id));
       }
       let newestFirst = false, stored = 0, pagesRead = 0;
-      // with=Buyer adds the buyer (username, avatar) to each purchase.
-      await pages(token, "/v2/resources/creator/purchases?with=Buyer", "purchases", async (rows, page) => {
+      // with=Buyer adds the buyer (username, avatar) to each purchase; with=Addon gives an
+      // add-on purchase its add-on (title, and the listing it belongs to).
+      await pages(token, "/v2/resources/creator/purchases?with=Buyer,Addon", "purchases", async (rows, page) => {
         pagesRead = page;
         if (page === 1) {
           const ts = rows.map((p) => num(p.created_at)).filter((n) => n > 0);
@@ -230,6 +231,7 @@ Deno.serve(async (req: Request) => {
           buyer_name: p.Buyer?.username ?? null,
           buyer_avatar: p.Buyer?.avatar_url_small ?? p.Buyer?.avatar_url_medium ?? null,
           external_tid: p.external_tid ?? null,
+          addon_title: p.Addon?.title ?? null,
         })).filter((r) => r.purchase_id && r.created_at);
         if (out.length) {
           const { error } = await admin.from("bbb2_purchases").upsert(out, { onConflict: "purchase_id" });
