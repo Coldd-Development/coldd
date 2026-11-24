@@ -20,6 +20,8 @@ export interface ParsedOrder {
   orderId: string;
   currency: string;
   total: number;
+  // What the store keeps after ClearlyDev's platform fee ("Platform Fee -$0.60"), when the email shows it.
+  net: number | null;
   items: ParsedItem[];
   buyer: string | null;
   // The order date printed in the email: the subject ("... - 28th August 2025")
@@ -120,7 +122,10 @@ export function readMoney(s: string): { amount: number; currency: string } | nul
 export function parseClearlyDevOrder(email: { subject?: string; html?: string; text?: string; from?: string }): ParseResult {
   const subject = email.subject || "";
   const html = email.html || "";
-  const text = email.text || (html ? htmlToText(html) : "");
+  // A short plain-text part with no amount ("You have a new order #1294056.") is not
+  // the email: read the HTML then.
+  const plain = email.text || "";
+  const text = plain && readMoney(plain) ? plain : (html ? htmlToText(html) : plain);
   const hay = (email.from || "") + "\n" + subject + "\n" + text + "\n" + html;
   if (!/clearly\s?dev/i.test(hay)) return { ok: false, error: "not a ClearlyDev email" };
   if (!/order/i.test(subject + "\n" + text)) return { ok: false, error: "not an order email" };
@@ -168,6 +173,8 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
   }
   if (!currency) { const any = readMoney(text); currency = any ? any.currency : "USD"; }
   if (amount == null) return { ok: false, error: "no total found" };
+  const fee = pick(/platform fee|service fee|commission/i);
+  const net = fee && fee.amount < amount ? Math.round((amount - fee.amount) * 100) / 100 : null;
 
   // Forwarded copies (Gmail strips class names) and any other layout: the item
   // names are the links to clearlydev.com/product/... pages.
@@ -231,5 +238,5 @@ export function parseClearlyDevOrder(email: { subject?: string; html?: string; t
     }
   }
   // The plain-text part marks bold as *Noah Gibbs*.
-  return { ok: true, orderId, currency, total: amount, items, buyer: buyer ? buyer.trim().replace(/^[*_]+|[*_]+$/g, "").trim() || null : null, subjectDate };
+  return { ok: true, orderId, currency, total: amount, net, items, buyer: buyer ? buyer.trim().replace(/^[*_]+|[*_]+$/g, "").trim() || null : null, subjectDate };
 }

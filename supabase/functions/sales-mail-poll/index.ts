@@ -17,10 +17,12 @@
 // (default imap.migadu.com).
 // Actions: "sync" (default), "ping" (connects and reads the server greeting,
 // no login; proves the mailbox host is reachable from here).
+// Every sync also reads again the ClearlyDev emails that failed in the last 7
+// days, so a parser fix picks them up without anyone touching the mailbox.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import PostalMime from "npm:postal-mime@2";
-import { forwardedSentAt, parseClearlyDevOrder } from "../_shared/clearlydev_email.ts";
+import { forwardedSentAt, parseClearlyDevOrder, type ParsedOrder } from "../_shared/clearlydev_email.ts";
 import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
 
 const MAX_PER_RUN = 25;
@@ -151,9 +153,38 @@ Deno.serve(async (req) => {
     return json({ ok: true, configured: false });
   }
 
+  const byTitle = new Map<string, string>();
+  const { data: prods } = await admin.from("products").select("id, title").limit(5000);
+  (prods || []).forEach((p: Obj) => { const k = norm(p.title); if (k && !byTitle.has(k)) byTitle.set(k, p.id); });
+  const rates = new Map<string, number>();
+  // One parsed order -> its platform_sales row, keyed on the ClearlyDev order number.
+  async function writeSale(parsed: ParsedOrder, m: { messageId: string; sentAt: string | null; subject: string; from: string; text: string; html: string }) {
+    const perUnit = await usdPerUnit(parsed.currency, rates);
+    const names = parsed.items.map((i) => i.name).filter(Boolean);
+    const qty = parsed.items.reduce((s, i) => s + (i.qty || 1), 0) || 1;
+    // The sale time is when ClearlyDev sent the email. A forwarded copy carries
+    // the forward's own date, so its quoted "Sent:" line is used instead (kept
+    // only when it is not after the forward itself).
+    const forwarded = /^\s*(fwd?|fw)\s*:/i.test(m.subject) || !/clearlydev\.com$/i.test(m.from);
+    const quoted = forwarded ? forwardedSentAt({ text: m.text, html: m.html }) : null;
+    const fwdAt = m.sentAt ? new Date(m.sentAt).getTime() : Date.now();
+    const soldAt = quoted && new Date(quoted).getTime() <= fwdAt + 120000 ? quoted : (m.sentAt || new Date().toISOString());
+    const up = await admin.from("platform_sales").upsert({
+      platform: "clearlydev", source: "email", external_id: parsed.orderId,
+      sold_at: soldAt,
+      product_id: names.length === 1 && qty === 1 ? byTitle.get(norm(names[0])) || null : null,
+      product_name: (names.join(", ") || "ClearlyDev order").slice(0, 300),
+      currency: parsed.currency, amount: parsed.total, amount_usd: Math.round(parsed.total * perUnit * 10000) / 10000,
+      net_amount: parsed.net, net_usd: parsed.net == null ? null : Math.round(parsed.net * perUnit * 10000) / 10000,
+      quantity: qty, buyer_name: parsed.buyer, status: "paid",
+      raw: { email_message_id: m.messageId, email_sent_at: m.sentAt, forwarded, quoted_sent_at: quoted }, updated_at: new Date().toISOString(),
+    }, { onConflict: "platform,external_id", ignoreDuplicates: true });
+    if (up.error) throw new Error(up.error.message);
+  }
+
   const imap = new Imap();
   let loginOk: boolean | null = null, error = "";
-  const summary = { read: 0, parsed: 0, ignored: 0, failed: 0, written: 0 };
+  const summary = { read: 0, parsed: 0, ignored: 0, failed: 0, written: 0, retried: 0 };
   try {
     await imap.open(host);
     try { await imap.cmd(`LOGIN ${quote(user)} ${quote(pass)}`); loginOk = true; }
@@ -161,11 +192,6 @@ Deno.serve(async (req) => {
     await imap.cmd("SELECT INBOX");
     const search = await imap.cmd("UID SEARCH UNSEEN");
     const uids = search.lines.filter((l) => /^\* SEARCH/i.test(l)).flatMap((l) => l.replace(/^\* SEARCH\s*/i, "").split(/\s+/)).filter(Boolean).slice(0, MAX_PER_RUN);
-
-    const byTitle = new Map<string, string>();
-    const { data: prods } = await admin.from("products").select("id, title").limit(5000);
-    (prods || []).forEach((p: Obj) => { const k = norm(p.title); if (k && !byTitle.has(k)) byTitle.set(k, p.id); });
-    const rates = new Map<string, number>();
 
     for (const uid of uids) {
       const f = await imap.cmd(`UID FETCH ${uid} (BODY.PEEK[])`);
@@ -187,26 +213,7 @@ Deno.serve(async (req) => {
       const parsed = parseClearlyDevOrder({ subject: mail.subject || "", html: mail.html || "", text: mail.text || "", from: mail.from?.address || "" });
       if (parsed.ok) {
         try {
-          const perUnit = await usdPerUnit(parsed.currency, rates);
-          const names = parsed.items.map((i) => i.name).filter(Boolean);
-          const qty = parsed.items.reduce((s, i) => s + (i.qty || 1), 0) || 1;
-          // The sale time is when ClearlyDev sent the email. A forwarded copy carries
-          // the forward's own date, so its quoted "Sent:" line is used instead (kept
-          // only when it is not after the forward itself).
-          const forwarded = /^\s*(fwd?|fw)\s*:/i.test(mail.subject || "") || !/clearlydev\.com$/i.test(mail.from?.address || "");
-          const quoted = forwarded ? forwardedSentAt({ text: mail.text || "", html: mail.html || "" }) : null;
-          const fwdAt = row.sent_at ? new Date(row.sent_at).getTime() : Date.now();
-          const soldAt = quoted && new Date(quoted).getTime() <= fwdAt + 120000 ? quoted : (row.sent_at || new Date().toISOString());
-          const up = await admin.from("platform_sales").upsert({
-            platform: "clearlydev", source: "email", external_id: parsed.orderId,
-            sold_at: soldAt,
-            product_id: names.length === 1 && qty === 1 ? byTitle.get(norm(names[0])) || null : null,
-            product_name: (names.join(", ") || "ClearlyDev order").slice(0, 300),
-            currency: parsed.currency, amount: parsed.total, amount_usd: Math.round(parsed.total * perUnit * 10000) / 10000,
-            quantity: qty, buyer_name: parsed.buyer, status: "paid",
-            raw: { email_message_id: messageId, email_sent_at: row.sent_at, forwarded, quoted_sent_at: quoted }, updated_at: new Date().toISOString(),
-          }, { onConflict: "platform,external_id", ignoreDuplicates: true });
-          if (up.error) throw new Error(up.error.message);
+          await writeSale(parsed, { messageId, sentAt: row.sent_at, subject: mail.subject || "", from: mail.from?.address || "", text: mail.text || "", html: mail.html || "" });
           summary.parsed++; summary.written++;
           Object.assign(row, { platform: "clearlydev", external_id: parsed.orderId, status: "parsed", error: null });
         } catch (e) {
@@ -229,6 +236,19 @@ Deno.serve(async (req) => {
     error = (e as Error).message;
   } finally {
     imap.close();
+  }
+
+  // ClearlyDev emails that failed in the last 7 days, read again.
+  const { data: retry } = await admin.from("inbound_emails").select("id, message_id, sent_at, mail_from, subject, text_body, html_body")
+    .eq("status", "failed").eq("platform", "clearlydev").gte("received_at", new Date(Date.now() - 7 * 86400000).toISOString()).limit(20);
+  for (const r of (retry || []) as Obj[]) {
+    const parsed = parseClearlyDevOrder({ subject: r.subject || "", html: r.html_body || "", text: r.text_body || "", from: r.mail_from || "" });
+    if (!parsed.ok) continue;
+    try {
+      await writeSale(parsed, { messageId: r.message_id, sentAt: r.sent_at, subject: r.subject || "", from: r.mail_from || "", text: r.text_body || "", html: r.html_body || "" });
+      await admin.from("inbound_emails").update({ status: "parsed", external_id: parsed.orderId, error: null }).eq("id", r.id);
+      summary.retried++; summary.written++;
+    } catch (_) { /* stays failed for the next run */ }
   }
 
   if (loginOk === false && prev?.cookie_ok !== false) {
