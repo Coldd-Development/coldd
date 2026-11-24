@@ -4582,7 +4582,7 @@
     var rows = ranked(g).map(function (c, i) {
       return '<div class="adm-catr-row" role="listitem">' +
         '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
-        '<span class="adm-catr-name"><b><i class="adm-dot" style="--pf:' + catColor(c) + '"></i>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em></span>' +
+        '<span class="adm-catr-name"><b>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em></span>' +
         '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span>' + change(c, i + 1) + '</div>';
     });
     var unc = g.Uncategorised;
@@ -4591,12 +4591,16 @@
       rows.push('<div class="adm-catr-unc' + (open ? ' is-open' : '') + '" role="listitem">' +
         '<button type="button" class="adm-catr-row is-btn" data-cat-open="unc" aria-expanded="' + open + '">' +
           '<span class="adm-catr-rank"></span>' +
-          '<span class="adm-catr-name"><b><i class="adm-dot is-unc"></i>Uncategorised</b><em>' + plural(nItems, 'product') + ' to sort</em></span>' +
+          '<span class="adm-catr-name"><b>Uncategorised</b><em>' + plural(nItems, 'product') + ' to sort</em></span>' +
           '<span class="adm-catr-val"><b>' + money(unc) + '</b><small>' + sub(unc) + '</small></span>' +
           '<span class="adm-catr-chg adm-catr-chev">' + AN_CAT_CHEV + '</span>' +
         '</button>' + (open ? anCatUncList(unc) : '') + '</div>');
     }
-    box.innerHTML = '<div class="adm-catr' + (gp ? '' : ' no-chg') + '" role="list" aria-label="Revenue by category">' + rows.join('') + '</div>';
+    // The pie carries the colours (hover a slice for its category); the list has none.
+    var slices = ranked(g).map(function (c) { return { v: g[c].v, color: catColor(c), label: c, tip: sharePct(tot ? g[c].v / tot * 100 : 0) + ', ' + money(g[c]) }; });
+    if (unc) slices.push({ v: unc.v, color: catColor('Uncategorised'), label: 'Uncategorised', tip: sharePct(tot ? unc.v / tot * 100 : 0) + ', ' + money(unc) });
+    box.innerHTML = '<div class="adm-catr-pie">' + donutSvg(slices, { size: 176, aria: 'Revenue share by category', center: tot ? fmtA(tot, true) : 'A$0', sub: 'revenue' }) + '</div>' +
+      '<div class="adm-catr' + (gp ? '' : ' no-chg') + '" role="list" aria-label="Revenue by category">' + rows.join('') + '</div>';
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-cat-open]');

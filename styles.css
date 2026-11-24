@@ -6036,6 +6036,7 @@ html[data-theme="light"] .adm-donut-empty { stroke: rgba(0,0,0,0.06) !important;
 @media (max-width: 560px) { .adm-cat-wrap { flex-direction: column; align-items: center; } .adm-cat-list { width: 100%; } }
 /* Categories (Analytics): a ranked list like BuiltByBit's Top categories */
 .adm-catr { display: flex; flex-direction: column; }
+.adm-catr-pie { display: flex; justify-content: center; margin: 2px 0 16px; }
 .adm-catr-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 64px; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--hairline); }
 .adm-catr.no-chg .adm-catr-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
 .adm-catr.no-chg .adm-catr-row.is-btn { grid-template-columns: 22px minmax(0, 1fr) auto 64px; }
