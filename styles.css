@@ -6027,6 +6027,7 @@ html[data-theme="light"] .adm-an, html[data-theme="light"] .adm-mkt { --cat-9: #
 .adm-alert-key { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .adm-alert-key code { font-size: 14px; letter-spacing: .02em; padding: 7px 10px; border-radius: 8px; background: var(--bg-2); color: var(--fg); user-select: all; word-break: break-all; }
 .adm-alert-pfs { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+#admAlertSoundName { margin-top: 8px; }
 .adm-alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 14px; }
 @media (max-width: 640px) {
   .adm-alert-add { grid-template-columns: minmax(0, 1fr); }

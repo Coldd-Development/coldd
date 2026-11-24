@@ -10505,9 +10505,14 @@
     'spell', 'suspense', 'telegraph', 'tiptoes', 'typewriters', 'update'];
   // Alerts the sender chose not to send (not failures).
   var ALERT_SKIPS = ['Phone alerts are off', 'Under the minimum amount', 'No phone added'];
-  var alertSoundDD = makeDropdown($('admAlertSoundDD'), {});
+  // "Custom sound in Bark": a sound imported in Bark's sound settings, by its name.
+  var alertSoundDD = makeDropdown($('admAlertSoundDD'), { onChange: function (v) {
+    var inp = $('admAlertSoundName'); if (!inp) return;
+    inp.hidden = v !== '__custom';
+    if (!inp.hidden) inp.focus();
+  } });
   var alertLevelDD = makeDropdown($('admAlertLevelDD'), {});
-  alertSoundDD.setOptions(ALERT_SOUNDS.map(function (s) { return { value: s, label: s === 'paymentsuccess' ? 'Payment success' : s.charAt(0).toUpperCase() + s.slice(1) }; }), 'paymentsuccess');
+  alertSoundDD.setOptions([{ value: '__custom', label: 'Custom sound in Bark' }].concat(ALERT_SOUNDS.map(function (s) { return { value: s, label: s === 'paymentsuccess' ? 'Payment success' : s.charAt(0).toUpperCase() + s.slice(1) }; })), 'paymentsuccess');
   alertLevelDD.setOptions([{ value: 'timeSensitive', label: 'Time sensitive (comes through Focus)' }, { value: 'active', label: 'Normal' },
     { value: 'critical', label: 'Critical (rings on silent)' }], 'timeSensitive');
   if ($('admAlertPfs')) $('admAlertPfs').innerHTML = ALERT_PFS.map(function (p) {
@@ -10561,7 +10566,10 @@
       $('admAlertMin').value = Number(st.min_usd) > 0 ? Number(st.min_usd) : '';
       $('admAlertQuietFrom').value = st.quiet_start ? String(st.quiet_start).slice(0, 5) : '';
       $('admAlertQuietTo').value = st.quiet_end ? String(st.quiet_end).slice(0, 5) : '';
-      alertSoundDD.setValue(st.sound || 'paymentsuccess');
+      var snd = st.sound || 'paymentsuccess', builtIn = ALERT_SOUNDS.indexOf(snd) >= 0;
+      alertSoundDD.setValue(builtIn ? snd : '__custom', true);
+      $('admAlertSoundName').value = builtIn ? '' : snd;
+      $('admAlertSoundName').hidden = builtIn;
       alertLevelDD.setValue(st.level || 'timeSensitive');
       $('admAlertSoundUrl').value = st.sound_url || '';
     }
@@ -10628,11 +10636,16 @@
   });
   if ($('admAlertSaveBtn')) $('admAlertSaveBtn').addEventListener('click', function () {
     var btn = this, url = $('admAlertSoundUrl').value.trim(), pfs = {};
+    var sound = alertSoundDD.getValue() || 'paymentsuccess';
+    if (sound === '__custom') {
+      sound = $('admAlertSoundName').value.trim().replace(/\.caf$/i, '');
+      if (!/^[A-Za-z0-9 ._-]{1,60}$/.test(sound)) { alertMsg('admAlertSaveMsg', 'Type the sound\'s name as Bark shows it (for example shopify-sales).', true); return; }
+    }
     if (url && !/^https:\/\/\S+\.caf(\?\S*)?$/i.test(url)) { alertMsg('admAlertSaveMsg', 'The sound link must be an https link to a .caf file.', true); return; }
     ALERT_PFS.forEach(function (p) { var c = document.querySelector('#admAlertPfs input[value="' + p[0] + '"]'); pfs[p[0]] = !c || c.checked; });
     var p = { enabled: $('admAlertEnabled').checked, platforms: pfs, min_usd: Math.max(0, Number($('admAlertMin').value) || 0),
       quiet_start: $('admAlertQuietFrom').value || '', quiet_end: $('admAlertQuietTo').value || '',
-      sound: alertSoundDD.getValue() || 'paymentsuccess', level: alertLevelDD.getValue() || 'timeSensitive', sound_url: url };
+      sound: sound, level: alertLevelDD.getValue() || 'timeSensitive', sound_url: url };
     btn.disabled = true;
     window.coldSupabase.rpc('admin_sale_alert_settings_save', { p: p }).then(function (r) {
       btn.disabled = false;
