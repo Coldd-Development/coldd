@@ -325,6 +325,35 @@ Deno.serve(async (req: Request) => {
             });
           }
         });
+        // Listings buyers can no longer see (unpublished or removed) keep no reviews here: BuiltByBit's
+        // public listing search only returns visible listings, so a reviewed listing missing from it
+        // is skipped and its stored reviews are removed. If none come back at all the search left our
+        // listings out, so nothing is removed on that run.
+        const ids = [...new Set(list.map((r) => Number(r.bbb_resource_id)).filter((n) => n > 0))];
+        const visible = new Set<number>();
+        let canCheck = true;
+        for (let i = 0; i < ids.length && canCheck; i += 100) {
+          try {
+            const d = await v2(token, "/v2/resources/discover/resources?per_page=100&resource_ids=" + ids.slice(i, i + 100).join(","));
+            for (const r of (Array.isArray(d?.data?.resources) ? d.data.resources : []) as Obj[]) visible.add(num(r.resource_id));
+          } catch (e) {
+            // The search needs the token's discover scope; without it nothing is checked or removed.
+            if (e instanceof ApiFail && (e.status === 401 || e.status === 403 || /scope/i.test(e.message))) { canCheck = false; summary.listingCheck = { skipped: e.message }; }
+            else throw e;
+          }
+        }
+        const shown = ids.filter((id) => visible.has(id));
+        const gone = canCheck && shown.length ? ids.filter((id) => !visible.has(id)) : [];
+        if (canCheck) summary.listingCheck = { held: false, asked: ids.length, visible: shown.length, gone: gone.length, goneTitles: gone.slice(0, 15).map((id) => resById.get(id)?.title ?? id) };
+        // More than half gone at once means the search changed, not that half the listings were
+        // unpublished: nothing is removed and the run says so.
+        if (gone.length > ids.length / 2) { summary.listingCheck.held = true; errors.push("reviews: " + gone.length + " of " + ids.length + " reviewed listings look unpublished; nothing removed"); }
+        else if (gone.length) {
+          const goneSet = new Set(gone);
+          for (let i = list.length - 1; i >= 0; i--) if (goneSet.has(Number(list[i].bbb_resource_id))) list.splice(i, 1);
+          const { error: delErr } = await admin.from("reviews").delete().eq("source", "BuiltByBit").in("listing_ref", gone.map(String));
+          if (delErr) throw new Error("remove unpublished: " + delErr.message);
+        }
         const matcher = await buildMatcher(admin);
         const saved = await savePlatformReviews(admin, list, { markSeen: firstRun, matcher });
         const swept = await sweepUnmatched(admin, matcher);

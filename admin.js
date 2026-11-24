@@ -9643,7 +9643,8 @@
     if (REV_OWNER !== null || !window.coldSupabase) return Promise.resolve(!!REV_OWNER);
     return window.coldSupabase.rpc('finance_allowed').then(function (r) { REV_OWNER = !r.error && r.data === true; return REV_OWNER; });
   }
-  function revPlatform(src) { return !src || src === 'Website' ? 'coldd.dev' : String(src); }
+  // Where a review was left, as the admin shows it (Creator Store reviews read as Roblox).
+  function revPlatform(src) { return !src || src === 'Website' ? 'coldd.dev' : src === 'Creator Store' ? 'Roblox' : String(src); }
   var reviewPlatformDropdown = makeDropdown($('admReviewPlatformDD'), {
     valueInput: $('admReviewPlatform'),
     onChange: function (v) { REVIEW_PLATFORM = v || 'all'; renderReviews(); }
@@ -9722,7 +9723,7 @@
     renderRevOverview();
     var seen = {};
     REVIEWS.forEach(function (r) { seen[revPlatform(r.source)] = true; });
-    var order = ['coldd.dev', 'BuiltByBit', 'Creator Store'];
+    var order = ['coldd.dev', 'BuiltByBit', 'Roblox'];
     var plats = order.concat(Object.keys(seen).filter(function (p) { return order.indexOf(p) < 0; }).sort());
     if (plats.join('|') !== REV_PLATFORM_SIG) {
       REV_PLATFORM_SIG = plats.join('|');
@@ -9735,8 +9736,8 @@
       var where = r.productTitle ? esc(r.productTitle) : r.listingName ? esc(untagName(r.listingName)) : 'General review';
       var actions = (r.status !== 'hidden' ? '<button class="btn btn-ghost adm-btn-sm adm-rev-hide" type="button">Hide</button>' :
           !r.hiddenReason ? '<button class="btn btn-ghost adm-btn-sm adm-rev-show" type="button">Unhide</button>' : '') +
-        (r.auto ? '' : '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>') +
-        (r.productId ? '<button class="btn btn-ghost adm-btn-sm adm-rev-goto" type="button">Go to product</button>' : '');
+        '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>' +
+        (r.productId ? '<a class="btn btn-ghost adm-btn-sm" href="/product/' + encodeURIComponent(r.productId) + '/" target="_blank" rel="noopener">Go to product</a>' : '');
       return '<div class="adm-review adm-rv' + (r.status === 'hidden' ? ' is-hidden' : '') + '" data-id="' + r.id + '">' +
         '<div class="adm-rv-head">' +
           (img ? '<span class="adm-rv-av has-img" style="background-image:url(\'' + img + '\')" aria-hidden="true"></span>' : '<span class="adm-rv-av" aria-hidden="true">' + esc(String(r.user || '?').charAt(0).toUpperCase()) + '</span>') +
@@ -9745,11 +9746,13 @@
           (!r.adminReviewedAt || REV_NEW_SEEN[r.id] ? '<span class="dt-badge warn">New</span>' : '') +
           (r.hiddenReason === 'unmatched' ? '<span class="dt-badge err" title="Published automatically once a product with this name is on the site">Hidden: no matching product</span>' : r.status === 'hidden' ? '<span class="dt-badge mute">Hidden</span>' : '') + '</div>' +
         (r.text ? '<p class="adm-review-text">' + esc(r.text) + '</p>' : '') +
-        (r.reply ? '<div class="adm-review-reply"><strong>' + (r.auto ? 'Your reply on ' + esc(plat) : 'Your reply') + '</strong><p>' + esc(r.reply.text) + '</p></div>' : '') +
-        (r.auto ? '' : '<div class="adm-review-reply-form" hidden>' +
+        // Replies are shown on coldd.dev only; a reply left on the platform is imported once, when
+        // the site has none.
+        (r.reply ? '<div class="adm-review-reply"><strong>Your reply</strong><p>' + esc(r.reply.text) + '</p></div>' : '') +
+        '<div class="adm-review-reply-form" hidden>' +
           '<textarea class="adm-input adm-textarea adm-rev-reply-input" rows="2" placeholder="Write a public reply to this review…">' + esc(r.reply ? r.reply.text : '') + '</textarea>' +
           '<button type="button" class="btn btn-primary adm-btn-sm adm-rev-reply-save">Save reply</button>' +
-        '</div>') +
+        '</div>' +
         (actions ? '<div class="adm-row-actions">' + actions + '</div>' : '') + '</div>';
     }).join('') || anEmpty(REVIEW_PLATFORM === 'all' ? 'No reviews yet.' : 'No reviews from ' + esc(REVIEW_PLATFORM) + ' yet.');
 
@@ -9787,8 +9790,6 @@
         logAudit((text ? 'Replied to' : 'Removed reply on') + ' review by ' + r.user + ' on "' + r.productTitle + '"');
         return refreshReviews();
       }).catch(function (err) { alert(err.message || 'Could not save reply.'); });
-    } else if (e.target.classList.contains('adm-rev-goto')) {
-      openProductEdit(r.productId);
     }
   });
 
@@ -9823,7 +9824,7 @@
     { value: '2', label: '★★ (2)' }, { value: '1', label: '★ (1)' }
   ], '5');
   var importReviewPlatformDropdown = makeDropdown($('admImportReviewPlatformDD'), { valueInput: $('admImportReviewPlatform') });
-  importReviewPlatformDropdown.setOptions(['BuiltByBit', 'ClearlyDev', 'Discord', 'Creator Store', 'Other'], 'BuiltByBit');
+  importReviewPlatformDropdown.setOptions(['BuiltByBit', 'ClearlyDev', 'Discord', { value: 'Creator Store', label: 'Roblox' }, 'Other'], 'BuiltByBit');
 
   var importReviewForm = $('admImportReviewForm');
   if (importReviewForm) importReviewForm.addEventListener('submit', function (e) {

@@ -22,9 +22,10 @@
     };
 
     // Reviews from another platform say where they were left (BuiltByBit, Creator Store, or the
-    // platform a review was imported from); coldd.dev's own say nothing.
+    // platform a review was imported from; Creator Store reads as Roblox); coldd.dev's own say nothing.
     window.__reviewPlatform = function (src) {
-      return src && src !== 'Website' && src !== 'Other' ? String(src) : '';
+      if (!src || src === 'Website' || src === 'Other') return '';
+      return src === 'Creator Store' ? 'Roblox' : String(src);
     };
     // A review's rating: stars, or a Creator Store review's thumbs up or down (it has no stars).
     window.__reviewRatingHtml = function (r, starSvg) {

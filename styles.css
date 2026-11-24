@@ -1542,6 +1542,10 @@ body.no-scroll { overflow: hidden; }
 .pd-thumbs { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .pd-thumb { width: 96px; height: 62px; border-radius: 10px; background-size: cover; background-position: center;
   cursor: pointer; border: 2px solid var(--hairline); opacity: 0.9; transition: opacity .15s var(--ease), border-color .15s var(--ease); }
+/* A thumb is a <button>: without these it keeps the browser's light-grey button face, which showed
+   through the see-through border, and the picture repeated into the top edge. */
+.pd-thumb { padding: 0; -webkit-appearance: none; appearance: none; background-color: var(--bg-2);
+  background-repeat: no-repeat; background-clip: padding-box; }
 .pd-thumb:hover { opacity: 1; }
 .pd-thumb.active { opacity: 1; border-color: var(--accent); }
 .pd-video { margin-top: 14px; }
