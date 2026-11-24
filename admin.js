@@ -146,6 +146,8 @@
   // (e.g. websiteRevenue().robux, summed from orders.total_robux) - do not
   // multiply it by ROBUX_PER_USD again.
   function robuxRaw(n) { return 'R$ ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+  // The Robux icon, for "Includes [robux] 1,234" style notes.
+  var RBX_IC = '<img class="adm-rbx-ic" src="/mp-logos/robux.png" alt="Robux" width="14" height="14" />';
   function pct(n) { return (Math.round((Number(n) || 0) * 10) / 10) + '%'; }
   // Real robux orders were actually charged in Robux (via a Roblox
   // gamepass, not our checkout) - showing usd(o.total) for them would
@@ -1137,7 +1139,8 @@
   /* ================================================================
      DATE RANGE
      ================================================================ */
-  var RANGE_DAYS = lsGet('coldd_admin_range_v1', 30); // 1, 7, 30, 90, 0(=all)
+  var RANGE_DAYS = lsGet('coldd_admin_range_v1', 30); // 1, 7, 30, 365, 0(=all)
+  if (RANGE_DAYS === 90) RANGE_DAYS = 365; // 90d became 1y (2026-11-24)
   function inRange(iso) {
     if (!RANGE_DAYS) return true;
     return new Date(iso) >= rangeStart();
@@ -1169,6 +1172,18 @@
     var arrow = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '–';
     return '<span class="ds-delta ' + cls + '">' + arrow + ' ' + Math.abs(Math.round(pct * 10) / 10) + '%</span>';
   }
+  (function stickyRange() {
+    var ticking = false;
+    function check() {
+      ticking = false;
+      document.querySelectorAll('.adm-an > .adm-home-head, .adm-mkt > .adm-home-head').forEach(function (h) {
+        if (!h.offsetParent) return;
+        var top = parseFloat(getComputedStyle(h).top) || 0;
+        h.classList.toggle('is-stuck', window.scrollY > 4 && h.getBoundingClientRect().top <= top + 0.5);
+      });
+    }
+    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+  })();
   function setRange(n) {
     RANGE_DAYS = n; lsSet('coldd_admin_range_v1', n);
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === n); });
@@ -2092,7 +2107,8 @@
     var months = CH.buckets, series = CH.series, n = months.length;
     var W = Math.max(320, box.clientWidth || 640), H = 236;
     var narrow = W < 560;
-    var padL = 56, padR = narrow ? 16 : 118, padT = 12, padB = 28;
+    // One line (CH.single) needs no end labels; the hover gives the breakdown.
+    var padL = 56, padR = narrow || CH.single ? 16 : 118, padT = 12, padB = 28;
     var iw = W - padL - padR, ih = H - padT - padB;
     var max = 0;
     series.forEach(function (s) { s.data.forEach(function (v) { if (v > max) max = v; }); });
@@ -2101,9 +2117,10 @@
     function Y(v) { return padT + ih - (v / sc.top) * ih; }
     var svg = '';
     sc.ticks.forEach(function (t) {
+      if (CH.intTicks && t % 1) return;
       var y = Y(t).toFixed(1);
       svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
-        '<text class="pc-axis" x="' + (padL - 10) + '" y="' + y + '" dy="4" text-anchor="end">' + esc('A$' + axisNum(t)) + '</text>';
+        '<text class="pc-axis" x="' + (padL - 10) + '" y="' + y + '" dy="4" text-anchor="end">' + esc(CH.axis ? CH.axis(t) : 'A$' + axisNum(t)) + '</text>';
     });
     // Axis labels counted back from the newest point, every step-th one.
     var step = (CH.step || 1) * (narrow ? 2 : 1);
@@ -2115,13 +2132,13 @@
     var order = series.slice().sort(function (a, b) { return (a.total > 0) - (b.total > 0); });
     order.forEach(function (s) {
       var pts = s.data.map(function (v, i) { return X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
-      var color = pfVar(s.key);
+      var color = s.color || pfVar(s.key);
       // The newest point is still filling up, so its segment is dashed.
       svg += '<path class="pc-line" style="stroke:' + color + '" d="M' + (n > 1 ? pts.slice(0, n - 1) : pts).join('L') + '"/>';
       if (n > 1) svg += '<path class="pc-line is-part" style="stroke:' + color + '" d="M' + pts.slice(n - 2).join('L') + '"/>';
     });
     // End labels with a short key line, nudged apart so they never overlap.
-    if (!narrow) {
+    if (!narrow && !CH.single) {
       var labels = series.map(function (s) { return { s: s, y: Y(s.data[n - 1]) }; }).sort(function (a, b) { return a.y - b.y; });
       var gap = 16, bottom = padT + ih + 4;
       for (var i = 1; i < labels.length; i++) if (labels[i].y < labels[i - 1].y + gap) labels[i].y = labels[i - 1].y + gap;
@@ -2130,12 +2147,12 @@
       for (var j = labels.length - 2; j >= 0; j--) if (labels[j].y > labels[j + 1].y - gap) labels[j].y = labels[j + 1].y - gap;
       var lx = padL + iw + 12;
       labels.forEach(function (l) {
-        svg += '<line class="pc-key" style="stroke:' + pfVar(l.s.key) + '" x1="' + lx + '" x2="' + (lx + 10) + '" y1="' + l.y.toFixed(1) + '" y2="' + l.y.toFixed(1) + '"/>' +
+        svg += '<line class="pc-key" style="stroke:' + (l.s.color || pfVar(l.s.key)) + '" x1="' + lx + '" x2="' + (lx + 10) + '" y1="' + l.y.toFixed(1) + '" y2="' + l.y.toFixed(1) + '"/>' +
           '<text class="pc-end" x="' + (lx + 16) + '" y="' + l.y.toFixed(1) + '" dy="4">' + esc(l.s.label) + '</text>';
       });
     }
     svg += '<line class="pc-cross" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + ih) + '" visibility="hidden"/>';
-    series.forEach(function (s) { svg += '<circle class="pc-dot" data-pf="' + s.key + '" r="4" cx="0" cy="0" style="fill:' + pfVar(s.key) + '" visibility="hidden"/>'; });
+    series.forEach(function (s) { svg += '<circle class="pc-dot" data-pf="' + s.key + '" r="4" cx="0" cy="0" style="fill:' + (s.color || pfVar(s.key)) + '" visibility="hidden"/>'; });
     box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(CH.aria || 'Sales in AU$ for each platform') + '">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
     box.__pc = { X: X, Y: Y, n: n, padL: padL, iw: iw, W: W };
   }
@@ -2163,14 +2180,17 @@
       // The total adds Robux at the DevEx rate (US$38 per 10,000), in AU$ at that
       // time's rate; each platform's own line still shows its Robux as Robux.
       var m = CH.buckets[i], total = 0, rbx = 0;
-      CH.series.forEach(function (s) { total += s.data[i]; rbx += s.robux[i] || 0; });
+      CH.series.forEach(function (s) { total += s.data[i]; rbx += (s.robux && s.robux[i]) || 0; });
       if (rbx) total += rbx * DEVEX_USD_PER_ROBUX * audRateOn(m.start.getTime());
       var tip = box.querySelector('.adm-pc-tip');
-      // Platforms always in the same order (HOME_PLATFORMS), never re-sorted by value.
-      tip.innerHTML = '<h4>' + esc(m.long) + (i === pc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
+      var head = '<h4>' + esc(m.long) + (i === pc.n - 1 ? ' <span>so far</span>' : '') + '</h4>';
+      // A chart can bring its own breakdown (CH.tip); platforms are always in the same
+      // order (HOME_PLATFORMS), never re-sorted by value.
+      if (CH.tip) tip.innerHTML = head + CH.tip(i);
+      else tip.innerHTML = head +
         CH.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i]) + '</b></div>'; }).join('') +
         '<div class="adm-pc-tip-total">All platforms<b>' + fmtA(total) + '</b></div>' +
-        (rbx ? '<p class="adm-pc-tip-note">Includes ' + robuxRaw(rbx) + ' at the DevEx rate</p>' : '');
+        (rbx ? '<p class="adm-pc-tip-note">Includes ' + RBX_IC + ' ' + num(rbx) + '</p>' : '');
       tip.hidden = false;
       var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
       if (left + tip.offsetWidth > bx.width) left = (e.clientX - bx.left) - tip.offsetWidth - 16;
@@ -2211,8 +2231,12 @@
     var cmp = !!pS;
     var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: cmp ? sumSales(sales, pS, pE, p.key) : null }; });
     var tot = sumSales(sales, cS, cE), totP = cmp ? sumSales(sales, pS, pE) : null;
-    function cell(key, r) { return pfValue(key, r.aud, r.robux); }
-    function rbx(n) { return n ? '<span class="adm-rbx"> | ' + robuxRaw(n) + '</span>' : ''; }
+    // R$ sits under the A$ (not beside it), so the table fits without scrolling.
+    function cell(key, r) { return fmtA(r.aud) + (PF_ROBUX[key] ? '<small>' + robuxRaw(r.robux) + '</small>' : ''); }
+    function rbx(n) { return n ? '<small>' + robuxRaw(n) + '</small>' : ''; }
+    // Shares and changes count Robux at the DevEx rate, like the chart's totals.
+    var rate = DEVEX_USD_PER_ROBUX * audRateOn(now);
+    function val(r) { return r.aud + r.robux * rate; }
     function change(cur, prev) {
       if (!prev) return cur ? '<span class="adm-chg up">New</span>' : '';
       var pct = (cur - prev) / prev * 100;
@@ -2224,15 +2248,15 @@
       (cmp ? '<th scope="col">' + esc(o.prevLabel || 'Previous 30d') + '</th><th scope="col">Change</th>' : '') +
       '<th scope="col">Share</th><th scope="col">Orders</th></tr></thead><tbody>' +
       rows.map(function (r) {
-        var share = tot.aud ? r.cur.aud / tot.aud * 100 : 0;
+        var share = val(tot) ? val(r.cur) / val(tot) * 100 : 0;
         return '<tr style="--pf:' + pfVar(r.p.key) + '"><th scope="row"><span class="adm-pf"><i></i>' + pfMark(r.p.key) + esc(r.p.label) + '</span></th>' +
           '<td class="is-strong">' + cell(r.p.key, r.cur) + '</td>' +
-          (cmp ? '<td class="is-muted">' + cell(r.p.key, r.prev) + '</td><td>' + change(r.cur.aud, r.prev.aud) + '</td>' : '') +
+          (cmp ? '<td class="is-muted">' + cell(r.p.key, r.prev) + '</td><td>' + change(val(r.cur), val(r.prev)) + '</td>' : '') +
           '<td><span class="adm-share"><span class="adm-share-bar"><i style="width:' + (share ? Math.max(share, 1.5) : 0).toFixed(1) + '%"></i></span><span>' + sharePct(share) + '</span></span></td>' +
           '<td>' + num(r.cur.n) + '</td></tr>';
       }).join('') + '</tbody>' +
       '<tfoot><tr><th scope="row">All platforms</th><td>' + fmtA(tot.aud) + rbx(tot.robux) + '</td>' +
-      (cmp ? '<td class="is-muted">' + fmtA(totP.aud) + rbx(totP.robux) + '</td><td>' + change(tot.aud, totP.aud) + '</td>' : '') +
+      (cmp ? '<td class="is-muted">' + fmtA(totP.aud) + rbx(totP.robux) + '</td><td>' + change(val(tot), val(totP)) + '</td>' : '') +
       '<td></td><td>' + num(tot.n) + '</td></tr></tfoot>';
   }
 
@@ -4104,7 +4128,7 @@
     var p = prevRangeWindow();
     return { start: rangeStart(), end: new Date(now + 60000), prevStart: p.start, prevEnd: p.end };
   }
-  function anRangeWord() { return RANGE_DAYS === 1 ? '24 hours' : RANGE_DAYS + ' days'; }
+  function anRangeWord() { return RANGE_DAYS === 1 ? '24 hours' : RANGE_DAYS === 365 ? 'year' : RANGE_DAYS + ' days'; }
   function anDelta(cur, prev, w) {
     if (!w.prevStart) return '';
     var against = 'previous ' + anRangeWord();
@@ -4117,9 +4141,18 @@
   function anMini(label, value, sub) {
     return '<div class="adm-an-stat"><span>' + esc(label) + '</span><b>' + value + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
   }
-  // Chart buckets for the range: hours for 24h, days up to 90d, months for all time.
+  // Chart buckets for the range: hours for 24h, days up to 30d, weeks for 1y, months for all time.
   function anBuckets(sales) {
     var now = new Date(), out = [], i, s;
+    if (RANGE_DAYS > 90) {
+      s = new Date(now.getFullYear(), now.getMonth(), now.getDate() - RANGE_DAYS + 1);
+      s.setDate(s.getDate() - (s.getDay() + 6) % 7);
+      for (; s <= now; s = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7)) {
+        out.push({ start: new Date(s), end: new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7), short: s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
+          long: 'Week of ' + s.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) });
+      }
+      return { buckets: out, step: 6 };
+    }
     if (RANGE_DAYS === 1) {
       for (i = 23; i >= 0; i--) {
         s = new Date(now); s.setMinutes(0, 0, 0); s.setHours(s.getHours() - i);
@@ -4154,7 +4187,7 @@
     grid.innerHTML = [
       kpiCell({ label: 'Sales', value: fmtA(cur.aud, cur.aud >= 1000), count: plural(cur.n, 'sale'), delta: anDelta(cur.aud, prev && prev.aud, w),
         sub: cur.robux ? '+ ' + robuxRaw(cur.robux) + ' in Robux sales' : 'No Robux sales', panel: 'orders' }),
-      kpiCell({ label: 'Average sale', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? 'Across ' + plural(n, 'money sale') : 'No money sales' }),
+      kpiCell({ label: 'Average sale', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? '' : 'No money sales' }),
       kpiCell({ label: 'Site visits', value: num(v.sessions), delta: anDelta(v.sessions, vP && vP.sessions, w), sub: num(v.views) + ' page views' + (w.start ? '' : ', last 120 days') }),
       kpiCell({ label: 'Site conversion', value: v.sessions ? pct(conv) : '–', delta: anDelta(conv, convP, w), sub: plural(site.n, 'site order') + ' from ' + plural(v.sessions, 'visit') })
     ].join('');
@@ -4260,7 +4293,7 @@
       m.pfs[x.pf] = true; m.aud += x.aud; m.robux += x.robux; m.units++;
     });
     var all = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux) || (b.units - a.units); });
-    var cnt = $('admBestCount'); if (cnt) cnt.textContent = all.length > 20 ? 'Top 20 of ' + num(all.length) : all.length ? plural(all.length, 'product') : '';
+    var cnt = $('admBestCount'); if (cnt) cnt.textContent = '';
     box.innerHTML = all.length ? all.slice(0, 20).map(function (p, i) {
       var img = p.image || bbbCoverFor(p.title);
       var pfs = HOME_PLATFORMS.filter(function (x) { return p.pfs[x.key]; }).map(function (x) { return '<span title="' + esc(x.label) + '">' + pfMark(x.key) + '</span>'; }).join('');
@@ -4359,8 +4392,7 @@
         keys.map(function (k, i) {
           return '<div class="adm-mix-row" role="row" style="--pf:' + pfVar(k) + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + pfMark(k) + esc(HOME_PLATFORMS[i].label) + '</span>' +
             '<span role="cell">' + (totA ? sharePct(rev[i] / totA * 100) : '–') + '</span><span role="cell">' + sharePct(ord[i] / totN * 100) + '</span></div>';
-        }).join('') + '</div>' +
-      '<p class="adm-an-note">100 means sales are spread evenly over all ' + keys.length + ' platforms, 0 means they all come from one. Revenue is AU$ sales; Robux sales count as orders.</p>';
+        }).join('') + '</div>';
   }
 
   // Order volume: orders per hour, day, week or month (the pills; the range
@@ -4369,7 +4401,7 @@
   var VOL_GRAIN = '';
   try { VOL_GRAIN = localStorage.getItem('coldd_admin_vol_grain_v1') || ''; } catch (_) {}
   var VOL_MAX = 750;
-  function volAuto() { return RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS && RANGE_DAYS <= 90 ? 'day' : 'month'; }
+  function volAuto() { return RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS && RANGE_DAYS <= 90 ? 'day' : RANGE_DAYS ? 'week' : 'month'; }
   function volFloor(d, g) {
     d = new Date(d);
     if (g === 'hour') { d.setMinutes(0, 0, 0); return d; }
@@ -4435,8 +4467,17 @@
       while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
       series[at[x.pf]].data[lo] += x.n;
     });
-    box.__vol = { buckets: buckets, series: series, step: b.step };
-    drawVolChart(box);
+    // The same line chart as Sales by platform: one line of all orders, and each
+    // platform's orders on hover.
+    var allOrders = buckets.map(function (_, i) { return anSum(series.map(function (s) { return s.data[i]; })); });
+    box.__chart = { buckets: buckets, step: b.step, single: true, intTicks: true, aria: 'Orders over the selected range',
+      axis: function (t) { return axisNum(t); },
+      series: [{ key: 'orders', label: 'Orders', color: 'var(--info)', data: allOrders, total: anSum(allOrders) }],
+      tip: function (i) {
+        return series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + num(s.data[i]) + '</b></div>'; }).join('') +
+          '<div class="adm-pc-tip-total">All platforms<b>' + plural(allOrders[i], 'order') + '</b></div>';
+      } };
+    drawPlatChart(box);
     var totals = buckets.map(function (_, i) { return anSum(series.map(function (s) { return s.data[i]; })); });
     var cur = sumSales(sales, w.start, w.end), prev = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd) : null;
     var unit = grain;
@@ -4451,118 +4492,120 @@
       return '<span style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + num(anSum(s.data)) + '</b></span>';
     }).join('');
   }
-  function drawVolChart(box) {
-    var V = box && box.__vol; if (!V) return;
-    var n = V.buckets.length, W = Math.max(300, box.clientWidth || 640), H = 210, narrow = W < 560;
-    var padL = 38, padR = 4, padT = 10, padB = 26, iw = W - padL - padR, ih = H - padT - padB;
-    var totals = V.buckets.map(function (_, i) { return anSum(V.series.map(function (s) { return s.data[i]; })); });
-    var sc = niceScale(Math.max(4, Math.max.apply(null, totals)));
-    var bw = iw / n, gap = Math.min(8, Math.max(1, bw * 0.28)), barW = Math.max(1.5, bw - gap);
-    function Y(v) { return padT + ih - v / sc.top * ih; }
-    var svg = '';
-    sc.ticks.forEach(function (t) {
-      if (t % 1) return;
-      var y = Y(t).toFixed(1);
-      svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
-        '<text class="pc-axis" x="' + (padL - 8) + '" y="' + y + '" dy="4" text-anchor="end">' + esc(axisNum(t)) + '</text>';
-    });
-    var step = (V.step || 1) * (narrow ? 2 : 1);
-    V.buckets.forEach(function (m, i) {
-      if ((n - 1 - i) % step) return;
-      svg += '<text class="pc-axis" x="' + (padL + i * bw + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(m.short) + '</text>';
-    });
-    svg += '<rect class="vc-hover" x="0" y="' + padT + '" width="' + bw.toFixed(2) + '" height="' + ih + '" rx="4" visibility="hidden"/>';
-    V.buckets.forEach(function (m, i) {
-      var x = (padL + i * bw + gap / 2).toFixed(2), y0 = padT + ih;
-      V.series.forEach(function (s) {
-        var v = s.data[i]; if (!v) return;
-        var h = v / sc.top * ih, y = y0 - h;
-        // A hairline of surface between stacked segments, so each platform reads on its own.
-        svg += '<rect class="vc-seg" x="' + x + '" y="' + y.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + Math.max(0.6, h - (h > 3 ? 1 : 0)).toFixed(2) + '" style="fill:' + pfVar(s.key) + '"/>';
-        y0 = y;
-      });
-    });
-    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Orders over the selected range, stacked by platform">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
-    box.__vc = { padL: padL, iw: iw, bw: bw, n: n, W: W };
-  }
-  (function wireVolChart(box) {
-    if (!box) return;
-    function hide() {
-      var tip = box.querySelector('.adm-pc-tip'); if (tip) tip.hidden = true;
-      var hv = box.querySelector('.vc-hover'); if (hv) hv.setAttribute('visibility', 'hidden');
-    }
-    box.addEventListener('mousemove', function (e) {
-      var vc = box.__vc, V = box.__vol, svg = box.querySelector('svg');
-      if (!vc || !V || !svg) return;
-      var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (vc.W / r.width);
-      if (x < vc.padL || x > vc.padL + vc.iw) { hide(); return; }
-      var i = Math.max(0, Math.min(vc.n - 1, Math.floor((x - vc.padL) / vc.bw)));
-      var hv = box.querySelector('.vc-hover');
-      hv.setAttribute('x', (vc.padL + i * vc.bw).toFixed(2)); hv.setAttribute('visibility', 'visible');
-      var m = V.buckets[i], total = anSum(V.series.map(function (s) { return s.data[i]; }));
-      var tip = box.querySelector('.adm-pc-tip');
-      tip.innerHTML = '<h4>' + esc(m.long) + (i === vc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
-        V.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + num(s.data[i]) + '</b></div>'; }).join('') +
-        '<div class="adm-pc-tip-total">All platforms<b>' + plural(total, 'order') + '</b></div>';
-      tip.hidden = false;
-      var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
-      if (left + tip.offsetWidth > bx.width) left = (e.clientX - bx.left) - tip.offsetWidth - 16;
-      tip.style.left = Math.max(0, left) + 'px';
-      tip.style.top = Math.max(0, Math.min(box.clientHeight - tip.offsetHeight, (e.clientY - bx.top) - tip.offsetHeight / 2)) + 'px';
-    });
-    box.addEventListener('mouseleave', hide);
-    if (window.ResizeObserver) {
-      var lastW = 0, t = null;
-      new ResizeObserver(function () {
-        var wd = box.clientWidth;
-        if (!wd || Math.abs(wd - lastW) < 4) return;
-        lastW = wd;
-        clearTimeout(t); t = setTimeout(function () { drawVolChart(box); }, 80);
-      }).observe(box);
-    }
-  })($('admVolChart'));
+  wirePlatChart($('admVolChart'));
 
-  // Categories: revenue by product category, our catalogue's categories
-  // (BuiltByBit's for products we don't list). Each category keeps its own
-  // colour whatever it sells; the smaller ones share a grey "Other" slice.
-  var AN_CAT_SLOT = { 'Buildings': 1, 'Assets': 2, 'Animations & VFX': 3, 'Uniforms & Gear': 4, 'Maps': 5, 'Scripts & UI': 6, 'Vehicles': 7, 'Weapons': 8 };
-  function catColor(c) { return AN_CAT_SLOT[c] ? 'var(--cat-' + AN_CAT_SLOT[c] + ')' : 'var(--cat-other)'; }
+  // Categories: revenue by product category (our catalogue's; BuiltByBit's for
+  // products we don't list). Colours follow the category, not its rank in the
+  // range: the 7 categories with the most revenue all time get their own colour,
+  // the rest share "Other categories". Robux counts at the DevEx rate.
+  // Uncategorised and Other categories open to show what is in them.
+  var AN_CAT_COLORED = 7, AN_CAT_OPEN = {}, AN_CAT_COL = { src: null, map: {} };
+  var AN_CAT_CHEV = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+  function anVal(aud, robux) { return (aud || 0) + (robux || 0) * DEVEX_USD_PER_ROBUX * audRateOn(Date.now()); }
+  function anCatColors(all) {
+    if (AN_CAT_COL.src === all) return AN_CAT_COL.map;
+    var by = {}, map = {};
+    all.forEach(function (x) { if (x.cat !== 'Uncategorised') by[x.cat] = (by[x.cat] || 0) + anVal(x.aud, x.robux); });
+    Object.keys(by).sort(function (a, b) { return by[b] - by[a] || (a < b ? -1 : 1); }).slice(0, AN_CAT_COLORED)
+      .forEach(function (c, i) { map[c] = 'var(--cat-' + (i + 1) + ')'; });
+    AN_CAT_COL = { src: all, map: map };
+    return map;
+  }
+  function catColor(c) {
+    if (c === 'Uncategorised') return 'var(--cat-unc)';
+    return anCatColors(anAllItems())[c] || 'var(--cat-other)';
+  }
+  function anCatItems(x) {
+    return Object.keys(x.items).map(function (k) { return x.items[k]; }).sort(function (a, b) { return b.v - a.v; });
+  }
+  // What is in Uncategorised: each product, where it sold, and a way to fix it.
+  function anCatUncList(x) {
+    var items = anCatItems(x), shown = items.slice(0, 40);
+    return '<div class="adm-cat-sub"><p class="adm-cat-hint">No category on coldd.dev, and no BuiltByBit listing with one. Set a category on the product to sort it.</p>' +
+      shown.map(function (it) {
+        var pid = it.key.indexOf('p:') === 0 ? it.key.slice(2) : '';
+        var logos = Object.keys(it.pfs).map(pfMark).join('');
+        var thumb = it.image ? '<span class="adm-cat-thumb" style="background-image:url(\'' + esc(it.image) + '\')"></span>' : '<span class="adm-cat-thumb is-logo">' + pfMark(Object.keys(it.pfs)[0]) + '</span>';
+        var inner = thumb + '<span class="adm-cat-sub-name"><b title="' + esc(it.title) + '">' + esc(it.title) + '</b><small>' + logos + plural(it.n, 'sale') + (pid ? '' : ' · not on coldd.dev') + '</small></span>' +
+          '<span class="adm-cat-sub-val">' + moneyBoth(it.aud, it.robux) + '</span>' +
+          (pid ? '<span class="adm-cat-fix">Set category</span>' : '<span></span>');
+        return pid ? '<a class="adm-cat-sub-row" href="/admin/products/' + esc(pid) + '/" data-cat-pid="' + esc(pid) + '">' + inner + '</a>'
+          : '<div class="adm-cat-sub-row">' + inner + '</div>';
+      }).join('') + (items.length > shown.length ? '<p class="adm-cat-hint">And ' + num(items.length - shown.length) + ' more</p>' : '') + '</div>';
+  }
+  // What is in Other categories: each category on its own.
+  function anCatOtherList(cats, g, tot) {
+    return '<div class="adm-cat-sub">' + cats.map(function (c) {
+      var x = g[c];
+      return '<div class="adm-cat-sub-row is-cat"><span class="adm-cat-thumb is-dot"><b class="adm-dot" style="--pf:var(--cat-other)"></b></span>' +
+        '<span class="adm-cat-sub-name"><b>' + esc(c) + '</b><small>' + plural(x.n, 'sale') + '</small></span>' +
+        '<span class="adm-cat-sub-val">' + moneyBoth(x.aud, x.robux) + '</span><span class="adm-cat-sub-share">' + (tot ? sharePct(x.v / tot * 100) : '') + '</span></div>';
+    }).join('') + '</div>';
+  }
   function renderAnCats(w) {
     var box = $('admAnCats'); if (!box) return;
     var all = anAllItems(), cur = anIn(all, w.start, w.end), prev = w.prevStart ? anIn(all, w.prevStart, w.prevEnd) : null;
-    function group(list) { var g = {}; list.forEach(function (x) { var c = g[x.cat] = g[x.cat] || { aud: 0, robux: 0, n: 0 }; c.aud += x.aud; c.robux += x.robux; c.n++; }); return g; }
-    var g = group(cur), gp = prev ? group(prev) : null;
     if (!cur.length) { box.innerHTML = anEmpty('No sales in this range.'); return; }
+    var col = anCatColors(all);
+    function group(list) {
+      var g = {};
+      list.forEach(function (x) {
+        var c = g[x.cat] = g[x.cat] || { aud: 0, robux: 0, n: 0, v: 0, items: {} };
+        var v = anVal(x.aud, x.robux);
+        c.aud += x.aud; c.robux += x.robux; c.n++; c.v += v;
+        var it = c.items[x.key] = c.items[x.key] || { key: x.key, title: x.title, image: x.image, pfs: {}, n: 0, aud: 0, robux: 0, v: 0 };
+        it.n++; it.aud += x.aud; it.robux += x.robux; it.v += v; it.pfs[x.pf] = 1;
+      });
+      return g;
+    }
+    function sumOf(src, keys) {
+      var o = { aud: 0, robux: 0, n: 0, v: 0 };
+      keys.forEach(function (c) { var x = src && src[c]; if (x) { o.aud += x.aud; o.robux += x.robux; o.n += x.n; o.v += x.v; } });
+      return o;
+    }
+    var g = group(cur), gp = prev ? group(prev) : null;
+    var tot = anSum(Object.keys(g).map(function (c) { return g[c].v; }));
+    var named = Object.keys(g).filter(function (c) { return c !== 'Uncategorised'; }).sort(function (a, b) { return g[b].v - g[a].v; });
+    var own = named.filter(function (c) { return col[c]; }), rest = named.filter(function (c) { return !col[c]; });
+    var rows = own.map(function (c) { return { id: 'c:' + c, label: c, color: col[c], x: g[c], p: gp ? sumOf(gp, [c]) : null }; });
+    if (rest.length) rows.push({ id: 'other', label: rest.length === 1 ? rest[0] : 'Other categories', color: 'var(--cat-other)', x: sumOf(g, rest), p: gp ? sumOf(gp, rest) : null, others: rest.length > 1 ? rest : null });
+    if (g.Uncategorised) rows.push({ id: 'unc', label: 'Uncategorised', color: 'var(--cat-unc)', x: g.Uncategorised, p: gp ? sumOf(gp, ['Uncategorised']) : null, unc: true });
+
     var known = {};
     allProducts().forEach(function (p) { if (p.cat) known[p.cat] = 1; });
-    Object.keys(g).forEach(function (c) { if (c !== 'Uncategorised') known[c] = 1; });
-    var catList = Object.keys(known);
-    var score = divScore(catList.map(function (c) { return g[c] ? g[c].aud : 0; }));
-    var scoreP = gp ? divScore(catList.map(function (c) { return gp[c] ? gp[c].aud : 0; })) : null;
-    var cats = Object.keys(g).sort(function (a, b) { return ((a === 'Uncategorised') - (b === 'Uncategorised')) || (g[b].aud - g[a].aud) || (g[b].robux - g[a].robux); });
-    var tot = anSum(cats.map(function (c) { return g[c].aud; }));
-    var named = cats.filter(function (c) { return c !== 'Uncategorised' && g[c].aud > 0; });
-    var selling = catList.filter(function (c) { return g[c] && g[c].n; }).length;
-    // Slices: each coloured category on its own, in a fixed order; the rest as one "Other".
-    var slices = Object.keys(AN_CAT_SLOT).filter(function (c) { return g[c] && g[c].aud > 0; }).map(function (c) {
-      return { v: g[c].aud, color: catColor(c), label: c, tip: sharePct(g[c].aud / tot * 100) + ', ' + fmtA(g[c].aud) };
-    });
-    var other = anSum(cats.filter(function (c) { return !AN_CAT_SLOT[c]; }).map(function (c) { return g[c].aud; }));
-    if (other > 0) slices.push({ v: other, color: 'var(--cat-other)', label: 'Other', tip: sharePct(other / tot * 100) + ', ' + fmtA(other) });
-    box.innerHTML = '<div class="adm-an-figs">' +
-        anFig('Category spread', score == null ? '–' : score, score == null ? '' : '/ 100', ptsDelta(score, scoreP, w),
-          named.length ? esc(named[0]) + ' brings in ' + sharePct(g[named[0]].aud / tot * 100) : 'No AU$ sales in this range') +
-        anFig('Categories selling', num(selling), 'of ' + catList.length, '', selling < catList.length ? (catList.length - selling) + (catList.length - selling === 1 ? ' category' : ' categories') + ' with no sales' : 'Every category sold') + '</div>' +
+    named.forEach(function (c) { known[c] = 1; });
+    var unc = g.Uncategorised, uncN = unc ? Object.keys(unc.items).length : 0, top = named[0];
+    var maxV = Math.max.apply(null, rows.map(function (r) { return r.x.v; }));
+    var slices = rows.map(function (r) { return { v: r.x.v, color: r.color, label: r.label, tip: sharePct(tot ? r.x.v / tot * 100 : 0) + ', ' + moneyBoth(r.x.aud, r.x.robux) }; });
+
+    box.innerHTML = '<div class="adm-an-figs is-3">' +
+        anFig('Top category', top ? esc(top) : '–', '', '', top && tot ? sharePct(g[top].v / tot * 100) + ' of revenue' : '') +
+        anFig('Categories selling', num(named.length), 'of ' + Object.keys(known).length, '', '') +
+        anFig('Uncategorised', unc ? sharePct(unc.v / tot * 100) : '0%', '', '', unc ? plural(uncN, 'product') + ' to sort' : 'Every sale has a category') +
+      '</div>' +
       '<div class="adm-cat-wrap">' +
         '<figure class="adm-pie">' + donutSvg(slices, { size: 176, aria: 'Revenue share by category', center: tot ? fmtA(tot, true) : 'A$0', sub: 'revenue' }) + '</figure>' +
-        '<div class="adm-cat-list" role="table" aria-label="Revenue by category">' + cats.map(function (c) {
-          var x = g[c];
-          return '<div class="adm-cat-row" role="row"><span class="adm-cat-name" role="cell"><b class="adm-dot" style="--pf:' + catColor(c) + '"></b><span>' + esc(c) + '<small>' + plural(x.n, 'sale') + '</small></span></span>' +
-            '<span class="adm-bar-val" role="cell">' + moneyBoth(x.aud, x.robux) + '<small>' + (tot ? sharePct(x.aud / tot * 100) : '') + (gp ? ' ' + chgChip(x.aud, gp[c] ? gp[c].aud : 0) : '') + '</small></span></div>';
+        '<div class="adm-cat-list" role="list" aria-label="Revenue by category">' + rows.map(function (r) {
+          var openable = !!(r.others || r.unc), open = openable && !!AN_CAT_OPEN[r.id];
+          var share = tot ? r.x.v / tot * 100 : 0;
+          var head = '<span class="adm-cat-name"><b class="adm-dot' + (r.unc ? ' is-unc' : '') + '" style="--pf:' + r.color + '"></b><span>' + esc(r.label) + '<small>' + plural(r.x.n, 'sale') + '</small></span></span>' +
+            '<span class="adm-cat-bar" aria-hidden="true"><i style="width:' + Math.max(1.5, maxV ? r.x.v / maxV * 100 : 0).toFixed(1) + '%;background:' + r.color + '"></i></span>' +
+            '<span class="adm-bar-val">' + (r.x.aud || !r.x.robux ? fmtA(r.x.aud) : robuxRaw(r.x.robux)) +
+              '<small>' + (r.x.aud && r.x.robux ? robuxRaw(r.x.robux) + ' · ' : '') + sharePct(share) + (r.p ? ' ' + chgChip(r.x.v, r.p.v) : '') + '</small></span>' +
+            '<span class="adm-cat-chev">' + (openable ? AN_CAT_CHEV : '') + '</span>';
+          return '<div class="adm-cat-item' + (open ? ' is-open' : '') + (r.unc ? ' is-unc' : '') + '" role="listitem">' +
+            (openable ? '<button type="button" class="adm-cat-head" data-cat-open="' + esc(r.id) + '" aria-expanded="' + open + '">' + head + '</button>'
+              : '<div class="adm-cat-head">' + head + '</div>') +
+            (open ? (r.unc ? anCatUncList(r.x) : anCatOtherList(r.others, g, tot)) : '') + '</div>';
         }).join('') + '</div>' +
-      '</div>' +
-      '<p class="adm-an-note">100 means revenue is spread evenly over all ' + catList.length + ' categories. Products we don\'t list here take their BuiltByBit category.</p>';
+      '</div>';
   }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-cat-open]');
+    if (b) { var id = b.getAttribute('data-cat-open'); AN_CAT_OPEN[id] = !AN_CAT_OPEN[id]; renderAnCats(anWindow()); return; }
+    var a = e.target.closest && e.target.closest('[data-cat-pid]');
+    if (a && !(e.ctrlKey || e.metaKey || e.shiftKey || e.button)) { e.preventDefault(); openProductEdit(a.getAttribute('data-cat-pid')); }
+  });
 
   // Price points: what each product sold for, in AU$ bands.
   var AN_BANDS = [[0, 5, 'Under A$5'], [5, 10, 'A$5 to A$10'], [10, 20, 'A$10 to A$20'], [20, 40, 'A$20 to A$40'], [40, 80, 'A$40 to A$80'], [80, Infinity, 'A$80 and up']];
@@ -4574,17 +4617,15 @@
     list.forEach(function (x) { for (var i = 0; i < AN_BANDS.length; i++) if (x.aud < AN_BANDS[i][1]) { b[i].n++; b[i].aud += x.aud; break; } });
     var totA = anSum(b.map(function (x) { return x.aud; })), maxN = Math.max.apply(null, b.map(function (x) { return x.n; }));
     var sorted = list.map(function (x) { return x.aud; }).sort(function (x, y) { return x - y; }), med = sorted[sorted.length >> 1];
-    var avg = totA / list.length;
     var topRev = 0; b.forEach(function (x, i) { if (x.aud > b[topRev].aud) topRev = i; });
     box.innerHTML = '<div class="adm-an-figs">' +
-        anFig('Typical price', fmtA(med), '', '', 'Half sold for less, half for more') +
-        anFig('Most revenue from', esc(AN_BANDS[topRev][2]), '', '', sharePct(b[topRev].aud / totA * 100) + ' of AU$ sales, average sale ' + fmtA(avg)) + '</div>' +
+        anFig('Typical price', fmtA(med), '', '', '') +
+        anFig('Most revenue from', esc(AN_BANDS[topRev][2]), '', '', sharePct(b[topRev].aud / totA * 100) + ' of AU$ sales') + '</div>' +
       '<div class="adm-bars" role="table" aria-label="Sales by price">' + b.map(function (x, i) {
         return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + esc(AN_BANDS[i][2]) + '<small>' + plural(x.n, 'sale') + '</small></span>' +
           '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (x.n ? Math.max(1.5, x.n / maxN * 100) : 0).toFixed(1) + '%"></i></span>' +
           '<span class="adm-bar-val" role="cell">' + fmtA(x.aud) + '<small>' + sharePct(x.aud / totA * 100) + ' of revenue</small></span></div>';
-      }).join('') + '</div>' +
-      '<p class="adm-an-note">Bars show how many products sold at each price. A product in a multi-product order counts at its share of the order.</p>';
+      }).join('') + '</div>';
   }
 
   // When people buy: orders by weekday and hour, in the viewer's own time zone.
@@ -7633,12 +7674,12 @@
   var GRX_SOURCES = [
     { key: 'site', label: 'coldd.dev', color: pfVar('site'), mark: pfMark('site') },
     { key: 'parcel', label: 'Parcel', color: pfVar('parcel'), mark: pfMark('parcel') },
-    { key: 'misc', label: 'Misc', color: 'var(--cat-other)', mark: '' }
+    { key: 'misc', label: 'Miscellaneous', color: 'var(--cat-other)', mark: '<img class="adm-pf-logo" src="/mp-logos/robux.png" alt="" width="18" height="18" loading="lazy" />' }
   ];
   var GRX_WIN_TEXT = { Day: 'Past day', Week: 'Past week', Month: 'Past month', Year: 'Past year' };
   // Roblox's summary windows for the page's range (it has no 90-day or all-time total).
   function grxWin() { return RANGE_DAYS === 1 ? 'Day' : RANGE_DAYS === 7 ? 'Week' : RANGE_DAYS === 30 ? 'Month' : 'Year'; }
-  function grxGrain() { return RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS && RANGE_DAYS <= 30 ? 'day' : RANGE_DAYS === 90 ? 'week' : 'month'; }
+  function grxGrain() { return RANGE_DAYS === 1 ? 'hour' : RANGE_DAYS && RANGE_DAYS <= 30 ? 'day' : RANGE_DAYS ? 'week' : 'month'; }
   function grxRerender() { if (curPanel === 'analytics') renderGroupRobux(); }
   function grxLoad(force) {
     var sb = window.coldSupabase; if (!sb) return;
@@ -7773,7 +7814,7 @@
       }).observe(box);
     }
   }
-  wireRbxChart($('admGrxRev'));
+  wirePlatChart($('admGrxRev'));
   wireRbxChart($('admGrxSpend'));
   function grxPie(tot) {
     var sum = anSum(GRX_SOURCES.map(function (s) { return tot[s.key] || 0; }));
@@ -7803,22 +7844,30 @@
     if (rows) rows.forEach(function (r) { var v = Number(r[2]) || 0; tot[r[1]] = (tot[r[1]] || 0) + v; rev += v; });
 
     facts.innerHTML = [
-      anFig('Robux revenue', rows ? robuxRaw(rev) : src ? '–' : skel, '', '', rows ? '≈ ' + grxAud(rev) + ' at the DevEx rate' : '&nbsp;'),
+      anFig('Robux revenue', rows ? robuxRaw(rev) : src ? '–' : skel, '', '', rows ? grxAud(rev) : '&nbsp;'),
       anFig('Robux spent', !ready ? skel : out == null ? '–' : robuxRaw(out), '', '',
-        ready ? GRX_WIN_TEXT[win] + (RANGE_DAYS === 90 || !RANGE_DAYS ? ', Roblox’s longest total' : '') : '&nbsp;'),
-      anFig('Pending Robux', !ready ? skel : pend == null ? '–' : robuxRaw(pend), '', '', 'Not released by Roblox yet'),
+        ready ? GRX_WIN_TEXT[win] : '&nbsp;'),
+      anFig('Pending Robux', !ready ? skel : pend == null ? '–' : robuxRaw(pend), '', '', ''),
       anFig('Group balance', !ready ? skel : bal == null ? '–' : robuxRaw(bal), '', '',
-        bal != null ? '≈ ' + grxAud(bal) + ' at the DevEx rate' : ready ? 'Not visible to the sync account' : '&nbsp;')
+        bal != null ? grxAud(bal) : ready ? 'Not visible to the sync account' : '&nbsp;')
     ].join('');
 
     if (revBox) {
-      if (!rows) { revBox.__rbx = null; revBox.innerHTML = src ? anEmpty('Robux sales could not be loaded.') : chartSkel; }
+      if (!rows) { revBox.__chart = null; revBox.innerHTML = src ? anEmpty('Robux sales could not be loaded.') : chartSkel; }
       else {
         var g = grxSeries(rows.map(function (r) { return [Number(r[0]) * 1000, r[1], Number(r[2]) || 0]; }), grxGrain(),
           src.first ? Date.parse(src.first) : Date.now(), GRX_SOURCES.map(function (x) { return x.key; }));
-        revBox.__rbx = { buckets: g.buckets, step: g.step, aria: 'Robux revenue by source over the selected range', total: 'All sources',
-          series: GRX_SOURCES.map(function (x) { return { key: x.key, label: x.label, color: x.color, data: g.data[x.key] }; }) };
-        drawRbxChart(revBox);
+        // The same line chart as Sales by platform: one line of all Robux revenue,
+        // each source on hover.
+        var allRbx = g.buckets.map(function (_, i) { return anSum(GRX_SOURCES.map(function (x) { return g.data[x.key][i]; })); });
+        revBox.__chart = { buckets: g.buckets, step: g.step, single: true, intTicks: true, aria: 'Robux revenue over the selected range',
+          axis: function (t) { return 'R$' + axisNum(t); },
+          series: [{ key: 'robux', label: 'Robux', color: 'var(--rbx-gold)', data: allRbx, total: anSum(allRbx) }],
+          tip: function (i) {
+            return GRX_SOURCES.map(function (x) { return '<div style="--pf:' + x.color + '"><i></i>' + esc(x.label) + '<b>' + robuxRaw(g.data[x.key][i]) + '</b></div>'; }).join('') +
+              '<div class="adm-pc-tip-total">All sources<b>' + robuxRaw(allRbx[i]) + '</b></div>';
+          } };
+        drawPlatChart(revBox);
       }
     }
     if (pieBox) pieBox.innerHTML = rows ? grxPie(tot) : src ? '' : chartSkel;
@@ -7849,9 +7898,9 @@
       var keep = Math.ceil(monthly * GRX_KEEP_MONTHS / 10000) * 10000;
       var free = bal == null ? null : bal - keep, freeVal, freeSub;
       if (free == null) { freeVal = '–'; freeSub = 'Needs the group balance'; }
-      else if (free < DEVEX_MIN_ROBUX) { freeVal = robuxRaw(0); freeSub = '≈ ' + grxAud(0) + ' · ' + (free < 0 ? robuxRaw(-free) + ' under the minimum' : 'DevEx needs ' + robuxRaw(DEVEX_MIN_ROBUX)); }
-      else { freeVal = robuxRaw(free); freeSub = '≈ ' + grxAud(free) + ' · next DevEx ' + esc(grxNextDevex().toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })); }
-      keepBox.innerHTML = anFig('Minimum balance', robuxRaw(keep), '', '', GRX_KEEP_MONTHS + ' months of spending, rounded up to the next 10,000') +
+      else if (free < DEVEX_MIN_ROBUX) { freeVal = robuxRaw(0); freeSub = grxAud(0); }
+      else { freeVal = robuxRaw(free); freeSub = grxAud(free) + ' · next DevEx ' + esc(grxNextDevex().toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })); }
+      keepBox.innerHTML = anFig('Minimum balance', robuxRaw(keep), '', '', GRX_KEEP_MONTHS + ' months of estimated spending') +
         anFig('Free to DevEx', freeVal, '', '', freeSub);
     }
   }
