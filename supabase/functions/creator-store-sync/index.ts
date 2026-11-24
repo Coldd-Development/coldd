@@ -14,10 +14,16 @@
 // the Creator Store items. It is used for exactly one read-only request (the
 // sales list below), never logged, never returned. Signing that session out
 // on Roblox kills it immediately; the admin then shows "cookie expired".
+//
+// Reviews (the comments under each asset on the Creator Store) every 15 minutes through
+// Roblox's public asset-reviews API, without the cookie: one count request per asset we have
+// sold, and the comments are read only for an asset whose count went up (all of them once a
+// day for edits and replies). Saved through _shared/platform_reviews.ts.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyRobloxCookieBroken } from "../_shared/roblox.ts";
 import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
+import { buildMatcher, savePlatformReviews, sweepUnmatched, type PlatformReview } from "../_shared/platform_reviews.ts";
 
 const API = "https://apis.roblox.com/marketplace-fiat-service/v1/seller/payments";
 const DIVISOR = 1_000_000_000;
@@ -25,6 +31,9 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 400;          // first run walks the whole history; later runs stop early
 const OVERLAP_MS = 3 * 86400000; // re-read the last 3 days each run (late or changed payments)
 const BUDGET_MS = 120000;
+const REVIEWS_API = "https://apis.roblox.com/asset-reviews-api/v1/assets/";
+const REVIEWS_EVERY_MS = 15 * 60 * 1000;
+const REVIEW_GAP_MS = 400;
 
 // deno-lint-ignore no-explicit-any
 type Obj = Record<string, any>;
@@ -63,6 +72,75 @@ function toRow(p: Obj) {
     buyer_ref: p.purchaserId ? String(p.purchaserId) : null,
     raw: { assetId, assetType: base.assetType || null },
   };
+}
+
+async function robloxJson(url: string): Promise<Obj | number | null> {
+  const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+  if (res.status === 429) return 429;
+  if (!res.ok) return null;
+  return await res.json().catch(() => null);
+}
+
+async function syncCreatorReviews(admin: Obj, firstRun: boolean, deep: boolean, deadline: number) {
+  const { data: sales } = await admin.from("platform_sales").select("raw, product_name, amount_usd, sold_at")
+    .eq("platform", "creatorstore").order("sold_at", { ascending: false }).limit(20000);
+  const assets = new Map<string, { name: string; price: number }>();
+  for (const r of (sales ?? []) as Obj[]) {
+    const id = String(r.raw?.assetId || "");
+    if (/^\d+$/.test(id) && !assets.has(id)) assets.set(id, { name: String(r.product_name || ""), price: Number(r.amount_usd) || 0 });
+  }
+  const { data: stored } = await admin.from("reviews").select("listing_ref").eq("source", "Creator Store").limit(20000);
+  const have = new Map<string, number>();
+  for (const r of (stored ?? []) as Obj[]) have.set(String(r.listing_ref), (have.get(String(r.listing_ref)) ?? 0) + 1);
+  const list: PlatformReview[] = [];
+  let checked = 0, read = 0, limited = false;
+  for (const [assetId, a] of assets) {
+    if (Date.now() > deadline - 10000) break;
+    const n = await robloxJson(REVIEWS_API + assetId + "/comments/count");
+    await sleep(REVIEW_GAP_MS);
+    if (n === 429) { limited = true; break; }
+    checked++;
+    const count = Number(n);
+    if (!Number.isFinite(count) || count <= 0 || (!deep && count <= (have.get(assetId) ?? 0))) continue;
+    let cursor = "";
+    for (let page = 0; page < 20; page++) {
+      const d = await robloxJson(REVIEWS_API + assetId + "/comments?limit=50" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+      await sleep(REVIEW_GAP_MS);
+      if (d === 429) { limited = true; break; }
+      if (!d || typeof d !== "object") break;
+      read++;
+      for (const c of (Array.isArray(d.commentResponses) ? d.commentResponses : []) as Obj[]) {
+        const when = new Date(Number(c.createdUtc) || 0);
+        if (!c.id || isNaN(when.getTime()) || when.getTime() <= 0) continue;
+        const replyAt = c.reply?.createdUtc ? new Date(Number(c.reply.createdUtc)) : null;
+        list.push({
+          external_id: "cs:" + c.id, source: "Creator Store", listing_name: a.name, listing_ref: assetId, price_usd: a.price || null,
+          stars: null, recommended: typeof c.isRecommended === "boolean" ? c.isRecommended : null,
+          text: String(c.text ?? "").trim(), user_name: c.commentingUsername ? String(c.commentingUsername) : null,
+          avatar_url: c.commentingUserId ? "uid:" + c.commentingUserId : null,
+          reply: c.reply?.text ? String(c.reply.text).trim() : null,
+          reply_at: replyAt && !isNaN(replyAt.getTime()) ? replyAt.toISOString() : null,
+          created_at: when.toISOString(),
+        });
+      }
+      if (!d.hasMore || !d.nextCursor) break;
+      cursor = String(d.nextCursor);
+    }
+    if (limited) break;
+  }
+  // Reviewer headshots (public thumbnails API, 100 users a request).
+  const uids = [...new Set(list.map((r) => String(r.avatar_url || "").replace(/^uid:/, "")).filter((u) => /^\d+$/.test(u)))];
+  const shot = new Map<string, string>();
+  for (let i = 0; i < uids.length && !limited; i += 100) {
+    const d = await robloxJson("https://thumbnails.roblox.com/v1/users/avatar-headshot?size=150x150&format=Png&isCircular=false&userIds=" + uids.slice(i, i + 100).join(","));
+    await sleep(REVIEW_GAP_MS);
+    if (d && typeof d === "object") for (const t of (Array.isArray(d.data) ? d.data : []) as Obj[]) if (t.state === "Completed" && t.imageUrl) shot.set(String(t.targetId), String(t.imageUrl));
+  }
+  for (const r of list) r.avatar_url = shot.get(String(r.avatar_url || "").replace(/^uid:/, "")) ?? null;
+  const matcher = await buildMatcher(admin);
+  const saved = await savePlatformReviews(admin, list, { markSeen: firstRun, matcher });
+  const swept = await sweepUnmatched(admin, matcher);
+  return { assets: assets.size, checked, pages: read, limited, ...saved, swept };
 }
 
 Deno.serve(async (req) => {
@@ -171,5 +249,25 @@ Deno.serve(async (req) => {
   // New sales just saved: send their phone alerts now (the database trigger and the
   // sale-alerts cron job are the backups).
   await flushSaleAlerts(admin).catch(() => null);
-  return json({ ok: !error, pages, read: rows.length, written, error: error || undefined });
+
+  let reviews: Obj | undefined;
+  const { data: rs } = await admin.from("platform_sync_state").select("last_run_at, last_ok_at").eq("platform", "creatorstore-reviews").maybeSingle();
+  const reviewsAge = rs?.last_run_at ? Date.now() - new Date(rs.last_run_at).getTime() : Infinity;
+  if (body.force === true || body.reviews === true || reviewsAge >= REVIEWS_EVERY_MS) {
+    const now = new Date();
+    try {
+      // The timer row must save first, or every minute would read the reviews again.
+      const { error: timerErr } = await admin.from("platform_sync_state").upsert({ platform: "creatorstore-reviews", last_run_at: now.toISOString(), updated_at: now.toISOString() });
+      if (timerErr) throw new Error("review timer: " + timerErr.message);
+      reviews = await syncCreatorReviews(admin, !rs?.last_ok_at, body.force === true || !rs?.last_ok_at || (now.getUTCHours() === 3 && now.getUTCMinutes() < 15), deadline + 30000);
+      await admin.from("platform_sync_state").upsert({
+        platform: "creatorstore-reviews", last_run_at: now.toISOString(), updated_at: new Date().toISOString(),
+        last_written: (reviews.added ?? 0) + (reviews.updated ?? 0), last_error: reviews.limited ? "Roblox rate limit; carried on next run" : null,
+        ...(reviews.limited ? {} : { last_ok_at: new Date().toISOString() }),
+      });
+    } catch (e) {
+      await admin.from("platform_sync_state").upsert({ platform: "creatorstore-reviews", last_run_at: now.toISOString(), updated_at: new Date().toISOString(), last_error: (e as Error).message.slice(0, 500) });
+    }
+  }
+  return json({ ok: !error, pages, read: rows.length, written, reviews, error: error || undefined });
 });

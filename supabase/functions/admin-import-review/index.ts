@@ -79,6 +79,8 @@ Deno.serve(async (req: Request) => {
       user_name: reviewerName,
       source: platform,
       status: "approved",
+      // Imported by hand, so already seen: never raises the "New reviews needing a look" task.
+      admin_reviewed_at: new Date().toISOString(),
     });
     if (insErr) return json({ ok: false, error: "Could not import review." }, 500);
 

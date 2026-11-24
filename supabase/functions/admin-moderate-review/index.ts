@@ -60,10 +60,13 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || "");
     const action = body.action;
-    if (!id || !["hide", "reply", "seen"].includes(action)) return json({ ok: false, error: "Invalid request." }, 400);
+    if (!id || !["hide", "show", "reply", "seen"].includes(action)) return json({ ok: false, error: "Invalid request." }, 400);
 
     let update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (action === "hide") { update.status = "hidden"; update.admin_reviewed_at = new Date().toISOString(); }
+    // Unhide: only a review an admin hid. One waiting for its product (hidden_reason 'unmatched')
+    // is published by the sync when that product is on the site.
+    else if (action === "show") { update.status = "approved"; update.admin_reviewed_at = new Date().toISOString(); }
     else if (action === "reply") {
       update.reply = body.reply ? String(body.reply).trim().slice(0, 2000) || null : null;
       update.reply_at = new Date().toISOString();
@@ -72,8 +75,9 @@ Deno.serve(async (req: Request) => {
       update = { admin_reviewed_at: new Date().toISOString() };
     }
 
-    const { data: updated, error: updateErr } = await admin.from("reviews").update(update)
-      .eq("id", id).select("user_id, reply, products(title)").maybeSingle();
+    let q = admin.from("reviews").update(update).eq("id", id);
+    if (action === "show") q = q.is("hidden_reason", null);
+    const { data: updated, error: updateErr } = await q.select("user_id, reply, products(title)").maybeSingle();
     if (updateErr) return json({ ok: false, error: "Could not update review." }, 500);
 
     if (action === "reply" && update.reply && updated?.user_id) {

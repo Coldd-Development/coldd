@@ -13,6 +13,8 @@
 //   - resources: GET /v2/resources/creator/resources?with=Description,Category (price,
 //     description, category, cover + carousel image urls) for the price / listing checks.
 //     Without the with hints the API leaves Description and Category out.
+//   - reviews: GET /v2/resources/creator/reviews?with=Reviewer,Resource (account-wide, every
+//     10 minutes) into public.reviews through _shared/platform_reviews.ts.
 //   - funnel: GET /v2/analytics/single (page views, impressions, cart adds, wishlist adds,
 //     purchases, revenue) overall and for each BuiltByBit listing that matches a coldd product.
 //
@@ -32,6 +34,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
+import { buildMatcher, savePlatformReviews, sweepUnmatched, type PlatformReview } from "../_shared/platform_reviews.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
@@ -47,6 +50,7 @@ const FULL_BUDGET_MS = 100000;
 const PURCHASES_FULL_EVERY_MS = 24 * 60 * 60 * 1000;
 const RESOURCES_EVERY_MS = 6 * 60 * 60 * 1000;
 const FUNNEL_EVERY_MS = 30 * 60 * 1000;
+const REVIEWS_EVERY_MS = 10 * 60 * 1000;
 
 // deno-lint-ignore no-explicit-any
 type Obj = Record<string, any>;
@@ -210,7 +214,7 @@ Deno.serve(async (req: Request) => {
       let newestFirst = false, stored = 0, pagesRead = 0;
       // with=Buyer adds the buyer (username, avatar) to each purchase; with=Addon gives an
       // add-on purchase its add-on (title, and the listing it belongs to).
-      await pages(token, "/v2/resources/creator/purchases?with=Buyer,Addon", "purchases", async (rows, page) => {
+      await pages(token, "/v2/resources/creator/purchases?with=Buyer,Addon", "purchases", async (rows) => {
         pagesRead = page;
         if (page === 1) {
           const ts = rows.map((p) => num(p.created_at)).filter((n) => n > 0);
@@ -289,6 +293,44 @@ Deno.serve(async (req: Request) => {
         summary.resources = n;
       }
     } catch (e) { errors.push("resources: " + (e as Error).message); }
+
+    // 2b) reviews: every review on our listings (one request per 100). A new one is published on
+    //     its coldd.dev product, or waits hidden until one with that name is on the site.
+    try {
+      if (force || age(st.reviews_at) >= REVIEWS_EVERY_MS) {
+        const firstRun = !st.reviews_at;
+        const { data: resRows } = await admin.from("bbb2_resources").select("resource_id, title, final_price").limit(5000);
+        const resById = new Map<number, Obj>();
+        for (const r of (resRows ?? []) as Obj[]) resById.set(Number(r.resource_id), r);
+        const list: PlatformReview[] = [];
+        await pages(token, "/v2/resources/creator/reviews?with=Reviewer,Resource", "reviews", async (rows) => {
+          for (const r of rows) {
+            const rid = num(r.resource_id);
+            const listing = resById.get(rid);
+            const member: Obj = r.Reviewer ?? r.reviewer ?? {};
+            const resource: Obj = r.Resource ?? r.resource ?? {};
+            const created = iso(r.created_at);
+            const stars = Math.round(num(r.stars));
+            if (!r.review_id || !created) continue;
+            const reply = plain(r.response);
+            list.push({
+              external_id: "bbb:" + r.review_id, source: "BuiltByBit",
+              listing_name: String(listing?.title ?? resource.title ?? ""), listing_ref: String(rid || ""),
+              bbb_resource_id: rid || null, price_usd: listing?.final_price != null ? num(listing.final_price) : null,
+              stars: stars >= 1 && stars <= 5 ? stars : null, recommended: null, text: plain(r.message),
+              user_name: member.username ? String(member.username) : null,
+              avatar_url: member.avatar_url_medium ?? member.avatar_url_small ?? member.avatar_url_large ?? null,
+              reply: reply || null, reply_at: null, created_at: created,
+            });
+          }
+        });
+        const matcher = await buildMatcher(admin);
+        const saved = await savePlatformReviews(admin, list, { markSeen: firstRun, matcher });
+        const swept = await sweepUnmatched(admin, matcher);
+        patch.reviews_at = new Date().toISOString();
+        summary.reviews = { ...saved, swept };
+      }
+    } catch (e) { errors.push("reviews: " + (e as Error).message); }
 
     // 3) funnel: overall + each BuiltByBit listing that matches a coldd product by title. Resumable:
     //    every (listing, period) pair has its own refresh age, each run does the stalest due pairs
