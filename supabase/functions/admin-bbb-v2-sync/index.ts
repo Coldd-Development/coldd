@@ -8,7 +8,8 @@
 // The admin Marketplaces / Dashboard / Analytics panels read those tables directly.
 //
 //   - purchases: GET /v2/resources/creator/purchases is ACCOUNT-WIDE (one request per 100
-//     purchases). Revenue is FinalPrice (what the buyer paid), fee is PlatformFee.
+//     purchases). Revenue is FinalPrice (what the buyer paid), fee is PlatformFee,
+//     ad_fee / ad_fee_credit are AdFeePayment / AdFeeCredit (featured-ad fee on that sale).
 //   - resources: GET /v2/resources/creator/resources?with=Description,Category (price,
 //     description, category, cover + carousel image urls) for the price / listing checks.
 //     Without the with hints the API leaves Description and Category out.
@@ -224,6 +225,10 @@ Deno.serve(async (req: Request) => {
           price_final: num(p.FinalPrice?.value),
           price_list: num(p.ListPrice?.value),
           fee: num(p.PlatformFee?.value),
+          // Featured-ad fee taken from this sale (0 unless it came through a featured placement)
+          // and any ad credit BuiltByBit applied to it.
+          ad_fee: p.AdFeePayment ? num(p.AdFeePayment.value) : null,
+          ad_fee_credit: p.AdFeeCredit ? num(p.AdFeeCredit.value) : null,
           currency: p.FinalPrice?.currency ?? null,
           gateway: p.gateway ?? null,
           bundle_id: p.bundle_id ? num(p.bundle_id) : null,

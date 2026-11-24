@@ -4642,6 +4642,117 @@
   }
   wirePlatChart($('admVolChart'));
 
+  // External fees: what the platforms and payment processors keep from money sales, in AU$
+  // at the rate of the sale's day. Robux is not included. Exact where the platform reports
+  // it: Creator Store and Payhip nets, BuiltByBit's platform fee and featured-ad fee
+  // (AdFeePayment; ad credit BuiltByBit covered is not a cost), ClearlyDev's emailed net.
+  // Estimated from published rates where it does not (XF_RATE): BuiltByBit's gateway fee,
+  // ClearlyDev sales without an emailed net, Parcel's and coldd.dev's card, PayPal and
+  // crypto fees.
+  var XF_CATS = [
+    { key: 'proc', label: 'Payment Processor Fees', color: 'var(--pf-site)' },
+    { key: 'creatorstore', label: 'Creator Store Fees', color: 'var(--pf-creatorstore)' },
+    { key: 'clearlydev', label: 'ClearlyDev Fees', color: 'var(--pf-clearlydev)' },
+    { key: 'bbb', label: 'BuiltByBit Fees', color: 'var(--pf-builtbybit)' },
+    { key: 'bbbad', label: 'BuiltByBit Advertising', color: '#f08c2e' }
+  ];
+  var XF_RATE = {
+    bbbGateway: { pct: 0.0249, fixedUsd: 0.40 },          // per checkout, split across its items by value
+    clearlydev: { pct: 0.10, monthlyUsd: 2 },
+    creatorstore: 0.098,                                  // only for a sale with no recorded net
+    payhip: 0.143,                                        // only for a sale with no recorded net
+    stripe: { pct: 0.035 + 0.02, fixedAud: 0.30 },        // international card + conversion to AU$
+    paypal: { pct: 0.036, fixedAud: 0.30 },
+    nowpayments: 0.005,
+    coinbase: 0.01
+  };
+  var XF_CACHE = { src: [], rows: null };
+  function extFees() {
+    var src = [ORDERS, BBB.purchases, PSALES, BBB.configured];
+    if (XF_CACHE.rows && src.every(function (v, i) { return v === XF_CACHE.src[i]; })) return XF_CACHE.rows;
+    var R = XF_RATE, out = [];
+    function add(cat, t, aud, gross, n) { if (aud > 0 && isFinite(t)) out.push({ cat: cat, t: t, aud: aud, gross: gross, n: n }); }
+    ORDERS.forEach(function (o) {
+      if (o.isTest || o.status !== 'completed' || o.source === 'granted' || o.currency === 'robux') return;
+      var t = Date.parse(o.paidAt || o.date), aud = usdToAudAt(o.total, t);
+      if (!(aud > 0)) return;
+      var p = String(o.paymentProvider || '').toLowerCase(), c = String(o.cryptoProvider || '').toLowerCase();
+      var f = p === 'paypal' ? aud * R.paypal.pct + R.paypal.fixedAud
+        : p === 'crypto' ? aud * (c === 'coinbase' ? R.coinbase : R.nowpayments)
+        : aud * R.stripe.pct + R.stripe.fixedAud;
+      add('proc', t, f, aud, 1);
+    });
+    if (BBB.configured) {
+      var cart = {};
+      BBB.purchases.forEach(function (p) { if (bbbIsUsd(p) && p.price > 0 && p.external_tid) cart[p.external_tid] = (cart[p.external_tid] || 0) + p.price; });
+      BBB.purchases.forEach(function (p) {
+        if (!bbbIsUsd(p) || !(p.price > 0)) return;
+        var t = Date.parse(p.purchased_at), share = p.external_tid && cart[p.external_tid] ? p.price / cart[p.external_tid] : 1;
+        var gross = usdToAudAt(p.price, t);
+        add('bbb', t, usdToAudAt(p.fee + p.price * R.bbbGateway.pct + R.bbbGateway.fixedUsd * share, t), gross, 1);
+        if (p.adFee > 0) add('bbbad', t, usdToAudAt(p.adFee, t), gross, 1);
+      });
+    }
+    var cdFirst = Infinity;
+    PSALES.forEach(function (s) {
+      if (s.status === 'refunded' || s.currency === 'ROBUX' || !(s.usd > 0)) return;
+      var gross = usdToAudAt(s.usd, s.t), fee = function (rate) { return usdToAudAt(s.net != null ? s.usd - s.net : s.usd * rate, s.t); };
+      if (s.platform === 'creatorstore') add('creatorstore', s.t, fee(R.creatorstore), gross, 1);
+      else if (s.platform === 'clearlydev') { add('clearlydev', s.t, fee(R.clearlydev.pct), gross, 1); if (s.t < cdFirst) cdFirst = s.t; }
+      else if (s.platform === 'payhip') add('proc', s.t, fee(R.payhip), gross, 1);
+      else if (s.platform === 'parcel') add('proc', s.t, gross * R.stripe.pct + R.stripe.fixedAud, gross, 1);
+    });
+    // ClearlyDev's monthly charge, on the 1st of every month since the first sale.
+    if (isFinite(cdFirst)) {
+      var m = new Date(cdFirst); m = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+      for (; m.getTime() <= Date.now(); m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) add('clearlydev', m.getTime(), usdToAudAt(R.clearlydev.monthlyUsd, m.getTime()), 0, 0);
+    }
+    XF_CACHE = { src: src, rows: out };
+    return out;
+  }
+  function renderAnFees(sales, w) {
+    var box = $('admFeeChart'), mixBox = $('admFeeMix'); if (!box) return;
+    var rows = extFees(), b = anBuckets(sales), buckets = b.buckets, n = buckets.length;
+    var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
+    var byCat = {}, total = buckets.map(function () { return 0; });
+    XF_CATS.forEach(function (c) { byCat[c.key] = buckets.map(function () { return 0; }); });
+    rows.forEach(function (x) {
+      if (x.t < first || x.t >= last) return;
+      var lo = 0, hi = n - 1;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
+      byCat[x.cat][lo] += x.aud; total[lo] += x.aud;
+    });
+    if (!total.some(function (v) { return v > 0; })) { box.__chart = null; box.innerHTML = anEmpty('No fees in this range.'); }
+    else {
+      box.__chart = { buckets: buckets, step: b.step, single: true, aria: 'External fees in AU$ over the selected range',
+        series: [{ key: 'fees', label: 'External fees', color: '#d95926', data: total, total: anSum(total) }],
+        tip: function (i) {
+          return XF_CATS.filter(function (c) { return byCat[c.key][i] > 0; }).map(function (c) {
+            return '<div style="--pf:' + c.color + '"><i></i>' + esc(c.label) + '<b>' + fmtA(byCat[c.key][i]) + '</b></div>';
+          }).join('') + '<div class="adm-pc-tip-total">Total<b>' + fmtA(total[i]) + '</b></div>';
+        } };
+      drawPlatChart(box);
+    }
+    if (!mixBox) return;
+    var s = w.start ? w.start.getTime() : -Infinity, e = w.end ? w.end.getTime() : Infinity, by = {}, spent = 0;
+    XF_CATS.forEach(function (c) { by[c.key] = { v: 0, g: 0 }; });
+    rows.forEach(function (x) { if (x.t < s || x.t >= e) return; by[x.cat].v += x.aud; by[x.cat].g += x.gross; spent += x.aud; });
+    var cats = XF_CATS.filter(function (c) { return by[c.key].v > 0; }).sort(function (a, b) { return by[b.key].v - by[a.key].v; });
+    if (!cats.length) { mixBox.innerHTML = anEmpty('No fees in this range.'); return; }
+    var gross = sumSales(sales, w.start, w.end).aud;
+    var slices = cats.map(function (c) { return { v: by[c.key].v, color: c.color, label: c.label, tip: sharePct(by[c.key].v / spent * 100) + ', ' + fmtA(by[c.key].v) }; });
+    mixBox.innerHTML = '<div class="adm-fin-mix">' +
+      '<figure class="adm-pie">' + donutSvg(slices, { aria: 'External fees by category', center: fmtA(spent, spent >= 1000), sub: gross > 0 ? sharePct(spent / gross * 100) + ' of sales' : 'in fees' }) + '</figure>' +
+      '<div class="adm-mix-table" role="table" aria-label="External fees by category">' +
+        '<div class="adm-mix-row is-head adm-fin-catrow" role="row"><span role="columnheader">Category</span><span role="columnheader">Fees</span><span role="columnheader">Share</span><span role="columnheader" title="Fees as a share of the sales they were taken from">Rate</span></div>' +
+        cats.map(function (c) {
+          var r = by[c.key];
+          return '<div class="adm-mix-row adm-fin-catrow" role="row" style="--pf:' + c.color + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c.label) + '</span>' +
+            '<span role="cell">' + fmtA(r.v) + '</span><span role="cell">' + sharePct(r.v / spent * 100) + '</span><span role="cell">' + (r.g > 0 ? sharePct(r.v / r.g * 100) : '–') + '</span></div>';
+        }).join('') + '</div></div>';
+  }
+  wirePlatChart($('admFeeChart'));
+
   // Categories: revenue by product category (our catalogue's; BuiltByBit's for listings
   // we don't sell here; the category set on a marketplace-only name in
   // product_name_aliases). Ranked like BuiltByBit's Top categories: revenue and sales,
@@ -4862,6 +4973,7 @@
     renderAnTop(w);
     renderAnMix(sales, w);
     renderAnVolume(sales, w);
+    renderAnFees(sales, w);
     renderAnCats(w);
     renderAnPrices(w);
     renderAnHeat(sales, w);
@@ -7405,7 +7517,7 @@
     if (!window.coldSupabase) return Promise.resolve();
     var sb = window.coldSupabase;
     return Promise.all([
-      bbbPaged(function () { return sb.from('bbb2_purchases').select('purchase_id, resource_id, created_at, price_final, price_list, fee, currency, gateway, bundle_id, sale_event_id, buyer_id, buyer_name, external_tid, addon_title').order('created_at', { ascending: false }).order('purchase_id'); }),
+      bbbPaged(function () { return sb.from('bbb2_purchases').select('purchase_id, resource_id, created_at, price_final, price_list, fee, ad_fee, currency, gateway, bundle_id, sale_event_id, buyer_id, buyer_name, external_tid, addon_title').order('created_at', { ascending: false }).order('purchase_id'); }),
       bbbPaged(function () { return sb.from('bbb2_resources').select('resource_id, title, url, summary, description, list_price, final_price, cover_image_url, carousel_count, category, latest_version').order('resource_id'); }),
       sb.from('bbb2_funnel').select('*').limit(5000),
       sb.from('bbb2_state').select('*').eq('id', true).maybeSingle(),
@@ -7417,7 +7529,7 @@
       if (BBB.loaded && sig === BBB.sig) return;
       BBB.sig = sig;
       BBB.purchases = r[0].map(function (p) {
-        return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, list_price: Number(p.price_list) || 0, fee: Number(p.fee) || 0, currency: p.currency, gateway: p.gateway,
+        return { purchase_id: p.purchase_id, resource_id: p.resource_id, purchased_at: p.created_at, price: Number(p.price_final) || 0, list_price: Number(p.price_list) || 0, fee: Number(p.fee) || 0, adFee: Number(p.ad_fee) || 0, currency: p.currency, gateway: p.gateway,
           bundle_id: p.bundle_id, sale_event_id: p.sale_event_id, buyer_id: p.buyer_id, buyer_name: p.buyer_name || '', external_tid: p.external_tid || '', addon: p.addon_title || '' };
       });
       BBB.resources = r[1];
