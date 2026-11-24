@@ -17,7 +17,9 @@ export const PLATFORM_LABEL: Record<string, string> = {
   site: "coldd.dev", builtbybit: "BuiltByBit", creatorstore: "Creator Store",
   clearlydev: "ClearlyDev", payhip: "Payhip", parcel: "Parcel",
 };
-const ICON_URL = "https://coldd.dev/mp-logos/sale-alert.png";
+// The alert icon. The live link is sale_alert_settings.icon_url (this is the fallback).
+// Bark caches an icon by its link, so a new icon needs a new link, never a new file at the old one.
+const ICON_URL = "https://coldd.dev/mp-logos/sale-alert-v2.png";
 const OPEN_URL = "https://coldd.dev/admin/orders/";
 const SYMBOL: Record<string, string> = { USD: "$", AUD: "A$", EUR: "€", GBP: "£", CAD: "C$", NZD: "NZ$" };
 // Rough US$ value, only for the "minimum amount" setting.
@@ -63,7 +65,7 @@ function isQuiet(st: Obj): boolean {
 // One push to one phone. Returns null when Bark accepted it, else the error.
 export async function pushTo(dev: Obj, fields: { title: string; body: string; pushId: string; silent: boolean }, st: Obj): Promise<string | null> {
   const level = fields.silent ? "passive" : (st?.level || "timeSensitive");
-  const inner: Obj = { title: fields.title, body: fields.body, group: "Sales", icon: ICON_URL, url: OPEN_URL, level, isArchive: "1" };
+  const inner: Obj = { title: fields.title, body: fields.body, group: "Sales", icon: st?.icon_url || ICON_URL, url: OPEN_URL, level, isArchive: "1" };
   if (!fields.silent) {
     inner.sound = st?.sound || "paymentsuccess";
     if (st?.sound_url) inner.soundUrl = st.sound_url;
