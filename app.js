@@ -2172,12 +2172,13 @@
           // that actually offer that upsell path at all.
           var resellBoost = el.getAttribute('data-resell') === 'yes' ? 8 : 0;
 
-          // BuiltByBit sales of this listing and of similar ones, plus on-site views: real demand
-          // signals that work before this site has its own sales history.
+          // Real demand: this product's recent sales on every platform (coldd.dev, BuiltByBit,
+          // Creator Store, ClearlyDev, Payhip, Parcel), BuiltByBit demand for similar listings,
+          // and on-site views. Sales weigh most.
           var demandBoost = 0;
           if (catalogDemand) {
             var dm = catalogDemand[el.getAttribute('data-id')];
-            if (dm) demandBoost = dm.bbb * 30 + dm.views * 12;
+            if (dm) demandBoost = (dm.sales || 0) * 34 + dm.bbb * 12 + dm.views * 10;
           }
 
           // This visitor's own browsing in this tab session (works for anonymous visitors):
@@ -2272,7 +2273,7 @@
             var rows = r.data || [];
             if (!rows.length) return;
             var map = {};
-            rows.forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0 }; });
+            rows.forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0, sales: Number(row.sales_rank) || 0 }; });
             catalogDemand = map;
             if (gridRevealed && sortMode === 'popular') refilter(true);
           }).catch(function () {}).then(function () { signalSettled('demand'); });
@@ -2305,7 +2306,8 @@
             return {
               p: p, i: i,
               price: filterPrice(p),
-              popularity: (catalogDemand && catalogDemand[p.getAttribute('data-id')] || {}).views || 0,
+              // Popular: sales on every platform first, then on-site views.
+              popularity: (function (d) { return d ? (d.sales || 0) * 1000 + (d.views || 0) : 0; })(catalogDemand && catalogDemand[p.getAttribute('data-id')]),
               rating: parseFloat(p.getAttribute('data-rating')) || 0,
               reviews: parseFloat(p.getAttribute('data-reviews')) || 0
             };

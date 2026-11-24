@@ -763,18 +763,19 @@
   // only describe that to the shopper; the discount that is charged is always the
   // server's. Prices round per product, exactly as the server does.
   function round2(n) { return Math.round(n * 100) / 100; }
-  // Same signal as the shop's "Popular" sort (views rank), then BuiltByBit sales, then reviews.
+  // Same signal as the shop's "Popular" sort (sales on every platform, then views), then
+  // BuiltByBit demand, then reviews.
   // window.__DEMAND arrives after the catalog (see loadBundleDemand) and bundle views re-render.
   function popularity(p) {
     var d = (window.__DEMAND || {})[p.id] || {};
-    return (Number(d.views) || 0) * 1e6 + (Number(d.bbb) || 0) * 1e3 + (Number(p.reviews) || 0) * 10 + (Number(p.rating) || 0);
+    return (Number(d.sales) || 0) * 1e9 + (Number(d.views) || 0) * 1e6 + (Number(d.bbb) || 0) * 1e3 + (Number(p.reviews) || 0) * 10 + (Number(p.rating) || 0);
   }
   function loadBundleDemand() {
     if (!(window.__BUNDLES || []).length || !window.coldSupabase) return;
     try { var cached = JSON.parse(sessionStorage.getItem('coldd_demand') || 'null'); if (cached) { window.__DEMAND = cached; return; } } catch (e) {}
     (window.__demandP || window.coldSupabase.rpc('catalog_demand_signals', {})).then(function (r) {
       var map = {};
-      (r.data || []).forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0 }; });
+      (r.data || []).forEach(function (row) { map[row.product_slug] = { bbb: Number(row.bbb_rank) || 0, views: Number(row.views_rank) || 0, sales: Number(row.sales_rank) || 0 }; });
       window.__DEMAND = map;
       try { sessionStorage.setItem('coldd_demand', JSON.stringify(map)); } catch (e) {}
       document.dispatchEvent(new CustomEvent('coldd:bundles-changed'));
