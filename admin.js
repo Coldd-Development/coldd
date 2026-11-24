@@ -1777,7 +1777,8 @@
   // Every sale on every platform as { pf, t, aud, robux, n }, BEFORE FEES: what
   // the buyer paid, converted at the rate of the day of the sale. Website orders
   // count once paid (no tests, no admin grants); BuiltByBit is FinalPrice;
-  // platform_sales rows use the sale amount. Refunds are left out.
+  // platform_sales rows use the sale amount; Parcel's Robux sales come from the group
+  // sale ledger (PARCEL_RBX). Refunds are left out.
   function homeSales() {
     var out = [];
     ORDERS.forEach(function (o) {
@@ -1797,6 +1798,8 @@
       if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: s.amount, n: 1 });
       else out.push({ pf: s.platform, t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0, n: 1 });
     });
+    // Parcel's Robux sales from the group ledger (price paid; one sale each).
+    PARCEL_RBX.forEach(function (x) { out.push({ pf: 'parcel', t: x.t, aud: 0, robux: x.robux, n: 1 }); });
     return out;
   }
   function sumSales(list, start, end, pf) {
@@ -1865,6 +1868,7 @@
   var MAIL_FAILED = 0; // ClearlyDev order emails in the last 7 days the parser could not read
   function refreshPlatformSales() {
     if (!window.coldSupabase) return Promise.resolve();
+    if (!PARCEL_RBX_LOADED) refreshParcelRobux();
     window.coldSupabase.from('inbound_emails').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('received_at', new Date(Date.now() - 7 * DAY_MS).toISOString()).then(function (r) {
       if (r.error) return;
       MAIL_FAILED = r.count || 0;
@@ -1894,6 +1898,28 @@
       if (curPanel === 'products') renderProducts();
       if (curPanel === 'home') renderHome();
     });
+  }
+
+  // Parcel's Robux sales, from the group sale ledger (developer products in the
+  // group's Parcel hub; synced by admin-robux-revenue every minute). Revenue only:
+  // the products are named after their price, so they count on the platform figures
+  // but are not listed as orders or products (the Discord bot will name them).
+  // robux = the price the buyer paid (the number in the product name).
+  var PARCEL_RBX = [], PARCEL_RBX_LOADED = false, PARCEL_RBX_LOADING = false, PARCEL_RBX_SIG = '';
+  function refreshParcelRobux() {
+    if (!window.coldSupabase || PARCEL_RBX_LOADING) return Promise.resolve();
+    PARCEL_RBX_LOADING = true;
+    return window.coldSupabase.rpc('admin_parcel_robux').then(function (r) {
+      PARCEL_RBX_LOADING = false; PARCEL_RBX_LOADED = true;
+      if (r.error || !Array.isArray(r.data)) { if (r.error) console.error('[admin] parcel robux:', r.error.message); return; }
+      var last = r.data[r.data.length - 1];
+      var sig = r.data.length + ':' + (last ? last.join(',') : '');
+      if (sig === PARCEL_RBX_SIG) return;
+      PARCEL_RBX_SIG = sig;
+      PARCEL_RBX = r.data.map(function (x) { return { t: Number(x[0]) * 1000, robux: Number(x[1]) || 0, net: Number(x[2]) || 0 }; });
+      if (curPanel === 'analytics') renderAnalytics();
+      if (curPanel === 'home') renderHome();
+    }, function () { PARCEL_RBX_LOADING = false; PARCEL_RBX_LOADED = true; });
   }
 
   function syncHomePeriod() {
@@ -8369,6 +8395,7 @@
       if (d.o !== was.o) refreshOrders();
       if (d.p !== was.p) refreshPlatformSales();
       if (d.b !== was.b) refreshBbbData();
+      if (d.r !== was.r) refreshParcelRobux();
     }, function () { PULSE_BUSY = false; });
   }
   setInterval(salesPulse, 5000);
