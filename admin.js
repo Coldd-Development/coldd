@@ -1173,16 +1173,30 @@
     return '<span class="ds-delta ' + cls + '">' + arrow + ' ' + Math.abs(Math.round(pct * 10) / 10) + '%</span>';
   }
   (function stickyRange() {
-    var ticking = false;
+    var ticking = false, dock = null;
+    function home(seg) { if (seg && seg.__home && seg.parentNode !== seg.__home) seg.__home.appendChild(seg); }
     function check() {
       ticking = false;
+      var pinned = null;
       document.querySelectorAll('.adm-an > .adm-home-head, .adm-mkt > .adm-home-head').forEach(function (h) {
-        if (!h.offsetParent) return;
-        var top = parseFloat(getComputedStyle(h).top) || 0;
-        h.classList.toggle('is-stuck', window.scrollY > 4 && h.getBoundingClientRect().top <= top + 0.5);
+        if (!h.__seg) { h.__seg = h.querySelector('.adm-range'); if (h.__seg) h.__seg.__home = h; }
+        // Pinned once the header has scrolled up under the site bar.
+        var stuck = !!h.offsetParent && h.getBoundingClientRect().bottom < 64;
+        h.classList.toggle('is-stuck', stuck);
+        if (stuck && !pinned) pinned = h;
       });
+      if (!dock) { dock = document.createElement('div'); dock.className = 'adm-range-dock'; dock.hidden = true; document.body.appendChild(dock); }
+      var cur = dock.firstElementChild, want = pinned && pinned.__seg;
+      if (cur && cur !== want) home(cur);
+      if (want && want.parentNode !== dock) dock.appendChild(want);
+      dock.hidden = !want;
     }
-    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+    function soon() { if (!ticking) { ticking = true; requestAnimationFrame(check); } }
+    window.addEventListener('scroll', soon, { passive: true });
+    window.addEventListener('resize', soon);
+    window.addEventListener('popstate', soon);
+    // Switching pages changes which header is on screen.
+    document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-panel]')) setTimeout(soon, 60); });
   })();
   function setRange(n) {
     RANGE_DAYS = n; lsSet('coldd_admin_range_v1', n);
@@ -1906,7 +1920,11 @@
       if (!firstLoad && sig === PSALES_SIG) return;
       PSALES_SIG = sig;
       PSALES = (res.data || []).map(function (r) {
-        return { id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
+        // A sale imported with only a date (the Payhip export, sales added by hand) sits
+        // exactly on the hour: its time is not known.
+        var tms = Date.parse(r.sold_at);
+        return { dateOnly: (r.source === 'manual' || r.source === 'csv') && tms % 3600000 === 0,
+          id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
       });
       if (curPanel === 'orders') renderOrders();
       if (curPanel === 'analytics') renderAnalytics();
@@ -7713,6 +7731,17 @@
   }
   // What Robux would pay out at the DevEx rate, in AU$.
   function grxAud(robux) { return fmtA((Number(robux) || 0) * DEVEX_USD_PER_ROBUX * audRateOn(Date.now())); }
+  // The biggest full calendar month of spending in the last 6, from the recorded
+  // spending history (daily records and the audit log backfill).
+  function grxHistoryMonthMax(src) {
+    var sp = src && !src.error && Array.isArray(src.spend) ? src.spend : [];
+    var now = new Date(), thisMonth = now.getFullYear() * 12 + now.getMonth(), by = {};
+    sp.forEach(function (r) {
+      var d = String(r[0]), k = Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7)) - 1;
+      if (k < thisMonth && k >= thisMonth - 6) by[k] = (by[k] || 0) + (Number(r[1]) || 0);
+    });
+    return Object.keys(by).reduce(function (mx, k) { return Math.max(mx, by[k]); }, 0);
+  }
   function grxNextDevex() {
     var now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + (now.getDate() > GRX_DEVEX_DAY ? 1 : 0), GRX_DEVEX_DAY);
@@ -7892,8 +7921,11 @@
 
     if (keepBox) {
       if (!ready) { keepBox.innerHTML = anFig('Minimum balance', skel, '', '', '&nbsp;') + anFig('Free to DevEx', skel, '', '', '&nbsp;'); return; }
+      // A month of spending: the highest of the past month, the past year's average
+      // and the biggest full month in the spending history. It updates as Roblox's
+      // totals refresh (every 5 minutes) and as history is recorded.
       var m = grxOut('Month'), y = grxOut('Year');
-      var monthly = Math.max(m || 0, y ? y / 12 : 0);
+      var monthly = Math.max(m || 0, y ? y / 12 : 0, grxHistoryMonthMax(src));
       // Rounded up to the next 10,000 R$, so it always errs on the safe side.
       var keep = Math.ceil(monthly * GRX_KEEP_MONTHS / 10000) * 10000;
       var free = bal == null ? null : bal - keep, freeVal, freeSub;
@@ -8393,7 +8425,7 @@
         prod +
         '<span class="adm-or-pf" style="--pf:' + pfVar(r.pf) + '">' + pfMark(r.pf) + '<span>' + esc(label) + '</span></span>' +
         '<span class="adm-or-buyer">' + (r.buyer ? esc(r.buyer) : '<span class="adm-sub">–</span>') + '</span>' +
-        '<span class="adm-or-date"><span>' + esc(fmtDate(d)) + '</span><small>' + esc(d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })) + '</small></span>' +
+        '<span class="adm-or-date"><span>' + esc(fmtDate(d)) + '</span><small>' + (r.src && r.src.dateOnly ? 'time unknown' : esc(d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }))) + '</small></span>' +
         '<span class="adm-or-amt">' + r.amount + orderAmtSub(r, flag) + '</span>' +
         '<span class="adm-or-act"><button type="button" class="adm-or-info" aria-label="Order info" title="Order info">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></span>' +
@@ -8531,7 +8563,7 @@
       rows += oiRow(s.qty > 1 ? 'Products' : 'Product', esc(s.name || '')) +
         oiRow('Buyer', s.buyer ? esc(s.buyer) : '') +
         oiRow('Quantity', s.qty > 1 ? num(s.qty) : '') +
-        oiRow('Sold', esc(fmtDateTime(new Date(s.t)))) +
+        oiRow('Sold', s.dateOnly ? esc(fmtDate(new Date(s.t))) + ' <span class="adm-sub">(time unknown)</span>' : esc(fmtDateTime(new Date(s.t)))) +
         oiRow('Amount', rb ? '<b>' + robuxRaw(s.amount) + '</b>' : oiMoney(s.usd, s.t)) +
         oiRow('Charged in', !rb && s.currency && s.currency !== 'USD' ? esc(Number(s.amount).toFixed(2) + ' ' + s.currency) : '') +
         oiRow('Platform fee', !rb && s.net != null && s.usd - s.net > 0.004 ? oiUsd(s.usd - s.net) : '') +

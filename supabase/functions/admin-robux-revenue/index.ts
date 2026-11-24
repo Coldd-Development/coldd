@@ -78,7 +78,7 @@ async function roblox(cookie: string, path: string): Promise<Obj> {
     if (slot > 0) await sleep(slot);
     let res: Response;
     try {
-      res = await fetch(ECON + path, { headers: { Cookie: `.ROBLOSECURITY=${cookie}`, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+      res = await fetch(path.startsWith("https://") ? path : ECON + path, { headers: { Cookie: `.ROBLOSECURITY=${cookie}`, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
     } catch {
       throw new ApiFail(504, "Roblox did not answer in time.");
     }
@@ -257,6 +257,56 @@ Deno.serve(async (req: Request) => {
     // Money going out shows in the summary (groupPayoutRobux is negative). The group
     // sale ledger has no spending types: Purchase, GroupPayout, AdSpend and DevEx all
     // answer 400 for a group (checked 2026-11-24).
+
+    // 3) Spending history from the group audit log ("Spend Group Funds": one-time payouts
+    //    and other spending, each with its amount and date) into robux_spend_log, for the
+    //    spending graph and the minimum balance. Needs the sync account to have the group's
+    //    "View audit log" permission; until then Roblox answers 403 and this retries hourly.
+    //    The first read walks back through the whole log (resuming across runs); after that
+    //    it reads the newest page every 15 minutes and stops at entries already stored.
+    const auditFull = !rc.audit_full_at;
+    const auditDue = auditFull && rc.audit_cursor ? true : ageOf(rc.audit_checked_at) >= (rc.audit_ok ? 15 * 60 * 1000 : 60 * 60 * 1000);
+    if (auditDue && !overBudget()) {
+      let cursor: string = auditFull && rc.audit_cursor ? String(rc.audit_cursor) : "", pages = 0, saved = 0, done = false;
+      const audit: Obj = { audit_checked_at: new Date().toISOString() };
+      try {
+        while (!overBudget() && pages < (auditFull ? 25 : 2)) {
+          const d = await roblox(cookie, `https://groups.roblox.com/v1/groups/${groupId}/audit-log?actionType=SpendGroupFunds&limit=100&sortOrder=Desc` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
+          pages++;
+          const out: Obj[] = [];
+          for (const r of (Array.isArray(d.data) ? d.data : []) as Obj[]) {
+            const desc: Obj = r.description && typeof r.description === "object" ? r.description : {};
+            const amount = Math.abs(Number(desc.Amount ?? desc.amount));
+            const cur = String(desc.CurrencyTypeName ?? desc.CurrencyType ?? "Robux");
+            if (!r.created || !Number.isFinite(amount) || amount <= 0 || /tix|ticket/i.test(cur)) continue;
+            const key = `${r.created}|${amount}|${JSON.stringify(desc)}|${r.actor?.user?.userId ?? ""}`;
+            const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(key)))).map((b) => b.toString(16).padStart(2, "0")).join("");
+            out.push({ id: hash, created_at: new Date(r.created).toISOString(), robux: Math.round(amount),
+              item: String(desc.ItemDescription ?? desc.itemDescription ?? "").slice(0, 300) || null,
+              actor_role: r.actor?.role?.name ?? null, description: desc, synced_at: new Date().toISOString() });
+          }
+          let allKnown = false;
+          if (out.length) {
+            if (!auditFull) {
+              const { data: have } = await admin.from("robux_spend_log").select("id").in("id", out.map((o) => o.id));
+              allKnown = (have || []).length >= out.length;
+            }
+            const { error } = await admin.from("robux_spend_log").upsert(out, { onConflict: "id" });
+            if (error) throw new Error("save spending: " + error.message);
+            saved += out.length;
+          }
+          cursor = d.nextPageCursor ? String(d.nextPageCursor) : "";
+          if (!cursor || allKnown) { done = true; break; }
+        }
+        Object.assign(audit, { audit_ok: true, audit_status: null, audit_saved: saved,
+          audit_cursor: auditFull && !done ? cursor : null, ...(auditFull && done ? { audit_full_at: new Date().toISOString() } : {}) });
+      } catch (e) {
+        const st = (e as ApiFail).status || 0;
+        if (st === 408) delete audit.audit_checked_at;
+        else Object.assign(audit, { audit_ok: false, audit_status: st, ...(auditFull ? { audit_cursor: cursor || null } : {}) });
+      }
+      patch.reconcile = { ...(patch.reconcile || rc), ...audit };
+    }
 
     patch.reconcile = { ...(patch.reconcile || rc), running_until: null };
     patch.last_error = errors.length ? errors.join("; ").slice(0, 400) : null;

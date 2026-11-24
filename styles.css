@@ -5588,14 +5588,18 @@ html[data-theme="light"] {
 .adm-pc-tip .adm-pc-tip-note { margin: 2px 0 0; font-size: 11px; color: var(--fg-3); }
 .adm-rbx-ic { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; }
 .adm-pc-tip-note .adm-rbx-ic { width: 12px; height: 12px; }
-/* Date range on Analytics / Marketing: the header row sticks under the site bar; once
-   it is stuck the title fades and the buttons float over the page. */
-.adm-an > .adm-home-head, .adm-mkt > .adm-home-head { position: sticky; top: 84px; z-index: 30; pointer-events: none; }
-.adm-an > .adm-home-head .adm-range, .adm-mkt > .adm-home-head .adm-range { pointer-events: auto; transition: box-shadow .2s, background-color .2s; }
-.adm-home-head h1 { transition: opacity .18s; }
-.adm-home-head.is-stuck h1 { opacity: 0; }
-.adm-home-head.is-stuck .adm-range { background: color-mix(in srgb, var(--bg-2, #16171b) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 8px 28px rgba(0,0,0,0.35); }
-html[data-theme="light"] .adm-home-head.is-stuck .adm-range { background: color-mix(in srgb, #fff 90%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+/* Date range on Analytics / Marketing: once the page header scrolls away, the
+   buttons move into a dock pinned to the top right corner of the screen (under the
+   site bar on medium screens, bottom centre on phones). */
+.adm-an > .adm-home-head, .adm-mkt > .adm-home-head { min-height: 44px; }
+.adm-range-dock { position: fixed; top: 14px; right: 18px; z-index: 120; animation: adm-range-in .18s ease-out; }
+.adm-range-dock[hidden] { display: none; }
+.adm-range-dock .adm-range { background: color-mix(in srgb, var(--bg-2, #16171b) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 8px 28px rgba(0,0,0,0.35); }
+html[data-theme="light"] .adm-range-dock .adm-range { background: color-mix(in srgb, #fff 90%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+@keyframes adm-range-in { from { opacity: 0; transform: translateY(-6px); } }
+@media (max-width: 1359px) { .adm-range-dock { top: 72px; } }
+@media (max-width: 720px) { .adm-range-dock { top: auto; bottom: 16px; right: 50%; transform: translateX(50%); animation: none; } }
+@media (prefers-reduced-motion: reduce) { .adm-range-dock { animation: none; } }
 .adm-pc-tip .adm-pc-tip-total { margin-top: 4px; padding-top: 5px; border-top: 1px solid var(--hairline); color: var(--fg-1); font-weight: 600; }
 .adm-plat-tablewrap { margin: 8px -20px 0; padding: 0 20px; overflow-x: auto; border-top: 1px solid var(--hairline); }
 .adm-plat-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13px; }
