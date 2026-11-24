@@ -6007,6 +6007,9 @@ html[data-theme="light"] .adm-heat-key i { background: color-mix(in srgb, var(--
 html[data-theme="light"] .adm-an, html[data-theme="light"] .adm-mkt { --cat-9: #0e8fa0; --cat-10: #a0662a; --cat-11: #6f7c12; --cat-unc: #d9dbe0; --cat-unc-line: #9a9ea8; --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #6250d6; --cat-8: #e34948; --cat-other: #a3a6ae; }
 .adm-donut { display: block; overflow: visible; }
 .adm-donut-wrap { position: relative; flex: 0 0 auto; }
+/* A pie draws at its own size (an older rule pins .adm-donut at 168px), so the
+   logos placed on its ring line up. */
+.adm-donut-wrap > .adm-donut { width: 100%; height: 100%; }
 .adm-donut-mark { position: absolute; display: grid; place-items: center; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: var(--bg-3); box-shadow: 0 0 0 1px var(--hairline); pointer-events: none; }
 .adm-donut-mark .adm-pf-logo { width: 15px; height: 15px; }
 .adm-donut path, .adm-donut circle { stroke: var(--bg-3); stroke-width: 2; stroke-linejoin: round; transition: opacity .15s; }

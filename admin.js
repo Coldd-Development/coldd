@@ -4233,7 +4233,8 @@
   var AN_BUILDING_RE = /\b(buildings?|house|houses|home|townhouse|apartments?|flats?|filler|hospital|station|school|hotel|motel|office|tower|mall|shopping|store|shop|shophouse|church|mosque|temple|warehouse|garage|bank|cafe|bakery|restaurant|diner|pharmacy|prison|jail|jailhouse|police|barracks|hangar|hanger|headquarters|hq|facility|base|compound|parliament|killhouse|blacksmith|shed|castle|palace|gate|depot|dealership|post|complex|range|airport)\b/i;
   var AN_ASSETISH_RE = /\b(assets?|props?)\b/i, AN_HAS_BUILDING_RE = /\b(buildings?|house|houses)\b/i;
   var AN_BOAT_RE = /\b(boats?|motorboat|ships?|yacht|naval|navy|ferry|submarine|landing craft|littoral|frigate|destroyer|carrier|canoe|kayak|jet ?ski)\b/i;
-  var AN_GRAPHIC_RE = /\b(graphics?|logos?|icons?|thumbnails?|banners?|textures?|decals?|gfx|emblems?)\b/i;
+  // Not "graphics": in a title that usually means a lighting / visual quality setup.
+  var AN_GRAPHIC_RE = /\b(logos?|icons?|thumbnails?|banners?|textures?|decals?|gfx|emblems?)\b/i;
   function bbbCategory(res) {
     var c = res.category || '', t = res.title || '';
     if (c === 'Roblox models') return AN_BUILDING_RE.test(t) && (!AN_ASSETISH_RE.test(t) || AN_HAS_BUILDING_RE.test(t)) ? 'Buildings' : 'Assets';
@@ -7785,78 +7786,8 @@
     });
     return { buckets: buckets, step: b.step, data: data };
   }
-  // Stacked bars in Robux (the order-volume chart's look), with a hover breakdown.
-  function drawRbxChart(box) {
-    var V = box && box.__rbx; if (!V) return;
-    var n = V.buckets.length, W = Math.max(300, box.clientWidth || 640), H = 200, narrow = W < 560;
-    var padL = 44, padR = 4, padT = 10, padB = 26, iw = W - padL - padR, ih = H - padT - padB;
-    var totals = V.buckets.map(function (_, i) { return anSum(V.series.map(function (s) { return s.data[i]; })); });
-    var sc = niceScale(Math.max(10, Math.max.apply(null, totals)));
-    var bw = iw / n, gap = Math.min(8, Math.max(1, bw * 0.28)), barW = Math.max(1.5, bw - gap);
-    function Y(v) { return padT + ih - v / sc.top * ih; }
-    var svg = '';
-    sc.ticks.forEach(function (t) {
-      if (t % 1) return;
-      var y = Y(t).toFixed(1);
-      svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
-        '<text class="pc-axis" x="' + (padL - 8) + '" y="' + y + '" dy="4" text-anchor="end">' + esc(axisNum(t)) + '</text>';
-    });
-    var step = (V.step || 1) * (narrow ? 2 : 1);
-    V.buckets.forEach(function (m, i) {
-      if ((n - 1 - i) % step) return;
-      svg += '<text class="pc-axis" x="' + (padL + i * bw + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(m.short) + '</text>';
-    });
-    svg += '<rect class="vc-hover" x="0" y="' + padT + '" width="' + bw.toFixed(2) + '" height="' + ih + '" rx="4" visibility="hidden"/>';
-    V.buckets.forEach(function (m, i) {
-      var x = (padL + i * bw + gap / 2).toFixed(2), y0 = padT + ih;
-      V.series.forEach(function (s) {
-        var v = s.data[i]; if (!v) return;
-        var h = v / sc.top * ih, y = y0 - h;
-        svg += '<rect class="vc-seg" x="' + x + '" y="' + y.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + Math.max(0.6, h - (h > 3 ? 1 : 0)).toFixed(2) + '" style="fill:' + s.color + '"/>';
-        y0 = y;
-      });
-    });
-    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(V.aria) + '">' + svg + '</svg><div class="adm-pc-tip" hidden></div>';
-    box.__vc = { padL: padL, iw: iw, bw: bw, n: n, W: W };
-  }
-  function wireRbxChart(box) {
-    if (!box) return;
-    function hide() {
-      var tip = box.querySelector('.adm-pc-tip'); if (tip) tip.hidden = true;
-      var hv = box.querySelector('.vc-hover'); if (hv) hv.setAttribute('visibility', 'hidden');
-    }
-    box.addEventListener('mousemove', function (e) {
-      var vc = box.__vc, V = box.__rbx, svg = box.querySelector('svg');
-      if (!vc || !V || !svg) return;
-      var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (vc.W / r.width);
-      if (x < vc.padL || x > vc.padL + vc.iw) { hide(); return; }
-      var i = Math.max(0, Math.min(vc.n - 1, Math.floor((x - vc.padL) / vc.bw)));
-      var hv = box.querySelector('.vc-hover');
-      hv.setAttribute('x', (vc.padL + i * vc.bw).toFixed(2)); hv.setAttribute('visibility', 'visible');
-      var m = V.buckets[i], total = anSum(V.series.map(function (s) { return s.data[i]; }));
-      var tip = box.querySelector('.adm-pc-tip');
-      tip.innerHTML = '<h4>' + esc(m.long) + (i === vc.n - 1 ? ' <span>so far</span>' : '') + '</h4>' +
-        V.series.map(function (s) { return '<div style="--pf:' + s.color + '"><i></i>' + esc(s.label) + '<b>' + robuxRaw(s.data[i]) + '</b></div>'; }).join('') +
-        (V.series.length > 1 ? '<div class="adm-pc-tip-total">' + esc(V.total || 'Total') + '<b>' + robuxRaw(total) + '</b></div>' : '');
-      tip.hidden = false;
-      var bx = box.getBoundingClientRect(), left = (e.clientX - bx.left) + 16;
-      if (left + tip.offsetWidth > bx.width) left = (e.clientX - bx.left) - tip.offsetWidth - 16;
-      tip.style.left = Math.max(0, left) + 'px';
-      tip.style.top = Math.max(0, Math.min(box.clientHeight - tip.offsetHeight, (e.clientY - bx.top) - tip.offsetHeight / 2)) + 'px';
-    });
-    box.addEventListener('mouseleave', hide);
-    if (window.ResizeObserver) {
-      var lastW = 0, t = null;
-      new ResizeObserver(function () {
-        var wd = box.clientWidth;
-        if (!wd || Math.abs(wd - lastW) < 4) return;
-        lastW = wd;
-        clearTimeout(t); t = setTimeout(function () { drawRbxChart(box); }, 80);
-      }).observe(box);
-    }
-  }
   wirePlatChart($('admGrxRev'));
-  wireRbxChart($('admGrxSpend'));
+  wirePlatChart($('admGrxSpend'));
   function grxPie(tot) {
     var sum = anSum(GRX_SOURCES.map(function (s) { return tot[s.key] || 0; }));
     if (!sum) return anEmpty('No Robux sales in this range.');
@@ -7915,9 +7846,9 @@
 
     if (spBox) {
       var sp = src && !src.error && Array.isArray(src.spend) ? src.spend : null;
-      if (!sp) { spBox.__rbx = null; spBox.innerHTML = src ? '' : chartSkel; }
+      if (!sp) { spBox.__chart = null; spBox.innerHTML = src ? '' : chartSkel; }
       else if (!sp.length) {
-        spBox.__rbx = null;
+        spBox.__chart = null;
         var known = ['Week', 'Month', 'Year'].map(function (wn) { var o = grxOut(wn); return o == null ? null : GRX_WIN_TEXT[wn].toLowerCase() + ' ' + robuxRaw(o); }).filter(Boolean);
         spBox.innerHTML = '<div class="adm-grx-empty"><p>Weekly spending builds up from tonight</p><small>Roblox only gives totals' + (known.length ? ': ' + esc(known.join(', ')) : '') + '</small></div>';
       } else {
@@ -7925,9 +7856,12 @@
         var spFrom = RANGE_DAYS ? Math.min(Date.now() - (RANGE_DAYS - 1) * DAY_MS, Date.now() - 55 * DAY_MS) : new Date(sp[0][0] + 'T00:00:00').getTime();
         var sg = grxSeries(sp.map(function (r) { return [new Date(r[0] + 'T12:00:00').getTime(), 'out', Number(r[1]) || 0]; }),
           'week', 0, ['out'], spFrom);
-        spBox.__rbx = { buckets: sg.buckets, step: sg.step, aria: 'Robux spent per week',
-          series: [{ key: 'out', label: 'Spent', color: 'var(--fg-3)', data: sg.data.out }] };
-        drawRbxChart(spBox);
+        // The same line chart as Revenue by source: one line of Robux spent per week.
+        spBox.__chart = { buckets: sg.buckets, step: sg.step, single: true, intTicks: true, aria: 'Robux spent per week',
+          axis: function (t) { return 'R$' + axisNum(t); },
+          series: [{ key: 'out', label: 'Spent', color: 'var(--accent)', data: sg.data.out, total: anSum(sg.data.out) }],
+          tip: function (i) { return '<div class="adm-pc-tip-total">Spent<b>' + robuxRaw(sg.data.out[i]) + '</b></div>'; } };
+        drawPlatChart(spBox);
       }
     }
 
