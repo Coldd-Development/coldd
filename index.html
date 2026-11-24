@@ -30,7 +30,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261115-hero-mirror" />
+  <link rel="stylesheet" href="/styles.css?v=20261126r" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "@id": "https://coldd.dev/#organization", "name": "coldd Development", "url": "https://coldd.dev/", "logo": {"@type": "ImageObject", "url": "https://coldd.dev/logo.png", "width": 256, "height": 256}, "description": "A studio building game-ready Roblox assets.", "email": "support@coldd.dev", "sameAs": ["https://discord.gg/coldd", "https://x.com/ColddDev", "https://www.youtube.com/@ColddDev", "https://www.tiktok.com/@coldddev"]}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "@id": "https://coldd.dev/#website", "name": "coldd Development", "url": "https://coldd.dev/", "publisher": {"@id": "https://coldd.dev/#organization"}, "inLanguage": "en"}</script>
@@ -187,43 +187,6 @@
       </div>
     </section>
 
-    <section class="section-pad" style="padding-top:0;" id="homeFeaturedSection" hidden>
-      <div class="wrap">
-        <div class="sec-head reveal">
-          <h2>Featured products</h2>
-        </div>
-        <div class="product-grid featured-grid" id="homeFeaturedGrid" hidden>
-          <article class="product" data-cat="game-templates" data-price="89" data-catlabel="Finished Games &amp; Templates" data-resell="yes">
-            <div class="p-thumb" style="background-image:url('/premade.jpg')"></div>
-            <div class="p-body">
-              <h3 class="p-name">ALL BRAWL Full Game</h3>
-              <div class="p-price-row"><span class="p-price">$89</span></div>
-              <p class="p-sum">Complete fighting game, fully scripted and ready to launch.</p>
-              <div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div>
-            </div>
-          </article>
-          <article class="product" data-cat="animations-vfx" data-price="22" data-catlabel="Animations &amp; VFX">
-            <div class="p-thumb" style="background-image:url('/banner.jpg')"></div>
-            <div class="p-body">
-              <h3 class="p-name">VFX Starter Pack</h3>
-              <div class="p-price-row"><span class="p-price">$22</span></div>
-              <p class="p-sum">20 ready-to-use particle and explosion effects.</p>
-              <div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div>
-            </div>
-          </article>
-          <article class="product" data-cat="weapons" data-price="24" data-catlabel="Weapons">
-            <div class="p-thumb" style="background-image:url('/builds.jpg')"></div>
-            <div class="p-body">
-              <h3 class="p-name">Weapon Pack Vol.1</h3>
-              <div class="p-price-row"><span class="p-price">$24</span></div>
-              <p class="p-sum">Modeled weapon set with viewmodels and sounds.</p>
-              <div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
-
     <section class="section-pad" style="padding-top:0;" id="homeDealsSection" hidden>
       <div class="wrap">
         <div class="sec-head reveal">
@@ -271,40 +234,61 @@
       </div>
     </section>
 
+    <section class="section-pad" style="padding-top:0;" id="homeReviewsSection" hidden>
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <h2>See what our customers think</h2>
+        </div>
+        <div class="reviews" id="homeReviewsGrid"></div>
+        <div class="reveal reviews-more-wrap">
+          <a class="reviews-more has-arrow" href="/reviews">See all reviews</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad" style="padding-top:0;" id="homeFeaturedSection" hidden>
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <h2>Featured products</h2>
+        </div>
+        <div class="product-grid featured-grid" id="homeFeaturedGrid" hidden>
+          <article class="product" data-cat="game-templates" data-price="89" data-catlabel="Finished Games &amp; Templates" data-resell="yes">
+            <div class="p-thumb" style="background-image:url('/premade.jpg')"></div>
+            <div class="p-body">
+              <h3 class="p-name">ALL BRAWL Full Game</h3>
+              <div class="p-price-row"><span class="p-price">$89</span></div>
+              <p class="p-sum">Complete fighting game, fully scripted and ready to launch.</p>
+              <div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div>
+            </div>
+          </article>
+          <article class="product" data-cat="animations-vfx" data-price="22" data-catlabel="Animations &amp; VFX">
+            <div class="p-thumb" style="background-image:url('/banner.jpg')"></div>
+            <div class="p-body">
+              <h3 class="p-name">VFX Starter Pack</h3>
+              <div class="p-price-row"><span class="p-price">$22</span></div>
+              <p class="p-sum">20 ready-to-use particle and explosion effects.</p>
+              <div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div>
+            </div>
+          </article>
+          <article class="product" data-cat="weapons" data-price="24" data-catlabel="Weapons">
+            <div class="p-thumb" style="background-image:url('/builds.jpg')"></div>
+            <div class="p-body">
+              <h3 class="p-name">Weapon Pack Vol.1</h3>
+              <div class="p-price-row"><span class="p-price">$24</span></div>
+              <p class="p-sum">Modeled weapon set with viewmodels and sounds.</p>
+              <div class="p-actions"><button class="p-buy" type="button">Buy now</button><button class="p-add" type="button">Add to cart</button></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section class="section-pad" style="padding-top:0;" id="homeBundlesSection" hidden>
       <div class="wrap">
         <div class="sec-head reveal">
           <h2>Bundle &amp; save</h2>
         </div>
         <div class="product-grid home-bundle-grid" id="homeBundlesGrid"></div>
-      </div>
-    </section>
-
-    <section class="section-pad" style="padding-top:0;">
-      <div class="wrap">
-        <div class="sec-head reveal">
-          <h2>See what our customers think</h2>
-        </div>
-        <div class="reviews">
-          <article class="glass review reveal d1">
-            <div class="stars" aria-label="5 out of 5"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg></div>
-            <p>"Absolute legends, friendly and fix things when needed :)"</p>
-            <div class="review-by"><span class="ra">S</span><span class="rn">sworned<small>Roblox developer</small></span></div>
-          </article>
-          <article class="glass review reveal d2">
-            <div class="stars" aria-label="5 out of 5"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg></div>
-            <p>"Great map and it's easy to edit. Nice workspace layout not messy."</p>
-            <div class="review-by"><span class="ra">T</span><span class="rn">Toven<small>Roblox developer</small></span></div>
-          </article>
-          <article class="glass review reveal d3">
-            <div class="stars" aria-label="5 out of 5"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg></div>
-            <p>"Bought tons of Medieval gear, worth every penny. The quality is unreal, everything looks incredible in-game, and my group has already been asking where I got it. Definitely one of the best purchases I've made for our market."</p>
-            <div class="review-by"><img class="ra" src="/lostarchives.png" alt="" width="38" height="38" /><span class="rn">Spencer C.<small>Lost Archives</small></span></div>
-          </article>
-        </div>
-        <div class="reveal reviews-more-wrap">
-          <a class="reviews-more has-arrow" href="/reviews">See all reviews</a>
-        </div>
       </div>
     </section>
 
@@ -532,7 +516,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261125b" data-then="/app.js?v=20261026-credit"></script>
+  <script src="/catalog.js?v=20261126r" data-then="/app.js?v=20261026-credit"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

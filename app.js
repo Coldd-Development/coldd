@@ -5,6 +5,8 @@
     // visible glyph names. Paths are lifted verbatim from Google's own SVGs, so
     // the 0 -960 960 960 viewBox is theirs, not a mistake.
     window.MSYM = {
+      thumb_up: 'M720-120H280v-520l280-280 50 50q7 7 11.5 19t4.5 23v14l-44 174h258q32 0 56 24t24 56v80q0 7-2 15t-4 15L794-168q-9 20-30 34t-44 14Zm-360-80h360l120-280v-80H480l54-220-174 174v406Zm0-406v406-406Zm-80-34v80H160v360h120v80H80v-520h200Z',
+      thumb_down: 'M240-840h440v520L400-40l-50-50q-7-7-11.5-19t-4.5-23v-14l44-174H120q-32 0-56-24t-24-56v-80q0-7 2-15t4-15l120-282q9-20 30-34t44-14Zm360 80H240L120-480v80h360l-54 220 174-174v-406Zm0 406v-406 406Zm80 34v-80h120v-360H680v-80h200v520H680Z',
       visibility: 'M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200q-146 0-266-81.5ZM480-500Zm207.5 160.5Q782-399 832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280q113 0 207.5-59.5Z',
       download: 'M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z',
       reviews: 'm363-390 117-71 117 71-31-133 104-90-137-11-53-126-53 126-137 11 104 90-31 133ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z'
@@ -17,6 +19,37 @@
       var s = size || 16;
       return '<svg class="msym" viewBox="0 -960 960 960" width="' + s + '" height="' + s +
         '" fill="currentColor" aria-hidden="true"><path d="' + d + '"/></svg>';
+    };
+
+    // Reviews from another platform say where they were left (BuiltByBit, Creator Store, or the
+    // platform a review was imported from); coldd.dev's own say nothing.
+    window.__reviewPlatform = function (src) {
+      return src && src !== 'Website' && src !== 'Other' ? String(src) : '';
+    };
+    // A review's rating: stars, or a Creator Store review's thumbs up or down (it has no stars).
+    window.__reviewRatingHtml = function (r, starSvg) {
+      if (r.stars > 0) {
+        var h = '';
+        for (var i = 0; i < 5; i++) h += i < r.stars ? starSvg : '<span class="off">' + starSvg + '</span>';
+        return '<div class="stars" aria-label="' + r.stars + ' out of 5">' + h + '</div>';
+      }
+      if (r.recommended == null) return '';
+      return '<div class="rv-thumb ' + (r.recommended ? 'up' : 'down') + '">' + window.msym(r.recommended ? 'thumb_up' : 'thumb_down', 15) +
+        (r.recommended ? 'Recommends this' : 'Doesn\'t recommend this') + '</div>';
+    };
+    // One review card for the homepage and /reviews (window.__REVIEWS rows, see catalog.js).
+    window.__reviewCardHtml = function (r, product) {
+      function e(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+      var star = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg>';
+      var initial = String(r.user || '?').trim().charAt(0).toUpperCase() || '?';
+      var img = /^(https:\/\/|\/(?!\/))[^\s"'<>]+$/.test(String(r.avatar || '')) ? r.avatar : '';
+      var av = img ? '<img class="ra" src="' + e(img) + '" alt="" width="38" height="38" loading="lazy" referrerpolicy="no-referrer" />' : '<span class="ra">' + e(initial) + '</span>';
+      var sub = product ? '<a class="rv-prod" href="/product/' + encodeURIComponent(product.id) + '">' + e(product.title) + '</a>' : r.byline ? e(r.byline) : '';
+      var plat = window.__reviewPlatform(r.source);
+      return '<article class="glass review reveal">' + window.__reviewRatingHtml(r, star) +
+        (r.text ? '<p>"' + e(r.text) + '"</p>' : '<p></p>') +
+        '<div class="review-by">' + av + '<span class="rn">' + e(r.user) + (sub ? '<small>' + sub + '</small>' : '') + '</span></div>' +
+        (plat ? '<div class="rv-src">Review originally left on ' + e(plat) + '</div>' : '') + '</article>';
     };
 
     // Browser alert()/confirm()/prompt() windows break the visual system and
@@ -1134,7 +1167,7 @@
         return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       }
       function starsHtmlFor(p) {
-        if (!(p.reviews > 0)) return '';
+        if (!(p.reviews > 0) || !(p.rating > 0)) return '';
         var full = Math.round(p.rating), st = '';
         for (var i = 0; i < 5; i++) st += '<span class="st' + (i < full ? ' on' : '') + '">' + STAR_SVG + '</span>';
         return '<div class="p-stars">' + st + '<span class="p-rc">(' + p.reviews + ')</span></div>';
@@ -1600,6 +1633,21 @@
             : 'New picks in ' + Math.round(hrs / 24) + ' days';
           cd.hidden = false;
         }
+      }
+
+      // Homepage reviews: the three newest good reviews with something to say (every review is
+      // on /reviews).
+      var homeRevGrid = document.getElementById('homeReviewsGrid');
+      var homeRevSection = document.getElementById('homeReviewsSection');
+      if (homeRevGrid && window.__reviewCardHtml) {
+        var homeRevById = {};
+        (window.__CATALOG || []).forEach(function (p) { homeRevById[p.id] = p; });
+        var allRev = (window.__REVIEWS || []).slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+        var goodRev = allRev.filter(function (r) { return (r.stars >= 4 || (r.stars == null && r.recommended === true)) && String(r.text || '').trim().length >= 30; });
+        var revPicks = (goodRev.length >= 3 ? goodRev : allRev).slice(0, 3);
+        homeRevGrid.innerHTML = revPicks.map(function (r) { return window.__reviewCardHtml(r, homeRevById[r.productId]); }).join('');
+        if (homeRevSection) homeRevSection.hidden = !revPicks.length;
+        if (window.__scanReveal) window.__scanReveal(homeRevGrid);
       }
 
       // Homepage "Bundle & save": the bundles an admin picked (admin > Content > Homepage), in
@@ -3236,10 +3284,14 @@
         function renderReviewListHtml(list) {
           return list.length ? list.map(function (r) {
             var reply = r.reply ? '<div class="pd-rev-reply"><div class="pd-rev-reply-head">coldd team replied</div><p>' + esc(r.reply.text) + '</p></div>' : '';
+            var rating = r.stars > 0 ? '<span class="pd-rev-stars">' + starRow(r.stars) + '</span>'
+              : r.recommended != null ? '<span class="rv-thumb ' + (r.recommended ? 'up' : 'down') + '">' + window.msym(r.recommended ? 'thumb_up' : 'thumb_down', 14) + (r.recommended ? 'Recommends this' : 'Doesn\'t recommend this') + '</span>' : '';
+            var plat = window.__reviewPlatform ? window.__reviewPlatform(r.source) : '';
             return '<div class="pd-rev"><div class="pd-rev-head"><span class="pd-rev-name">' + esc(r.user) + '</span>' +
-              '<span class="pd-rev-dot">·</span><span class="pd-rev-stars">' + starRow(r.stars) + '</span>' +
+              (rating ? '<span class="pd-rev-dot">·</span>' + rating : '') +
               '<span class="pd-rev-dot">·</span><span class="pd-rev-meta">' + esc(fmtRevDate(r.date)) + '</span></div>' +
-              '<p class="pd-rev-body">' + esc(r.text) + '</p>' + reply + '</div>';
+              (r.text ? '<p class="pd-rev-body">' + esc(r.text) + '</p>' : '') +
+              (plat ? '<p class="pd-rev-src">Review originally left on ' + esc(plat) + '</p>' : '') + reply + '</div>';
           }).join('') : '<p class="pd-empty">No reviews yet. Be the first to review this product.</p>';
         }
         // `existing` is {stars, text} when this account already has a
@@ -3288,13 +3340,14 @@
         function refetchReviewsAndRender(slug) {
           if (!window.coldSupabase || !pdPaneReviews) return Promise.resolve();
           return window.coldSupabase.from('reviews')
-            .select('id, stars, text, created_at, reply, reply_at, user_name, products!inner(slug)')
+            .select('id, stars, text, created_at, reply, reply_at, user_name, source, recommended, products!inner(slug)')
             .eq('status', 'approved').eq('products.slug', slug)
             .order('created_at', { ascending: false }).limit(500)
             .then(function (res) {
               var rows = res && res.data || [];
               var list = rows.map(function (row) {
                 return { user: row.user_name || 'user', stars: row.stars, text: row.text, date: row.created_at,
+                  source: row.source || 'Website', recommended: row.recommended == null ? null : !!row.recommended,
                   reply: row.reply ? { text: row.reply, date: row.reply_at } : null };
               });
               if (pdRevCount) pdRevCount.textContent = '(' + list.length + ')';
@@ -3863,6 +3916,18 @@
 
           var revs = reviewsFor(p);
           if (pdRevCount) pdRevCount.textContent = '(' + revs.length + ')';
+          // The two newest reviews under Product Features; the Reviews tab has every one.
+          var peek = $('pdRevPeek');
+          if (!peek && pdAbout) { pdAbout.insertAdjacentHTML('afterend', '<div class="pd-rev-peek" id="pdRevPeek" hidden></div>'); peek = $('pdRevPeek'); }
+          if (peek) {
+            var rated = revs.filter(function (r) { return r.stars > 0; });
+            var avgStars = rated.length ? rated.reduce(function (s, r) { return s + r.stars; }, 0) / rated.length : 0;
+            peek.hidden = !revs.length;
+            peek.innerHTML = revs.length ? '<div class="pd-rev-peek-head"><h4>Reviews</h4>' +
+              (rated.length ? '<span class="pd-rev-stars">' + starRow(Math.round(avgStars)) + '</span><span class="pd-rev-meta">' + avgStars.toFixed(1) + ' from ' + rated.length + ' rating' + (rated.length === 1 ? '' : 's') + '</span>' : '') + '</div>' +
+              renderReviewListHtml(revs.slice(0, 2)) +
+              (revs.length > 2 ? '<button type="button" class="pd-rev-all" data-goto-reviews>See all ' + revs.length + ' reviews</button>' : '') : '';
+          }
           if (pdPaneReviews) {
             pdPaneReviews.innerHTML = (owned ? renderReviewFormHtml(null) : '') + renderReviewListHtml(revs);
             revSelectedStars = 0;
@@ -4000,6 +4065,9 @@
         if (pdReferLearn) pdReferLearn.addEventListener('click', function () { location.href = '/dashboard?panel=referrals'; });
 
         var revSelectedStars = 0;
+        document.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('[data-goto-reviews]')) goToReviews(false);
+        });
         if (pdPaneReviews) {
           pdPaneReviews.addEventListener('click', function (e) {
             var starBtn = e.target.closest('.pd-rev-star-btn');

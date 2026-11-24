@@ -30,7 +30,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261107-bundles-veil" />
+  <link rel="stylesheet" href="/styles.css?v=20261126r" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://coldd.dev/"}, {"@type": "ListItem", "position": 2, "name": "Reviews", "item": "https://coldd.dev/reviews"}]}</script>
   <!-- ld:end -->
@@ -133,18 +133,6 @@
 
     <section class="section-pad" style="padding-top: 6px;">
       <div class="wrap">
-        <div class="sort-field" id="reviewFilterField" style="display: inline-block; margin: 0 0 24px;">
-          <button type="button" class="sort-btn" id="reviewFilterBtn" aria-haspopup="listbox" aria-expanded="false">
-            <span class="sf-label">Sort by</span>
-            <span class="sort-btn-val" id="reviewFilterVal">Newest</span>
-            <svg class="sort-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-          <div class="sort-menu" id="reviewFilterMenu" role="listbox" aria-label="Sort reviews" hidden>
-            <button type="button" class="sort-opt active" data-filter="newest" role="option" aria-selected="true"><span>Newest</span><span class="sort-radio"></span></button>
-            <button type="button" class="sort-opt" data-filter="highest" role="option" aria-selected="false"><span>Highest rating</span><span class="sort-radio"></span></button>
-            <button type="button" class="sort-opt" data-filter="lowest" role="option" aria-selected="false"><span>Lowest rating</span><span class="sort-radio"></span></button>
-          </div>
-        </div>
         <div class="reviews" id="allReviewsGrid">
           <p class="pd-empty">Loading reviews…</p>
         </div>
@@ -321,7 +309,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261125b" data-then="/app.js?v=20261026-credit,/reviews-page.js?v=20261008a"></script>
+  <script src="/catalog.js?v=20261126r" data-then="/app.js?v=20261026-credit,/reviews-page.js?v=20261126a"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

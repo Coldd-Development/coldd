@@ -692,7 +692,13 @@
       date: row.created_at,
       status: row.status,
       adminReviewedAt: row.admin_reviewed_at,
-      reply: row.reply ? { text: row.reply, date: row.reply_at } : null
+      reply: row.reply ? { text: row.reply, date: row.reply_at } : null,
+      source: row.source || 'Website',
+      listingName: row.listing_name || '',
+      hiddenReason: row.hidden_reason || null,
+      recommended: row.recommended == null ? null : !!row.recommended,
+      avatar: row.avatar_url || '',
+      auto: !!row.auto_imported
     };
   }
   function refreshReviews() {
@@ -2347,7 +2353,7 @@
     var payouts = PAYOUTS.filter(function (p) { return p.status === 'requested'; }).length;
     if (payouts) items.push({ icon: 'payments', text: plural(payouts, 'referral payout') + ' to send', sub: 'Prizes & Payouts', panel: 'giveaways' });
     var reviews = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length;
-    if (reviews) items.push({ icon: 'reviews', text: plural(reviews, 'new review') + ' to read', sub: 'Reviews', panel: 'reviews' });
+    if (reviews) items.push({ icon: 'reviews', text: 'New reviews needing a look', sub: plural(reviews, 'new review') + ' in Reviews', panel: 'reviews' });
     if (UNRELEASED_FILES.length) items.push({ icon: 'rocket_launch', text: plural(UNRELEASED_FILES.length, 'product') + ' to release', sub: 'Products', panel: 'unreleased' });
     var open = mpOpenItems();
     MP_TASK_TARGETS.forEach(function (m) {
@@ -9623,13 +9629,26 @@
   /* ================================================================
      REVIEWS PANEL
      ================================================================ */
-  // Reviews (redesigned 2026-11-24): overview, star breakdown, most reviewed,
-  // and one list with New / Visible / Hidden / All tabs.
-  var REVIEW_FILTER = 'new';
-  var reviewFilterDropdown = { getValue: function () { return REVIEW_FILTER; } };
+  // Reviews (2026-11-26): overview, star breakdown, most reviewed, and one list, newest first,
+  // with a platform dropdown (Global by default). BuiltByBit and Creator Store reviews come in on
+  // their own (admin-bbb-v2-sync, creator-store-sync); one whose product is not on the site waits
+  // hidden (hiddenReason 'unmatched') and the sync publishes it once that product is added.
+  var REVIEW_PLATFORM = 'all';
+  var REV_PLATFORM_SIG = '';
+  // Reviews that were new when the owner opened the list keep their New badge for this visit.
+  var REV_NEW_SEEN = {};
+  // Only the owner reading the list clears "new" (finance_allowed() is true for the owner only).
+  var REV_OWNER = null;
+  function revOwner() {
+    if (REV_OWNER !== null || !window.coldSupabase) return Promise.resolve(!!REV_OWNER);
+    return window.coldSupabase.rpc('finance_allowed').then(function (r) { REV_OWNER = !r.error && r.data === true; return REV_OWNER; });
+  }
+  function revPlatform(src) { return !src || src === 'Website' ? 'coldd.dev' : String(src); }
+  var reviewPlatformDropdown = makeDropdown($('admReviewPlatformDD'), {
+    valueInput: $('admReviewPlatform'),
+    onChange: function (v) { REVIEW_PLATFORM = v || 'all'; renderReviews(); }
+  });
   document.addEventListener('click', function (e) {
-    var t = e.target.closest && e.target.closest('#admReviewTabs [data-rf]');
-    if (t) { REVIEW_FILTER = t.getAttribute('data-rf'); renderReviews(); return; }
     var imp = e.target.closest && e.target.closest('#admImportReviewToggle');
     if (imp) {
       var box = $('admImportReviewBox'), open = box.hidden;
@@ -9643,80 +9662,105 @@
     for (var i = 0; i < 5; i++) s += '<span class="' + (i < n ? 'on' : '') + '">★</span>';
     return '<span class="adm-rv-stars" aria-label="' + n + ' out of 5 stars">' + s + '</span>';
   }
+  // Creator Store reviews are a thumbs up or down, never stars.
+  function revThumb(r) {
+    if (r.recommended == null) return '';
+    var up = r.recommended;
+    return '<span class="adm-rv-thumb ' + (up ? 'up' : 'down') + '">' + homeIcon(up ? 'thumb_up' : 'thumb_down', 14) + (up ? 'Recommends' : 'Doesn\'t recommend') + '</span>';
+  }
+  // Avatars come from other platforms: only a plain https address goes into a style attribute.
+  function revImg(u) { u = String(u || ''); return /^https:\/\/[^\s'"()<>\\]+$/.test(u) ? u : ''; }
+  function revAvg(list) { return list.length ? list.reduce(function (s, r) { return s + r.stars; }, 0) / list.length : null; }
   function renderRevOverview() {
     var vis = REVIEWS.filter(function (r) { return r.status !== 'hidden'; });
-    var avg = vis.length ? vis.reduce(function (s, r) { return s + (r.stars || 0); }, 0) / vis.length : 0;
+    var rated = vis.filter(function (r) { return r.stars > 0; });
+    var avg = revAvg(rated);
     var now = Date.now(), m30 = vis.filter(function (r) { return now - Date.parse(r.date) < 30 * DAY_MS; }), p30 = vis.filter(function (r) { var a = now - Date.parse(r.date); return a >= 30 * DAY_MS && a < 60 * DAY_MS; });
-    var avg30 = m30.length ? m30.reduce(function (s, r) { return s + r.stars; }, 0) / m30.length : null;
+    var avg30 = revAvg(m30.filter(function (r) { return r.stars > 0; }));
     var fresh = REVIEWS.filter(function (r) { return !r.adminReviewedAt; }).length, hidden = REVIEWS.length - vis.length;
+    var waiting = REVIEWS.filter(function (r) { return r.hiddenReason === 'unmatched'; }).length;
     var d = p30.length ? (m30.length - p30.length) / p30.length * 100 : null;
     var grid = $('admRevKpis');
     if (grid) grid.innerHTML = [
-      kpiCell({ label: 'Average rating', value: vis.length ? avg.toFixed(2) + '<span class="adm-star">★</span>' : '–', delta: '', sub: vis.length ? 'From ' + plural(vis.length, 'review') : 'No reviews yet' }),
+      kpiCell({ label: 'Average rating', value: avg != null ? avg.toFixed(2) + '<span class="adm-star">★</span>' : '–', delta: '', sub: rated.length ? 'From ' + plural(rated.length, 'star rating') : 'No star ratings yet' }),
       kpiCell({ label: 'Reviews, 30 days', value: num(m30.length), delta: d == null || Math.abs(d) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (d > 0 ? 'up' : 'down') + '">' + homeIcon(d > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(d) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>', sub: avg30 != null ? avg30.toFixed(2) + '★ average this month' : '' }),
-      kpiCell({ label: 'New to read', value: num(fresh), delta: '', sub: fresh ? 'Opening the New tab marks them read' : 'All caught up' }),
-      kpiCell({ label: 'Hidden', value: num(hidden), delta: '', sub: REVIEWS.length ? sharePct(hidden / REVIEWS.length * 100) + ' of all reviews' : '' })
+      kpiCell({ label: 'New to read', value: num(fresh), delta: '', sub: fresh ? 'Reading the list below marks them read' : 'All caught up' }),
+      kpiCell({ label: 'Hidden', value: num(hidden), delta: '', sub: waiting ? plural(waiting, 'review') + ' waiting for its product on the site' : REVIEWS.length ? sharePct(hidden / REVIEWS.length * 100) + ' of all reviews' : '' })
     ].join('');
     var st = $('admRevStars');
     if (st) {
       var c = [0, 0, 0, 0, 0, 0];
-      vis.forEach(function (r) { c[Math.max(1, Math.min(5, r.stars || 0))]++; });
+      rated.forEach(function (r) { c[Math.max(1, Math.min(5, r.stars))]++; });
       var max = Math.max.apply(null, c.slice(1).concat([1]));
-      st.innerHTML = vis.length ? '<div class="adm-bars">' + [5, 4, 3, 2, 1].map(function (n) {
+      st.innerHTML = rated.length ? '<div class="adm-bars">' + [5, 4, 3, 2, 1].map(function (n) {
         return '<div class="adm-bar-row"><span class="adm-bar-name">' + revStars(n) + '</span>' +
           '<span class="adm-bar-track" aria-hidden="true"><i style="width:' + (c[n] ? Math.max(1.5, c[n] / max * 100) : 0).toFixed(1) + '%;background:var(--warn)"></i></span>' +
-          '<span class="adm-bar-val">' + num(c[n]) + '<small>' + sharePct(c[n] / vis.length * 100) + '</small></span></div>';
-      }).join('') + '</div>' : anEmpty('No reviews yet.');
+          '<span class="adm-bar-val">' + num(c[n]) + '<small>' + sharePct(c[n] / rated.length * 100) + '</small></span></div>';
+      }).join('') + '</div>' : anEmpty('No star ratings yet.');
     }
     var top = $('admRevTop');
     if (top) {
       var by = {};
-      vis.forEach(function (r) { if (!r.productId) return; var b = by[r.productId] = by[r.productId] || { id: r.productId, title: r.productTitle, n: 0, sum: 0 }; b.n++; b.sum += r.stars || 0; });
-      var list = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.n - a.n || b.sum / b.n - a.sum / a.n; }).slice(0, 6);
+      vis.forEach(function (r) {
+        if (!r.productId) return;
+        var b = by[r.productId] = by[r.productId] || { id: r.productId, title: r.productTitle, n: 0, sum: 0, rn: 0, up: 0 };
+        b.n++;
+        if (r.stars > 0) { b.sum += r.stars; b.rn++; } else if (r.recommended) b.up++;
+      });
+      var list = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.n - a.n || (b.rn ? b.sum / b.rn : 0) - (a.rn ? a.sum / a.rn : 0); }).slice(0, 6);
       top.innerHTML = list.length ? '<div class="adm-cust-list">' + list.map(function (b, i) {
         var p = findProduct(b.id);
         return '<div class="adm-cust-row adm-rv-top"><span class="adm-an-rank">' + (i + 1) + '</span><span class="adm-or-thumb"' + (p && p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>' +
           '<span class="adm-cust-name"><b title="' + esc(b.title) + '">' + esc(b.title) + '</b><small>' + plural(b.n, 'review') + '</small></span>' +
-          '<span class="adm-an-pval adm-rv-avg">' + (b.sum / b.n).toFixed(1) + '<span class="adm-star">★</span></span></div>';
+          '<span class="adm-an-pval adm-rv-avg">' + (b.rn ? (b.sum / b.rn).toFixed(1) + '<span class="adm-star">★</span>' : homeIcon('thumb_up', 13) + num(b.up)) + '</span></div>';
       }).join('') + '</div>' : anEmpty('No product reviews yet.');
     }
-    var cnt = document.querySelector('#admReviewTabs [data-rcount="new"]'); if (cnt) cnt.textContent = fresh ? num(fresh) : '';
-    document.querySelectorAll('#admReviewTabs [data-rf]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-rf') === REVIEW_FILTER); });
+    var hc = $('admRevHiddenCount');
+    if (hc) { hc.hidden = !hidden; hc.textContent = hidden ? num(hidden) + ' hidden' : ''; hc.title = waiting ? plural(waiting, 'review') + ' waiting for its product on the site' : ''; }
   }
   function renderReviews() {
-    var f = reviewFilterDropdown.getValue() || 'new';
     renderRevOverview();
-    var rows = REVIEWS.filter(function (r) { return f === 'all' || (f === 'new' ? !r.adminReviewedAt : r.status === f); }).sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+    var seen = {};
+    REVIEWS.forEach(function (r) { seen[revPlatform(r.source)] = true; });
+    var order = ['coldd.dev', 'BuiltByBit', 'Creator Store'];
+    var plats = order.concat(Object.keys(seen).filter(function (p) { return order.indexOf(p) < 0; }).sort());
+    if (plats.join('|') !== REV_PLATFORM_SIG) {
+      REV_PLATFORM_SIG = plats.join('|');
+      reviewPlatformDropdown.setOptions([{ value: 'all', label: 'Global' }].concat(plats.map(function (p) { return { value: p, label: p }; })), REVIEW_PLATFORM);
+    }
+    var rows = REVIEWS.filter(function (r) { return REVIEW_PLATFORM === 'all' || revPlatform(r.source) === REVIEW_PLATFORM; })
+      .sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
     $('admReviewsList').innerHTML = rows.map(function (r) {
-      var initial = esc(String(r.user || '?').charAt(0).toUpperCase());
+      var plat = revPlatform(r.source), img = revImg(r.avatar);
+      var where = r.productTitle ? esc(r.productTitle) : r.listingName ? esc(untagName(r.listingName)) : 'General review';
+      var actions = (r.status !== 'hidden' ? '<button class="btn btn-ghost adm-btn-sm adm-rev-hide" type="button">Hide</button>' :
+          !r.hiddenReason ? '<button class="btn btn-ghost adm-btn-sm adm-rev-show" type="button">Unhide</button>' : '') +
+        (r.auto ? '' : '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>') +
+        (r.productId ? '<button class="btn btn-ghost adm-btn-sm adm-rev-goto" type="button">Go to product</button>' : '');
       return '<div class="adm-review adm-rv' + (r.status === 'hidden' ? ' is-hidden' : '') + '" data-id="' + r.id + '">' +
-        '<div class="adm-rv-head"><span class="adm-rv-av" aria-hidden="true">' + initial + '</span>' +
-          '<span class="adm-rv-who"><b>' + esc(r.user) + '</b><small>' + (r.productTitle ? esc(r.productTitle) : 'General review') + ' · ' + esc(fmtDate(new Date(r.date))) + '</small></span>' +
-          revStars(r.stars || 0) +
-          (!r.adminReviewedAt ? '<span class="dt-badge warn">New</span>' : r.status === 'hidden' ? '<span class="dt-badge mute">Hidden</span>' : '') + '</div>' +
-        '<p class="adm-review-text">' + esc(r.text) + '</p>' +
-        (r.reply ? '<div class="adm-review-reply"><strong>Your reply</strong><p>' + esc(r.reply.text) + '</p></div>' : '') +
-        '<div class="adm-review-reply-form" hidden>' +
+        '<div class="adm-rv-head">' +
+          (img ? '<span class="adm-rv-av has-img" style="background-image:url(\'' + img + '\')" aria-hidden="true"></span>' : '<span class="adm-rv-av" aria-hidden="true">' + esc(String(r.user || '?').charAt(0).toUpperCase()) + '</span>') +
+          '<span class="adm-rv-who"><b>' + esc(r.user) + '</b><small>' + where + ' · ' + esc(plat) + ' · ' + esc(fmtDate(new Date(r.date))) + '</small></span>' +
+          (r.stars ? revStars(r.stars) : revThumb(r)) +
+          (!r.adminReviewedAt || REV_NEW_SEEN[r.id] ? '<span class="dt-badge warn">New</span>' : '') +
+          (r.hiddenReason === 'unmatched' ? '<span class="dt-badge err" title="Published automatically once a product with this name is on the site">Hidden: no matching product</span>' : r.status === 'hidden' ? '<span class="dt-badge mute">Hidden</span>' : '') + '</div>' +
+        (r.text ? '<p class="adm-review-text">' + esc(r.text) + '</p>' : '') +
+        (r.reply ? '<div class="adm-review-reply"><strong>' + (r.auto ? 'Your reply on ' + esc(plat) : 'Your reply') + '</strong><p>' + esc(r.reply.text) + '</p></div>' : '') +
+        (r.auto ? '' : '<div class="adm-review-reply-form" hidden>' +
           '<textarea class="adm-input adm-textarea adm-rev-reply-input" rows="2" placeholder="Write a public reply to this review…">' + esc(r.reply ? r.reply.text : '') + '</textarea>' +
           '<button type="button" class="btn btn-primary adm-btn-sm adm-rev-reply-save">Save reply</button>' +
-        '</div>' +
-        '<div class="adm-row-actions">' +
-          (r.status !== 'hidden' ? '<button class="btn btn-ghost adm-btn-sm adm-rev-hide" type="button">Hide</button>' : '') +
-          '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>' +
-          (r.productId ? '<button class="btn btn-ghost adm-btn-sm adm-rev-goto" type="button">Go to product</button>' : '') +
-        '</div></div>';
-    }).join('') || anEmpty(f === 'new' ? 'No new reviews. All caught up.' : 'Nothing here.');
+        '</div>') +
+        (actions ? '<div class="adm-row-actions">' + actions + '</div>' : '') + '</div>';
+    }).join('') || anEmpty(REVIEW_PLATFORM === 'all' ? 'No reviews yet.' : 'No reviews from ' + esc(REVIEW_PLATFORM) + ' yet.');
 
-    // Reviews are public the moment they're submitted now - there's no
-    // approval step for this panel to gate. Opening it is what clears the
-    // "new review" flag driving the dashboard to-do, same as reading an
-    // inbox marks it read.
-    var unseen = rows.filter(function (r) { return !r.adminReviewedAt; });
-    if (unseen.length) {
-      Promise.all(unseen.map(function (r) { return callModerateReview(r.dbId, 'seen'); }))
-        .then(refreshReviews)
-        .catch(function () {});
-    }
+    // Reviews are public the moment they're posted. The owner reading this list is what clears
+    // the "New reviews needing a look" task, like reading an inbox marks it read.
+    var unseen = rows.filter(function (r) { return !r.adminReviewedAt && !REV_NEW_SEEN[r.id]; });
+    if (unseen.length) revOwner().then(function (owner) {
+      if (!owner || curPanel !== 'reviews') return;
+      unseen.forEach(function (r) { REV_NEW_SEEN[r.id] = true; });
+      return Promise.all(unseen.map(function (r) { return callModerateReview(r.dbId, 'seen'); })).then(refreshReviews);
+    }).catch(function () {});
   }
   var reviewsList = $('admReviewsList');
   if (reviewsList) reviewsList.addEventListener('click', function (e) {
@@ -9725,9 +9769,14 @@
     var r = REVIEWS.filter(function (x) { return x.id === id; })[0]; if (!r) return;
     if (e.target.classList.contains('adm-rev-hide')) {
       callModerateReview(r.dbId, 'hide').then(function () {
-        logAudit('Hid review by ' + r.user + ' on "' + r.productTitle + '"');
+        logAudit('Hid review by ' + r.user + ' on "' + (r.productTitle || r.listingName || 'the store') + '"');
         return refreshReviews();
       }).catch(function (err) { alert(err.message || 'Could not hide review.'); });
+    } else if (e.target.classList.contains('adm-rev-show')) {
+      callModerateReview(r.dbId, 'show').then(function () {
+        logAudit('Unhid review by ' + r.user + ' on "' + (r.productTitle || r.listingName || 'the store') + '"');
+        return refreshReviews();
+      }).catch(function (err) { alert(err.message || 'Could not unhide review.'); });
     } else if (e.target.classList.contains('adm-rev-reply-toggle')) {
       var form = card.querySelector('.adm-review-reply-form');
       form.hidden = !form.hidden;

@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261126c" />
+  <link rel="stylesheet" href="/styles.css?v=20261126d" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -1158,13 +1158,14 @@
 
             <div class="adm-hp">
               <div class="adm-hp-head">
-                <div class="adm-hp-title"><h2>Reviews</h2><span>Public the moment they're posted; hide any that shouldn't be</span></div>
-                <div class="adm-seg" role="group" aria-label="Show reviews" id="admReviewTabs">
-                  <button type="button" class="active" data-rf="new">New <span class="adm-gw-count" data-rcount="new"></span></button>
-                  <button type="button" data-rf="approved">Visible</button>
-                  <button type="button" data-rf="hidden">Hidden</button>
-                  <button type="button" data-rf="all">All</button>
+                <div class="adm-hp-title"><h2>Reviews <span class="adm-rv-hidn" id="admRevHiddenCount" hidden></span></h2><span>Newest first. BuiltByBit and Creator Store reviews come in on their own</span></div>
+                <div class="adm-dd adm-dd-inline adm-rv-plat" id="admReviewPlatformDD">
+                  <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span>
+                    <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div>
                 </div>
+                <input type="hidden" id="admReviewPlatform" value="all" />
               </div>
               <div class="adm-rv-list" id="admReviewsList"></div>
             </div>
@@ -1926,6 +1927,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261126c" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126c"></script>
+  <script src="/catalog.js?v=20261126d" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126d"></script>
 </body>
 </html>

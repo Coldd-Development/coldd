@@ -641,6 +641,10 @@
       byline: row.byline || null,
       avatar: row.avatar_url || null,
       stars: row.stars,
+      // A Creator Store review is a thumbs up or down (no stars); source is where it was left
+      // ('Website' = coldd.dev).
+      recommended: row.recommended == null ? null : !!row.recommended,
+      source: row.source || 'Website',
       text: row.text,
       date: row.created_at,
       reply: row.reply ? { text: row.reply, date: row.reply_at } : null
@@ -978,7 +982,7 @@
     window.coldSupabase.from('products').select(PRODUCT_PUBLIC_COLS).eq('is_active', true).limit(20000),
     window.coldSupabase
       .from('reviews')
-      .select('id, stars, text, created_at, reply, reply_at, user_name, byline, avatar_url, products(slug)')
+      .select('id, stars, text, created_at, reply, reply_at, user_name, byline, avatar_url, source, recommended, products(slug)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
       .limit(20000),
