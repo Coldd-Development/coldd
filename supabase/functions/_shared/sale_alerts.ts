@@ -32,12 +32,12 @@ export function money(amount: number, currency: string): string {
   return SYMBOL[c] ? SYMBOL[c] + v : v + " " + c;
 }
 
-// "Sale for $24.99!" / "Catch a Fish just sold for $24.99 on BuiltByBit!"
+// "Sale for $24.99!" / "Catch a Fish just sold on BuiltByBit!" (the price is only in the title)
 export function alertText(a: { source: string; product: string | null; more: number; amount: number; currency: string }) {
   const price = money(Number(a.amount), a.currency);
   const where = PLATFORM_LABEL[a.source] || a.source;
   const what = a.product ? a.product + (a.more > 0 ? ` + ${a.more} more` : "") : `A ${where} product`;
-  return { title: `Sale for ${price}!`, body: `${what} just sold for ${price} on ${where}!` };
+  return { title: `Sale for ${price}!`, body: `${what} just sold on ${where}!` };
 }
 
 const enc = new TextEncoder();

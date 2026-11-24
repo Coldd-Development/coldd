@@ -10528,8 +10528,9 @@
   }
   // The alert's text, as the phone shows it.
   function alertBody(a) {
-    var where = (ALERT_PFS.filter(function (x) { return x[0] === a.source; })[0] || [0, a.source])[1], p = alertMoney(a.amount, a.currency);
-    return (a.product ? a.product + (a.more > 0 ? ' + ' + a.more + ' more' : '') : 'A ' + where + ' product') + ' just sold for ' + p + ' on ' + where + '!';
+    // The price is only in the title ("Sale for $24.99!").
+    var where = (ALERT_PFS.filter(function (x) { return x[0] === a.source; })[0] || [0, a.source])[1];
+    return (a.product ? a.product + (a.more > 0 ? ' + ' + a.more + ' more' : '') : 'A ' + where + ' product') + ' just sold on ' + where + '!';
   }
   function alertMsg(id, text, bad) { var m = $(id); if (!m) return; m.textContent = text || ''; m.className = 'adm-edit-msg' + (text ? (bad ? ' err' : ' ok') : ''); }
   function loadAlerts() {

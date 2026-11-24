@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const [{ data: devs }, { data: st }] = await Promise.all([q, admin.from("sale_alert_settings").select("*").eq("id", true).maybeSingle()]);
     if (!devs?.length) return json({ ok: false, error: "Add a phone first." }, 400);
     const results = await Promise.all(devs.map(async (d: { id: string; name: string }) => {
-      const err = await pushTo(d, { title: "Sale for $24.99!", body: "Catch a Fish just sold for $24.99 on BuiltByBit!", pushId: "sale-test", silent: false }, st || {});
+      const err = await pushTo(d, { title: "Sale for $24.99!", body: "Catch a Fish just sold on BuiltByBit!", pushId: "sale-test", silent: false }, st || {});
       await admin.from("sale_alert_devices").update(err ? { last_error: err } : { last_sent_at: new Date().toISOString(), last_error: null }).eq("id", d.id);
       return { id: d.id, name: d.name, ok: !err, error: err };
     }));
