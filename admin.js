@@ -4226,6 +4226,21 @@
   var AN_BBB_CAT = { 'Roblox models': 'Assets', 'Roblox maps': 'Maps', 'Roblox scripts': 'Scripts & UI', 'Roblox graphics & UI': 'Scripts & UI',
     'Roblox animations & VFX': 'Animations & VFX', 'Roblox clothing': 'Uniforms & Gear', 'Roblox vehicles': 'Vehicles',
     'Roblox game setups': 'Finished Games & Templates', 'Roblox weapons': 'Weapons', 'Minecraft builds': 'Minecraft' };
+  // BuiltByBit lumps some of our categories together: "Roblox models" holds our Buildings
+  // and Assets, "Roblox vehicles" our Vehicles and Boats, "Roblox graphics & UI" our
+  // Graphics and Scripts & UI. Only used for listings that aren't one of our products
+  // (those take the product's own category); the title splits them.
+  var AN_BUILDING_RE = /\b(buildings?|house|houses|home|townhouse|apartments?|flats?|filler|hospital|station|school|hotel|motel|office|tower|mall|shopping|store|shop|shophouse|church|mosque|temple|warehouse|garage|bank|cafe|bakery|restaurant|diner|pharmacy|prison|jail|jailhouse|police|barracks|hangar|hanger|headquarters|hq|facility|base|compound|parliament|killhouse|blacksmith|shed|castle|palace|gate|depot|dealership|post|complex|range|airport)\b/i;
+  var AN_ASSETISH_RE = /\b(assets?|props?)\b/i, AN_HAS_BUILDING_RE = /\b(buildings?|house|houses)\b/i;
+  var AN_BOAT_RE = /\b(boats?|motorboat|ships?|yacht|naval|navy|ferry|submarine|landing craft|littoral|frigate|destroyer|carrier|canoe|kayak|jet ?ski)\b/i;
+  var AN_GRAPHIC_RE = /\b(graphics?|logos?|icons?|thumbnails?|banners?|textures?|decals?|gfx|emblems?)\b/i;
+  function bbbCategory(res) {
+    var c = res.category || '', t = res.title || '';
+    if (c === 'Roblox models') return AN_BUILDING_RE.test(t) && (!AN_ASSETISH_RE.test(t) || AN_HAS_BUILDING_RE.test(t)) ? 'Buildings' : 'Assets';
+    if (c === 'Roblox vehicles') return AN_BOAT_RE.test(t) ? 'Boats' : 'Vehicles';
+    if (c === 'Roblox graphics & UI') return AN_GRAPHIC_RE.test(t) ? 'Graphics' : 'Scripts & UI';
+    return AN_BBB_CAT[c] || c;
+  }
   var AN_ITEMS = null;
   function anAllItems() {
     var prods = allProducts();
@@ -4235,7 +4250,7 @@
     function add(o) {
       var p = matchProduct(o.id, o.title);
       var res = o.res || resByTitle[bbbNorm(canonName(o.title))] || null;
-      var cat = p && p.cat ? p.cat : res && res.category ? (AN_BBB_CAT[res.category] || res.category) : nameCat(o.title);
+      var cat = p && p.cat ? p.cat : res && res.category ? bbbCategory(res) : nameCat(o.title);
       var shown = p ? p.title : res && !o.res ? res.title : canonName(o.title || 'Unknown product');
       list.push({ pf: o.pf, t: o.t, aud: o.aud || 0, robux: o.robux || 0, title: shown,
         key: p ? 'p:' + p.id : 't:' + bbbNorm(shown), image: p && p.image ? window.imgUrl(p.image) : (res && res.cover_image_url) || '',

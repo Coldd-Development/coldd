@@ -216,7 +216,7 @@ Deno.serve(async (req: Request) => {
         }
         const out = rows.map((p) => ({
           purchase_id: num(p.purchase_id),
-          resource_id: p.Resource?.resource_id ?? p.Addon?.resource_id ?? (p.content_type === "resource" ? num(p.content_id) : null),
+          resource_id: p.Resource?.resource_id ?? p.addon?.resource_id ?? p.Addon?.resource_id ?? (p.content_type === "resource" ? num(p.content_id) : null),
           content_type: p.content_type ?? null,
           created_at: iso(p.created_at),
           validated_at: iso(p.validated_at),
@@ -231,7 +231,8 @@ Deno.serve(async (req: Request) => {
           buyer_name: p.Buyer?.username ?? null,
           buyer_avatar: p.Buyer?.avatar_url_small ?? p.Buyer?.avatar_url_medium ?? null,
           external_tid: p.external_tid ?? null,
-          addon_title: p.Addon?.title ?? null,
+          // with=Addon comes back as a lower-case "addon" key.
+          addon_title: p.addon?.title ?? p.Addon?.title ?? null,
         })).filter((r) => r.purchase_id && r.created_at);
         if (out.length) {
           const { error } = await admin.from("bbb2_purchases").upsert(out, { onConflict: "purchase_id" });
