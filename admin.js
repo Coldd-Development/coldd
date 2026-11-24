@@ -1802,11 +1802,10 @@
     var w = whole || Math.abs(v) >= 10000;
     return 'A$' + v.toLocaleString('en-AU', { minimumFractionDigits: w ? 0 : 2, maximumFractionDigits: w ? 0 : 2 });
   }
-  // Platforms that sell only in Robux: Robux first, its DevEx value in AU$ greyed.
+  // Platforms that sell mostly in Robux (Parcel): Robux first, its real AU$ sales greyed.
   var PF_RBX_MAIN = { parcel: true };
-  function rbxAud(robux, t) { return (Number(robux) || 0) * DEVEX_USD_PER_ROBUX * audRateOn(t || Date.now()); }
-  function pfValue(key, aud, robux, whole, t) {
-    if (PF_RBX_MAIN[key]) return robuxRaw(robux) + '<span class="adm-rbx"> | ' + fmtA(rbxAud(robux, t), whole) + '</span>';
+  function pfValue(key, aud, robux, whole) {
+    if (PF_RBX_MAIN[key]) return robuxRaw(robux) + '<span class="adm-rbx"> | ' + fmtA(aud, whole) + '</span>';
     return PF_ROBUX[key] ? fmtA(aud, whole) + '<span class="adm-rbx"> | ' + robuxRaw(robux) + '</span>' : fmtA(aud, whole);
   }
   function plural(n, word) { return num(n) + ' ' + word + (n === 1 ? '' : 's'); }
@@ -2217,7 +2216,7 @@
       // order (HOME_PLATFORMS), never re-sorted by value.
       if (CH.tip) tip.innerHTML = head + CH.tip(i);
       else tip.innerHTML = head +
-        CH.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i], false, m.start.getTime()) + '</b></div>'; }).join('') +
+        CH.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i]) + '</b></div>'; }).join('') +
         '<div class="adm-pc-tip-total">All platforms<b>' + fmtA(total) + '</b></div>' +
         (rbx ? '<p class="adm-pc-tip-note">Includes ' + RBX_IC + ' ' + num(rbx) + '</p>' : '');
       tip.hidden = false;
@@ -2268,8 +2267,8 @@
     var tot = sumSales(sales, cS, cE), totP = cmp ? sumSales(sales, pS, pE) : null;
     // R$ sits under the A$ (not beside it), so the table fits without scrolling.
     function cell(key, r) {
-      // Robux-only platforms (Parcel): Robux on top, its DevEx value in AU$ under it.
-      if (PF_RBX_MAIN[key]) return robuxRaw(r.robux) + '<small>' + fmtA(rbxAud(r.robux)) + '</small>';
+      // Robux-first platforms (Parcel): Robux on top, its real AU$ sales under it.
+      if (PF_RBX_MAIN[key]) return robuxRaw(r.robux) + '<small>' + fmtA(r.aud) + '</small>';
       return fmtA(r.aud) + (PF_ROBUX[key] ? '<small>' + robuxRaw(r.robux) + '</small>' : '');
     }
     function rbx(n) { return n ? '<small>' + robuxRaw(n) + '</small>' : ''; }
