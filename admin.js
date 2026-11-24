@@ -12495,7 +12495,7 @@
     var st = FIN.form;
     if (st && st.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(st.added);
     FIN.form = null; FIN.editId = null;
-    finRenderExpForm();
+    finRenderExpForm(); finRenderExpList();
   }
   function finSaveExpense() {
     var st = FIN.form;
@@ -12575,15 +12575,28 @@
     $('admFinExpTotal').textContent = list.length ? finEntries(list.length) + ', ' + finM(total) : '';
     var table = $('admFinExpTable');
     if (!list.length) { table.innerHTML = '<tbody><tr><td class="adm-empty">' + (FIN.expenses.length ? 'Nothing matches these filters.' : 'No expenses logged yet.') + '</td></tr></tbody>'; return; }
-    table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col">Reason</th><th scope="col">Paid to</th><th scope="col">Paid with</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Receipts and actions</span></th></tr></thead><tbody>' +
+    table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Reason</th><th scope="col">Paid to</th><th scope="col">Paid with</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Receipts and delete</span></th></tr></thead><tbody>' +
       list.map(function (e) {
-        var n = Array.isArray(e.receipts) ? e.receipts.length : 0, unc = e.category === 'Uncategorised';
-        return '<tr><th scope="row">' + esc(finLong(e.spent_on)) + '</th><td><span class="adm-pf' + (unc ? ' adm-fin-unc' : '') + '" style="--pf:' + finCatColor(e.category) + '"><b class="adm-dot"></b>' + esc(e.category) + '</span></td>' +
-          '<td class="adm-fin-note"' + (e.notes ? ' title="' + esc(e.notes) + '"' : '') + '>' + esc(e.note || '') + '</td><td>' + esc(e.vendor || '') + '</td><td>' + esc(e.payment_method || '') + '</td><td class="is-strong">' + finM(e.amount) + '</td>' +
+        var n = Array.isArray(e.receipts) ? e.receipts.length : 0, charge = finCharge(e);
+        return '<tr data-fin-edit="' + esc(e.id) + '" tabindex="0" aria-label="Edit ' + esc((e.note || e.vendor || 'expense') + ', ' + finLong(e.spent_on)) + '"' + (FIN.editId === e.id ? ' class="is-editing"' : '') + '>' +
+          '<th scope="row">' + esc(finLong(e.spent_on)) + '</th>' +
+          '<td class="adm-fin-note">' + esc(e.note || '') + (charge ? '<small class="adm-fin-charge">' + esc(charge) + '</small>' : '') + '</td>' +
+          '<td>' + esc(e.vendor || '') + '</td><td>' + esc(e.payment_method || '') + '</td><td class="is-strong">' + finM(e.amount) + '</td>' +
           '<td class="adm-fin-rowact">' + (n ? '<button type="button" class="adm-fin-clip" data-fin-list-rcpt="' + esc(e.id) + '" title="' + (n === 1 ? 'Open the receipt' : 'Open the ' + n + ' receipts') + '">' + FIN_CLIP + (n > 1 ? '<span>' + n + '</span>' : '') + '</button>' : '') +
-            '<button type="button" class="btn btn-ghost adm-btn-sm" data-fin-edit="' + esc(e.id) + '">Edit</button><button type="button" class="adm-fin-del" data-fin-del-exp="' + esc(e.id) + '" aria-label="Delete expense">×</button></td></tr>';
+            '<button type="button" class="adm-fin-del" data-fin-del-exp="' + esc(e.id) + '" aria-label="Delete expense">×</button></td></tr>';
       }).join('') + '</tbody>';
   }
+  // The bank's own name for a charge, from an imported statement line ("CommBank: <name>, USD 9.00, posted ...").
+  function finCharge(e) {
+    var m = /^CommBank:\s*(.+)$/m.exec(e.notes || '');
+    return m ? m[1].split(/,\s*(?:[A-Z]{3}\s[\d.,]+|posted\b)/)[0].trim() : '';
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var row = ev.target.closest && ev.target.closest('tr[data-fin-edit]');
+    if (!row || ev.target !== row) return;
+    ev.preventDefault(); row.click();
+  });
 
   /* ---- Settings: rates, instalments, income tax, GST ---- */
   function finRenderInstalments() {
@@ -12722,8 +12735,8 @@
       if ((b = e.target.closest('[data-fin-rcpt-del]'))) { finRemoveReceipt(b.getAttribute('data-fin-rcpt-del')); return; }
       if ((b = e.target.closest('[data-fin-rcpt-view]'))) { finViewReceipts(FIN.form ? FIN.form.receipts : [], +b.getAttribute('data-fin-rcpt-view')); return; }
       if ((b = e.target.closest('[data-fin-list-rcpt]'))) { var ex = FIN.expenses.filter(function (x) { return x.id === b.getAttribute('data-fin-list-rcpt'); })[0]; if (ex) finViewReceipts(ex.receipts, 0); return; }
-      if ((b = e.target.closest('[data-fin-edit]'))) { if (FIN.form && FIN.form.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(FIN.form.added); FIN.form = null; FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       if ((b = e.target.closest('[data-fin-del-exp]'))) { finDeleteExpense(b.getAttribute('data-fin-del-exp')); return; }
+      if ((b = e.target.closest('[data-fin-edit]'))) { if (FIN.form && FIN.form.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(FIN.form.added); FIN.form = null; FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); finRenderExpList(); $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       if (e.target.closest('#admFinSetSave')) { finSaveSettings(); return; }
     });
     // Weekly cells and instalments save when they lose focus (or on Enter; Escape undoes).
