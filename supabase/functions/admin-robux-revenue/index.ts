@@ -260,10 +260,12 @@ Deno.serve(async (req: Request) => {
 
     // 3) Spending history from the group audit log ("Spend Group Funds": one-time payouts
     //    and other spending, each with its amount and date) into robux_spend_log, for the
-    //    spending graph and the minimum balance. Needs the sync account to have the group's
-    //    "View audit log" permission; until then Roblox answers 403 and this retries hourly.
+    //    spending graph and the minimum balance. Read with the group owner's session
+    //    (ROBLOX_CREATOR_COOKIE, the account that owns the group; the owner's call), since
+    //    the sync account can't see the audit log. Read-only. On a 403 this retries hourly.
     //    The first read walks back through the whole log (resuming across runs); after that
     //    it reads the newest page every 15 minutes and stops at entries already stored.
+    const ownerCookie = (Deno.env.get("ROBLOX_CREATOR_COOKIE") || "").trim() || cookie;
     const auditFull = !rc.audit_full_at;
     const auditDue = auditFull && rc.audit_cursor ? true : ageOf(rc.audit_checked_at) >= (rc.audit_ok ? 15 * 60 * 1000 : 60 * 60 * 1000);
     if (auditDue && !overBudget()) {
@@ -271,7 +273,7 @@ Deno.serve(async (req: Request) => {
       const audit: Obj = { audit_checked_at: new Date().toISOString() };
       try {
         while (!overBudget() && pages < (auditFull ? 25 : 2)) {
-          const d = await roblox(cookie, `https://groups.roblox.com/v1/groups/${groupId}/audit-log?actionType=SpendGroupFunds&limit=100&sortOrder=Desc` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
+          const d = await roblox(ownerCookie, `https://groups.roblox.com/v1/groups/${groupId}/audit-log?actionType=SpendGroupFunds&limit=100&sortOrder=Desc` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
           pages++;
           const out: Obj[] = [];
           for (const r of (Array.isArray(d.data) ? d.data : []) as Obj[]) {
