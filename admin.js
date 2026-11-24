@@ -8405,14 +8405,15 @@
   // slide in at the top and glow for a few seconds; a redraw inside that window
   // resumes the animation where it was (negative animation-delay) instead of
   // replaying it. Only recent sales count (an old backfill never animates).
-  var ORDER_SEEN = null, ORDER_SEEN_SRC = null, ORDER_NEW = {};
+  // ORDER_WAIT: arrived while the tab was hidden; they slide in once it is shown.
+  var ORDER_SEEN = null, ORDER_SEEN_SRC = null, ORDER_NEW = {}, ORDER_WAIT = {};
   var ORDER_NEW_MS = 6000;
   function markNewOrders(all) {
     if (all === ORDER_SEEN_SRC) return;
     var now = Date.now();
     if (ORDER_SEEN) {
       var fresh = all.filter(function (r) { return !ORDER_SEEN[r.key] && r.status !== 'pending' && r.t > now - 3 * DAY_MS; });
-      if (fresh.length && fresh.length <= 25) fresh.forEach(function (r) { ORDER_NEW[r.key] = now; });
+      if (fresh.length && fresh.length <= 25) fresh.forEach(function (r) { if (document.hidden) ORDER_WAIT[r.key] = 1; else ORDER_NEW[r.key] = now; });
     }
     ORDER_SEEN = {};
     all.forEach(function (r) { ORDER_SEEN[r.key] = 1; });
@@ -8518,9 +8519,27 @@
   // website orders, marketplace sales or BuiltByBit purchases changed, and only
   // a changed source is re-read. The servers bring sales in every 1-2 minutes
   // (ClearlyDev email, Creator Store and BuiltByBit each every minute).
-  var PULSE = null, PULSE_BUSY = false;
+  // In a background tab it keeps going every 20 seconds, so the page is current the
+  // moment you look; the tab title counts the sales that came in meanwhile.
+  var PULSE = null, PULSE_BUSY = false, PULSE_AT = 0, PULSE_UNSEEN = 0, PULSE_TITLE = document.title;
+  // Sales in a pulse: rows on each platform plus paid website orders.
+  function pulseSales(d) {
+    if (!d) return 0;
+    var n = 0;
+    ['p', 'b', 'r'].forEach(function (k) { n += parseInt(String(d[k] || '0'), 10) || 0; });
+    String(d.o || '').split('|')[1] && String(d.o).split('|')[1].split(',').forEach(function (x) {
+      var kv = x.split('='); if (kv[0] === 'paid' || kv[0] === 'completed') n += Number(kv[1]) || 0;
+    });
+    return n;
+  }
+  function pulseTitle() {
+    if (!document.hidden) PULSE_UNSEEN = 0;
+    document.title = (PULSE_UNSEEN > 0 ? '(' + PULSE_UNSEEN + ') ' : '') + PULSE_TITLE;
+  }
   function salesPulse() {
-    if (PULSE_BUSY || !window.coldSupabase || document.hidden) return;
+    if (PULSE_BUSY || !window.coldSupabase) return;
+    if (document.hidden && Date.now() - PULSE_AT < 20000) return;
+    PULSE_AT = Date.now();
     if (curPanel !== 'orders' && curPanel !== 'analytics' && curPanel !== 'home') return;
     PULSE_BUSY = true;
     window.coldSupabase.rpc('admin_sales_pulse').then(function (r) {
@@ -8529,6 +8548,7 @@
       var d = r.data, was = PULSE;
       PULSE = d;
       if (!was) return;
+      if (document.hidden) { var more = pulseSales(d) - pulseSales(was); if (more > 0) { PULSE_UNSEEN += more; pulseTitle(); } }
       if (d.o !== was.o) refreshOrders();
       if (d.p !== was.p) refreshPlatformSales();
       if (d.b !== was.b) refreshBbbData();
@@ -8536,7 +8556,19 @@
     }, function () { PULSE_BUSY = false; });
   }
   setInterval(salesPulse, 5000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) salesPulse(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    pulseTitle();
+    // Sales that came in while you were away slide in now.
+    var waiting = Object.keys(ORDER_WAIT);
+    if (waiting.length) {
+      var now = Date.now();
+      waiting.forEach(function (k) { ORDER_NEW[k] = now; });
+      ORDER_WAIT = {};
+      if (curPanel === 'orders') renderOrders();
+    }
+    salesPulse();
+  });
   // Safety net for anything the pulse cannot see: full re-reads every 2 minutes
   // (website orders, marketplace sales) and every 5 minutes (BuiltByBit).
   setInterval(function () { if (!document.hidden && (curPanel === 'orders' || curPanel === 'analytics')) { refreshOrders(); refreshPlatformSales(); } }, 120000);
