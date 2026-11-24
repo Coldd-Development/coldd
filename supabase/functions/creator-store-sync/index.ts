@@ -40,7 +40,8 @@ function json(body: unknown, status = 200) {
   });
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const norm = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+// A tag before the name ("[COMPLETE] Catch a Fish") is not part of the product's name.
+const norm = (s: string) => String(s || "").replace(/^\s*(?:\[[^\]]*\]\s*)+/, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 // Same id rule as the userscript, so the two never make duplicate rows.
 function toRow(p: Obj) {

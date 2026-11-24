@@ -1933,7 +1933,7 @@
         // exactly on the hour: its time is not known.
         var tms = Date.parse(r.sold_at);
         return { dateOnly: (r.source === 'manual' || r.source === 'csv') && tms % 3600000 === 0,
-          id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
+          id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: untagName(r.product_name) || r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
       });
       if (curPanel === 'orders') renderOrders();
       if (curPanel === 'analytics') renderAnalytics();
@@ -4283,7 +4283,7 @@
   var CAT_SURE_MIN = 0.9, CAT_MODEL = null;
   function catWords(s) {
     var out = [];
-    String(s || '').toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').forEach(function (w) {
+    untagName(s).toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').forEach(function (w) {
       if (!w || w.length < 2 || /\d/.test(w) || CAT_STOP.indexOf(w) >= 0) return;
       if (w.length > 3 && /s$/.test(w) && !/(ss|us|is)$/.test(w)) w = w.replace(/ies$/, 'y').replace(/s$/, '');
       if (out.indexOf(w) < 0) out.push(w);
@@ -7183,7 +7183,10 @@
     return statTile('BuiltByBit orders', num(t.cur.orders), null, pctDelta(t.cur.orders, t.prev.orders), { panel: 'marketplaces' });
   }
 
-  function bbbNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+  // A tag a listing puts before its name ("[COMPLETE] Catch a Fish", "[NEW] ...") is never
+  // part of the product's name.
+  function untagName(s) { return String(s || '').replace(/^\s*(?:\[[^\]]*\]\s*)+/, ''); }
+  function bbbNorm(s) { return untagName(s).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
   // Names a platform uses that differ from ours (public.product_name_aliases,
   // added by hand as they turn up). Each points to the coldd.dev name, or the
   // BuiltByBit name for a product not on the site yet; once the product is on
@@ -7204,12 +7207,12 @@
     return '';
   }
   function canonName(t, usd) {
-    var e = NAME_ALIAS[bbbNorm(t)]; if (!e) return t;
+    var e = NAME_ALIAS[bbbNorm(t)]; if (!e) return t ? untagName(t) : t;
     if (usd > 0) for (var i = 0; i < e.priced.length; i++) {
       var p = e.priced[i].price;
       if (Math.abs(usd - p) <= Math.max(0.5, p * 0.1)) return e.priced[i].name;
     }
-    return e.any || t;
+    return e.any || untagName(t);
   }
   function refreshNameAliases() {
     if (!window.coldSupabase) return Promise.resolve();
@@ -7251,7 +7254,7 @@
     'model', 'models', 'animation', 'animations', 'effect', 'effects', 'edition', 'version', 'premium', 'ultimate', 'hd', 'free', 'custom', 'scripted'];
   function pmWords(s) {
     var out = [];
-    String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').forEach(function (w) {
+    untagName(s).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').forEach(function (w) {
       w = PM_SAME[w] || w;
       if (w && PM_STOP.indexOf(w) < 0 && out.indexOf(w) < 0) out.push(w);
     });
@@ -7259,7 +7262,7 @@
   }
   // The numbers in a name ("500+ Combat VFX Asset Pack" -> "500"): two names
   // with different numbers are different products.
-  function pmNums(s) { return (String(s || '').match(/\d+/g) || []).sort().join(','); }
+  function pmNums(s) { return (untagName(s).match(/\d+/g) || []).sort().join(','); }
   // When one name holds the other, what is left over must not be just a
   // number (or a number and a short word): "500+ Combat VFX Pack" is not
   // "Combat VFX Pack", "Shophouse Building Pack 2" is not "...Pack", but
