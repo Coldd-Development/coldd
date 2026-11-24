@@ -6362,27 +6362,34 @@ html[data-theme="light"] .adm-mkt .dash-stat { background: rgba(0,0,0,0.02); }
 .adm-nav-lock[hidden] { display: none; }
 .adm-nav a.active:has(.adm-nav-lock:not([hidden]))::after { display: none; }
 .adm-fin-lock { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 20px; text-align: center; }
-.adm-fin-lock[hidden], #admFinRange[hidden] { display: none; }
+.adm-fin-lock[hidden], .adm-fin-tools[hidden], .adm-fin .btn[hidden], .adm-fin .adm-seg[hidden] { display: none; }
 .adm-fin-lock svg { color: var(--fg-3); margin-bottom: 4px; }
 .adm-fin-lock h2 { font-size: 17px; font-weight: 700; }
 .adm-fin-lock p { font-size: 13px; color: var(--fg-3); }
 .adm-fin-body:not([hidden]), .adm-fin-view:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
-.adm-fin-body .adm-sd-tabs { align-self: flex-start; flex-wrap: wrap; }
+.adm-fin .dash-head.adm-fin-head { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.adm-fin-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .adm-fin-legend { display: flex; gap: 14px; font-size: 12px; color: var(--fg-2); }
 .adm-fin-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .adm-fin-legend i { width: 14px; height: 3px; border-radius: 2px; background: var(--pf); }
 .adm-fin-h3 { margin: 18px 0 10px; font-size: 13px; font-weight: 700; color: var(--fg-2); }
-.adm-fin-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.adm-fin-2 > .adm-hp { margin: 0; }
 
-/* Weekly log: a spreadsheet of inputs */
-.adm-fin-sheet { min-width: 940px; }
-.adm-fin-sheet .adm-fin-grp th { padding: 10px 8px 0; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-3); text-align: center; }
-.adm-fin-sheet .adm-fin-grp th[colspan] { border-bottom: 1px solid var(--hairline); }
-.adm-fin-sheet td { padding: 4px 4px; }
+/* Cards: label, figure, one line right under it */
+.adm-fin-kpi { gap: 4px; }
+.adm-fin-kpi .adm-kpi-value { margin-top: 2px; }
+.adm-fin-kpi-sub { font-size: 12px; color: var(--fg-3); }
+
+/* Scrolling panels: weekly log and expense list */
+.adm-fin-scroll { max-height: 372px; overflow: auto; margin: 0 -20px; padding: 0 20px; border-top: 1px solid var(--hairline); overscroll-behavior: contain; }
+.adm-fin-scroll-list { max-height: 420px; margin-top: 10px; }
+.adm-fin-scroll .adm-plat-table thead th { position: sticky; top: 0; z-index: 2; background: var(--bg-3); box-shadow: inset 0 -1px 0 var(--hairline); }
+.adm-fin-scroll .adm-plat-table tfoot th, .adm-fin-scroll .adm-plat-table tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--bg-3); box-shadow: inset 0 1px 0 var(--hairline-strong); }
+.adm-fin-sheet { min-width: 900px; }
+.adm-fin-sheet td { padding: 3px 4px; }
 .adm-fin-sheet tbody th { font-weight: 600; }
+.adm-fin-sheet th.adm-fin-oth, .adm-fin-sheet td.adm-fin-oth { border-left: 1px solid var(--hairline); padding-left: 10px; }
 .adm-fin-sheet tr.is-latest th, .adm-fin-sheet tr.is-latest td { background: rgba(255,255,255,0.035); }
-.adm-plat-table tr.is-latest th small, .adm-plat-table th small { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--fg-3); }
+.adm-plat-table th small { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--fg-3); }
 .adm-fin-in { width: 100%; min-width: 84px; padding: 6px 8px; font: inherit; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: var(--r-xs); transition: border-color .15s, background .15s; }
 .adm-fin-in::placeholder { color: var(--fg-3); }
@@ -6399,38 +6406,28 @@ html[data-theme="light"] .adm-mkt .dash-stat { background: rgba(0,0,0,0.02); }
 .adm-fin-del:hover { color: var(--warn); background: rgba(255,255,255,0.05); }
 .adm-fin-exp:focus-visible, .adm-fin-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* Expense log */
-.adm-fin-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-top: 12px; }
+/* Expenses */
+.adm-fin-mix { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: center; margin-top: 14px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.adm-fin-catrow { grid-template-columns: minmax(0, 1fr) 96px 64px 64px; }
+.adm-fin-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
 .adm-fin-form .adm-fin-wide { grid-column: 1 / -1; }
 .adm-fin-form .adm-dd { width: 100%; }
 .adm-fin-form #admFinExpNewCat { margin-top: 8px; }
 .adm-fin-brackets { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-.adm-fin-actions { display: flex; gap: 8px; margin-top: 18px; }
-.adm-fin-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
+.adm-fin-actions { display: flex; gap: 8px; margin-top: 16px; }
+.adm-fin-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 .adm-fin-filters .adm-dd { min-width: 200px; }
 .adm-fin-inline { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-3); }
 .adm-fin-search { flex: 1 1 180px; min-width: 160px; }
+.adm-fin-count { font-size: 12px; color: var(--fg-3); white-space: nowrap; }
 .adm-fin-explist td { white-space: normal; }
-.adm-fin-explist td.adm-fin-note { max-width: 280px; text-align: left; color: var(--fg-2); }
-.adm-fin-explist td:nth-child(2), .adm-fin-explist td:nth-child(3), .adm-fin-explist thead th:nth-child(-n+4) { text-align: left; }
+.adm-fin-explist td.adm-fin-note { min-width: 180px; text-align: left; color: var(--fg-1); }
+.adm-fin-explist td:nth-child(2), .adm-fin-explist td:nth-child(4), .adm-fin-explist thead th:nth-child(-n+4) { text-align: left; }
 .adm-fin-rowact { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
 
-/* Where the money goes */
-.adm-fin-mix { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: center; }
-.adm-fin-catrow { grid-template-columns: minmax(0, 1fr) 96px 64px 64px; }
-.adm-fin-bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 4px; }
-.adm-fin-bar { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
-.adm-fin-bar i { display: block; width: 100%; max-width: 34px; border-radius: 4px 4px 0 0; background: var(--accent); opacity: .85; }
-.adm-fin-bar span { font-size: 11px; color: var(--fg-3); }
-.adm-fin-top { display: flex; flex-direction: column; }
-.adm-fin-top > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--hairline); font-size: 13px; }
-.adm-fin-top > div:first-child { border-top: 0; }
-.adm-fin-top span { display: flex; flex-direction: column; min-width: 0; }
-.adm-fin-top span b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adm-fin-top small { font-size: 12px; color: var(--fg-3); }
-.adm-fin-top > div > b { font-variant-numeric: tabular-nums; }
-
-/* Tax */
+/* Settings: instalments, GST, income tax */
+.adm-fin-reserve { font-size: 13px; color: var(--fg-2); }
+.adm-fin-reserve b { margin-left: 6px; font-size: 15px; font-weight: 800; color: var(--fg); font-variant-numeric: tabular-nums; }
 .adm-fin-line { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--hairline); font-size: 13px; color: var(--fg-2); }
 .adm-fin-line b { font-weight: 600; color: var(--fg-1); font-variant-numeric: tabular-nums; }
 .adm-fin-line.is-total { color: var(--fg); font-weight: 700; border-top-color: var(--hairline-strong); }
@@ -6441,7 +6438,6 @@ html[data-theme="light"] .adm-mkt .dash-stat { background: rgba(0,0,0,0.02); }
 #admFinGst .adm-share-bar i { background: var(--pf); }
 
 @media (max-width: 900px) {
-  .adm-fin-2 { grid-template-columns: minmax(0, 1fr); }
   .adm-fin-mix { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   .adm-fin-mix .adm-mix-table { width: 100%; }
 }

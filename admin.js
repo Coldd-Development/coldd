@@ -11759,6 +11759,684 @@
   if (admErrOverlayEl) admErrOverlayEl.addEventListener('click', function (e) { if (e.target === admErrOverlayEl) admErrOverlayEl.hidden = true; });
 
   /* ================================================================
+     FINANCES (2026-11-25)
+     The owner's finance system, moved from the Google Sheet "Finance
+     Tracker", on one page: cards, net revenue, the weekly log, expenses and
+     the expense log; Settings holds the rates, instalments, income tax and
+     GST. Locked by the database, not by this page: finance_allowed() guards
+     every finance_* table (RLS), so for any other account every read comes
+     back empty and every write is refused. The lock screen is only the message.
+     Tax transfer per week = the rise in max(tax on this year's total income
+     less tax already withheld, instalment rate x this year's revenue), split
+     between coldd and TCG by that week's revenue, as the sheet does. The tax
+     reserve should hold everything owed so far less the instalments paid.
+     All money here is AU$, shown with a plain $.
+     ================================================================ */
+  var FIN = { access: null, loading: null, loaded: false, settings: null, weeks: [], expenses: [], cats: [], instalments: [],
+    view: 'main', range: 'month', sheet: 'weeks', editId: null, filter: { cats: [], from: '', to: '', q: '' }, salesTries: 0 };
+  var FIN_CATS = ['Developer payment', 'Licence purchase', 'Giveaway payout', 'Refunds', 'Software subscriptions', 'Utility subscriptions', 'Marketing', 'Misc'];
+  var FIN_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767', '#4fb3c8', '#a8a35a', '#b07cc6', '#7f8c99'];
+  var FIN_NUM_FIELDS = ['revenue', 'tcg_revenue', 'tcg_expenses', 'other_income', 'other_withheld'];
+  var FIN_DD_CHEV = '<svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+
+  function finToday() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date()); }
+  function finD(s) { return new Date(s + 'T00:00:00Z'); }
+  function finIso(d) { return d.toISOString().slice(0, 10); }
+  function finAdd(s, days) { return finIso(new Date(finD(s).getTime() + days * DAY_MS)); }
+  function finSunday(s) { var w = finD(s).getUTCDay(); return w === 0 ? s : finAdd(s, 7 - w); }
+  function finLastSunday(s) { var w = finD(s).getUTCDay(); return finAdd(s, -w); }
+  function finFy(s) { var y = +s.slice(0, 4); return +s.slice(5, 7) >= 7 ? y : y - 1; }
+  function finFyLabel(y) { return y + '-' + String((y + 1) % 100).padStart(2, '0'); }
+  function finShort(s) { return finD(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
+  function finLong(s) { return finD(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); }
+  function finMonthName(s) { return finD(s).toLocaleDateString('en-AU', { month: 'short', year: 'numeric', timeZone: 'UTC' }); }
+  function finM(v) { v = Number(v) || 0; return (v < -0.004 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function finM0(v) { v = Math.round(Number(v) || 0); return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-AU'); }
+  function finK(v) { return Math.abs(Number(v) || 0) >= 1000 ? finM0(v) : finM(v); }
+  function finPct(v, d) { return (Number(v) * 100).toFixed(d == null ? 1 : d).replace(/\.0+$/, '') + '%'; }
+  function finEntries(n) { return num(n) + (n === 1 ? ' entry' : ' entries'); }
+  function finNum(s) {
+    if (s == null) return null;
+    s = String(s).replace(/[A$,\s]/g, '');
+    if (s === '' || s === '-') return null;
+    var n = Number(s);
+    return isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+  }
+  function finInVal(v) { return v == null || v === '' ? '' : Number(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function finAllCats() {
+    var out = FIN_CATS.slice();
+    FIN.cats.forEach(function (c) { if (out.indexOf(c.name) < 0) out.push(c.name); });
+    FIN.expenses.forEach(function (e) { if (out.indexOf(e.category) < 0) out.push(e.category); });
+    return out;
+  }
+  function finCatColor(name) { var all = finAllCats(), i = all.indexOf(name); return FIN_COLORS[(i < 0 ? all.length : i) % FIN_COLORS.length]; }
+  function finWeekLabel(we) { return finShort(finAdd(we, -6)) + ' to ' + finShort(we); }
+
+  /* ---- Tax maths (the sheet's rules, plus the Medicare phase-in and the low income tax offset) ---- */
+  function finTaxOn(p) {
+    var s = FIN.settings, out = { income: 0, lito: 0, medicare: 0, total: 0 };
+    if (!s || !(p > 0)) return out;
+    var br = (s.tax_brackets || []).map(function (b) { return [Number(b[0]), Number(b[1])]; }).sort(function (a, b) { return a[0] - b[0]; });
+    var cum = 0;
+    for (var i = 0; i < br.length; i++) {
+      var next = br[i + 1];
+      if (next && p > next[0]) { cum += (next[0] - br[i][0]) * br[i][1]; continue; }
+      out.income = cum + (p - br[i][0]) * br[i][1];
+      break;
+    }
+    var full = +s.lito_full_to, mid = +s.lito_mid_to, mx = +s.lito_max;
+    var lito = p <= full ? mx : p <= mid ? mx - (p - full) * s.lito_rate1 : mx - (mid - full) * s.lito_rate1 - (p - mid) * s.lito_rate2;
+    out.lito = Math.min(Math.max(0, lito), out.income);
+    out.medicare = p <= +s.medicare_threshold ? 0 : Math.min(p * s.medicare_rate, (p - s.medicare_threshold) * s.medicare_phase_in);
+    out.total = out.income - out.lito + out.medicare;
+    return out;
+  }
+  function finBrackets() {
+    var br = (FIN.settings.tax_brackets || []).map(function (b) { return [Number(b[0]), Number(b[1])]; }).sort(function (a, b) { return a[0] - b[0]; });
+    var cum = 0;
+    return br.map(function (b, i) { var row = { start: b[0], rate: b[1], cum: cum }; if (br[i + 1]) cum += (br[i + 1][0] - b[0]) * b[1]; return row; });
+  }
+  function finExpByWeek() {
+    var m = {};
+    FIN.expenses.forEach(function (e) { var k = finSunday(e.spent_on); m[k] = (m[k] || 0) + Number(e.amount); });
+    return m;
+  }
+  // Every week of one financial year, oldest first, with its transfer worked out.
+  function finRows(fy) {
+    var start = fy + '-07-01', end = (fy + 1) + '-06-30', rate = Number(FIN.settings.instalment_rate) || 0;
+    var exp = finExpByWeek(), P = 0, R = 0, W = 0, Lprev = 0;
+    return FIN.weeks.filter(function (w) { return w.week_ending >= start && w.week_ending <= end; })
+      .sort(function (a, b) { return a.week_ending < b.week_ending ? -1 : 1; })
+      .map(function (w) {
+        var rev = Number(w.revenue) || 0, ex = exp[w.week_ending] || 0, tr = Number(w.tcg_revenue) || 0, te = Number(w.tcg_expenses) || 0;
+        var oi = Number(w.other_income) || 0, wh = Number(w.other_withheld) || 0;
+        P += rev - ex + tr - te + oi; R += rev + tr; W += wh;
+        var tax = finTaxOn(P), L = Math.max(tax.total - W, R * rate, 0);
+        var combined = L - Lprev; Lprev = L;
+        var share = rev + tr > 0 ? rev / (rev + tr) : 1;
+        var tc = combined * share;
+        return { w: w, we: w.week_ending, rev: rev, exp: ex, profit: rev - ex, tr: tr, te: te, oi: oi, wh: wh, P: P, R: R, W: W, L: L, tax: tax,
+          colddT: tc, tcgT: combined - tc };
+      });
+  }
+  function finQuarters(fy, rows) {
+    var rate = Number(FIN.settings.instalment_rate) || 0, y2 = fy + 1, fl = finFyLabel(fy);
+    var qs = [[fy + '-07-01', fy + '-09-30', fy + '-10-28', 'Jul to Sep'], [fy + '-10-01', fy + '-12-31', y2 + '-02-28', 'Oct to Dec'],
+      [y2 + '-01-01', y2 + '-03-31', y2 + '-04-28', 'Jan to Mar'], [y2 + '-04-01', y2 + '-06-30', y2 + '-07-28', 'Apr to Jun']];
+    return qs.map(function (q, i) {
+      var income = rows.filter(function (r) { return r.we >= q[0] && r.we <= q[1]; }).reduce(function (s, r) { return s + r.rev + r.tr; }, 0);
+      var rec = FIN.instalments.filter(function (x) { return x.fy === fl && x.quarter === i + 1; })[0] || null;
+      return { q: i + 1, fy: fl, start: q[0], end: q[1], due: q[2], label: q[3], income: income, calc: income * rate, rec: rec,
+        paid: rec && rec.amount_paid != null ? Number(rec.amount_paid) : null };
+    });
+  }
+  // What the tax account should hold right now: everything owed this year so far
+  // (coldd and TCG together) less the instalments already paid to the ATO.
+  function finReserve() {
+    var t = finToday(), fy = finFy(t), rows = finRows(fy), fl = finFyLabel(fy);
+    var owed = rows.length ? rows[rows.length - 1].L : 0;
+    var paid = FIN.instalments.filter(function (x) { return x.fy === fl; }).reduce(function (s, x) { return s + (Number(x.amount_paid) || 0); }, 0);
+    return { owed: owed, paid: paid, need: owed - paid };
+  }
+
+  /* ---- Loading ---- */
+  function finCheckAccess() {
+    if (FIN.access !== null || !window.coldSupabase) return Promise.resolve(FIN.access);
+    return window.coldSupabase.rpc('finance_allowed').then(function (r) {
+      FIN.access = !r.error && r.data === true;
+      var lock = $('admNavFinLock'); if (lock) lock.hidden = FIN.access;
+      return FIN.access;
+    });
+  }
+  function finLoad() {
+    if (FIN.loading) return FIN.loading;
+    var sb = window.coldSupabase;
+    FIN.loading = Promise.all([
+      sb.from('finance_settings').select('*').eq('id', true).maybeSingle(),
+      sb.from('finance_weeks').select('*').order('week_ending'),
+      sb.from('finance_expenses').select('*').order('spent_on', { ascending: false }).order('created_at', { ascending: false }),
+      sb.from('finance_expense_categories').select('name').order('name'),
+      sb.from('finance_instalments').select('*')
+    ]).then(function (res) {
+      var bad = res.filter(function (r) { return r.error; })[0];
+      if (bad) throw bad.error;
+      if (!res[0].data) throw new Error('No settings row');
+      FIN.settings = res[0].data; FIN.weeks = res[1].data || []; FIN.expenses = res[2].data || [];
+      FIN.cats = res[3].data || []; FIN.instalments = res[4].data || []; FIN.loaded = true;
+    });
+    return FIN.loading;
+  }
+  function renderFinances() {
+    var locked = $('admFinLocked'), body = $('admFinBody'), head = $('admFinHeadTools');
+    finCheckAccess().then(function (ok) {
+      if (!ok) { locked.hidden = false; body.hidden = true; head.hidden = true; return; }
+      locked.hidden = true; body.hidden = false; head.hidden = false;
+      if (!FIN.loaded) {
+        $('admFinKpis').innerHTML = '<p class="adm-empty">Loading…</p>';
+        finLoad().then(finRenderView).catch(function (e) {
+          FIN.loading = null;
+          $('admFinKpis').innerHTML = '<p class="adm-empty">Could not load finances: ' + esc(e && e.message || 'unknown error') + '</p>';
+        });
+        return;
+      }
+      finRenderView();
+    });
+  }
+  function finRenderView() {
+    if (!FIN.loaded) return;
+    var main = FIN.view === 'main';
+    $('admFinMain').hidden = !main; $('admFinSettingsView').hidden = main;
+    $('admFinRange').hidden = !main;
+    $('admFinSettingsBtn').textContent = main ? 'Settings' : 'Back to finances';
+    if (main) { finRenderOverview(); finRenderSheet(); finRenderExpForm(); finRenderExpList(); }
+    else { finRenderSettings(); finRenderInstalments(); finRenderIncomeTax(); finRenderGst(); }
+  }
+
+  /* ---- Periods: last week, this month, this year ---- */
+  function finPeriod() {
+    var t = finToday();
+    if (FIN.range === 'week') { var we = finLastSunday(t); return { from: finAdd(we, -6), to: we, week: function (w) { return w === we; }, chartFrom: finAdd(we, -7 * 11) }; }
+    if (FIN.range === 'year') { var fs = finFy(t) + '-07-01'; return { from: fs, to: t, week: function (w) { return w >= fs && w <= finSunday(t); }, chartFrom: fs }; }
+    var m = t.slice(0, 7);
+    return { from: m + '-01', to: t, week: function (w) { return finAdd(w, -3).slice(0, 7) === m; }, chartFrom: finAdd(m + '-01', -7 * 8) };
+  }
+  function finGross(from, to) {
+    if (!salesReady()) return null;
+    var a = Date.parse(from + 'T00:00:00+10:00'), z = Date.parse(finAdd(to, 1) + 'T00:00:00+10:00');
+    return homeSales().reduce(function (s, x) { return x.t >= a && x.t < z ? s + x.aud : s; }, 0);
+  }
+  function finRenderOverview() {
+    var per = finPeriod();
+    var weeks = FIN.weeks.filter(function (w) { return per.week(w.week_ending); });
+    var net = weeks.reduce(function (s, w) { return s + (Number(w.revenue) || 0); }, 0);
+    var exps = FIN.expenses.filter(function (e) { return e.spent_on >= per.from && e.spent_on <= per.to; });
+    var spent = exps.reduce(function (s, e) { return s + Number(e.amount); }, 0);
+    var profit = net - spent, gross = finGross(per.from, per.to), res = finReserve();
+    if (gross == null && FIN.salesTries++ < 40) setTimeout(function () { if (curPanel === 'finances' && FIN.view === 'main') finRenderOverview(); }, 1500);
+    $('admFinKpis').innerHTML = [
+      finKpi({ label: 'Net revenue', value: finK(net), sub: gross == null ? 'Loading gross…' : finK(gross) + ' gross', title: 'Gross: all platforms, before fees and payout delays' }),
+      finKpi({ label: 'Expenses', value: finK(spent), count: finEntries(exps.length), sub: net > 0 ? finPct(spent / net) + ' of net revenue' : '' }),
+      finKpi({ label: 'Profit margin', value: net > 0 ? finPct(profit / net) : '–', sub: finM(profit) + ' profit' }),
+      finKpi({ label: 'Tax reserve', value: finM(res.need), sub: 'Should be in the tax account now', title: finM(res.owed) + ' owed this year so far, less ' + finM(res.paid) + ' paid to the ATO' })
+    ].join('');
+    finRenderNetChart(per);
+    finRenderExpChart(per);
+    finRenderMix(exps, spent);
+  }
+  // A card: label, figure, one line under it (no empty change line in between).
+  function finKpi(o) {
+    return '<div class="adm-kpi-cell adm-fin-kpi"' + (o.title ? ' title="' + esc(o.title) + '"' : '') + '><span class="adm-kpi-label">' + esc(o.label) + '</span>' +
+      '<span class="adm-kpi-value"><b>' + o.value + '</b>' + (o.count ? '<em>' + o.count + '</em>' : '') + '</span>' +
+      (o.sub ? '<span class="adm-fin-kpi-sub">' + o.sub + '</span>' : '') + '</div>';
+  }
+  function finBuckets(weeks) {
+    return weeks.map(function (we) {
+      return { start: new Date(finAdd(we, -6) + 'T00:00:00+10:00'), end: new Date(finAdd(we, 1) + 'T00:00:00+10:00'), short: finShort(we), long: finWeekLabel(we) };
+    });
+  }
+  function finChartWeeks(per) {
+    var to = finSunday(per.to), out = [];
+    for (var we = finSunday(per.chartFrom); we <= to; we = finAdd(we, 7)) out.push(we);
+    return out;
+  }
+  function finAxis(t) { return '$' + axisNum(t); }
+  function finRenderNetChart(per) {
+    var box = $('admFinChart'); if (!box) return;
+    var calc = {}, fy = finFy(finToday());
+    [fy - 1, fy].forEach(function (y) { finRows(y).forEach(function (r) { calc[r.we] = r; }); });
+    var have = {}; FIN.weeks.forEach(function (w) { have[w.week_ending] = w; });
+    var exp = finExpByWeek();
+    var weeks = finChartWeeks(per).filter(function (we) { return have[we]; });
+    if (!weeks.length) { box.__chart = null; box.innerHTML = '<p class="adm-empty">No weeks in this period yet.</p>'; return; }
+    var rows = weeks.map(function (we) { var r = calc[we]; return r || { rev: Number(have[we].revenue) || 0, exp: exp[we] || 0, profit: (Number(have[we].revenue) || 0) - (exp[we] || 0), colddT: 0 }; });
+    var add = function (a, b) { return a + b; };
+    var netData = rows.map(function (r) { return r.rev; }), profData = rows.map(function (r) { return Math.max(0, r.profit); });
+    box.__chart = {
+      buckets: finBuckets(weeks), step: Math.max(1, Math.ceil(weeks.length / 8)), complete: true, single: true, axis: finAxis, aria: 'Net revenue and profit by week',
+      series: [
+        { key: 'net', label: 'Net revenue', color: 'var(--accent)', data: netData, total: netData.reduce(add, 0) },
+        { key: 'profit', label: 'Profit', color: 'var(--price)', data: profData, total: profData.reduce(add, 0) }
+      ],
+      tip: function (i) {
+        var r = rows[i];
+        return '<div style="--pf:var(--accent)"><i></i>Net revenue<b>' + finM(r.rev) + '</b></div>' +
+          '<div style="--pf:var(--fg-3)"><i></i>Expenses<b>' + finM(r.exp) + '</b></div>' +
+          '<div style="--pf:var(--price)"><i></i>Profit<b>' + finM(r.profit) + '</b></div>' +
+          '<div class="adm-pc-tip-total">Tax transfer<b>' + finM(r.colddT) + '</b></div>';
+      }
+    };
+    drawPlatChart(box);
+  }
+  function finRenderExpChart(per) {
+    var box = $('admFinExpChart'); if (!box) return;
+    var weeks = finChartWeeks(per), idx = {};
+    weeks.forEach(function (we, i) { idx[we] = i; });
+    var total = weeks.map(function () { return 0; }), byCat = {};
+    FIN.expenses.forEach(function (e) {
+      var i = idx[finSunday(e.spent_on)]; if (i == null) return;
+      total[i] += Number(e.amount);
+      var c = byCat[e.category] = byCat[e.category] || weeks.map(function () { return 0; });
+      c[i] += Number(e.amount);
+    });
+    if (!total.some(function (v) { return v > 0; })) { box.__chart = null; box.innerHTML = '<p class="adm-empty">No expenses in this period.</p>'; return; }
+    var cats = Object.keys(byCat).sort(function (a, b) { return byCat[b].reduce(function (s, v) { return s + v; }, 0) - byCat[a].reduce(function (s, v) { return s + v; }, 0); });
+    box.__chart = {
+      buckets: finBuckets(weeks), step: Math.max(1, Math.ceil(weeks.length / 8)), complete: weeks[weeks.length - 1] < finToday(), single: true, axis: finAxis, aria: 'Expenses by week',
+      series: [{ key: 'exp', label: 'Expenses', color: '#d95926', data: total, total: total.reduce(function (a, b) { return a + b; }, 0) }],
+      tip: function (i) {
+        var lines = cats.filter(function (c) { return byCat[c][i] > 0; }).map(function (c) {
+          return '<div style="--pf:' + finCatColor(c) + '"><i></i>' + esc(c) + '<b>' + finM(byCat[c][i]) + '</b></div>';
+        }).join('');
+        return (lines || '<div>No expenses</div>') + '<div class="adm-pc-tip-total">Total<b>' + finM(total[i]) + '</b></div>';
+      }
+    };
+    drawPlatChart(box);
+  }
+  function finRenderMix(exps, spent) {
+    var box = $('admFinMix'); if (!box) return;
+    if (!exps.length) { box.innerHTML = anEmpty('No expenses in this period.'); return; }
+    var by = {};
+    exps.forEach(function (e) { var c = by[e.category] = by[e.category] || { v: 0, n: 0 }; c.v += Number(e.amount); c.n++; });
+    var cats = Object.keys(by).sort(function (a, b) { return by[b].v - by[a].v; });
+    var slices = cats.map(function (c) { return { v: by[c].v, color: finCatColor(c), label: c, tip: sharePct(by[c].v / spent * 100) + ', ' + finM(by[c].v) }; });
+    box.innerHTML = '<div class="adm-fin-mix">' +
+      '<figure class="adm-pie">' + donutSvg(slices, { aria: 'Expenses by category', center: finK(spent), sub: 'spent' }) + '</figure>' +
+      '<div class="adm-mix-table" role="table" aria-label="Expenses by category">' +
+        '<div class="adm-mix-row is-head adm-fin-catrow" role="row"><span role="columnheader">Category</span><span role="columnheader">Spent</span><span role="columnheader">Share</span><span role="columnheader">Entries</span></div>' +
+        cats.map(function (c) {
+          return '<div class="adm-mix-row adm-fin-catrow" role="row" style="--pf:' + finCatColor(c) + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c) + '</span>' +
+            '<span role="cell">' + finM(by[c].v) + '</span><span role="cell">' + sharePct(by[c].v / spent * 100) + '</span><span role="cell">' + num(by[c].n) + '</span></div>';
+        }).join('') + '</div></div>';
+  }
+
+  /* ---- Weekly log (one scrolling panel: weeks or months) ---- */
+  function finRenderSheet() {
+    var table = $('admFinWeekTable'); if (!table) return;
+    document.querySelectorAll('#admFinSheetSeg [data-fin-sheet]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-fin-sheet') === FIN.sheet); });
+    $('admFinAddWeek').hidden = FIN.sheet !== 'weeks';
+    if (FIN.sheet === 'months') { finRenderMonths(table); return; }
+    var fy = finFy(finToday()), rows = finRows(fy);
+    if (!rows.length) { table.innerHTML = '<tbody><tr><td class="adm-empty">No weeks yet. Add this week to start.</td></tr></tbody>'; return; }
+    function inp(r, f, label) {
+      return '<td><input class="adm-fin-in" type="text" inputmode="decimal" autocomplete="off" data-week="' + r.we + '" data-field="' + f + '" value="' + esc(finInVal(r.w[f])) + '" placeholder="–" aria-label="' + esc(label + ', ' + finWeekLabel(r.we)) + '" /></td>';
+    }
+    var tot = rows.reduce(function (s, r) { s.rev += r.rev; s.exp += r.exp; s.profit += r.profit; s.t += r.colddT; s.tr += r.tr; s.te += r.te; s.oi += r.oi; s.wh += r.wh; return s; },
+      { rev: 0, exp: 0, profit: 0, t: 0, tr: 0, te: 0, oi: 0, wh: 0 });
+    var latest = rows[rows.length - 1].we;
+    table.innerHTML = '<thead><tr><th scope="col">Week</th><th scope="col">Net revenue</th><th scope="col">Expenses</th><th scope="col">Profit</th><th scope="col">Tax transfer</th>' +
+      '<th scope="col" class="adm-fin-oth">TCG revenue</th><th scope="col">TCG expenses</th><th scope="col">Other income</th><th scope="col">Tax withheld</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead><tbody>' +
+      rows.slice().reverse().map(function (r) {
+        var tip = Math.abs(r.tcgT) >= 0.005 ? 'TCG part: ' + finM(r.tcgT) : '';
+        return '<tr' + (r.we === latest ? ' class="is-latest"' : '') + '><th scope="row">' + esc(finWeekLabel(r.we)) + '</th>' + inp(r, 'revenue', 'Net revenue') +
+          '<td><button type="button" class="adm-fin-exp" data-fin-week-exp="' + r.we + '" title="See or log this week\'s expenses">' + finM(r.exp) + '</button></td>' +
+          '<td class="' + (r.profit < 0 ? 'is-neg' : '') + '">' + finM(r.profit) + '</td>' +
+          '<td class="adm-fin-transfer"' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + finM(r.colddT) + '</td>' +
+          '<td class="adm-fin-oth">' + inp(r, 'tcg_revenue', 'TCG revenue').slice(4) + inp(r, 'tcg_expenses', 'TCG expenses') + inp(r, 'other_income', 'Other income') + inp(r, 'other_withheld', 'Tax withheld') +
+          '<td><button type="button" class="adm-fin-del" data-fin-del-week="' + r.we + '" aria-label="Remove ' + esc(finWeekLabel(r.we)) + '">×</button></td></tr>';
+      }).join('') + '</tbody>' +
+      '<tfoot><tr><th scope="row">This year</th><td>' + finM(tot.rev) + '</td><td>' + finM(tot.exp) + '</td><td>' + finM(tot.profit) + '</td><td>' + finM(tot.t) + '</td>' +
+      '<td class="adm-fin-oth">' + finM(tot.tr) + '</td><td>' + finM(tot.te) + '</td><td>' + finM(tot.oi) + '</td><td>' + finM(tot.wh) + '</td><td></td></tr></tfoot>';
+  }
+  function finRenderMonths(table) {
+    var fy = finFy(finToday()), rows = finRows(fy), months = [];
+    for (var i = 0; i < 12; i++) {
+      var y = fy + (i >= 6 ? 1 : 0), m = ((6 + i) % 12) + 1, key = y + '-' + String(m).padStart(2, '0');
+      // A week counts in the month most of its days fall in (the sheet's rule).
+      var inM = rows.filter(function (r) { return finAdd(r.we, -3).slice(0, 7) === key; });
+      var o = inM.reduce(function (s, r) { s.rev += r.rev; s.exp += r.exp; s.profit += r.profit; s.t += r.colddT; return s; }, { rev: 0, exp: 0, profit: 0, t: 0 });
+      o.key = key; o.n = inM.length; months.push(o);
+    }
+    var tot = months.reduce(function (s, o) { s.rev += o.rev; s.exp += o.exp; s.profit += o.profit; s.t += o.t; s.n += o.n; return s; }, { rev: 0, exp: 0, profit: 0, t: 0, n: 0 });
+    table.innerHTML = '<thead><tr><th scope="col">Month</th><th scope="col">Net revenue</th><th scope="col">Expenses</th><th scope="col">Profit</th><th scope="col">Avg weekly profit</th><th scope="col">Tax transfers</th></tr></thead><tbody>' +
+      months.slice().reverse().map(function (o) {
+        return '<tr' + (o.n ? '' : ' class="is-empty"') + '><th scope="row">' + esc(finMonthName(o.key + '-01')) + '</th><td>' + finM(o.rev) + '</td><td>' + finM(o.exp) + '</td>' +
+          '<td class="' + (o.profit < 0 ? 'is-neg' : '') + '">' + finM(o.profit) + '</td><td>' + (o.n ? finM(o.profit / o.n) : '–') + '</td><td>' + finM(o.t) + '</td></tr>';
+      }).join('') + '</tbody><tfoot><tr><th scope="row">This year</th><td>' + finM(tot.rev) + '</td><td>' + finM(tot.exp) + '</td><td>' + finM(tot.profit) + '</td><td>' + (tot.n ? finM(tot.profit / tot.n) : '–') + '</td><td>' + finM(tot.t) + '</td></tr></tfoot>';
+  }
+  function finAfterChange() { finRenderOverview(); finRenderSheet(); }
+  function finSaveWeekField(we, field, value) {
+    var row = FIN.weeks.filter(function (w) { return w.week_ending === we; })[0];
+    if (!row || FIN_NUM_FIELDS.indexOf(field) < 0) return;
+    var before = row[field];
+    row[field] = value;
+    finAfterChange();
+    var patch = { updated_at: new Date().toISOString() }; patch[field] = value;
+    window.coldSupabase.from('finance_weeks').update(patch).eq('week_ending', we).select('week_ending').then(function (r) {
+      if (r.error || !r.data || !r.data.length) {
+        row[field] = before; finAfterChange();
+        admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false);
+      }
+    });
+  }
+  function finAddWeek() {
+    var t = finToday(), have = FIN.weeks.map(function (w) { return w.week_ending; }).sort();
+    var next = have.length ? finAdd(have[have.length - 1], 7) : finSunday(t);
+    if (next > finAdd(finSunday(t), 7)) { admToast('The next week is already there.', false); return; }
+    window.coldSupabase.from('finance_weeks').insert({ week_ending: next }).select('*').then(function (r) {
+      if (r.error) { admToast('Could not add the week: ' + r.error.message, false); return; }
+      FIN.weeks.push(r.data[0]);
+      finAfterChange();
+      var first = document.querySelector('#admFinWeekTable input[data-week="' + next + '"][data-field="revenue"]');
+      if (first) first.focus();
+    });
+  }
+  function finDeleteWeek(we) {
+    dialogConfirm('Remove ' + finWeekLabel(we) + '? Its revenue and other income are deleted. Its expenses stay in the log.', { title: 'Remove week', acceptLabel: 'Remove week' }).then(function (ok) {
+      if (!ok) return;
+      window.coldSupabase.from('finance_weeks').delete().eq('week_ending', we).select('week_ending').then(function (r) {
+        if (r.error || !r.data || !r.data.length) { admToast('Could not remove the week: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
+        FIN.weeks = FIN.weeks.filter(function (w) { return w.week_ending !== we; });
+        finAfterChange();
+      });
+    });
+  }
+
+  /* ---- Expense log ---- */
+  var finCatDD = null, finFilterDD = null;
+  function finCatOptions() { return finAllCats().map(function (c) { return { value: c, label: c }; }).concat([{ value: '__new', label: 'New category…' }]); }
+  function finRenderExpForm() {
+    var box = $('admFinExpForm'); if (!box) return;
+    var e = FIN.editId ? FIN.expenses.filter(function (x) { return x.id === FIN.editId; })[0] : null;
+    if (FIN.editId && !e) FIN.editId = null;
+    box.innerHTML = '<div class="adm-fin-form">' +
+        '<label class="adm-field"><span>Date</span><input type="date" class="adm-input" id="admFinExpDate" value="' + esc(e ? e.spent_on : finToday()) + '" max="' + esc(finAdd(finToday(), 1)) + '" /></label>' +
+        '<label class="adm-field"><span>Amount</span><input type="text" inputmode="decimal" class="adm-input" id="admFinExpAmt" placeholder="$0.00" value="' + esc(e ? finInVal(e.amount) : '') + '" autocomplete="off" /></label>' +
+        '<div class="adm-field"><span>Category</span><div class="adm-dd adm-dd-inline" id="admFinExpCatDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' + FIN_DD_CHEV +
+          '</button><div class="adm-dd-menu" role="listbox" aria-label="Category" hidden></div></div>' +
+          '<input type="text" maxlength="40" class="adm-input" id="admFinExpNewCat" placeholder="New category name" hidden /></div>' +
+        '<label class="adm-field"><span>Paid to</span><input type="text" maxlength="80" class="adm-input" id="admFinExpVendor" placeholder="Optional" value="' + esc(e && e.vendor || '') + '" /></label>' +
+        '<label class="adm-field adm-fin-wide"><span>What it was for</span><input type="text" maxlength="300" class="adm-input" id="admFinExpNote" placeholder="e.g. Thumbnails for Catch a Fish" value="' + esc(e && e.note || '') + '" /></label>' +
+      '</div>' +
+      '<div class="adm-fin-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admFinExpSave">' + (e ? 'Save changes' : 'Add expense') + '</button>' +
+        (e ? '<button class="btn btn-ghost adm-btn-sm" type="button" id="admFinExpCancel">Cancel</button>' : '') + '</div>';
+    finCatDD = makeDropdown($('admFinExpCatDD'), { searchable: true, placeholder: 'Choose a category', onChange: function (v) {
+      var nc = $('admFinExpNewCat'); nc.hidden = v !== '__new'; if (v === '__new') nc.focus();
+    } });
+    finCatDD.setOptions(finCatOptions(), e ? e.category : '');
+  }
+  function finSaveExpense() {
+    var date = $('admFinExpDate').value, amt = finNum($('admFinExpAmt').value), cat = finCatDD ? finCatDD.getValue() : '';
+    var vendor = $('admFinExpVendor').value.trim() || null, note = $('admFinExpNote').value.trim() || null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { admToast('Pick a date.', false); return; }
+    if (!(amt > 0)) { admToast('Enter an amount above zero.', false); return; }
+    var newCat = null;
+    if (cat === '__new') {
+      newCat = $('admFinExpNewCat').value.trim();
+      if (!newCat || newCat.length > 40) { admToast('Name the new category (up to 40 characters).', false); return; }
+      cat = newCat;
+    }
+    if (!cat) { admToast('Choose a category.', false); return; }
+    var sb = window.coldSupabase, btn = $('admFinExpSave');
+    btn.disabled = true;
+    var saveCat = newCat && finAllCats().indexOf(newCat) < 0
+      ? sb.from('finance_expense_categories').insert({ name: newCat }).then(function (r) { if (!r.error) FIN.cats.push({ name: newCat }); })
+      : Promise.resolve();
+    var row = { spent_on: date, amount: amt, category: cat, vendor: vendor, note: note, updated_at: new Date().toISOString() };
+    var wasEdit = !!FIN.editId;
+    saveCat.then(function () {
+      return wasEdit ? sb.from('finance_expenses').update(row).eq('id', FIN.editId).select('*') : sb.from('finance_expenses').insert(row).select('*');
+    }).then(function (r) {
+      btn.disabled = false;
+      if (r.error || !r.data || !r.data.length) { admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
+      var saved = r.data[0];
+      FIN.expenses = FIN.expenses.filter(function (x) { return x.id !== saved.id; }).concat([saved])
+        .sort(function (a, b) { return a.spent_on < b.spent_on ? 1 : a.spent_on > b.spent_on ? -1 : 0; });
+      admToast(wasEdit ? 'Expense saved.' : 'Expense logged.', true);
+      FIN.editId = null;
+      finRenderExpForm(); finRenderExpList(); finAfterChange();
+    });
+  }
+  function finDeleteExpense(id) {
+    var e = FIN.expenses.filter(function (x) { return x.id === id; })[0]; if (!e) return;
+    dialogConfirm('Delete the ' + finM(e.amount) + ' ' + e.category + ' expense from ' + finLong(e.spent_on) + '? This cannot be undone.', { title: 'Delete expense', acceptLabel: 'Delete expense' }).then(function (ok) {
+      if (!ok) return;
+      window.coldSupabase.from('finance_expenses').delete().eq('id', id).select('id').then(function (r) {
+        if (r.error || !r.data || !r.data.length) { admToast('Could not delete: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
+        FIN.expenses = FIN.expenses.filter(function (x) { return x.id !== id; });
+        if (FIN.editId === id) { FIN.editId = null; finRenderExpForm(); }
+        finRenderExpList(); finAfterChange();
+      });
+    });
+  }
+  function finRenderExpList() {
+    var box = $('admFinExpList'); if (!box) return;
+    var f = FIN.filter;
+    if (!$('admFinFilterDD')) {
+      box.innerHTML = '<div class="adm-fin-filters">' +
+          '<div class="adm-dd adm-dd-inline" id="admFinFilterDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' + FIN_DD_CHEV +
+            '</button><div class="adm-dd-menu" role="listbox" aria-label="Categories" hidden></div></div>' +
+          '<label class="adm-fin-inline"><span>From</span><input type="date" class="adm-input" id="admFinFrom" /></label>' +
+          '<label class="adm-fin-inline"><span>To</span><input type="date" class="adm-input" id="admFinTo" /></label>' +
+          '<input type="search" class="adm-input adm-fin-search" id="admFinQ" placeholder="Search what it was for or who" autocomplete="off" />' +
+          '<button type="button" class="btn btn-ghost adm-btn-sm" id="admFinClear">Clear</button>' +
+          '<span class="adm-fin-count" id="admFinExpTotal"></span>' +
+        '</div><div class="adm-fin-scroll adm-fin-scroll-list"><table class="adm-plat-table adm-fin-explist" id="admFinExpTable"></table></div>';
+      finFilterDD = makeDropdown($('admFinFilterDD'), { multi: true, searchable: true, placeholder: 'All categories', onChange: function (v) { FIN.filter.cats = v; finRenderExpList(); } });
+      ['admFinFrom', 'admFinTo', 'admFinQ'].forEach(function (id) {
+        $(id).addEventListener('input', function () { FIN.filter.from = $('admFinFrom').value; FIN.filter.to = $('admFinTo').value; FIN.filter.q = $('admFinQ').value; finRenderExpList(); });
+      });
+      $('admFinClear').addEventListener('click', function () { FIN.filter = { cats: [], from: '', to: '', q: '' }; finFilterDD.setValue([], true); $('admFinFrom').value = ''; $('admFinTo').value = ''; $('admFinQ').value = ''; finRenderExpList(); });
+    }
+    finFilterDD.setOptions(finAllCats().map(function (c) { return { value: c, label: c }; }), f.cats);
+    if ($('admFinFrom').value !== f.from) $('admFinFrom').value = f.from;
+    if ($('admFinTo').value !== f.to) $('admFinTo').value = f.to;
+    var q = f.q.trim().toLowerCase();
+    var list = FIN.expenses.filter(function (e) {
+      if (f.cats.length && f.cats.indexOf(e.category) < 0) return false;
+      if (f.from && e.spent_on < f.from) return false;
+      if (f.to && e.spent_on > f.to) return false;
+      if (q && ((e.vendor || '') + ' ' + (e.note || '') + ' ' + e.category).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    var total = list.reduce(function (s, e) { return s + Number(e.amount); }, 0);
+    $('admFinExpTotal').textContent = list.length ? finEntries(list.length) + ', ' + finM(total) : '';
+    var table = $('admFinExpTable');
+    if (!list.length) { table.innerHTML = '<tbody><tr><td class="adm-empty">' + (FIN.expenses.length ? 'Nothing matches these filters.' : 'No expenses logged yet.') + '</td></tr></tbody>'; return; }
+    table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col">What it was for</th><th scope="col">Paid to</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>' +
+      list.map(function (e) {
+        return '<tr><th scope="row">' + esc(finLong(e.spent_on)) + '</th><td><span class="adm-pf" style="--pf:' + finCatColor(e.category) + '"><b class="adm-dot"></b>' + esc(e.category) + '</span></td>' +
+          '<td class="adm-fin-note">' + esc(e.note || '') + '</td><td>' + esc(e.vendor || '') + '</td><td class="is-strong">' + finM(e.amount) + '</td>' +
+          '<td class="adm-fin-rowact"><button type="button" class="btn btn-ghost adm-btn-sm" data-fin-edit="' + esc(e.id) + '">Edit</button><button type="button" class="adm-fin-del" data-fin-del-exp="' + esc(e.id) + '" aria-label="Delete expense">×</button></td></tr>';
+      }).join('') + '</tbody>';
+  }
+
+  /* ---- Settings: rates, instalments, income tax, GST ---- */
+  function finRenderInstalments() {
+    var t = finToday(), fy = finFy(t), rows = finRows(fy), qs = finQuarters(fy, rows), rate = Number(FIN.settings.instalment_rate) || 0, res = finReserve();
+    $('admFinInst').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Quarterly instalments</h2><span>' + esc(finFyLabel(fy)) + ', rate ' + esc(finPct(rate, 2)) + '</span></div>' +
+        '<span class="adm-fin-reserve">Tax reserve <b>' + finM(res.need) + '</b></span></div>' +
+      '<div class="adm-plat-tablewrap"><table class="adm-plat-table adm-fin-inst"><thead><tr><th scope="col">Quarter</th><th scope="col">Instalment income</th><th scope="col">Calculated</th><th scope="col">Due</th><th scope="col">Paid</th><th scope="col">Paid on</th><th scope="col">Difference</th></tr></thead><tbody>' +
+      qs.map(function (q) {
+        var diff = q.paid == null ? '' : '<span class="' + (Math.abs(q.paid - q.calc) < 0.005 ? '' : q.paid > q.calc ? 'is-up' : 'is-neg') + '">' + (q.paid - q.calc >= 0 ? '+' : '') + finM(q.paid - q.calc) + '</span>';
+        return '<tr' + (q.start > t ? ' class="is-empty"' : '') + '><th scope="row">Q' + q.q + ' <small>' + esc(q.label) + '</small></th><td>' + finM(q.income) + '</td><td class="is-strong">' + finM(q.calc) + '</td>' +
+          '<td>' + esc(finLong(q.due)) + '</td>' +
+          '<td><input class="adm-fin-in" type="text" inputmode="decimal" autocomplete="off" data-fin-inst="' + q.q + '" data-fin-fy="' + esc(q.fy) + '" value="' + esc(q.paid == null ? '' : finInVal(q.paid)) + '" placeholder="–" aria-label="Q' + q.q + ' amount paid" /></td>' +
+          '<td><input class="adm-input adm-fin-date" type="date" data-fin-inst="' + q.q + '" data-fin-fy="' + esc(q.fy) + '" value="' + esc(q.rec && q.rec.paid_on || '') + '" aria-label="Q' + q.q + ' paid on" /></td>' +
+          '<td>' + diff + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="adm-hint" style="margin-top:10px;">Instalment income is coldd and TCG revenue for the weeks ending in the quarter. The tax reserve is everything owed this year so far (' + finM(res.owed) + ') less what you have paid (' + finM(res.paid) + '), so a quarter the ATO charges more or less for is evened out.</p>';
+  }
+  function finRenderIncomeTax() {
+    var fy = finFy(finToday()), rows = finRows(fy), last = rows[rows.length - 1] || { P: 0, W: 0, tax: finTaxOn(0) };
+    var br = finBrackets(), P = last.P, tx = last.tax, owing = Math.max(0, tx.total - last.W);
+    var cP = rows.reduce(function (s, r) { return s + r.profit; }, 0), tP = rows.reduce(function (s, r) { return s + r.tr - r.te; }, 0), oI = rows.reduce(function (s, r) { return s + r.oi; }, 0);
+    var pace = rows.length ? P / rows.length * 52 : 0, paceTax = finTaxOn(pace);
+    var curB = br.filter(function (b) { return P >= b.start; }).pop() || br[0];
+    function line(label, v, cls) { return '<div class="adm-fin-line' + (cls ? ' ' + cls : '') + '"><span>' + label + '</span><b>' + v + '</b></div>'; }
+    $('admFinIncomeTax').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Income tax</h2><span>this year so far</span></div></div>' +
+      line('coldd profit', finM(cP)) + line('TCG profit', finM(tP)) + line('Other income', finM(oI)) + line('Taxable income', finM(P), 'is-total') +
+      line('Tax on brackets', finM(tx.income)) + line('Low income tax offset', '-' + finM(tx.lito)) + line('Medicare levy', finM(tx.medicare)) +
+      (last.W ? line('Tax already withheld', '-' + finM(last.W)) : '') + line('Tax owing so far', finM(owing), 'is-total') +
+      '<p class="adm-hint" style="margin:10px 0 14px;">At this year\'s pace (' + plural(rows.length, 'week') + ' so far): about ' + finM0(pace) + ' taxable income and ' + finM0(paceTax.total) + ' tax for the full year.</p>' +
+      '<div class="adm-plat-tablewrap"><table class="adm-plat-table"><thead><tr><th scope="col">Bracket from</th><th scope="col">Rate</th><th scope="col">Tax at start</th><th scope="col">Away</th></tr></thead><tbody>' +
+      br.map(function (b) {
+        var here = b === curB;
+        return '<tr' + (here ? ' class="is-latest"' : '') + '><th scope="row">' + finM0(b.start) + (here ? ' <small>you are here</small>' : '') + '</th><td>' + finPct(b.rate, 0) + '</td><td>' + finM0(b.cum) + '</td><td>' + (b.start > P ? finM0(b.start - P) : '–') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function finRenderGst() {
+    var t = finToday(), s = FIN.settings, th = Number(s.gst_threshold) || 75000;
+    var yearAgo = finAdd(t, -365), d91 = finAdd(t, -91);
+    var bank = FIN.weeks.filter(function (w) { return w.week_ending <= t; });
+    function sum(list) { return list.reduce(function (a, w) { return a + (Number(w.revenue) || 0) + (Number(w.tcg_revenue) || 0); }, 0); }
+    var trailing = sum(bank.filter(function (w) { return w.week_ending > yearAgo; })), projected = sum(bank.filter(function (w) { return w.week_ending > d91; })) / 13 * 52;
+    var g12 = null, gProj = null;
+    if (salesReady()) {
+      var now = Date.now(), y0 = now - 365 * DAY_MS, q0 = now - 91 * DAY_MS, g91 = 0;
+      g12 = 0;
+      homeSales().forEach(function (x) { if (x.t >= y0) g12 += x.aud; if (x.t >= q0) g91 += x.aud; });
+      gProj = g91 / 91 * 365;
+    } else if (FIN.salesTries++ < 40) setTimeout(function () { if (curPanel === 'finances' && FIN.view === 'settings') finRenderGst(); }, 1500);
+    function meter(v) { return '<span class="adm-share"><span class="adm-share-bar"><i style="--pf:' + (v >= th ? 'var(--warn)' : 'var(--accent)') + ';width:' + Math.min(100, v / th * 100).toFixed(1) + '%"></i></span><span>' + Math.round(v / th * 100) + '%</span></span>'; }
+    var bankOver = trailing >= th || projected >= th, grossOver = g12 != null && (g12 >= th || gProj >= th);
+    $('admFinGst').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>GST</h2><span>threshold ' + finM0(th) + '</span></div>' +
+      '<span class="dt-badge ' + (bankOver || grossOver ? 'err' : 'ok') + '">' + (bankOver ? 'Over on bank revenue' : grossOver ? 'Over on gross sales' : 'Under') + '</span></div>' +
+      '<div class="adm-plat-tablewrap"><table class="adm-plat-table"><thead><tr><th scope="col"></th><th scope="col">Last 12 months</th><th scope="col">Next 12 months at current pace</th></tr></thead><tbody>' +
+      '<tr><th scope="row">Bank revenue <small>coldd + TCG</small></th><td>' + finM0(trailing) + meter(trailing) + '</td><td>' + finM0(projected) + meter(projected) + '</td></tr>' +
+      '<tr><th scope="row">Gross sales <small>dashboard</small></th><td>' + (g12 == null ? 'Loading…' : finM0(g12) + meter(g12)) + '</td><td>' + (gProj == null ? 'Loading…' : finM0(gProj) + meter(gProj)) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<p class="adm-hint" style="margin-top:10px;">You must register within 21 days once your current or projected 12-month GST turnover reaches ' + finM0(th) + '. Bank revenue follows the sheet; turnover is normally measured on sales before fees, so ask your accountant which figure counts for you. Projections use the last 13 weeks.</p>';
+  }
+  function finSaveInstalment(fyLabel, q, field, value) {
+    var rec = FIN.instalments.filter(function (x) { return x.fy === fyLabel && x.quarter === q; })[0];
+    var row = { fy: fyLabel, quarter: q, amount_paid: rec ? rec.amount_paid : null, paid_on: rec ? rec.paid_on : null, updated_at: new Date().toISOString() };
+    row[field] = value;
+    window.coldSupabase.from('finance_instalments').upsert(row, { onConflict: 'fy,quarter' }).select('*').then(function (r) {
+      if (r.error || !r.data || !r.data.length) { admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false); finRenderInstalments(); return; }
+      FIN.instalments = FIN.instalments.filter(function (x) { return !(x.fy === fyLabel && x.quarter === q); }).concat([r.data[0]]);
+      finRenderInstalments();
+    });
+  }
+  function finRenderSettings() {
+    var box = $('admFinSettings'); if (!box) return;
+    var s = FIN.settings;
+    function field(id, label, v, hint) { return '<label class="adm-field"><span>' + label + '</span><input type="text" inputmode="decimal" class="adm-input" id="' + id + '" value="' + esc(String(v)) + '" />' + (hint ? '<small class="adm-hint">' + hint + '</small>' : '') + '</label>'; }
+    var br = (s.tax_brackets || []).map(function (b) { return [Number(b[0]), Number(b[1])]; }).sort(function (a, b) { return a[0] - b[0]; });
+    box.innerHTML = '<div class="dash-card-head"><h2>Tax settings</h2></div>' +
+      '<p class="adm-hint">Rates for the current financial year. Check them each July against the ATO (your instalment rate is on your activity statement).</p>' +
+      '<h3 class="adm-fin-h3">PAYG instalments and GST</h3><div class="adm-fin-form">' +
+        field('admFinSetRate', 'Instalment rate (%)', +(s.instalment_rate * 100).toFixed(4)) + field('admFinSetGst', 'GST threshold ($)', +s.gst_threshold) + '</div>' +
+      '<h3 class="adm-fin-h3">Income tax brackets</h3><div class="adm-fin-form adm-fin-brackets">' +
+        br.map(function (b, i) { return field('admFinSetB' + i, 'From ($)', b[0]) + field('admFinSetR' + i, 'Rate (%)', +(b[1] * 100).toFixed(4)); }).join('') + '</div>' +
+      '<h3 class="adm-fin-h3">Medicare levy</h3><div class="adm-fin-form">' +
+        field('admFinSetMedT', 'Low-income threshold ($)', +s.medicare_threshold) + field('admFinSetMedR', 'Levy rate (%)', +(s.medicare_rate * 100).toFixed(4)) +
+        field('admFinSetMedP', 'Phase-in rate (%)', +(s.medicare_phase_in * 100).toFixed(4), 'Levy is the lower of the full rate and this rate on income over the threshold.') + '</div>' +
+      '<h3 class="adm-fin-h3">Low income tax offset</h3><div class="adm-fin-form">' +
+        field('admFinSetLMax', 'Maximum offset ($)', +s.lito_max) + field('admFinSetLFull', 'Full offset up to ($)', +s.lito_full_to) + field('admFinSetLMid', 'First reduction ends at ($)', +s.lito_mid_to) +
+        field('admFinSetLR1', 'First reduction rate (%)', +(s.lito_rate1 * 100).toFixed(4)) + field('admFinSetLR2', 'Second reduction rate (%)', +(s.lito_rate2 * 100).toFixed(4)) + '</div>' +
+      '<div class="adm-fin-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admFinSetSave">Save settings</button></div>';
+  }
+  function finSaveSettings() {
+    function v(id, pct) { var n = finNum($(id).value); return n == null || isNaN(n) ? NaN : pct ? n / 100 : n; }
+    var brackets = [];
+    for (var i = 0; $('admFinSetB' + i); i++) brackets.push([v('admFinSetB' + i), v('admFinSetR' + i, true)]);
+    var row = { instalment_rate: v('admFinSetRate', true), gst_threshold: v('admFinSetGst'), tax_brackets: brackets,
+      medicare_threshold: v('admFinSetMedT'), medicare_rate: v('admFinSetMedR', true), medicare_phase_in: v('admFinSetMedP', true),
+      lito_max: v('admFinSetLMax'), lito_full_to: v('admFinSetLFull'), lito_mid_to: v('admFinSetLMid'), lito_rate1: v('admFinSetLR1', true), lito_rate2: v('admFinSetLR2', true) };
+    var bad = Object.keys(row).filter(function (k) { return k === 'tax_brackets' ? brackets.some(function (b) { return !(b[0] >= 0) || !(b[1] >= 0 && b[1] < 1); }) : !(row[k] >= 0); });
+    if (bad.length) { admToast('Check the settings: every value must be a number of zero or more.', false); return; }
+    if (brackets[0][0] !== 0) { admToast('The first bracket must start at $0.', false); return; }
+    row.updated_at = new Date().toISOString();
+    window.coldSupabase.from('finance_settings').update(row).eq('id', true).select('*').then(function (r) {
+      if (r.error || !r.data || !r.data.length) { admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
+      FIN.settings = r.data[0];
+      admToast('Tax settings saved.', true);
+      finRenderView();
+    });
+  }
+
+  /* ---- Wiring ---- */
+  (function wireFinances() {
+    var panel = $('adm-panel-finances'); if (!panel) return;
+    finCheckAccess();
+    wirePlatChart($('admFinChart'));
+    wirePlatChart($('admFinExpChart'));
+    panel.addEventListener('click', function (e) {
+      var b;
+      if (e.target.closest('#admFinSettingsBtn')) { FIN.view = FIN.view === 'main' ? 'settings' : 'main'; finRenderView(); window.scrollTo(0, 0); return; }
+      if ((b = e.target.closest('[data-fin-range]'))) {
+        FIN.range = b.getAttribute('data-fin-range');
+        document.querySelectorAll('#admFinRange [data-fin-range]').forEach(function (x) { x.classList.toggle('active', x === b); });
+        finRenderOverview(); return;
+      }
+      if ((b = e.target.closest('[data-fin-sheet]'))) { FIN.sheet = b.getAttribute('data-fin-sheet'); finRenderSheet(); return; }
+      if (e.target.closest('#admFinAddWeek')) { finAddWeek(); return; }
+      if ((b = e.target.closest('[data-fin-del-week]'))) { finDeleteWeek(b.getAttribute('data-fin-del-week')); return; }
+      if ((b = e.target.closest('[data-fin-week-exp]'))) {
+        var we = b.getAttribute('data-fin-week-exp');
+        FIN.filter = { cats: [], from: finAdd(we, -6), to: we, q: '' };
+        if (finFilterDD) finFilterDD.setValue([], true);
+        if ($('admFinQ')) $('admFinQ').value = '';
+        finRenderExpList();
+        $('admFinExpDate').value = we > finToday() ? finToday() : we;
+        $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (e.target.closest('#admFinExpSave')) { finSaveExpense(); return; }
+      if (e.target.closest('#admFinExpCancel')) { FIN.editId = null; finRenderExpForm(); return; }
+      if ((b = e.target.closest('[data-fin-edit]'))) { FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if ((b = e.target.closest('[data-fin-del-exp]'))) { finDeleteExpense(b.getAttribute('data-fin-del-exp')); return; }
+      if (e.target.closest('#admFinSetSave')) { finSaveSettings(); return; }
+    });
+    // Weekly cells and instalments save when they lose focus (or on Enter; Escape undoes).
+    panel.addEventListener('focusin', function (e) {
+      var el = e.target;
+      if (el.classList && el.classList.contains('adm-fin-in')) { el.dataset.was = el.value; var n = finNum(el.value); el.value = n == null || isNaN(n) ? '' : String(n); el.select(); }
+    });
+    panel.addEventListener('keydown', function (e) {
+      var el = e.target;
+      if (!el.classList || !el.classList.contains('adm-fin-in')) return;
+      if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+      if (e.key === 'Escape') { el.value = el.dataset.was || ''; el.dataset.cancel = '1'; el.blur(); }
+    });
+    panel.addEventListener('focusout', function (e) {
+      var el = e.target;
+      if (!el.classList || !el.classList.contains('adm-fin-in')) return;
+      if (el.dataset.cancel) { delete el.dataset.cancel; return; }
+      var n = finNum(el.value);
+      if (isNaN(n)) { admToast('That is not a number.', false); el.value = el.dataset.was || ''; return; }
+      if (el.hasAttribute('data-fin-inst')) {
+        var rec = FIN.instalments.filter(function (x) { return x.fy === el.getAttribute('data-fin-fy') && x.quarter === +el.getAttribute('data-fin-inst'); })[0];
+        var oldPaid = rec && rec.amount_paid != null ? Number(rec.amount_paid) : null;
+        if (oldPaid === n) { el.value = finInVal(n); return; }
+        if (n != null && n < 0) { admToast('A payment cannot be negative.', false); el.value = el.dataset.was || ''; return; }
+        finSaveInstalment(el.getAttribute('data-fin-fy'), +el.getAttribute('data-fin-inst'), 'amount_paid', n);
+        return;
+      }
+      var we = el.getAttribute('data-week'), f = el.getAttribute('data-field');
+      var row = FIN.weeks.filter(function (w) { return w.week_ending === we; })[0];
+      var old = row ? (row[f] == null ? null : Number(row[f])) : null;
+      if (old === n) { el.value = finInVal(n); return; }
+      finSaveWeekField(we, f, n);
+    });
+    panel.addEventListener('change', function (e) {
+      var el = e.target;
+      if (el.classList && el.classList.contains('adm-fin-date') && el.hasAttribute('data-fin-inst')) {
+        finSaveInstalment(el.getAttribute('data-fin-fy'), +el.getAttribute('data-fin-inst'), 'paid_on', el.value || null);
+      }
+    });
+    // Hover text for the expense donut.
+    var tip = document.createElement('div');
+    tip.className = 'adm-pc-tip adm-donut-tip'; tip.hidden = true;
+    document.body.appendChild(tip);
+    panel.addEventListener('mouseover', function (e) {
+      var s = e.target.closest && e.target.closest('.adm-donut [data-tip]');
+      if (!s) { tip.hidden = true; return; }
+      var parts = s.getAttribute('data-tip').split('|');
+      tip.innerHTML = '<h4>' + parts[0] + '</h4><div>' + (parts[1] || '') + '</div>';
+      tip.hidden = false;
+    });
+    panel.addEventListener('mousemove', function (e) {
+      if (tip.hidden) return;
+      var x = e.clientX + 14, y = e.clientY + 14;
+      if (x + tip.offsetWidth > innerWidth - 8) x = e.clientX - tip.offsetWidth - 14;
+      if (y + tip.offsetHeight > innerHeight - 8) y = e.clientY - tip.offsetHeight - 14;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    });
+    panel.addEventListener('mouseleave', function () { tip.hidden = true; });
+  })();
+
+  /* ================================================================
      INIT
      ================================================================ */
   routeFromLocation();
@@ -11829,670 +12507,6 @@
   refreshPlatformSales();
   refreshTodos();
   refreshLifetimeViews();
-  /* ================================================================
-     FINANCES (2026-11-25)
-     The owner's finance system, moved from the Google Sheet "Finance
-     Tracker": weekly net revenue (what reached the bank), the expense log,
-     TCG and other income (only for the tax maths), quarterly PAYG
-     instalments and the tax settings.
-     Locked by the database, not by this page: finance_allowed() guards every
-     finance_* table (RLS), so for any other account every read comes back
-     empty and every write is refused. The lock screen is only the message.
-     Tax transfer per week = the rise in max(tax on this year's total income
-     less tax already withheld, instalment rate x this year's revenue), split
-     between coldd and TCG by that week's revenue, as the sheet does.
-     ================================================================ */
-  var FIN = { access: null, loading: null, loaded: false, settings: null, weeks: [], expenses: [], cats: [], instalments: [],
-    view: 'overview', range: 'fy', editId: null, filter: { cats: [], from: '', to: '', q: '' } };
-  var FIN_CATS = ['Developer payment', 'Licence purchase', 'Giveaway payout', 'Refunds', 'Software subscriptions', 'Utility subscriptions', 'Marketing', 'Misc'];
-  var FIN_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767', '#4fb3c8', '#a8a35a', '#b07cc6', '#7f8c99'];
-  var FIN_NUM_FIELDS = ['revenue', 'tcg_revenue', 'tcg_expenses', 'other_income', 'other_withheld'];
-
-  function finToday() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date()); }
-  function finD(s) { return new Date(s + 'T00:00:00Z'); }
-  function finIso(d) { return d.toISOString().slice(0, 10); }
-  function finAdd(s, days) { return finIso(new Date(finD(s).getTime() + days * DAY_MS)); }
-  function finSunday(s) { var w = finD(s).getUTCDay(); return w === 0 ? s : finAdd(s, 7 - w); }
-  function finFy(s) { var y = +s.slice(0, 4); return +s.slice(5, 7) >= 7 ? y : y - 1; }
-  function finFyLabel(y) { return y + '-' + String((y + 1) % 100).padStart(2, '0'); }
-  function finShort(s) { return finD(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
-  function finLong(s) { return finD(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); }
-  function finMonthName(s) { return finD(s).toLocaleDateString('en-AU', { month: 'short', year: 'numeric', timeZone: 'UTC' }); }
-  function finA(v) { v = Number(v) || 0; return (v < -0.004 ? '-' : '') + 'A$' + Math.abs(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-  function finA0(v) { v = Math.round(Number(v) || 0); return (v < 0 ? '-' : '') + 'A$' + Math.abs(v).toLocaleString('en-AU'); }
-  function finPct(v, d) { return (Number(v) * 100).toFixed(d == null ? 1 : d).replace(/\.0+$/, '') + '%'; }
-  function finNum(s) {
-    if (s == null) return null;
-    s = String(s).replace(/[A$,\s]/g, '');
-    if (s === '' || s === '-') return null;
-    var n = Number(s);
-    return isFinite(n) ? Math.round(n * 100) / 100 : NaN;
-  }
-  function finEntries(n) { return num(n) + (n === 1 ? ' entry' : ' entries'); }
-  function finInVal(v) { return v == null || v === '' ? '' : Number(v).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-  function finCatColor(name) {
-    var all = finAllCats(), i = all.indexOf(name);
-    return FIN_COLORS[(i < 0 ? all.length : i) % FIN_COLORS.length];
-  }
-  function finAllCats() {
-    var out = FIN_CATS.slice();
-    FIN.cats.forEach(function (c) { if (out.indexOf(c.name) < 0) out.push(c.name); });
-    FIN.expenses.forEach(function (e) { if (out.indexOf(e.category) < 0) out.push(e.category); });
-    return out;
-  }
-
-  /* ---- Tax maths (the sheet's rules, plus the Medicare phase-in and the low income tax offset) ---- */
-  function finTaxOn(p) {
-    var s = FIN.settings, out = { income: 0, lito: 0, medicare: 0, total: 0 };
-    if (!s || !(p > 0)) return out;
-    var br = (s.tax_brackets || []).map(function (b) { return [Number(b[0]), Number(b[1])]; }).sort(function (a, b) { return a[0] - b[0]; });
-    var cum = 0;
-    for (var i = 0; i < br.length; i++) {
-      var next = br[i + 1];
-      if (next && p > next[0]) { cum += (next[0] - br[i][0]) * br[i][1]; continue; }
-      out.income = cum + (p - br[i][0]) * br[i][1];
-      break;
-    }
-    var full = +s.lito_full_to, mid = +s.lito_mid_to, mx = +s.lito_max;
-    var lito = p <= full ? mx : p <= mid ? mx - (p - full) * s.lito_rate1 : mx - (mid - full) * s.lito_rate1 - (p - mid) * s.lito_rate2;
-    out.lito = Math.min(Math.max(0, lito), out.income);
-    out.medicare = p <= +s.medicare_threshold ? 0 : Math.min(p * s.medicare_rate, (p - s.medicare_threshold) * s.medicare_phase_in);
-    out.total = out.income - out.lito + out.medicare;
-    return out;
-  }
-  function finBrackets() {
-    var br = (FIN.settings.tax_brackets || []).map(function (b) { return [Number(b[0]), Number(b[1])]; }).sort(function (a, b) { return a[0] - b[0]; });
-    var cum = 0;
-    return br.map(function (b, i) {
-      var row = { start: b[0], rate: b[1], cum: cum };
-      if (br[i + 1]) cum += (br[i + 1][0] - b[0]) * b[1];
-      return row;
-    });
-  }
-  function finExpByWeek() {
-    var m = {};
-    FIN.expenses.forEach(function (e) { var k = finSunday(e.spent_on); m[k] = (m[k] || 0) + Number(e.amount); });
-    return m;
-  }
-  // Every week of one financial year, oldest first, with its transfer worked out.
-  function finRows(fy) {
-    var start = fy + '-07-01', end = (fy + 1) + '-06-30', rate = Number(FIN.settings.instalment_rate) || 0;
-    var exp = finExpByWeek(), P = 0, R = 0, W = 0, Lprev = 0;
-    return FIN.weeks.filter(function (w) { return w.week_ending >= start && w.week_ending <= end; })
-      .sort(function (a, b) { return a.week_ending < b.week_ending ? -1 : 1; })
-      .map(function (w) {
-        var rev = Number(w.revenue) || 0, ex = exp[w.week_ending] || 0, tr = Number(w.tcg_revenue) || 0, te = Number(w.tcg_expenses) || 0;
-        var oi = Number(w.other_income) || 0, wh = Number(w.other_withheld) || 0;
-        P += rev - ex + tr - te + oi; R += rev + tr; W += wh;
-        var tax = finTaxOn(P), L = Math.max(tax.total - W, R * rate);
-        var combined = L - Lprev; Lprev = L;
-        var share = rev + tr > 0 ? rev / (rev + tr) : 1;
-        var tc = combined * share, tt = combined - tc;
-        return { w: w, we: w.week_ending, rev: rev, exp: ex, profit: rev - ex, tr: tr, te: te, oi: oi, wh: wh, P: P, R: R, W: W, tax: tax,
-          colddT: tc, tcgT: tt, colddT0: Math.round(tc), tcgT0: Math.round(tt) };
-      });
-  }
-  function finQuarters(fy, rows) {
-    var rate = Number(FIN.settings.instalment_rate) || 0, y2 = fy + 1, fl = finFyLabel(fy);
-    var qs = [[fy + '-07-01', fy + '-09-30', fy + '-10-28', 'Jul to Sep'], [fy + '-10-01', fy + '-12-31', y2 + '-02-28', 'Oct to Dec'],
-      [y2 + '-01-01', y2 + '-03-31', y2 + '-04-28', 'Jan to Mar'], [y2 + '-04-01', y2 + '-06-30', y2 + '-07-28', 'Apr to Jun']];
-    return qs.map(function (q, i) {
-      var income = rows.filter(function (r) { return r.we >= q[0] && r.we <= q[1]; }).reduce(function (s, r) { return s + r.rev + r.tr; }, 0);
-      var rec = FIN.instalments.filter(function (x) { return x.fy === fl && x.quarter === i + 1; })[0] || null;
-      return { q: i + 1, fy: fl, start: q[0], end: q[1], due: q[2], label: q[3], income: income, calc: income * rate, rec: rec,
-        paid: rec && rec.amount_paid != null ? Number(rec.amount_paid) : null };
-    });
-  }
-
-  /* ---- Loading ---- */
-  function finCheckAccess() {
-    if (FIN.access !== null || !window.coldSupabase) return Promise.resolve(FIN.access);
-    return window.coldSupabase.rpc('finance_allowed').then(function (r) {
-      FIN.access = !r.error && r.data === true;
-      var lock = $('admNavFinLock'); if (lock) lock.hidden = FIN.access;
-      return FIN.access;
-    });
-  }
-  function finLoad(force) {
-    if (FIN.loading && !force) return FIN.loading;
-    var sb = window.coldSupabase;
-    FIN.loading = Promise.all([
-      sb.from('finance_settings').select('*').eq('id', true).maybeSingle(),
-      sb.from('finance_weeks').select('*').order('week_ending'),
-      sb.from('finance_expenses').select('*').order('spent_on', { ascending: false }).order('created_at', { ascending: false }),
-      sb.from('finance_expense_categories').select('name').order('name'),
-      sb.from('finance_instalments').select('*')
-    ]).then(function (res) {
-      var bad = res.filter(function (r) { return r.error; })[0];
-      if (bad) throw bad.error;
-      if (!res[0].data) throw new Error('No settings row');
-      FIN.settings = res[0].data; FIN.weeks = res[1].data || []; FIN.expenses = res[2].data || [];
-      FIN.cats = res[3].data || []; FIN.instalments = res[4].data || []; FIN.loaded = true;
-    });
-    return FIN.loading;
-  }
-  function renderFinances() {
-    var locked = $('admFinLocked'), body = $('admFinBody'), range = $('admFinRange');
-    finCheckAccess().then(function (ok) {
-      if (!ok) { locked.hidden = false; body.hidden = true; range.hidden = true; return; }
-      locked.hidden = true; body.hidden = false;
-      if (!FIN.loaded) {
-        $('admFinKpis').innerHTML = '<p class="adm-empty">Loading…</p>';
-        finLoad().then(finRenderView).catch(function (e) {
-          FIN.loading = null;
-          $('admFinKpis').innerHTML = '<p class="adm-empty">Could not load finances: ' + esc(e && e.message || 'unknown error') + '</p>';
-        });
-        return;
-      }
-      finRenderView();
-    });
-  }
-  function finRenderView() {
-    if (!FIN.loaded) return;
-    ['overview', 'weeks', 'expenses', 'tax', 'settings'].forEach(function (v) { var el = $('admFinView-' + v); if (el) el.hidden = v !== FIN.view; });
-    document.querySelectorAll('#admFinTabs [data-fin-view]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-fin-view') === FIN.view); });
-    $('admFinRange').hidden = FIN.view !== 'overview';
-    if (FIN.view === 'overview') finRenderOverview();
-    else if (FIN.view === 'weeks') { finRenderWeeks(); finRenderMonths(); }
-    else if (FIN.view === 'expenses') { finRenderExpForm(); finRenderExpList(); }
-    else if (FIN.view === 'tax') finRenderTax();
-    else if (FIN.view === 'settings') finRenderSettings();
-  }
-
-  /* ---- Overview ---- */
-  function finWindow() {
-    var t = finToday();
-    if (FIN.range === '4w') return finAdd(t, -27);
-    if (FIN.range === '13w') return finAdd(t, -90);
-    if (FIN.range === 'fy') return finFy(t) + '-07-01';
-    return '';
-  }
-  function finRenderOverview() {
-    var from = finWindow(), t = finToday();
-    var weeks = FIN.weeks.filter(function (w) { return (!from || w.week_ending >= from) && w.week_ending <= finSunday(t); });
-    var net = weeks.reduce(function (s, w) { return s + (Number(w.revenue) || 0); }, 0);
-    var exps = FIN.expenses.filter(function (e) { return (!from || e.spent_on >= from) && e.spent_on <= t; });
-    var spent = exps.reduce(function (s, e) { return s + Number(e.amount); }, 0);
-    var profit = net - spent;
-    var gross = null;
-    if (salesReady()) {
-      var g0 = from ? Date.parse(from + 'T00:00:00+10:00') : -Infinity;
-      gross = homeSales().reduce(function (s, x) { return x.t >= g0 ? s + x.aud : s; }, 0);
-    }
-    var label = { '4w': 'last 4 weeks', '13w': 'last 13 weeks', fy: 'this year', all: 'all time' }[FIN.range];
-    $('admFinKpis').innerHTML = [
-      kpiCell({ label: 'Gross sales', value: gross == null ? '–' : fmtA(gross, gross >= 1000), delta: '', sub: gross == null ? 'Loading sales…' : 'All platforms, before fees', panel: 'analytics' }),
-      kpiCell({ label: 'Net revenue', value: fmtA(net, net >= 1000), count: plural(weeks.length, 'week'), delta: '', sub: 'Reached the bank, ' + label }),
-      kpiCell({ label: 'Expenses', value: fmtA(spent, spent >= 1000), count: finEntries(exps.length), delta: '', sub: net > 0 ? finPct(spent / net) + ' of net revenue' : '&nbsp;' }),
-      kpiCell({ label: 'Profit margin', value: net > 0 ? finPct(profit / net) : '–', delta: '', sub: finA(profit) + ' profit' })
-    ].join('');
-    finRenderChart(from);
-    finRenderMix(exps, spent);
-  }
-  function finRenderChart(from) {
-    var box = $('admFinChart'); if (!box) return;
-    var fy = finFy(finToday());
-    var calc = {};
-    [fy - 1, fy].forEach(function (y) { finRows(y).forEach(function (r) { calc[r.we] = r; }); });
-    var weeks = FIN.weeks.filter(function (w) { return !from || w.week_ending >= finSunday(from); })
-      .sort(function (a, b) { return a.week_ending < b.week_ending ? -1 : 1; });
-    if (!weeks.length) { box.__chart = null; box.innerHTML = '<p class="adm-empty">No weeks in this range yet.</p>'; return; }
-    var sales = salesReady() ? homeSales() : [];
-    var buckets = weeks.map(function (w) {
-      var s = finAdd(w.week_ending, -6);
-      return { start: new Date(s + 'T00:00:00+10:00'), end: new Date(finAdd(w.week_ending, 1) + 'T00:00:00+10:00'), short: finShort(w.week_ending), long: 'Week ending ' + finLong(w.week_ending) };
-    });
-    var rows = weeks.map(function (w) { return calc[w.week_ending] || { rev: Number(w.revenue) || 0, exp: 0, profit: Number(w.revenue) || 0, colddT0: 0 }; });
-    var grossBy = buckets.map(function (b) { var a = b.start.getTime(), z = b.end.getTime(); return sales.reduce(function (s, x) { return x.t >= a && x.t < z ? s + x.aud : s; }, 0); });
-    var add = function (a, b) { return a + b; };
-    var netData = rows.map(function (r) { return r.rev; }), profData = rows.map(function (r) { return r.profit; });
-    box.__chart = {
-      buckets: buckets, step: Math.max(1, Math.ceil(buckets.length / 8)), complete: true, single: true, aria: 'Net revenue and profit by week',
-      series: [
-        { key: 'net', label: 'Net revenue', color: 'var(--accent)', data: netData, total: netData.reduce(add, 0) },
-        { key: 'profit', label: 'Profit', color: 'var(--price)', data: profData.map(function (v) { return Math.max(0, v); }), total: profData.reduce(add, 0) }
-      ],
-      tip: function (i) {
-        var r = rows[i];
-        return '<div style="--pf:var(--accent)"><i></i>Net revenue<b>' + finA(r.rev) + '</b></div>' +
-          '<div style="--pf:var(--fg-3)"><i></i>Expenses<b>' + finA(r.exp) + '</b></div>' +
-          '<div style="--pf:var(--price)"><i></i>Profit<b>' + finA(r.profit) + '</b></div>' +
-          '<div class="adm-pc-tip-total">Tax transfer<b>' + finA0(r.colddT0) + '</b></div>' +
-          (sales.length ? '<p class="adm-pc-tip-note">Gross sales that week: ' + fmtA(grossBy[i]) + '</p>' : '');
-      }
-    };
-    drawPlatChart(box);
-  }
-  function finRenderMix(exps, spent) {
-    var box = $('admFinMix'); if (!box) return;
-    if (!exps.length) { box.innerHTML = anEmpty('No expenses in this range.'); return; }
-    var by = {};
-    exps.forEach(function (e) { var c = by[e.category] = by[e.category] || { v: 0, n: 0 }; c.v += Number(e.amount); c.n++; });
-    var cats = Object.keys(by).sort(function (a, b) { return by[b].v - by[a].v; });
-    var slices = cats.map(function (c) { return { v: by[c].v, color: finCatColor(c), label: c, tip: sharePct(by[c].v / spent * 100) + ', ' + finA(by[c].v) }; });
-    // Spending by month, newest last.
-    var months = {};
-    exps.forEach(function (e) { var k = e.spent_on.slice(0, 7); months[k] = (months[k] || 0) + Number(e.amount); });
-    var mk = Object.keys(months).sort().slice(-12), mmax = Math.max.apply(null, mk.map(function (k) { return months[k]; }).concat([1]));
-    var top = exps.slice().sort(function (a, b) { return b.amount - a.amount; }).slice(0, 5);
-    box.innerHTML = '<div class="adm-fin-mix">' +
-      '<figure class="adm-pie">' + donutSvg(slices, { aria: 'Expenses by category', center: fmtA(spent, true), sub: 'spent' }) + '</figure>' +
-      '<div class="adm-mix-table" role="table" aria-label="Expenses by category">' +
-        '<div class="adm-mix-row is-head adm-fin-catrow" role="row"><span role="columnheader">Category</span><span role="columnheader">Spent</span><span role="columnheader">Share</span><span role="columnheader">Entries</span></div>' +
-        cats.map(function (c) {
-          return '<div class="adm-mix-row adm-fin-catrow" role="row" style="--pf:' + finCatColor(c) + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c) + '</span>' +
-            '<span role="cell">' + finA(by[c].v) + '</span><span role="cell">' + sharePct(by[c].v / spent * 100) + '</span><span role="cell">' + num(by[c].n) + '</span></div>';
-        }).join('') + '</div></div>' +
-      '<div class="adm-fin-2">' +
-        '<div><h3 class="adm-fin-h3">By month</h3><div class="adm-fin-bars">' + mk.map(function (k) {
-          return '<div class="adm-fin-bar" title="' + esc(finMonthName(k + '-01') + ': ' + finA(months[k])) + '"><i style="height:' + Math.max(2, months[k] / mmax * 100).toFixed(1) + '%"></i><span>' + esc(finD(k + '-01').toLocaleDateString('en-AU', { month: 'short', timeZone: 'UTC' })) + '</span></div>';
-        }).join('') + '</div></div>' +
-        '<div><h3 class="adm-fin-h3">Biggest expenses</h3><div class="adm-fin-top">' + top.map(function (e) {
-          return '<div><span><b>' + esc(e.vendor || e.category) + '</b><small>' + esc(finLong(e.spent_on)) + (e.vendor ? ' · ' + esc(e.category) : '') + '</small></span><b>' + finA(e.amount) + '</b></div>';
-        }).join('') + '</div></div>' +
-      '</div>';
-  }
-
-  /* ---- Weekly log ---- */
-  function finRenderWeeks() {
-    var table = $('admFinWeekTable'); if (!table) return;
-    var fy = finFy(finToday()), rows = finRows(fy);
-    $('admFinWeeksSub').textContent = finFyLabel(fy) + ' financial year';
-    if (!rows.length) { table.innerHTML = '<tbody><tr><td class="adm-empty">No weeks yet. Add this week to start.</td></tr></tbody>'; return; }
-    function inp(r, f) {
-      return '<td><input class="adm-fin-in" type="text" inputmode="decimal" autocomplete="off" data-week="' + r.we + '" data-field="' + f + '" value="' + esc(finInVal(r.w[f])) + '" aria-label="' + esc(f.replace(/_/g, ' ') + ', week ending ' + finLong(r.we)) + '" /></td>';
-    }
-    var tot = rows.reduce(function (s, r) { s.rev += r.rev; s.exp += r.exp; s.profit += r.profit; s.t += r.colddT0; s.tr += r.tr; s.te += r.te; s.oi += r.oi; s.wh += r.wh; return s; },
-      { rev: 0, exp: 0, profit: 0, t: 0, tr: 0, te: 0, oi: 0, wh: 0 });
-    var latest = rows[rows.length - 1].we;
-    table.innerHTML = '<thead><tr class="adm-fin-grp"><th></th><th colspan="4">coldd</th><th colspan="4">Other income (for the tax maths)</th><th></th></tr>' +
-      '<tr><th scope="col">Week ending</th><th scope="col">Net revenue</th><th scope="col">Expenses</th><th scope="col">Profit</th><th scope="col">Tax transfer</th>' +
-      '<th scope="col">TCG revenue</th><th scope="col">TCG expenses</th><th scope="col">Other income</th><th scope="col">Tax withheld</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead><tbody>' +
-      rows.slice().reverse().map(function (r) {
-        var tip = 'Exact: ' + finA(r.colddT) + (Math.abs(r.tcgT) >= 0.005 ? '. TCG part: ' + finA(r.tcgT) : '');
-        return '<tr' + (r.we === latest ? ' class="is-latest"' : '') + '><th scope="row">' + esc(finLong(r.we)) + '</th>' + inp(r, 'revenue') +
-          '<td><button type="button" class="adm-fin-exp" data-fin-week-exp="' + r.we + '" title="See or log this week\'s expenses">' + finA(r.exp) + '</button></td>' +
-          '<td class="' + (r.profit < 0 ? 'is-neg' : '') + '">' + finA(r.profit) + '</td>' +
-          '<td class="adm-fin-transfer" title="' + esc(tip) + '">' + finA0(r.colddT0) + '</td>' +
-          inp(r, 'tcg_revenue') + inp(r, 'tcg_expenses') + inp(r, 'other_income') + inp(r, 'other_withheld') +
-          '<td><button type="button" class="adm-fin-del" data-fin-del-week="' + r.we + '" aria-label="Remove week ending ' + esc(finLong(r.we)) + '">×</button></td></tr>';
-      }).join('') + '</tbody>' +
-      '<tfoot><tr><th scope="row">This year</th><td>' + finA(tot.rev) + '</td><td>' + finA(tot.exp) + '</td><td>' + finA(tot.profit) + '</td><td>' + finA0(tot.t) + '</td>' +
-      '<td>' + finA(tot.tr) + '</td><td>' + finA(tot.te) + '</td><td>' + finA(tot.oi) + '</td><td>' + finA(tot.wh) + '</td><td></td></tr></tfoot>';
-  }
-  function finRenderMonths() {
-    var table = $('admFinMonths'); if (!table) return;
-    var fy = finFy(finToday()), rows = finRows(fy), months = [];
-    for (var i = 0; i < 12; i++) {
-      var y = fy + (i >= 6 ? 1 : 0), m = ((6 + i) % 12) + 1, key = y + '-' + String(m).padStart(2, '0');
-      // A week counts in the month most of its days fall in (the sheet's rule).
-      var inM = rows.filter(function (r) { return finAdd(r.we, -3).slice(0, 7) === key; });
-      var o = inM.reduce(function (s, r) { s.rev += r.rev; s.exp += r.exp; s.profit += r.profit; s.t += r.colddT0; return s; }, { rev: 0, exp: 0, profit: 0, t: 0 });
-      o.key = key; o.n = inM.length; months.push(o);
-    }
-    var tot = months.reduce(function (s, o) { s.rev += o.rev; s.exp += o.exp; s.profit += o.profit; s.t += o.t; s.n += o.n; return s; }, { rev: 0, exp: 0, profit: 0, t: 0, n: 0 });
-    table.innerHTML = '<thead><tr><th scope="col">Month</th><th scope="col">Net revenue</th><th scope="col">Expenses</th><th scope="col">Profit</th><th scope="col">Avg weekly profit</th><th scope="col">Tax transfers</th></tr></thead><tbody>' +
-      months.map(function (o) {
-        var empty = !o.n;
-        return '<tr' + (empty ? ' class="is-empty"' : '') + '><th scope="row">' + esc(finMonthName(o.key + '-01')) + '</th><td>' + finA(o.rev) + '</td><td>' + finA(o.exp) + '</td>' +
-          '<td class="' + (o.profit < 0 ? 'is-neg' : '') + '">' + finA(o.profit) + '</td><td>' + (o.n ? finA(o.profit / o.n) : '–') + '</td><td>' + finA0(o.t) + '</td></tr>';
-      }).join('') + '</tbody><tfoot><tr><th scope="row">Year</th><td>' + finA(tot.rev) + '</td><td>' + finA(tot.exp) + '</td><td>' + finA(tot.profit) + '</td><td>' + (tot.n ? finA(tot.profit / tot.n) : '–') + '</td><td>' + finA0(tot.t) + '</td></tr></tfoot>';
-  }
-  function finSaveWeekField(we, field, value) {
-    var row = FIN.weeks.filter(function (w) { return w.week_ending === we; })[0];
-    if (!row || FIN_NUM_FIELDS.indexOf(field) < 0) return;
-    var before = row[field];
-    row[field] = value;
-    finRenderWeeks(); finRenderMonths();
-    var patch = { updated_at: new Date().toISOString() }; patch[field] = value;
-    window.coldSupabase.from('finance_weeks').update(patch).eq('week_ending', we).select('week_ending').then(function (r) {
-      if (r.error || !r.data || !r.data.length) {
-        row[field] = before; finRenderWeeks(); finRenderMonths();
-        admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false);
-      }
-    });
-  }
-  function finAddWeek() {
-    var t = finToday(), have = FIN.weeks.map(function (w) { return w.week_ending; }).sort();
-    var next = have.length ? finAdd(have[have.length - 1], 7) : finSunday(t);
-    if (next > finAdd(finSunday(t), 7)) { admToast('The next week is already there.', false); return; }
-    window.coldSupabase.from('finance_weeks').insert({ week_ending: next }).select('*').then(function (r) {
-      if (r.error) { admToast('Could not add the week: ' + r.error.message, false); return; }
-      FIN.weeks.push(r.data[0]);
-      finRenderWeeks(); finRenderMonths();
-      var first = document.querySelector('#admFinWeekTable input[data-week="' + next + '"][data-field="revenue"]');
-      if (first) first.focus();
-    });
-  }
-  function finDeleteWeek(we) {
-    dialogConfirm('Remove the week ending ' + finLong(we) + '? Its revenue and other income are deleted. Expenses stay in the log.', { title: 'Remove week', acceptLabel: 'Remove week' }).then(function (ok) {
-      if (!ok) return;
-      window.coldSupabase.from('finance_weeks').delete().eq('week_ending', we).select('week_ending').then(function (r) {
-        if (r.error || !r.data || !r.data.length) { admToast('Could not remove the week: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
-        FIN.weeks = FIN.weeks.filter(function (w) { return w.week_ending !== we; });
-        finRenderWeeks(); finRenderMonths();
-      });
-    });
-  }
-
-  /* ---- Expenses ---- */
-  var finCatDD = null, finFilterDD = null;
-  function finCatOptions() { return finAllCats().map(function (c) { return { value: c, label: c }; }).concat([{ value: '__new', label: 'New category…' }]); }
-  function finRenderExpForm() {
-    var box = $('admFinExpForm'); if (!box) return;
-    var e = FIN.editId ? FIN.expenses.filter(function (x) { return x.id === FIN.editId; })[0] : null;
-    if (FIN.editId && !e) FIN.editId = null;
-    box.innerHTML = '<div class="dash-card-head"><h2>' + (e ? 'Edit expense' : 'Log an expense') + '</h2></div>' +
-      '<div class="adm-fin-form">' +
-        '<label class="adm-field"><span>Date</span><input type="date" class="adm-input" id="admFinExpDate" value="' + esc(e ? e.spent_on : finToday()) + '" max="' + esc(finAdd(finToday(), 1)) + '" /></label>' +
-        '<label class="adm-field"><span>Amount (A$)</span><input type="text" inputmode="decimal" class="adm-input" id="admFinExpAmt" placeholder="0.00" value="' + esc(e ? finInVal(e.amount) : '') + '" autocomplete="off" /></label>' +
-        '<div class="adm-field"><span>Category</span><div class="adm-dd adm-dd-inline" id="admFinExpCatDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' +
-          '<svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Category" hidden></div></div>' +
-          '<input type="text" maxlength="40" class="adm-input" id="admFinExpNewCat" placeholder="New category name" hidden /></div>' +
-        '<label class="adm-field"><span>Paid to</span><input type="text" maxlength="80" class="adm-input" id="admFinExpVendor" placeholder="Optional" value="' + esc(e && e.vendor || '') + '" /></label>' +
-        '<label class="adm-field adm-fin-wide"><span>Note</span><input type="text" maxlength="300" class="adm-input" id="admFinExpNote" placeholder="Optional" value="' + esc(e && e.note || '') + '" /></label>' +
-      '</div>' +
-      '<div class="adm-fin-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admFinExpSave">' + (e ? 'Save changes' : 'Add expense') + '</button>' +
-        (e ? '<button class="btn btn-ghost adm-btn-sm" type="button" id="admFinExpCancel">Cancel</button>' : '') + '</div>';
-    finCatDD = makeDropdown($('admFinExpCatDD'), { placeholder: 'Choose a category', onChange: function (v) {
-      var nc = $('admFinExpNewCat'); nc.hidden = v !== '__new'; if (v === '__new') nc.focus();
-    } });
-    finCatDD.setOptions(finCatOptions(), e ? e.category : '');
-  }
-  function finSaveExpense() {
-    var date = $('admFinExpDate').value, amt = finNum($('admFinExpAmt').value), cat = finCatDD ? finCatDD.getValue() : '';
-    var vendor = $('admFinExpVendor').value.trim() || null, note = $('admFinExpNote').value.trim() || null;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { admToast('Pick a date.', false); return; }
-    if (!(amt > 0)) { admToast('Enter an amount above zero.', false); return; }
-    var newCat = null;
-    if (cat === '__new') {
-      newCat = $('admFinExpNewCat').value.trim();
-      if (!newCat || newCat.length > 40) { admToast('Name the new category (up to 40 characters).', false); return; }
-      cat = newCat;
-    }
-    if (!cat) { admToast('Choose a category.', false); return; }
-    var sb = window.coldSupabase, btn = $('admFinExpSave');
-    btn.disabled = true;
-    var saveCat = newCat && finAllCats().indexOf(newCat) < 0
-      ? sb.from('finance_expense_categories').insert({ name: newCat }).then(function (r) { if (!r.error) FIN.cats.push({ name: newCat }); })
-      : Promise.resolve();
-    var row = { spent_on: date, amount: amt, category: cat, vendor: vendor, note: note, updated_at: new Date().toISOString() };
-    saveCat.then(function () {
-      return FIN.editId ? sb.from('finance_expenses').update(row).eq('id', FIN.editId).select('*') : sb.from('finance_expenses').insert(row).select('*');
-    }).then(function (r) {
-      btn.disabled = false;
-      if (r.error || !r.data || !r.data.length) { admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
-      var saved = r.data[0];
-      FIN.expenses = FIN.expenses.filter(function (x) { return x.id !== saved.id; }).concat([saved])
-        .sort(function (a, b) { return a.spent_on < b.spent_on ? 1 : a.spent_on > b.spent_on ? -1 : 0; });
-      admToast(FIN.editId ? 'Expense saved.' : 'Expense logged.', true);
-      FIN.editId = null;
-      finRenderExpForm(); finRenderExpList();
-    });
-  }
-  function finDeleteExpense(id) {
-    var e = FIN.expenses.filter(function (x) { return x.id === id; })[0]; if (!e) return;
-    dialogConfirm('Delete the ' + finA(e.amount) + ' ' + e.category + ' expense from ' + finLong(e.spent_on) + '? This cannot be undone.', { title: 'Delete expense', acceptLabel: 'Delete expense' }).then(function (ok) {
-      if (!ok) return;
-      window.coldSupabase.from('finance_expenses').delete().eq('id', id).select('id').then(function (r) {
-        if (r.error || !r.data || !r.data.length) { admToast('Could not delete: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
-        FIN.expenses = FIN.expenses.filter(function (x) { return x.id !== id; });
-        if (FIN.editId === id) { FIN.editId = null; finRenderExpForm(); }
-        finRenderExpList();
-      });
-    });
-  }
-  function finRenderExpList() {
-    var box = $('admFinExpList'); if (!box) return;
-    var f = FIN.filter;
-    if (!$('admFinFilterDD')) {
-      box.innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Expenses</h2><span id="admFinExpTotal"></span></div></div>' +
-        '<div class="adm-fin-filters">' +
-          '<div class="adm-dd adm-dd-inline" id="admFinFilterDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' +
-            '<svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Categories" hidden></div></div>' +
-          '<label class="adm-fin-inline"><span>From</span><input type="date" class="adm-input" id="admFinFrom" /></label>' +
-          '<label class="adm-fin-inline"><span>To</span><input type="date" class="adm-input" id="admFinTo" /></label>' +
-          '<input type="search" class="adm-input adm-fin-search" id="admFinQ" placeholder="Search who or note" autocomplete="off" />' +
-          '<button type="button" class="btn btn-ghost adm-btn-sm" id="admFinClear">Clear</button>' +
-        '</div><div class="adm-plat-tablewrap"><table class="adm-plat-table adm-fin-explist" id="admFinExpTable"></table></div>';
-      finFilterDD = makeDropdown($('admFinFilterDD'), { multi: true, placeholder: 'All categories', onChange: function (v) { FIN.filter.cats = v; finRenderExpList(); } });
-      ['admFinFrom', 'admFinTo', 'admFinQ'].forEach(function (id) {
-        $(id).addEventListener('input', function () { FIN.filter.from = $('admFinFrom').value; FIN.filter.to = $('admFinTo').value; FIN.filter.q = $('admFinQ').value; finRenderExpList(); });
-      });
-      $('admFinClear').addEventListener('click', function () { FIN.filter = { cats: [], from: '', to: '', q: '' }; finFilterDD.setValue([], true); $('admFinFrom').value = ''; $('admFinTo').value = ''; $('admFinQ').value = ''; finRenderExpList(); });
-    }
-    finFilterDD.setOptions(finAllCats().map(function (c) { return { value: c, label: c }; }), f.cats);
-    if ($('admFinFrom').value !== f.from) $('admFinFrom').value = f.from;
-    if ($('admFinTo').value !== f.to) $('admFinTo').value = f.to;
-    var q = f.q.trim().toLowerCase();
-    var list = FIN.expenses.filter(function (e) {
-      if (f.cats.length && f.cats.indexOf(e.category) < 0) return false;
-      if (f.from && e.spent_on < f.from) return false;
-      if (f.to && e.spent_on > f.to) return false;
-      if (q && ((e.vendor || '') + ' ' + (e.note || '') + ' ' + e.category).toLowerCase().indexOf(q) < 0) return false;
-      return true;
-    });
-    var total = list.reduce(function (s, e) { return s + Number(e.amount); }, 0);
-    $('admFinExpTotal').textContent = list.length ? finEntries(list.length) + ', ' + finA(total) : '';
-    var table = $('admFinExpTable');
-    if (!list.length) { table.innerHTML = '<tbody><tr><td class="adm-empty">' + (FIN.expenses.length ? 'Nothing matches these filters.' : 'No expenses logged yet.') + '</td></tr></tbody>'; return; }
-    table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col">Paid to</th><th scope="col">Note</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>' +
-      list.map(function (e) {
-        return '<tr><th scope="row">' + esc(finLong(e.spent_on)) + '</th><td><span class="adm-pf" style="--pf:' + finCatColor(e.category) + '"><b class="adm-dot"></b>' + esc(e.category) + '</span></td>' +
-          '<td>' + esc(e.vendor || '') + '</td><td class="adm-fin-note">' + esc(e.note || '') + '</td><td class="is-strong">' + finA(e.amount) + '</td>' +
-          '<td class="adm-fin-rowact"><button type="button" class="btn btn-ghost adm-btn-sm" data-fin-edit="' + esc(e.id) + '">Edit</button><button type="button" class="adm-fin-del" data-fin-del-exp="' + esc(e.id) + '" aria-label="Delete expense">×</button></td></tr>';
-      }).join('') + '</tbody><tfoot><tr><th scope="row">Total</th><td></td><td></td><td></td><td>' + finA(total) + '</td><td></td></tr></tfoot>';
-  }
-
-  /* ---- Tax ---- */
-  function finRenderTax() {
-    var t = finToday(), fy = finFy(t), rows = finRows(fy), qs = finQuarters(fy, rows), s = FIN.settings, rate = Number(s.instalment_rate) || 0;
-    var last = rows[rows.length - 1] || { P: 0, R: 0, W: 0, tax: finTaxOn(0) };
-    // The reserve: every weekly transfer (coldd and TCG, whole dollars as transferred) less what was paid to the ATO.
-    var putIn = 0;
-    FIN.weeks.map(function (w) { return finFy(w.week_ending); }).filter(function (y, i, a) { return a.indexOf(y) === i; }).forEach(function (y) {
-      finRows(y).forEach(function (r) { if (r.we <= finSunday(t)) putIn += r.colddT0 + r.tcgT0; });
-    });
-    var paid = FIN.instalments.reduce(function (s2, x) { return s2 + (Number(x.amount_paid) || 0); }, 0);
-    var missing = qs.filter(function (q) { return q.due <= t && q.paid == null && q.calc > 0; });
-    var cur = qs.filter(function (q) { return t >= q.start && t <= q.end; })[0] || qs.filter(function (q) { return q.paid == null; })[0] || qs[3];
-    var owing = Math.max(0, last.tax.total - last.W);
-    var putInFy = rows.reduce(function (s2, r) { return s2 + r.colddT0 + r.tcgT0; }, 0);
-    $('admFinTaxKpis').innerHTML = [
-      kpiCell({ label: 'Tax reserve should have', value: finA(putIn - paid), delta: missing.length ? '<span class="adm-kpi-delta down">' + missing.map(function (q) { return 'Q' + q.q; }).join(', ') + ' payment not entered</span>' : '',
-        sub: finA0(putIn) + ' put in, ' + finA(paid) + ' paid to the ATO' }),
-      kpiCell({ label: 'Q' + cur.q + ' instalment so far', value: finA(cur.calc), delta: '', sub: 'Due ' + finLong(cur.due), title: finA(cur.income) + ' instalment income × ' + finPct(rate, 2) }),
-      kpiCell({ label: 'Tax on this year so far', value: finA(owing), delta: '', sub: 'On ' + finA(last.P) + ' taxable income' }),
-      kpiCell({ label: 'Left over at tax time', value: finA(putInFy - owing), delta: '', sub: 'If the year ended today' })
-    ].join('');
-
-    $('admFinInst').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Quarterly instalments</h2><span>' + esc(finFyLabel(fy)) + ', instalment rate ' + esc(finPct(rate, 2)) + '</span></div></div>' +
-      '<div class="adm-plat-tablewrap"><table class="adm-plat-table adm-fin-inst"><thead><tr><th scope="col">Quarter</th><th scope="col">Instalment income</th><th scope="col">Calculated</th><th scope="col">Due</th><th scope="col">Paid</th><th scope="col">Paid on</th><th scope="col">Difference</th></tr></thead><tbody>' +
-      qs.map(function (q) {
-        var diff = q.paid == null ? '' : '<span class="' + (Math.abs(q.paid - q.calc) < 0.005 ? '' : q.paid > q.calc ? 'is-up' : 'is-neg') + '">' + (q.paid - q.calc >= 0 ? '+' : '') + finA(q.paid - q.calc) + '</span>';
-        var future = q.start > t;
-        return '<tr' + (future ? ' class="is-empty"' : '') + '><th scope="row">Q' + q.q + ' <small>' + esc(q.label) + '</small></th><td>' + finA(q.income) + '</td><td class="is-strong">' + finA(q.calc) + '</td>' +
-          '<td>' + esc(finLong(q.due)) + '</td>' +
-          '<td><input class="adm-fin-in" type="text" inputmode="decimal" autocomplete="off" data-fin-inst="' + q.q + '" data-fin-fy="' + esc(q.fy) + '" data-f="amount_paid" value="' + esc(q.paid == null ? '' : finInVal(q.paid)) + '" placeholder="–" aria-label="Q' + q.q + ' amount paid" /></td>' +
-          '<td><input class="adm-input adm-fin-date" type="date" data-fin-inst="' + q.q + '" data-fin-fy="' + esc(q.fy) + '" data-f="paid_on" value="' + esc(q.rec && q.rec.paid_on || '') + '" aria-label="Q' + q.q + ' paid on" /></td>' +
-          '<td>' + diff + '</td></tr>';
-      }).join('') + '</tbody></table></div>' +
-      '<p class="adm-hint" style="margin-top:10px;">Instalment income is coldd and TCG revenue for the weeks ending in the quarter. Enter what you paid each quarter so the reserve figure stays right.</p>';
-
-    var br = finBrackets(), P = last.P, tx = last.tax;
-    var cP = rows.reduce(function (s2, r) { return s2 + r.profit; }, 0), tP = rows.reduce(function (s2, r) { return s2 + r.tr - r.te; }, 0), oI = rows.reduce(function (s2, r) { return s2 + r.oi; }, 0);
-    var pace = rows.length ? P / rows.length * 52 : 0, paceTax = finTaxOn(pace);
-    var curB = br.filter(function (b) { return P >= b.start; }).pop() || br[0];
-    function line(label, v, cls) { return '<div class="adm-fin-line' + (cls ? ' ' + cls : '') + '"><span>' + label + '</span><b>' + v + '</b></div>'; }
-    $('admFinIncomeTax').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Income tax</h2><span>this year so far</span></div></div>' +
-      line('coldd profit', finA(cP)) + line('TCG profit', finA(tP)) + line('Other income', finA(oI)) + line('Taxable income', finA(P), 'is-total') +
-      line('Tax on brackets', finA(tx.income)) + line('Low income tax offset', '-' + finA(tx.lito)) + line('Medicare levy', finA(tx.medicare)) +
-      (last.W ? line('Tax already withheld', '-' + finA(last.W)) : '') + line('Tax owing so far', finA(owing), 'is-total') +
-      '<p class="adm-hint" style="margin:10px 0 14px;">At this year\'s pace (' + plural(rows.length, 'week') + ' so far): about ' + finA0(pace) + ' taxable income and ' + finA0(paceTax.total) + ' tax for the full year.</p>' +
-      '<div class="adm-plat-tablewrap"><table class="adm-plat-table"><thead><tr><th scope="col">Bracket from</th><th scope="col">Rate</th><th scope="col">Tax at start</th><th scope="col">Away</th></tr></thead><tbody>' +
-      br.map(function (b) {
-        var here = b === curB;
-        return '<tr' + (here ? ' class="is-latest"' : '') + '><th scope="row">' + finA0(b.start) + (here ? ' <small>you are here</small>' : '') + '</th><td>' + finPct(b.rate, 0) + '</td><td>' + finA0(b.cum) + '</td><td>' + (b.start > P ? finA0(b.start - P) : '–') + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
-
-    // GST: the sheet's method (bank revenue, coldd + TCG) and gross sales from the dashboard.
-    var yearAgo = finAdd(t, -365), d91 = finAdd(t, -91);
-    var bankRows = FIN.weeks.filter(function (w) { return w.week_ending <= t; });
-    var trailing = bankRows.filter(function (w) { return w.week_ending > yearAgo; }).reduce(function (s2, w) { return s2 + (Number(w.revenue) || 0) + (Number(w.tcg_revenue) || 0); }, 0);
-    var recent = bankRows.filter(function (w) { return w.week_ending > d91; }).reduce(function (s2, w) { return s2 + (Number(w.revenue) || 0) + (Number(w.tcg_revenue) || 0); }, 0);
-    var projected = recent / 13 * 52, th = Number(s.gst_threshold) || 75000;
-    var g12 = null, g91 = null;
-    if (salesReady()) {
-      var now = Date.now(), y0 = now - 365 * DAY_MS, q0 = now - 91 * DAY_MS;
-      g12 = 0; g91 = 0;
-      homeSales().forEach(function (x) { if (x.t >= y0) g12 += x.aud; if (x.t >= q0) g91 += x.aud; });
-    }
-    var gProj = g91 == null ? null : g91 / 91 * 365;
-    function meter(v) { return '<span class="adm-share"><span class="adm-share-bar"><i style="--pf:' + (v >= th ? 'var(--warn)' : 'var(--accent)') + ';width:' + Math.min(100, v / th * 100).toFixed(1) + '%"></i></span><span>' + Math.round(v / th * 100) + '%</span></span>'; }
-    var bankOver = trailing >= th || projected >= th, grossOver = g12 != null && (g12 >= th || gProj >= th);
-    $('admFinGst').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>GST</h2><span>threshold ' + finA0(th) + '</span></div>' +
-      '<span class="dt-badge ' + (bankOver || grossOver ? 'err' : 'ok') + '">' + (bankOver ? 'Over on bank revenue' : grossOver ? 'Over on gross sales' : 'Under') + '</span></div>' +
-      '<div class="adm-plat-tablewrap"><table class="adm-plat-table"><thead><tr><th scope="col"></th><th scope="col">Last 12 months</th><th scope="col">Next 12 months at current pace</th></tr></thead><tbody>' +
-      '<tr><th scope="row">Bank revenue <small>coldd + TCG</small></th><td>' + finA0(trailing) + meter(trailing) + '</td><td>' + finA0(projected) + meter(projected) + '</td></tr>' +
-      '<tr><th scope="row">Gross sales <small>dashboard</small></th><td>' + (g12 == null ? 'Loading…' : fmtA(g12, true) + meter(g12)) + '</td><td>' + (gProj == null ? 'Loading…' : fmtA(gProj, true) + meter(gProj)) + '</td></tr>' +
-      '</tbody></table></div>' +
-      '<p class="adm-hint" style="margin-top:10px;">You must register within 21 days once your current or projected 12-month GST turnover reaches ' + finA0(th) + '. Bank revenue follows the sheet; turnover is normally measured on sales before fees, so ask your accountant which figure counts for you. Projections use the last 13 weeks.</p>';
-  }
-  function finSaveInstalment(fyLabel, q, field, value) {
-    var rec = FIN.instalments.filter(function (x) { return x.fy === fyLabel && x.quarter === q; })[0];
-    var row = { fy: fyLabel, quarter: q, amount_paid: rec ? rec.amount_paid : null, paid_on: rec ? rec.paid_on : null, updated_at: new Date().toISOString() };
-    row[field] = value;
-    window.coldSupabase.from('finance_instalments').upsert(row, { onConflict: 'fy,quarter' }).select('*').then(function (r) {
-      if (r.error || !r.data || !r.data.length) { admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false); finRenderTax(); return; }
-      FIN.instalments = FIN.instalments.filter(function (x) { return !(x.fy === fyLabel && x.quarter === q); }).concat([r.data[0]]);
-      finRenderTax();
-    });
-  }
-
-  /* ---- Settings ---- */
-  function finRenderSettings() {
-    var box = $('admFinSettings'); if (!box) return;
-    var s = FIN.settings;
-    function field(id, label, v, hint) { return '<label class="adm-field"><span>' + label + '</span><input type="text" inputmode="decimal" class="adm-input" id="' + id + '" value="' + esc(String(v)) + '" />' + (hint ? '<small class="adm-hint">' + hint + '</small>' : '') + '</label>'; }
-    var br = (s.tax_brackets || []).map(function (b) { return [Number(b[0]), Number(b[1])]; }).sort(function (a, b) { return a[0] - b[0]; });
-    box.innerHTML = '<div class="dash-card-head"><h2>Tax settings</h2></div>' +
-      '<p class="adm-hint">Rates for the current financial year. Check them each July against the ATO (your instalment rate is on your activity statement).</p>' +
-      '<h3 class="adm-fin-h3">PAYG instalments and GST</h3><div class="adm-fin-form">' +
-        field('admFinSetRate', 'Instalment rate (%)', +(s.instalment_rate * 100).toFixed(4)) + field('admFinSetGst', 'GST threshold (A$)', +s.gst_threshold) + '</div>' +
-      '<h3 class="adm-fin-h3">Income tax brackets</h3><div class="adm-fin-form adm-fin-brackets">' +
-        br.map(function (b, i) { return field('admFinSetB' + i, 'From (A$)', b[0]) + field('admFinSetR' + i, 'Rate (%)', +(b[1] * 100).toFixed(4)); }).join('') + '</div>' +
-      '<h3 class="adm-fin-h3">Medicare levy</h3><div class="adm-fin-form">' +
-        field('admFinSetMedT', 'Low-income threshold (A$)', +s.medicare_threshold) + field('admFinSetMedR', 'Levy rate (%)', +(s.medicare_rate * 100).toFixed(4)) +
-        field('admFinSetMedP', 'Phase-in rate (%)', +(s.medicare_phase_in * 100).toFixed(4), 'Levy is the lower of the full rate and this rate on income over the threshold.') + '</div>' +
-      '<h3 class="adm-fin-h3">Low income tax offset</h3><div class="adm-fin-form">' +
-        field('admFinSetLMax', 'Maximum offset (A$)', +s.lito_max) + field('admFinSetLFull', 'Full offset up to (A$)', +s.lito_full_to) + field('admFinSetLMid', 'First reduction ends at (A$)', +s.lito_mid_to) +
-        field('admFinSetLR1', 'First reduction rate (%)', +(s.lito_rate1 * 100).toFixed(4)) + field('admFinSetLR2', 'Second reduction rate (%)', +(s.lito_rate2 * 100).toFixed(4)) + '</div>' +
-      '<div class="adm-fin-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admFinSetSave">Save settings</button></div>';
-  }
-  function finSaveSettings() {
-    function v(id, pct) { var n = finNum($(id).value); return n == null || isNaN(n) ? NaN : pct ? n / 100 : n; }
-    var brackets = [];
-    for (var i = 0; $('admFinSetB' + i); i++) brackets.push([v('admFinSetB' + i), v('admFinSetR' + i, true)]);
-    var row = { instalment_rate: v('admFinSetRate', true), gst_threshold: v('admFinSetGst'), tax_brackets: brackets,
-      medicare_threshold: v('admFinSetMedT'), medicare_rate: v('admFinSetMedR', true), medicare_phase_in: v('admFinSetMedP', true),
-      lito_max: v('admFinSetLMax'), lito_full_to: v('admFinSetLFull'), lito_mid_to: v('admFinSetLMid'), lito_rate1: v('admFinSetLR1', true), lito_rate2: v('admFinSetLR2', true) };
-    var bad = Object.keys(row).filter(function (k) { return k === 'tax_brackets' ? brackets.some(function (b) { return !(b[0] >= 0) || !(b[1] >= 0 && b[1] < 1); }) : !(row[k] >= 0); });
-    if (bad.length) { admToast('Check the settings: every value must be a number of zero or more.', false); return; }
-    if (brackets[0][0] !== 0) { admToast('The first bracket must start at A$0.', false); return; }
-    row.updated_at = new Date().toISOString();
-    window.coldSupabase.from('finance_settings').update(row).eq('id', true).select('*').then(function (r) {
-      if (r.error || !r.data || !r.data.length) { admToast('Could not save: ' + (r.error ? r.error.message : 'not allowed'), false); return; }
-      FIN.settings = r.data[0];
-      admToast('Tax settings saved.', true);
-      finRenderSettings();
-    });
-  }
-
-  /* ---- Wiring ---- */
-  (function wireFinances() {
-    var panel = $('adm-panel-finances'); if (!panel) return;
-    finCheckAccess();
-    wirePlatChart($('admFinChart'));
-    panel.addEventListener('click', function (e) {
-      var b;
-      if ((b = e.target.closest('[data-fin-view]'))) { FIN.view = b.getAttribute('data-fin-view'); finRenderView(); return; }
-      if ((b = e.target.closest('[data-fin-range]'))) {
-        FIN.range = b.getAttribute('data-fin-range');
-        document.querySelectorAll('#admFinRange [data-fin-range]').forEach(function (x) { x.classList.toggle('active', x === b); });
-        finRenderOverview(); return;
-      }
-      if (e.target.closest('#admFinAddWeek')) { finAddWeek(); return; }
-      if ((b = e.target.closest('[data-fin-del-week]'))) { finDeleteWeek(b.getAttribute('data-fin-del-week')); return; }
-      if ((b = e.target.closest('[data-fin-week-exp]'))) {
-        var we = b.getAttribute('data-fin-week-exp');
-        FIN.filter = { cats: [], from: finAdd(we, -6), to: we, q: '' };
-        if (finFilterDD) finFilterDD.setValue([], true);
-        FIN.view = 'expenses'; finRenderView();
-        $('admFinExpDate').value = we > finToday() ? finToday() : we;
-        return;
-      }
-      if (e.target.closest('#admFinExpSave')) { finSaveExpense(); return; }
-      if (e.target.closest('#admFinExpCancel')) { FIN.editId = null; finRenderExpForm(); return; }
-      if ((b = e.target.closest('[data-fin-edit]'))) { FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); $('admFinExpForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-      if ((b = e.target.closest('[data-fin-del-exp]'))) { finDeleteExpense(b.getAttribute('data-fin-del-exp')); return; }
-      if (e.target.closest('#admFinSetSave')) { finSaveSettings(); return; }
-    });
-    // Weekly cells and instalments save when they lose focus (or on Enter).
-    panel.addEventListener('focusin', function (e) {
-      var el = e.target;
-      if (el.classList && el.classList.contains('adm-fin-in')) { el.dataset.was = el.value; var n = finNum(el.value); el.value = n == null || isNaN(n) ? '' : String(n); el.select(); }
-    });
-    panel.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('adm-fin-in')) { e.preventDefault(); e.target.blur(); }
-      if (e.key === 'Escape' && e.target.classList && e.target.classList.contains('adm-fin-in')) { e.target.value = e.target.dataset.was || ''; e.target.dataset.cancel = '1'; e.target.blur(); }
-    });
-    panel.addEventListener('focusout', function (e) {
-      var el = e.target;
-      if (!el.classList || !el.classList.contains('adm-fin-in')) return;
-      if (el.dataset.cancel) { delete el.dataset.cancel; return; }
-      var n = finNum(el.value);
-      if (isNaN(n)) { admToast('That is not a number.', false); el.value = el.dataset.was || ''; return; }
-      if (el.hasAttribute('data-fin-inst')) {
-        var rec = FIN.instalments.filter(function (x) { return x.fy === el.getAttribute('data-fin-fy') && x.quarter === +el.getAttribute('data-fin-inst'); })[0];
-        var oldPaid = rec && rec.amount_paid != null ? Number(rec.amount_paid) : null;
-        if (oldPaid === n) { el.value = finInVal(n); return; }
-        if (n != null && n < 0) { admToast('A payment cannot be negative.', false); el.value = el.dataset.was || ''; return; }
-        finSaveInstalment(el.getAttribute('data-fin-fy'), +el.getAttribute('data-fin-inst'), 'amount_paid', n);
-        return;
-      }
-      var we = el.getAttribute('data-week'), f = el.getAttribute('data-field');
-      var row = FIN.weeks.filter(function (w) { return w.week_ending === we; })[0];
-      var old = row ? (row[f] == null ? null : Number(row[f])) : null;
-      if (old === n) { el.value = finInVal(n); return; }
-      finSaveWeekField(we, f, n);
-    });
-    panel.addEventListener('change', function (e) {
-      var el = e.target;
-      if (el.classList && el.classList.contains('adm-fin-date') && el.hasAttribute('data-fin-inst')) {
-        finSaveInstalment(el.getAttribute('data-fin-fy'), +el.getAttribute('data-fin-inst'), 'paid_on', el.value || null);
-      }
-    });
-    // Hover text for the expense donut.
-    var tip = document.createElement('div');
-    tip.className = 'adm-pc-tip adm-donut-tip'; tip.hidden = true;
-    document.body.appendChild(tip);
-    panel.addEventListener('mouseover', function (e) {
-      var s = e.target.closest && e.target.closest('.adm-donut [data-tip]');
-      if (!s) { tip.hidden = true; return; }
-      var parts = s.getAttribute('data-tip').split('|');
-      tip.innerHTML = '<h4>' + parts[0] + '</h4><div>' + (parts[1] || '') + '</div>';
-      tip.hidden = false;
-    });
-    panel.addEventListener('mousemove', function (e) {
-      if (tip.hidden) return;
-      var x = e.clientX + 14, y = e.clientY + 14;
-      if (x + tip.offsetWidth > innerWidth - 8) x = e.clientX - tip.offsetWidth - 14;
-      if (y + tip.offsetHeight > innerHeight - 8) y = e.clientY - tip.offsetHeight - 14;
-      tip.style.left = x + 'px'; tip.style.top = y + 'px';
-    });
-    panel.addEventListener('mouseleave', function () { tip.hidden = true; });
-  })();
-
   setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'tasks')) refreshTodos(); }, 60000);
   setInterval(function () { if (!document.hidden && curPanel === 'home') { refreshPlatformSales(); refreshLifetimeViews(); refreshAbandoned(); } }, 5 * 60 * 1000);
   refreshEmailConfigStatus();

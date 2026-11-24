@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261125p" />
+  <link rel="stylesheet" href="/styles.css?v=20261125q" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -203,13 +203,15 @@
           </section>
 
           <section class="dash-panel adm-pg adm-fin" id="adm-panel-finances" hidden>
-            <div class="dash-head adm-home-head">
+            <div class="dash-head adm-home-head adm-fin-head">
               <h1>Finances</h1>
-              <div class="adm-seg" id="admFinRange" role="group" aria-label="Date range" hidden>
-                <button type="button" data-fin-range="4w">4 weeks</button>
-                <button type="button" data-fin-range="13w">13 weeks</button>
-                <button type="button" data-fin-range="fy" class="active">This year</button>
-                <button type="button" data-fin-range="all">All time</button>
+              <div class="adm-fin-tools" id="admFinHeadTools" hidden>
+                <div class="adm-seg" id="admFinRange" role="group" aria-label="Period">
+                  <button type="button" data-fin-range="week">Last week</button>
+                  <button type="button" data-fin-range="month" class="active">This month</button>
+                  <button type="button" data-fin-range="year">This year</button>
+                </div>
+                <button class="btn btn-ghost adm-btn-sm" type="button" id="admFinSettingsBtn">Settings</button>
               </div>
             </div>
 
@@ -220,55 +222,47 @@
             </div>
 
             <div class="adm-fin-body" id="admFinBody" hidden>
-              <div class="adm-seg adm-sd-tabs" id="admFinTabs" role="group" aria-label="Section">
-                <button type="button" class="adm-tab active" data-fin-view="overview">Overview</button>
-                <button type="button" class="adm-tab" data-fin-view="weeks">Weekly log</button>
-                <button type="button" class="adm-tab" data-fin-view="expenses">Expenses</button>
-                <button type="button" class="adm-tab" data-fin-view="tax">Tax</button>
-                <button type="button" class="adm-tab" data-fin-view="settings">Settings</button>
-              </div>
-
-              <div class="adm-fin-view" id="admFinView-overview">
+              <div class="adm-fin-view" id="admFinMain">
                 <div class="adm-hp adm-kpi"><div class="adm-kpi-grid" id="admFinKpis"></div></div>
+
                 <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Net revenue</h2><span>by week, what reached the bank</span></div>
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Net revenue</h2></div>
                     <div class="adm-fin-legend"><span style="--pf:var(--accent)"><i></i>Net revenue</span><span style="--pf:var(--price)"><i></i>Profit</span></div></div>
                   <div class="adm-plat-chart" id="admFinChart"></div>
                 </div>
+
                 <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Where the money goes</h2><span>expenses in this range</span></div></div>
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Weekly log</h2></div>
+                    <div class="adm-fin-tools">
+                      <div class="adm-seg" id="admFinSheetSeg" role="group" aria-label="Show">
+                        <button type="button" data-fin-sheet="weeks" class="active">Weeks</button>
+                        <button type="button" data-fin-sheet="months">Months</button>
+                      </div>
+                      <button class="btn btn-secondary adm-btn-sm" type="button" id="admFinAddWeek">Add next week</button>
+                    </div></div>
+                  <div class="adm-fin-scroll"><table class="adm-plat-table adm-fin-sheet" id="admFinWeekTable"></table></div>
+                  <p class="adm-hint" style="margin-top:10px;">At the end of each week enter what reached the bank, then move the tax transfer into the tax account. Expenses come from the expense log below. TCG and other income only feed the tax maths.</p>
+                </div>
+
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Expenses</h2></div></div>
+                  <div class="adm-plat-chart" id="admFinExpChart"></div>
                   <div id="admFinMix"></div>
                 </div>
-              </div>
 
-              <div class="adm-fin-view" id="admFinView-weeks" hidden>
-                <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Weekly log</h2><span id="admFinWeeksSub"></span></div>
-                    <button class="btn btn-secondary adm-btn-sm" type="button" id="admFinAddWeek">Add next week</button></div>
-                  <div class="adm-plat-tablewrap adm-fin-sheetwrap"><table class="adm-plat-table adm-fin-sheet" id="admFinWeekTable"></table></div>
-                  <p class="adm-hint" style="margin-top:10px;">At the end of each week enter the net revenue that reached the bank, then move the tax transfer into the tax account. Expenses come from the expense log. TCG and other income are only used for the tax maths, because your tax depends on your total income.</p>
-                </div>
-                <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Monthly summary</h2></div></div>
-                  <div class="adm-plat-tablewrap"><table class="adm-plat-table" id="admFinMonths"></table></div>
+                <div class="adm-hp" id="admFinExpCard">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Expense log</h2></div></div>
+                  <div id="admFinExpForm"></div>
+                  <div id="admFinExpList"></div>
                 </div>
               </div>
 
-              <div class="adm-fin-view" id="admFinView-expenses" hidden>
-                <div class="adm-hp" id="admFinExpForm"></div>
-                <div class="adm-hp" id="admFinExpList"></div>
-              </div>
-
-              <div class="adm-fin-view" id="admFinView-tax" hidden>
-                <div class="adm-hp adm-kpi"><div class="adm-kpi-grid" id="admFinTaxKpis"></div></div>
+              <div class="adm-fin-view" id="admFinSettingsView" hidden>
                 <div class="adm-hp" id="admFinInst"></div>
                 <div class="adm-hp" id="admFinGst"></div>
                 <div class="adm-hp" id="admFinIncomeTax"></div>
-                <p class="adm-hint">Estimates from your own numbers using the ATO rates in Settings. Not tax advice: check anything important with your accountant.</p>
-              </div>
-
-              <div class="adm-fin-view" id="admFinView-settings" hidden>
                 <div class="adm-hp" id="admFinSettings"></div>
+                <p class="adm-hint">Estimates from your own numbers using the ATO rates above. Not tax advice: check anything important with your accountant.</p>
               </div>
             </div>
           </section>
@@ -1915,6 +1909,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261125p" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125p"></script>
+  <script src="/catalog.js?v=20261125q" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125q"></script>
 </body>
 </html>
