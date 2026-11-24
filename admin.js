@@ -1182,10 +1182,10 @@
     function check() {
       ticking = false;
       var pinned = null;
-      document.querySelectorAll('.adm-an > .adm-home-head, .adm-mkt > .adm-home-head').forEach(function (h) {
-        if (!h.__seg) { h.__seg = h.querySelector('.adm-range'); if (h.__seg) h.__seg.__home = h; }
-        // Pinned once the header has scrolled up under the site bar.
-        var stuck = !!h.offsetParent && h.getBoundingClientRect().bottom < 64;
+      document.querySelectorAll('.adm-an > .adm-home-head, .adm-mkt > .adm-home-head, .adm-fin > .adm-home-head').forEach(function (h) {
+        if (!h.__seg) { h.__seg = h.querySelector('.adm-range') || h.querySelector('.adm-fin-tools'); if (h.__seg) h.__seg.__home = h; }
+        // Pinned once the header has scrolled up under the site bar (never while the bar is hidden, e.g. locked Finances).
+        var stuck = !!h.offsetParent && h.getBoundingClientRect().bottom < 64 && !!h.__seg && !h.__seg.hidden;
         h.classList.toggle('is-stuck', stuck);
         if (stuck && !pinned) pinned = h;
       });
@@ -12066,6 +12066,7 @@
     var main = FIN.view === 'main';
     $('admFinMain').hidden = !main; $('admFinSettingsView').hidden = main;
     $('admFinRange').hidden = !main;
+    finRenderMonthDD();
     $('admFinSettingsBtn').textContent = main ? 'Settings' : 'Back to finances';
     if (main) { finRenderOverview(); finRenderSheet(); finRenderExpForm(); finRenderExpList(); }
     else { finRenderSettings(); finRenderInstalments(); finRenderIncomeTax(); finRenderGst(); }
@@ -12076,8 +12077,47 @@
     var t = finToday();
     if (FIN.range === 'week') { var we = finLastSunday(t); return { from: finAdd(we, -6), to: we, week: function (w) { return w === we; }, chartFrom: finAdd(we, -7 * 11) }; }
     if (FIN.range === 'year') { var fs = finFy(t) + '-07-01'; return { from: fs, to: t, week: function (w) { return w >= fs && w <= finSunday(t); }, chartFrom: fs }; }
+    if (/^m:\d{4}-\d{2}$/.test(FIN.range)) {
+      var mm = FIN.range.slice(2), end = mm + '-' + String(new Date(+mm.slice(0, 4), +mm.slice(5, 7), 0).getDate()).padStart(2, '0');
+      return { from: mm + '-01', to: end < t ? end : t, week: function (w) { return finAdd(w, -3).slice(0, 7) === mm; }, chartFrom: finAdd(mm + '-01', -7 * 8) };
+    }
     var m = t.slice(0, 7);
     return { from: m + '-01', to: t, week: function (w) { return finAdd(w, -3).slice(0, 7) === m; }, chartFrom: finAdd(m + '-01', -7 * 8) };
+  }
+  // Month picker beside the periods: any month with data, newest first.
+  var finMonthDD = null;
+  function finMonthOptions() {
+    var now = finToday().slice(0, 7), first = now;
+    FIN.weeks.forEach(function (w) { var m = finAdd(w.week_ending, -3).slice(0, 7); if (m < first) first = m; });
+    FIN.expenses.forEach(function (e) { var m = String(e.spent_on).slice(0, 7); if (m < first) first = m; });
+    var out = [], y = +now.slice(0, 4), mo = +now.slice(5, 7);
+    for (var i = 0; i < 120; i++) {
+      var key = y + '-' + String(mo).padStart(2, '0');
+      out.push({ value: key, label: new Date(y, mo - 1, 1).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }) });
+      if (key <= first) break;
+      if (--mo < 1) { mo = 12; y--; }
+    }
+    return out;
+  }
+  function finRenderMonthDD() {
+    var seg = $('admFinRange'); if (!seg) return;
+    var root = $('admFinMonthDD');
+    if (!root) {
+      root = document.createElement('div');
+      root.className = 'adm-dd adm-dd-inline adm-fin-monthdd'; root.id = 'admFinMonthDD';
+      root.innerHTML = '<button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' + FIN_DD_CHEV + '</button><div class="adm-dd-menu" role="listbox" aria-label="Month" hidden></div>';
+      seg.parentNode.insertBefore(root, seg.nextSibling);
+      finMonthDD = makeDropdown(root, { placeholder: 'Pick a month', onChange: function (v) { if (!v) return; FIN.range = 'm:' + v; finSyncRange(); finRenderOverview(); } });
+    }
+    root.hidden = seg.hidden;
+    finMonthDD.setOptions(finMonthOptions(), /^m:/.test(FIN.range) ? FIN.range.slice(2) : '');
+    finSyncRange();
+  }
+  function finSyncRange() {
+    document.querySelectorAll('#admFinRange [data-fin-range]').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-fin-range') === FIN.range); });
+    var m = /^m:/.test(FIN.range) ? FIN.range.slice(2) : '', root = $('admFinMonthDD');
+    if (finMonthDD) finMonthDD.setValue(m, true);
+    if (root) root.classList.toggle('is-active', !!m);
   }
   function finGross(from, to) {
     if (!salesReady()) return null;
@@ -12733,14 +12773,14 @@
     finCheckAccess();
     wirePlatChart($('admFinChart'));
     wirePlatChart($('admFinExpChart'));
-    panel.addEventListener('click', function (e) {
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest || !e.target.closest('#admFinHeadTools')) return;
       var b;
       if (e.target.closest('#admFinSettingsBtn')) { FIN.view = FIN.view === 'main' ? 'settings' : 'main'; finRenderView(); window.scrollTo(0, 0); return; }
-      if ((b = e.target.closest('[data-fin-range]'))) {
-        FIN.range = b.getAttribute('data-fin-range');
-        document.querySelectorAll('#admFinRange [data-fin-range]').forEach(function (x) { x.classList.toggle('active', x === b); });
-        finRenderOverview(); return;
-      }
+      if ((b = e.target.closest('[data-fin-range]'))) { FIN.range = b.getAttribute('data-fin-range'); finSyncRange(); finRenderOverview(); }
+    });
+    panel.addEventListener('click', function (e) {
+      var b;
       if ((b = e.target.closest('[data-fin-sheet]'))) { FIN.sheet = b.getAttribute('data-fin-sheet'); finRenderSheet(); return; }
       if (e.target.closest('#admFinAddWeek')) { finAddWeek(); return; }
       if ((b = e.target.closest('[data-fin-del-week]'))) { finDeleteWeek(b.getAttribute('data-fin-del-week')); return; }

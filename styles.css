@@ -6534,3 +6534,22 @@ body.adm-fin-viewing { overflow: hidden; }
 .adm-xf-split b { font-weight: 700; }
 .adm-xf-hassplit:hover .adm-xf-split, .adm-xf-hassplit:focus-visible .adm-xf-split { display: flex; }
 .adm-pc-tip .adm-xf-sub { padding-left: 18px; font-size: 11.5px; color: var(--fg-3); }
+
+/* Finances: month picker beside the periods; the whole bar pins like the Analytics range */
+.adm-fin-monthdd[hidden] { display: none; }
+.adm-fin-monthdd .adm-dd-btn { min-width: 150px; padding: 7px 13px; border-radius: var(--r-pill); font-size: 12px; background: var(--ink-25); color: var(--fg-2); }
+.adm-fin-monthdd.is-active .adm-dd-btn { color: #fff; background: rgba(255,255,255,0.11); }
+.adm-fin-monthdd .adm-dd-val.placeholder { color: var(--fg-2); }
+.adm-fin-monthdd .adm-dd-menu { left: auto; right: 0; max-height: 320px; }
+html[data-theme="light"] .adm-fin-monthdd .adm-dd-btn { background: rgba(0,0,0,0.04); }
+html[data-theme="light"] .adm-fin-monthdd.is-active .adm-dd-btn { color: var(--fg); background: rgba(0,0,0,0.08); }
+.adm-range-dock .adm-fin-tools { flex-wrap: nowrap; padding: 4px; border-radius: var(--r-pill); border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--bg-2, #16171b) 88%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 8px 28px rgba(0,0,0,0.35); }
+html[data-theme="light"] .adm-range-dock .adm-fin-tools { background: color-mix(in srgb, #fff 90%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+@media (max-width: 720px) {
+  .adm-range-dock .adm-fin-tools { flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 24px); border-radius: 18px; }
+  .adm-range-dock #admFinSettingsBtn { display: none; }
+  .adm-range-dock .adm-fin-tools > * { flex: 0 0 auto; }
+  .adm-range-dock .adm-fin-tools .adm-seg button { white-space: nowrap; }
+  .adm-range-dock .adm-dd-menu { top: auto; bottom: calc(100% + 8px); }
+}
