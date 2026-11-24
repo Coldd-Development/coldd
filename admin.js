@@ -4246,26 +4246,118 @@
   // (those take the product's own category); the title splits them.
   var AN_BUILDING_RE = /\b(buildings?|house|houses|home|townhouse|apartments?|flats?|filler|hospital|station|school|hotel|motel|office|tower|mall|shopping|store|shop|shophouse|church|mosque|temple|warehouse|garage|bank|cafe|bakery|restaurant|diner|pharmacy|prison|jail|jailhouse|police|barracks|hangar|hanger|headquarters|hq|facility|base|compound|parliament|killhouse|blacksmith|shed|castle|palace|gate|depot|dealership|post|complex|range|airport)\b/i;
   var AN_ASSETISH_RE = /\b(assets?|props?)\b/i, AN_HAS_BUILDING_RE = /\b(buildings?|house|houses)\b/i;
+  // A whole building named outright (not a pack or kit of parts) is always a Building.
+  var AN_WHOLE_BUILDING_RE = /\b(townhouses?|apartments?|airport|hospital|school|hotel|motel|church|mosque|mansion|villa|skyscraper|headquarters|department)\b/i;
+  var AN_KITISH_RE = /\b(packs?|kits?|props?|assets?)\b/i;
   var AN_BOAT_RE = /\b(boats?|motorboat|ships?|yacht|naval|navy|ferry|submarine|landing craft|littoral|frigate|destroyer|carrier|canoe|kayak|jet ?ski)\b/i;
   // Not "graphics": in a title that usually means a lighting / visual quality setup.
   var AN_GRAPHIC_RE = /\b(logos?|icons?|thumbnails?|banners?|textures?|decals?|gfx|emblems?)\b/i;
+  var AN_BBB_PAIRS = { 'Roblox models': ['Buildings', 'Assets'], 'Roblox vehicles': ['Vehicles', 'Boats'], 'Roblox graphics & UI': ['Graphics', 'Scripts & UI'] };
+  // What the title's words say for a lumped-together BuiltByBit category; sure = a clear word.
+  function bbbRule(c, t) {
+    if (c === 'Roblox models') {
+      if (AN_ASSETISH_RE.test(t) && !AN_HAS_BUILDING_RE.test(t)) return { cat: 'Assets', sure: true };
+      if (AN_HAS_BUILDING_RE.test(t) || (AN_WHOLE_BUILDING_RE.test(t) && !AN_KITISH_RE.test(t))) return { cat: 'Buildings', sure: true };
+      return { cat: AN_BUILDING_RE.test(t) ? 'Buildings' : 'Assets', sure: false };
+    }
+    if (c === 'Roblox vehicles') return AN_BOAT_RE.test(t) ? { cat: 'Boats', sure: true } : { cat: 'Vehicles', sure: false };
+    if (c === 'Roblox graphics & UI') return AN_GRAPHIC_RE.test(t) ? { cat: 'Graphics', sure: true } : { cat: 'Scripts & UI', sure: false };
+    return null;
+  }
   function bbbCategory(res) {
-    var c = res.category || '', t = res.title || '';
-    if (c === 'Roblox models') return AN_BUILDING_RE.test(t) && (!AN_ASSETISH_RE.test(t) || AN_HAS_BUILDING_RE.test(t)) ? 'Buildings' : 'Assets';
-    if (c === 'Roblox vehicles') return AN_BOAT_RE.test(t) ? 'Boats' : 'Vehicles';
-    if (c === 'Roblox graphics & UI') return AN_GRAPHIC_RE.test(t) ? 'Graphics' : 'Scripts & UI';
-    return AN_BBB_CAT[c] || c;
+    var c = res.category || '', t = res.title || '', r = bbbRule(c, t);
+    if (!r) return AN_BBB_CAT[c] || c;
+    // No clear word: what our own catalogue does with names like it, else the rule.
+    return r.sure ? r.cat : catGuess(t, AN_BBB_PAIRS[c]) || r.cat;
+  }
+
+  // ---- Categories that learn ----
+  // Labelled names teach which words go with which category: every catalogue product
+  // (its own category), every category set by hand and BuiltByBit listings whose category
+  // is one of ours outright. A name with no label takes the category its words point to,
+  // when they point clearly. It retrains whenever the products, labels or listings
+  // change, so adding or moving a product on the site re-sorts similar names.
+  var CAT_STOP = ['the', 'a', 'an', 'and', 'of', 'for', 'with', 'roblox', 'by', 'in', 'on', 'to', 'pack', 'packs', 'bundle', 'bundles', 'kit',
+    'set', 'collection', 'edition', 'version', 'premium', 'ultimate', 'hd', 'free', 'custom', 'full', 'complete', 'mega', 'new', 'high', 'quality',
+    'low', 'poly', 'realistic', 'detailed', 'best', 'cheap', 'ready', 'fully', 'scripted', 'unscripted', 'uncopylocked', 'open', 'source', 'x'];
+  var CAT_SURE_MIN = 0.9, CAT_MODEL = null;
+  function catWords(s) {
+    var out = [];
+    String(s || '').toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').forEach(function (w) {
+      if (!w || w.length < 2 || /\d/.test(w) || CAT_STOP.indexOf(w) >= 0) return;
+      if (w.length > 3 && /s$/.test(w) && !/(ss|us|is)$/.test(w)) w = w.replace(/ies$/, 'y').replace(/s$/, '');
+      if (out.indexOf(w) < 0) out.push(w);
+    });
+    return out;
+  }
+  function catModel() {
+    var prods = allProducts(), res = BBB.resources || [];
+    if (CAT_MODEL && CAT_MODEL.p === prods && CAT_MODEL.n === NAME_CAT && CAT_MODEL.r === res) return CAT_MODEL;
+    var m = { p: prods, n: NAME_CAT, r: res, cats: {}, df: {} };
+    function learn(title, cat, wt) {
+      if (!title || !cat || cat === 'Minecraft' || cat === 'Uncategorised') return;
+      var ws = catWords(title); if (!ws.length) return;
+      var c = m.cats[cat] = m.cats[cat] || { docs: 0, w: {} };
+      c.docs += wt;
+      ws.forEach(function (w) { c.w[w] = (c.w[w] || 0) + wt; m.df[w] = (m.df[w] || 0) + 1; });
+    }
+    prods.forEach(function (p) { learn(p.title, p.cat, 3); });
+    NAME_CAT_NAMES.forEach(function (x) { learn(x[0], x[1], 3); });
+    res.forEach(function (r) { if (!AN_BBB_PAIRS[r.category]) learn(r.title, AN_BBB_CAT[r.category], 1); });
+    CAT_MODEL = m;
+    return m;
+  }
+  // The category a name's words point to (among cands, or any), or '' when unsure.
+  // Naive Bayes over which words appear, flat prior (a category's size doesn't sway it),
+  // only words at least two labelled names share.
+  function catGuess(title, cands) {
+    var m = catModel(), ws = catWords(title).filter(function (w) { return m.df[w] >= 2; });
+    if (!ws.length) return '';
+    cands = (cands || Object.keys(m.cats)).filter(function (c) { return m.cats[c] && m.cats[c].docs >= 3; });
+    if (cands.length < 2) return '';
+    var sc = cands.map(function (c) {
+      var k = m.cats[c], s = 0;
+      ws.forEach(function (w) { s += Math.log(((k.w[w] || 0) + 0.3) / (k.docs + 0.6)); });
+      return s;
+    });
+    var mx = Math.max.apply(null, sc), z = 0;
+    sc.forEach(function (s) { z += Math.exp(s - mx); });
+    var best = cands[sc.indexOf(mx)];
+    if (1 / z < CAT_SURE_MIN) return '';
+    return ws.some(function (w) { return m.cats[best].w[w]; }) ? best : '';
+  }
+  // BuiltByBit listings imported into the catalogue (public.bbb_imports): resource id ->
+  // product database id. Their sales belong to that product whatever either is called.
+  var BBB_LINK = {}, BBB_LINK_BY = null;
+  function refreshBbbLinks() {
+    if (!window.coldSupabase) return Promise.resolve();
+    return window.coldSupabase.from('bbb_imports').select('resource_id, product_id').then(function (r) {
+      if (r.error) { console.error('[admin] BuiltByBit imports:', r.error.message); return; }
+      var m = {};
+      (r.data || []).forEach(function (x) { if (x.resource_id != null && x.product_id) m[String(x.resource_id)] = x.product_id; });
+      if (JSON.stringify(m) === JSON.stringify(BBB_LINK)) return;
+      BBB_LINK = m; AN_ITEMS = null;
+      if (curPanel === 'analytics') renderAnalytics();
+    });
+  }
+  function bbbLinkedProduct(resourceId) {
+    var dbId = BBB_LINK[String(resourceId)]; if (!dbId) return null;
+    var prods = allProducts();
+    if (!BBB_LINK_BY || BBB_LINK_BY.src !== prods) { BBB_LINK_BY = { src: prods, m: {} }; prods.forEach(function (p) { if (p.dbId) BBB_LINK_BY.m[p.dbId] = p; }); }
+    return BBB_LINK_BY.m[dbId] || null;
   }
   var AN_ITEMS = null;
   function anAllItems() {
     var prods = allProducts();
-    if (AN_ITEMS && AN_ITEMS.a === ORDERS && AN_ITEMS.b === BBB.purchases && AN_ITEMS.c === PSALES && AN_ITEMS.d === prods && AN_ITEMS.e === BBB.resources && AN_ITEMS.f === FX_KEYS) return AN_ITEMS.list;
+    if (AN_ITEMS && AN_ITEMS.a === ORDERS && AN_ITEMS.b === BBB.purchases && AN_ITEMS.c === PSALES && AN_ITEMS.d === prods && AN_ITEMS.e === BBB.resources && AN_ITEMS.f === FX_KEYS && AN_ITEMS.g === BBB_LINK) return AN_ITEMS.list;
     var list = [], resById = {}, resByTitle = {};
     (BBB.resources || []).forEach(function (r) { resById[String(r.resource_id)] = r; var k = bbbNorm(r.title); if (k && !resByTitle[k]) resByTitle[k] = r; });
     function add(o) {
-      var p = matchProduct(o.id, o.title);
+      var p = (o.res && bbbLinkedProduct(o.res.resource_id)) || matchProduct(o.id, o.title);
       var res = o.res || resByTitle[bbbNorm(canonName(o.title))] || null;
-      var cat = p && p.cat ? p.cat : res && res.category ? bbbCategory(res) : nameCat(o.title);
+      // Our product's category, then one set by hand, then BuiltByBit's (split by the
+      // title), then what the name's words point to.
+      var cat = p && p.cat ? p.cat : nameCat(o.title) || (res && res.category ? bbbCategory(res) : '') || catGuess(o.title);
       var shown = p ? p.title : res && !o.res ? res.title : canonName(o.title || 'Unknown product');
       list.push({ pf: o.pf, t: o.t, aud: o.aud || 0, robux: o.robux || 0, title: shown,
         key: p ? 'p:' + p.id : 't:' + bbbNorm(shown), image: p && p.image ? window.imgUrl(p.image) : (res && res.cover_image_url) || '',
@@ -4296,7 +4388,7 @@
           buyer: s.buyer ? s.platform + ':' + String(s.buyer).toLowerCase() : '', buyerName: s.buyer, order: s.platform + ':' + s.id });
       });
     });
-    AN_ITEMS = { a: ORDERS, b: BBB.purchases, c: PSALES, d: prods, e: BBB.resources, f: FX_KEYS, list: list };
+    AN_ITEMS = { a: ORDERS, b: BBB.purchases, c: PSALES, d: prods, e: BBB.resources, f: FX_KEYS, g: BBB_LINK, list: list };
     return list;
   }
   function anIn(list, s, e) {
@@ -7101,7 +7193,7 @@
   var NAME_ALIAS = {};
   // Categories set on names that only sell on the marketplaces (product_name_aliases.category),
   // by normalised name.
-  var NAME_CAT = {};
+  var NAME_CAT = {}, NAME_CAT_NAMES = [];
   function nameCat(t) {
     if (!t) return '';
     var c = NAME_CAT[bbbNorm(t)];
@@ -7123,15 +7215,18 @@
     if (!window.coldSupabase) return Promise.resolve();
     return window.coldSupabase.from('product_name_aliases').select('alias, canonical, price_usd, category').then(function (res) {
       if (res.error) { console.error('[admin] name aliases:', res.error.message); return; }
-      var m = {}, cats = {};
+      var m = {}, cats = {}, named = [];
       (res.data || []).forEach(function (r) {
         if (!r.alias || !r.canonical) return;
-        if (r.category) { cats[bbbNorm(r.alias)] = r.category; cats[bbbNorm(r.canonical)] = r.category; }
+        if (r.category) {
+          cats[bbbNorm(r.alias)] = r.category; cats[bbbNorm(r.canonical)] = r.category;
+          named.push([r.alias, r.category]); if (r.canonical !== r.alias) named.push([r.canonical, r.category]);
+        }
         var e = m[bbbNorm(r.alias)] = m[bbbNorm(r.alias)] || { any: null, priced: [] };
         if (r.price_usd != null && Number(r.price_usd) > 0) e.priced.push({ price: Number(r.price_usd), name: r.canonical });
         else e.any = r.canonical;
       });
-      NAME_ALIAS = m; NAME_CAT = cats;
+      NAME_ALIAS = m; NAME_CAT = cats; NAME_CAT_NAMES = named;
       PM = { src: null, list: [], memo: {} }; ORDER_NAMES = null; AN_ITEMS = null;
       if (curPanel === 'orders') renderOrders();
       if (curPanel === 'analytics') renderAnalytics();
@@ -8449,7 +8544,7 @@
   // Products are still being added: every 5 minutes the pages that match sales
   // to products (pictures, links, prices, categories) reload the product list,
   // so a new match shows up without a page refresh.
-  setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'orders' || curPanel === 'analytics')) { refreshProducts(); refreshNameAliases(); } }, 5 * 60 * 1000);
+  setInterval(function () { if (!document.hidden && (curPanel === 'home' || curPanel === 'orders' || curPanel === 'analytics')) { refreshProducts(); refreshNameAliases(); refreshBbbLinks(); } }, 5 * 60 * 1000);
 
   // ---- Order info popup: everything we know about one order ----
   var OI_EL = null, OI_RETURN = null;
@@ -11528,6 +11623,7 @@
   // Dashboard home: marketplace sales outside BuiltByBit, Today's work tasks
   // (shared between admins, so re-read every minute) and the all-time view count.
   refreshNameAliases();
+  refreshBbbLinks();
   refreshPlatformSales();
   refreshTodos();
   refreshLifetimeViews();
