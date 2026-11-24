@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261125o" />
+  <link rel="stylesheet" href="/styles.css?v=20261125p" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -112,6 +112,7 @@
           </a>
           <nav class="dash-nav adm-nav" aria-label="Admin">
               <a href="/admin/" data-panel="home" class="active"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Dashboard</span></a>
+              <a href="/admin/finances/" data-panel="finances"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M21 12h-5a2 2 0 0 0 0 4h5v-4Z"/></svg><span>Finances</span><svg class="adm-nav-lock" id="admNavFinLock" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Locked" hidden><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></a>
               <a href="/admin/tasks/" data-panel="tasks"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Tasks</span><span class="adm-nav-count" id="admTaskNavCount" hidden></span></a>
               <span class="adm-nav-label">Store</span>
               <a href="/admin/analytics/" data-panel="analytics"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg><span>Analytics</span></a>
@@ -198,6 +199,77 @@
                 <kbd aria-hidden="true">Enter</kbd>
               </form>
               <div class="adm-work-list" id="admTasksList"></div>
+            </div>
+          </section>
+
+          <section class="dash-panel adm-pg adm-fin" id="adm-panel-finances" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Finances</h1>
+              <div class="adm-seg" id="admFinRange" role="group" aria-label="Date range" hidden>
+                <button type="button" data-fin-range="4w">4 weeks</button>
+                <button type="button" data-fin-range="13w">13 weeks</button>
+                <button type="button" data-fin-range="fy" class="active">This year</button>
+                <button type="button" data-fin-range="all">All time</button>
+              </div>
+            </div>
+
+            <div class="adm-hp adm-fin-lock" id="admFinLocked" hidden>
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              <h2>Finances is locked</h2>
+              <p>Only the owner's accounts can open this page.</p>
+            </div>
+
+            <div class="adm-fin-body" id="admFinBody" hidden>
+              <div class="adm-seg adm-sd-tabs" id="admFinTabs" role="group" aria-label="Section">
+                <button type="button" class="adm-tab active" data-fin-view="overview">Overview</button>
+                <button type="button" class="adm-tab" data-fin-view="weeks">Weekly log</button>
+                <button type="button" class="adm-tab" data-fin-view="expenses">Expenses</button>
+                <button type="button" class="adm-tab" data-fin-view="tax">Tax</button>
+                <button type="button" class="adm-tab" data-fin-view="settings">Settings</button>
+              </div>
+
+              <div class="adm-fin-view" id="admFinView-overview">
+                <div class="adm-hp adm-kpi"><div class="adm-kpi-grid" id="admFinKpis"></div></div>
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Net revenue</h2><span>by week, what reached the bank</span></div>
+                    <div class="adm-fin-legend"><span style="--pf:var(--accent)"><i></i>Net revenue</span><span style="--pf:var(--price)"><i></i>Profit</span></div></div>
+                  <div class="adm-plat-chart" id="admFinChart"></div>
+                </div>
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Where the money goes</h2><span>expenses in this range</span></div></div>
+                  <div id="admFinMix"></div>
+                </div>
+              </div>
+
+              <div class="adm-fin-view" id="admFinView-weeks" hidden>
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Weekly log</h2><span id="admFinWeeksSub"></span></div>
+                    <button class="btn btn-secondary adm-btn-sm" type="button" id="admFinAddWeek">Add next week</button></div>
+                  <div class="adm-plat-tablewrap adm-fin-sheetwrap"><table class="adm-plat-table adm-fin-sheet" id="admFinWeekTable"></table></div>
+                  <p class="adm-hint" style="margin-top:10px;">At the end of each week enter the net revenue that reached the bank, then move the tax transfer into the tax account. Expenses come from the expense log. TCG and other income are only used for the tax maths, because your tax depends on your total income.</p>
+                </div>
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Monthly summary</h2></div></div>
+                  <div class="adm-plat-tablewrap"><table class="adm-plat-table" id="admFinMonths"></table></div>
+                </div>
+              </div>
+
+              <div class="adm-fin-view" id="admFinView-expenses" hidden>
+                <div class="adm-hp" id="admFinExpForm"></div>
+                <div class="adm-hp" id="admFinExpList"></div>
+              </div>
+
+              <div class="adm-fin-view" id="admFinView-tax" hidden>
+                <div class="adm-hp adm-kpi"><div class="adm-kpi-grid" id="admFinTaxKpis"></div></div>
+                <div class="adm-hp" id="admFinInst"></div>
+                <div class="adm-hp" id="admFinGst"></div>
+                <div class="adm-hp" id="admFinIncomeTax"></div>
+                <p class="adm-hint">Estimates from your own numbers using the ATO rates in Settings. Not tax advice: check anything important with your accountant.</p>
+              </div>
+
+              <div class="adm-fin-view" id="admFinView-settings" hidden>
+                <div class="adm-hp" id="admFinSettings"></div>
+              </div>
             </div>
           </section>
 
@@ -1843,6 +1915,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261125o" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125o"></script>
+  <script src="/catalog.js?v=20261125p" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125p"></script>
 </body>
 </html>
