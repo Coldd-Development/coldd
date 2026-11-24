@@ -10581,7 +10581,8 @@
       else if (a.sent_at) label = a.error;
       else if (a.attempts >= 5) { label = 'Failed'; cls = ' err'; }
       else label = 'Sending';
-      return '<div class="adm-alert-row"><div class="adm-alert-main"><b>Sale for ' + esc(alertMoney(a.amount, a.currency)) + '!</b><span>' + esc(alertBody(a)) + '</span></div>' +
+      // What the phone showed (amounts in AU$, saved when sent); before sending, the sale itself.
+      return '<div class="adm-alert-row"><div class="adm-alert-main"><b>' + esc(a.sent_title || 'Sale for ' + alertMoney(a.amount, a.currency) + '!') + '</b><span>' + esc(a.sent_body || alertBody(a)) + '</span></div>' +
         '<div class="adm-alert-side"><span class="dt-badge' + cls + '"' + (a.error && !a.sent_at ? ' title="' + esc(a.error) + '"' : '') + '>' + esc(label) + '</span><small>' + esc(relTime(a.created_at)) + '</small></div></div>';
     }).join('') : '<p class="adm-hint">Every sale from now on shows here, with whether its alert was sent.</p>';
   }

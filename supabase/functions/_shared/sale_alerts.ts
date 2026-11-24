@@ -32,7 +32,28 @@ export function money(amount: number, currency: string): string {
   return SYMBOL[c] ? SYMBOL[c] + v : v + " " + c;
 }
 
-// "Sale for $24.99!" / "Catch a Fish just sold on BuiltByBit!" (the price is only in the title)
+// Rates to AU$ for this send (ECB via Frankfurter, the admin's own source), one request per
+// currency. A currency whose rate can't be fetched is shown as it is: never a lost alert.
+export async function audRates(currencies: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = { AUD: 1 };
+  const need = [...new Set(currencies.map((c) => String(c || "USD").toUpperCase()))].filter((c) => c !== "AUD" && c !== "ROBUX");
+  await Promise.all(need.map(async (c) => {
+    try {
+      const r = await fetch(`https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(c)}&symbols=AUD`, { signal: AbortSignal.timeout(5000) });
+      const v = Number((await r.json())?.rates?.AUD);
+      if (v > 0) out[c] = v;
+    } catch { /* shown in its own currency */ }
+  }));
+  return out;
+}
+// Money sales in AU$; Robux stays Robux (never converted).
+export function inAud(amount: number, currency: string, rates: Record<string, number>) {
+  const c = String(currency || "USD").toUpperCase();
+  if (c === "ROBUX" || !rates[c]) return { amount, currency: c };
+  return { amount: Math.round(amount * rates[c] * 100) / 100, currency: "AUD" };
+}
+
+// "Sale for A$38.62!" / "Catch a Fish just sold on BuiltByBit!" (the price is only in the title)
 export function alertText(a: { source: string; product: string | null; more: number; amount: number; currency: string }) {
   const price = money(Number(a.amount), a.currency);
   const where = PLATFORM_LABEL[a.source] || a.source;
@@ -97,6 +118,7 @@ export async function flushSaleAlerts(admin: any): Promise<{ sent: number; skipp
     admin.from("sale_alert_devices").select("*").eq("enabled", true),
   ]);
   const quietHours = isQuiet(st);
+  const rates = await audRates((due as Obj[]).map((a) => a.currency));
   const now = () => new Date().toISOString();
   for (const a of due as Obj[]) {
     let skip: string | null = null;
@@ -109,7 +131,7 @@ export async function flushSaleAlerts(admin: any): Promise<{ sent: number; skipp
       out.skipped++;
       continue;
     }
-    const text = alertText({ source: a.source, product: a.product, more: a.more, amount: Number(a.amount), currency: a.currency });
+    const text = alertText({ source: a.source, product: a.product, more: a.more, ...inAud(Number(a.amount), a.currency, rates) });
     const results = await Promise.all((devs as Obj[]).map(async (d) => {
       const err = await pushTo(d, { ...text, pushId: a.push_id, silent: a.quiet || quietHours }, st);
       await admin.from("sale_alert_devices").update(err ? { last_error: err } : { last_sent_at: now(), last_error: null }).eq("id", d.id);
@@ -117,7 +139,7 @@ export async function flushSaleAlerts(admin: any): Promise<{ sent: number; skipp
     }));
     const ok = results.some((e) => !e);
     if (ok) {
-      await admin.from("sale_alerts").update({ sent_at: now(), claimed_at: null, error: results.find((e) => e) || null }).eq("id", a.id);
+      await admin.from("sale_alerts").update({ sent_at: now(), claimed_at: null, error: results.find((e) => e) || null, sent_title: text.title, sent_body: text.body }).eq("id", a.id);
       out.sent++;
     } else {
       // Try again later: 1, 2, 4, 8 minutes (5 tries in all).

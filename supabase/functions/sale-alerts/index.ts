@@ -12,7 +12,7 @@
 //   supabase functions deploy sale-alerts --no-verify-jwt
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { flushSaleAlerts, pushTo } from "../_shared/sale_alerts.ts";
+import { alertText, audRates, flushSaleAlerts, inAud, pushTo } from "../_shared/sale_alerts.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -49,8 +49,10 @@ Deno.serve(async (req) => {
     if (body.device_id) q = q.eq("id", String(body.device_id));
     const [{ data: devs }, { data: st }] = await Promise.all([q, admin.from("sale_alert_settings").select("*").eq("id", true).maybeSingle()]);
     if (!devs?.length) return json({ ok: false, error: "Add a phone first." }, 400);
+    // A sample US$24.99 BuiltByBit sale, shown the way real alerts are (in AU$).
+    const sample = alertText({ source: "builtbybit", product: "Catch a Fish", more: 0, ...inAud(24.99, "USD", await audRates(["USD"])) });
     const results = await Promise.all(devs.map(async (d: { id: string; name: string }) => {
-      const err = await pushTo(d, { title: "Sale for $24.99!", body: "Catch a Fish just sold on BuiltByBit!", pushId: "sale-test", silent: false }, st || {});
+      const err = await pushTo(d, { ...sample, pushId: "sale-test", silent: false }, st || {});
       await admin.from("sale_alert_devices").update(err ? { last_error: err } : { last_sent_at: new Date().toISOString(), last_error: null }).eq("id", d.id);
       return { id: d.id, name: d.name, ok: !err, error: err };
     }));
