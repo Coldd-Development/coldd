@@ -111,8 +111,8 @@ export async function buildMatcher(admin: Obj): Promise<Matcher> {
 }
 
 // Saves platform reviews by external_id. A new one is published on its product (or hidden as
-// unmatched); one already stored gets its text, rating and reply refreshed (the reviewer can
-// edit it) but keeps its product and status, so an admin's own hide is never undone.
+// unmatched); one already stored gets its text and rating refreshed (the reviewer can edit it)
+// but keeps its product, status and any reply, so an admin's own hide or reply is never undone.
 export async function savePlatformReviews(admin: Obj, list: PlatformReview[], opts: { markSeen?: boolean; matcher?: Matcher } = {}) {
   const out = { read: list.length, added: 0, updated: 0, matched: 0, unmatched: 0 };
   if (!list.length) return out;
@@ -131,11 +131,15 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
   for (const r of list) {
     const old = have.get(r.external_id);
     if (old) {
-      const changed = old.text !== r.text || old.stars !== r.stars || old.recommended !== r.recommended || (old.reply ?? null) !== r.reply ||
+      // A reply written on coldd.dev is never replaced: the platform's own reply only fills an
+      // empty one.
+      const takeReply = !!r.reply && !old.reply;
+      const changed = old.text !== r.text || old.stars !== r.stars || old.recommended !== r.recommended || takeReply ||
         old.user_name !== r.user_name || (r.avatar_url && old.avatar_url !== r.avatar_url);
       if (!changed) continue;
       const { error } = await admin.from("reviews").update({
-        text: r.text, stars: r.stars, recommended: r.recommended, reply: r.reply, reply_at: r.reply ? (r.reply_at ?? now) : null,
+        text: r.text, stars: r.stars, recommended: r.recommended,
+        ...(takeReply ? { reply: r.reply, reply_at: r.reply_at ?? now } : {}),
         user_name: r.user_name, ...(r.avatar_url ? { avatar_url: r.avatar_url } : {}), updated_at: now,
       }).eq("id", old.id);
       if (error) throw new Error("update review: " + error.message);

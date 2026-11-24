@@ -214,7 +214,7 @@ Deno.serve(async (req: Request) => {
       let newestFirst = false, stored = 0, pagesRead = 0;
       // with=Buyer adds the buyer (username, avatar) to each purchase; with=Addon gives an
       // add-on purchase its add-on (title, and the listing it belongs to).
-      await pages(token, "/v2/resources/creator/purchases?with=Buyer,Addon", "purchases", async (rows) => {
+      await pages(token, "/v2/resources/creator/purchases?with=Buyer,Addon", "purchases", async (rows, page) => {
         pagesRead = page;
         if (page === 1) {
           const ts = rows.map((p) => num(p.created_at)).filter((n) => n > 0);
@@ -274,8 +274,9 @@ Deno.serve(async (req: Request) => {
             carousel_count: Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls.length : 0,
             carousel_image_urls: Array.isArray(r.carousel_image_urls) ? r.carousel_image_urls.filter((u: unknown) => typeof u === "string") : [],
             category: r.Category?.title ?? null,
-            purchases: r.purchases ?? null,
-            downloads: r.downloads ?? null,
+            // The API names these purchase_count / download_count.
+            purchases: r.purchase_count ?? r.purchases ?? null,
+            downloads: r.download_count ?? r.downloads ?? null,
             review_count: r.review_count ?? null,
             review_average: r.review_average ?? null,
             latest_version: r.LatestVersion?.version_string ?? null,
