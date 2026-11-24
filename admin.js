@@ -4673,7 +4673,7 @@
   ];
   var XF_SRC = { builtbybit: 'BuiltByBit', site: 'coldd.dev' };
   var XF_RATE = {
-    clearlydev: { pct: 0.175 },                           // only for a sale with no recorded net (ClearlyDev's ledger averages 17.5%)
+    clearlydev: { pct: 0.175, monthlyUsd: 2 },            // pct only for a sale with no recorded net (the ledger averages 17.5%); US$2 every month
     creatorstore: 0.098,                                  // only for a sale with no recorded net
     payhip: 0.143,                                        // only for a sale with no recorded net
     stripe: { pct: 0.035 + 0.02, fixedAud: 0.30 },        // international card + conversion to AU$
@@ -4731,14 +4731,20 @@
         if (p.adFee > 0) add('bbbad', t, usdToAudAt(p.adFee, t), gross, 1);
       });
     }
+    var cdFirst = Infinity;
     PSALES.forEach(function (s) {
       if (s.status === 'refunded' || s.currency === 'ROBUX' || !(s.usd > 0)) return;
       var gross = usdToAudAt(s.usd, s.t), fee = function (rate) { return usdToAudAt(s.net != null ? s.usd - s.net : s.usd * rate, s.t); };
       if (s.platform === 'creatorstore') add('creatorstore', s.t, fee(R.creatorstore), gross, 1);
-      else if (s.platform === 'clearlydev') add('clearlydev', s.t, fee(R.clearlydev.pct), gross, 1);
+      else if (s.platform === 'clearlydev') { add('clearlydev', s.t, fee(R.clearlydev.pct), gross, 1); if (s.t < cdFirst) cdFirst = s.t; }
       else if (s.platform === 'payhip') add('payhip', s.t, fee(R.payhip), gross, 1);
       else if (s.platform === 'parcel') add('parcel', s.t, gross * R.stripe.pct + R.stripe.fixedAud, gross, 1);
     });
+    // ClearlyDev's US$2 monthly charge, on the 1st of every month since the first sale.
+    if (isFinite(cdFirst)) {
+      var m = new Date(cdFirst); m = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+      for (; m.getTime() <= Date.now(); m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) add('clearlydev', m.getTime(), usdToAudAt(R.clearlydev.monthlyUsd, m.getTime()), 0, 0);
+    }
     XF_CACHE = { src: src, rows: out };
     return out;
   }
