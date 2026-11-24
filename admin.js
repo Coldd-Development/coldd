@@ -7599,7 +7599,7 @@
        rolling totals, so the sync records each day's spending just after
        midnight Sydney (robux_daily) for the spending graph.
      - Minimum balance: 3 months of spending (a month = the higher of the past
-       month and the past year's average), to the nearest 1,000 R$. Free to
+       month and the past year's average), rounded up to the next 10,000 R$. Free to
        DevEx: the balance above it, once that reaches Roblox's 30,000 R$ minimum.
      ================================================================ */
   var GRX = { state: null, stateLoaded: false, src: {}, loading: {} };
@@ -7650,9 +7650,21 @@
     var now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + (now.getDate() > GRX_DEVEX_DAY ? 1 : 0), GRX_DEVEX_DAY);
   }
-  // [time, key, value] points into the range's buckets (the order-volume chart's grouping).
-  function grxSeries(points, grain, firstMs, keys) {
-    var b = volBuckets([{ t: firstMs || Date.now() }], grain), buckets = b.buckets, n = buckets.length;
+  // Weekly buckets from a given start (the spending graph's own span).
+  function grxWeeksFrom(startMs) {
+    var out = [], s = volFloor(new Date(startMs), 'week'), now = Date.now();
+    while (s.getTime() <= now && out.length < 400) {
+      var e = volNext(s, 'week');
+      out.push({ start: s, end: e, short: s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
+        long: 'Week of ' + s.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) });
+      s = e;
+    }
+    return { buckets: out, step: Math.max(1, Math.ceil(out.length / 8)) };
+  }
+  // [time, key, value] points into the range's buckets (the order-volume chart's grouping),
+  // or into weeks from startMs when weeksFrom is set.
+  function grxSeries(points, grain, firstMs, keys, weeksFrom) {
+    var b = weeksFrom ? grxWeeksFrom(weeksFrom) : volBuckets([{ t: firstMs || Date.now() }], grain), buckets = b.buckets, n = buckets.length;
     var ends = buckets.map(function (x) { return x.end.getTime(); }), first = buckets[0].start.getTime();
     var data = {};
     keys.forEach(function (k) { data[k] = buckets.map(function () { return 0; }); });
@@ -7791,11 +7803,13 @@
       else if (!sp.length) {
         spBox.__rbx = null;
         var known = ['Week', 'Month', 'Year'].map(function (wn) { var o = grxOut(wn); return o == null ? null : GRX_WIN_TEXT[wn].toLowerCase() + ' ' + robuxRaw(o); }).filter(Boolean);
-        spBox.innerHTML = '<div class="adm-grx-empty"><p>Daily spending builds up from tonight</p><small>Roblox only gives totals' + (known.length ? ': ' + esc(known.join(', ')) : '') + '</small></div>';
+        spBox.innerHTML = '<div class="adm-grx-empty"><p>Weekly spending builds up from tonight</p><small>Roblox only gives totals' + (known.length ? ': ' + esc(known.join(', ')) : '') + '</small></div>';
       } else {
+        // One bar per week, over the page's range but never less than the past 8 weeks.
+        var spFrom = RANGE_DAYS ? Math.min(Date.now() - (RANGE_DAYS - 1) * DAY_MS, Date.now() - 55 * DAY_MS) : new Date(sp[0][0] + 'T00:00:00').getTime();
         var sg = grxSeries(sp.map(function (r) { return [new Date(r[0] + 'T12:00:00').getTime(), 'out', Number(r[1]) || 0]; }),
-          grxGrain() === 'hour' ? 'day' : grxGrain(), new Date(sp[0][0] + 'T00:00:00').getTime(), ['out']);
-        spBox.__rbx = { buckets: sg.buckets, step: sg.step, aria: 'Robux spent over the selected range',
+          'week', 0, ['out'], spFrom);
+        spBox.__rbx = { buckets: sg.buckets, step: sg.step, aria: 'Robux spent per week',
           series: [{ key: 'out', label: 'Spent', color: 'var(--fg-3)', data: sg.data.out }] };
         drawRbxChart(spBox);
       }
@@ -7805,12 +7819,13 @@
       if (!ready) { keepBox.innerHTML = anFig('Minimum balance', skel, '', '', '&nbsp;') + anFig('Free to DevEx', skel, '', '', '&nbsp;'); return; }
       var m = grxOut('Month'), y = grxOut('Year');
       var monthly = Math.max(m || 0, y ? y / 12 : 0);
-      var keep = Math.round(monthly * GRX_KEEP_MONTHS / 1000) * 1000;
+      // Rounded up to the next 10,000 R$, so it always errs on the safe side.
+      var keep = Math.ceil(monthly * GRX_KEEP_MONTHS / 10000) * 10000;
       var free = bal == null ? null : bal - keep, freeVal, freeSub;
       if (free == null) { freeVal = '–'; freeSub = 'Needs the group balance'; }
       else if (free < DEVEX_MIN_ROBUX) { freeVal = robuxRaw(0); freeSub = '≈ ' + grxAud(0) + ' · ' + (free < 0 ? robuxRaw(-free) + ' under the minimum' : 'DevEx needs ' + robuxRaw(DEVEX_MIN_ROBUX)); }
       else { freeVal = robuxRaw(free); freeSub = '≈ ' + grxAud(free) + ' · next DevEx ' + esc(grxNextDevex().toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })); }
-      keepBox.innerHTML = anFig('Minimum balance', robuxRaw(keep), '', '', GRX_KEEP_MONTHS + ' months of spending, to the nearest 1,000') +
+      keepBox.innerHTML = anFig('Minimum balance', robuxRaw(keep), '', '', GRX_KEEP_MONTHS + ' months of spending, rounded up to the next 10,000') +
         anFig('Free to DevEx', freeVal, '', '', freeSub);
     }
   }
