@@ -11810,7 +11810,10 @@
     return out;
   }
   function finCatColor(name) { var all = finAllCats(), i = all.indexOf(name); return FIN_COLORS[(i < 0 ? all.length : i) % FIN_COLORS.length]; }
-  function finWeekLabel(we) { return finShort(finAdd(we, -6)) + ' to ' + finShort(we); }
+  // "November Week 1 (7th)": named after the month and date the week ends on (ends 1st to 7th = Week 1).
+  function finOrd(n) { var s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'; return n + s; }
+  function finWeekLabel(we) { var d = finD(we), n = d.getUTCDate(); return d.toLocaleDateString('en-AU', { month: 'long', timeZone: 'UTC' }) + ' Week ' + Math.ceil(n / 7) + ' (' + finOrd(n) + ')'; }
+  function finWeekDates(we) { return finShort(finAdd(we, -6)) + ' to ' + finShort(we); }
 
   /* ---- Tax maths (the sheet's rules, plus the Medicare phase-in and the low income tax offset) ---- */
   function finTaxOn(p) {
@@ -11971,7 +11974,7 @@
   }
   function finBuckets(weeks) {
     return weeks.map(function (we) {
-      return { start: new Date(finAdd(we, -6) + 'T00:00:00+10:00'), end: new Date(finAdd(we, 1) + 'T00:00:00+10:00'), short: finShort(we), long: finWeekLabel(we) };
+      return { start: new Date(finAdd(we, -6) + 'T00:00:00+10:00'), end: new Date(finAdd(we, 1) + 'T00:00:00+10:00'), short: finShort(we), long: finWeekLabel(we) + ' <span>' + finWeekDates(we) + '</span>' };
     });
   }
   function finChartWeeks(per) {
@@ -12067,7 +12070,7 @@
       '<th scope="col" class="adm-fin-oth">TCG revenue</th><th scope="col">TCG expenses</th><th scope="col">Other income</th><th scope="col">Tax withheld</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead><tbody>' +
       rows.slice().reverse().map(function (r) {
         var tip = Math.abs(r.tcgT) >= 0.005 ? 'TCG part: ' + finM(r.tcgT) : '';
-        return '<tr' + (r.we === latest ? ' class="is-latest"' : '') + '><th scope="row">' + esc(finWeekLabel(r.we)) + '</th>' + inp(r, 'revenue', 'Net revenue') +
+        return '<tr' + (r.we === latest ? ' class="is-latest"' : '') + '><th scope="row" title="' + esc(finWeekDates(r.we)) + '">' + esc(finWeekLabel(r.we)) + '</th>' + inp(r, 'revenue', 'Net revenue') +
           '<td><button type="button" class="adm-fin-exp" data-fin-week-exp="' + r.we + '" title="See or log this week\'s expenses">' + finM(r.exp) + '</button></td>' +
           '<td class="' + (r.profit < 0 ? 'is-neg' : '') + '">' + finM(r.profit) + '</td>' +
           '<td class="adm-fin-transfer"' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + finM(r.colddT) + '</td>' +
