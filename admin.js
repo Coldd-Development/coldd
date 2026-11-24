@@ -4223,7 +4223,7 @@
     var site = sumSales(sales, w.start, w.end, 'site'), siteP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd, 'site') : null;
     var conv = v.sessions ? site.n / v.sessions * 100 : 0, convP = vP && vP.sessions ? siteP.n / vP.sessions * 100 : 0;
     grid.innerHTML = [
-      kpiCell({ label: 'Sales', value: fmtA(cur.aud, cur.aud >= 1000), count: plural(cur.n, 'sale'), delta: anDelta(cur.aud, prev && prev.aud, w),
+      kpiCell({ label: 'Gross sales', value: fmtA(cur.aud, cur.aud >= 1000), count: plural(cur.n, 'sale'), delta: anDelta(cur.aud, prev && prev.aud, w),
         sub: cur.robux ? '+ ' + robuxRaw(cur.robux) + ' in Robux sales' : 'No Robux sales', panel: 'orders' }),
       kpiCell({ label: 'Average sale', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? '' : 'No money sales' }),
       kpiCell({ label: 'Site visits', value: num(v.sessions), delta: anDelta(v.sessions, vP && vP.sessions, w), sub: num(v.views) + ' page views' + (w.start ? '' : ', last 120 days') }),
@@ -4841,7 +4841,7 @@
     var w = anWindow();
     if (!salesReady()) {
       var kp = $('admAnKpis');
-      if (kp) kp.innerHTML = ['Sales', 'Average sale', 'Site visits', 'Site conversion'].map(function (l) {
+      if (kp) kp.innerHTML = ['Gross sales', 'Average sale', 'Site visits', 'Site conversion'].map(function (l) {
         return '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"><span class="adm-skel adm-skel-sm"></span></span><span class="adm-kpi-sub">&nbsp;</span></div>';
       }).join('');
       var ch = $('admAnChart'); if (ch) ch.innerHTML = '<div class="adm-skel adm-skel-chart"></div>';
@@ -4852,7 +4852,7 @@
     var chart = $('admAnChart');
     if (chart) {
       var b = anBuckets(sales);
-      chart.__chart = pfChartData(sales, b.buckets, b.step, 'Sales in AU$ for each platform over the selected range');
+      chart.__chart = pfChartData(sales, b.buckets, b.step, 'Gross sales in AU$ for each platform over the selected range');
       drawPlatChart(chart);
     }
     var label = RANGE_DAYS === 1 ? '24h' : RANGE_DAYS + 'd';
