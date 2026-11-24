@@ -17,6 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyRobloxCookieBroken } from "../_shared/roblox.ts";
+import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
 
 const API = "https://apis.roblox.com/marketplace-fiat-service/v1/seller/payments";
 const DIVISOR = 1_000_000_000;
@@ -166,5 +167,8 @@ Deno.serve(async (req) => {
     ...(error ? {} : { last_ok_at: new Date().toISOString() }),
     ...(newest ? { newest_sale_at: newest } : {}),
   });
+  // New sales just saved: send their phone alerts now (the database trigger and the
+  // sale-alerts cron job are the backups).
+  await flushSaleAlerts(admin).catch(() => null);
   return json({ ok: !error, pages, read: rows.length, written, error: error || undefined });
 });

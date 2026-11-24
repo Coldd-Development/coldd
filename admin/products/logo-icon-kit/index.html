@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261125i" />
+  <link rel="stylesheet" href="/styles.css?v=20261125j" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -1461,6 +1461,7 @@
               <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="roblox">Roblox</button>
               <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="staff">Staff &amp; Whitelist</button>
               <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="users">Users</button>
+              <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="alerts">Phone alerts</button>
               <button type="button" class="adm-tab adm-sitemgmt-btn" data-view="audit">Audit Log</button>
             </div>
 
@@ -1602,6 +1603,64 @@
                   <span class="adm-note" id="admGrantMsg"></span>
                   <div class="adm-note-warn" id="admGrantOwnedWarn" hidden></div>
                 </form>
+              </div>
+            </div>
+
+<div id="admSiteMgmtAlertsView" hidden>
+              <div class="adm-hp adm-sd-card">
+                <div class="dash-card-head">
+                  <h2>Phone alerts</h2>
+                  <span class="dt-badge" id="admAlertState">Loading…</span>
+                </div>
+                <p class="adm-hint">A notification on your iPhone for every sale on every platform, through the free Bark app. Each phone has its own encryption key, so only that phone can read its alerts.</p>
+                <div class="adm-alert-phones" id="admAlertPhones"></div>
+                <div class="adm-alert-add">
+                  <label class="adm-field"><span>Phone name</span><input maxlength="40" type="text" id="admAlertName" class="adm-input" placeholder="iPhone" /></label>
+                  <label class="adm-field"><span>Bark link</span><input maxlength="300" type="text" id="admAlertLink" class="adm-input" placeholder="https://api.day.app/..." autocomplete="off" spellcheck="false" /></label>
+                  <button class="btn btn-secondary adm-btn-sm" id="admAlertAddBtn" type="button">Add phone</button>
+                </div>
+                <p class="adm-hint" style="margin-top:8px;">In Bark, copy the link shown at the top of its home screen and paste it here.</p>
+                <div class="adm-alert-setup" id="admAlertSetup" hidden></div>
+                <div class="adm-edit-msg" id="admAlertMsg"></div>
+              </div>
+              <div class="adm-hp adm-sd-card">
+                <div class="dash-card-head"><h2>What to send</h2></div>
+                <label class="adm-check"><input type="checkbox" id="admAlertEnabled" checked /> Send sale alerts</label>
+                <div class="adm-field" style="margin-top:14px;"><span>Platforms</span><div class="adm-alert-pfs" id="admAlertPfs"></div></div>
+                <div class="adm-alert-grid">
+                  <label class="adm-field"><span>Only sales over (US$)</span><input type="number" min="0" step="1" id="admAlertMin" class="adm-input" placeholder="0" /></label>
+                  <label class="adm-field"><span>Quiet from</span><input type="time" id="admAlertQuietFrom" class="adm-input" /></label>
+                  <label class="adm-field"><span>Quiet until</span><input type="time" id="admAlertQuietTo" class="adm-input" /></label>
+                </div>
+                <p class="adm-hint" style="margin-top:8px;">Sydney time. Sales during quiet hours still arrive, silently.</p>
+                <div class="adm-alert-grid">
+                  <div class="adm-field"><span>Sound</span>
+                    <div class="adm-dd adm-dd-inline" id="admAlertSoundDD">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val"></span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Sound" hidden></div>
+                    </div>
+                  </div>
+                  <div class="adm-field"><span>Alert type</span>
+                    <div class="adm-dd adm-dd-inline" id="admAlertLevelDD">
+                      <button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="adm-dd-val"></span>
+                        <svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      <div class="adm-dd-menu" role="listbox" aria-label="Alert type" hidden></div>
+                    </div>
+                  </div>
+                </div>
+                <label class="adm-field" style="margin-top:14px;"><span>Custom sound link (.caf, under 30 seconds)</span><input maxlength="300" type="url" id="admAlertSoundUrl" class="adm-input" placeholder="https://coldd.dev/sounds/sale.caf" spellcheck="false" /></label>
+                <p class="adm-hint" style="margin-top:8px;">Your phone downloads it once and plays it for every sale. Leave empty to use the sound above.</p>
+                <button class="btn btn-primary adm-btn-sm" id="admAlertSaveBtn" type="button" style="margin-top:18px;"><span class="btn-label">Save</span><span class="btn-spinner" hidden></span></button>
+                <div class="adm-edit-msg" id="admAlertSaveMsg"></div>
+              </div>
+              <div class="adm-hp adm-sd-card">
+                <div class="dash-card-head"><h2>Recent alerts</h2></div>
+                <div class="adm-alert-recent" id="admAlertRecent"></div>
               </div>
             </div>
 
@@ -1783,6 +1842,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261125i" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125i"></script>
+  <script src="/catalog.js?v=20261125j" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125j"></script>
 </body>
 </html>

@@ -10489,6 +10489,157 @@
     $('admSiteMgmtStaffView').hidden = view !== 'staff';
     $('admSiteMgmtUsersView').hidden = view !== 'users';
     $('admSiteMgmtAuditView').hidden = view !== 'audit';
+    $('admSiteMgmtAlertsView').hidden = view !== 'alerts';
+    if (view === 'alerts') loadAlerts();
+  });
+
+  /* ---- Phone alerts (Site Management) ----
+     A push to your iPhone for every sale, through the free Bark app: the sales triggers
+     queue them (public.sale_alerts) and the sale-alerts function sends them. A phone is
+     added from the link Bark shows and gets its own encryption key, typed into Bark once,
+     so only that phone can read its alerts. */
+  var ALERTS = null, ALERTS_FORM_SET = false;
+  var ALERT_PFS = [['site', 'coldd.dev'], ['builtbybit', 'BuiltByBit'], ['creatorstore', 'Creator Store'], ['clearlydev', 'ClearlyDev'], ['payhip', 'Payhip'], ['parcel', 'Parcel']];
+  var ALERT_SOUNDS = ['paymentsuccess', 'alarm', 'anticipate', 'bell', 'birdsong', 'bloom', 'calypso', 'chime', 'choo', 'descent', 'electronic', 'fanfare', 'glass',
+    'gotosleep', 'healthnotification', 'horn', 'ladder', 'mailsent', 'minuet', 'multiwayinvitation', 'newmail', 'newsflash', 'noir', 'shake', 'sherwoodforest',
+    'spell', 'suspense', 'telegraph', 'tiptoes', 'typewriters', 'update'];
+  // Alerts the sender chose not to send (not failures).
+  var ALERT_SKIPS = ['Phone alerts are off', 'Under the minimum amount', 'No phone added'];
+  var alertSoundDD = makeDropdown($('admAlertSoundDD'), {});
+  var alertLevelDD = makeDropdown($('admAlertLevelDD'), {});
+  alertSoundDD.setOptions(ALERT_SOUNDS.map(function (s) { return { value: s, label: s === 'paymentsuccess' ? 'Payment success' : s.charAt(0).toUpperCase() + s.slice(1) }; }), 'paymentsuccess');
+  alertLevelDD.setOptions([{ value: 'timeSensitive', label: 'Time sensitive (comes through Focus)' }, { value: 'active', label: 'Normal' },
+    { value: 'critical', label: 'Critical (rings on silent)' }], 'timeSensitive');
+  if ($('admAlertPfs')) $('admAlertPfs').innerHTML = ALERT_PFS.map(function (p) {
+    return '<label class="adm-check"><input type="checkbox" value="' + p[0] + '" checked /> ' + esc(p[1]) + '</label>';
+  }).join('');
+
+  function alertMoney(a, c) {
+    c = String(c || 'USD').toUpperCase();
+    if (c === 'ROBUX') return 'R$' + Math.round(Number(a) || 0).toLocaleString('en-US');
+    var sym = { USD: '$', AUD: 'A$', EUR: '€', GBP: '£', CAD: 'C$', NZD: 'NZ$' }[c];
+    var v = (Number(a) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return sym ? sym + v : v + ' ' + c;
+  }
+  // The alert's text, as the phone shows it.
+  function alertBody(a) {
+    var where = (ALERT_PFS.filter(function (x) { return x[0] === a.source; })[0] || [0, a.source])[1], p = alertMoney(a.amount, a.currency);
+    return (a.product ? a.product + (a.more > 0 ? ' + ' + a.more + ' more' : '') : 'A ' + where + ' product') + ' just sold for ' + p + ' on ' + where + '!';
+  }
+  function alertMsg(id, text, bad) { var m = $(id); if (!m) return; m.textContent = text || ''; m.className = 'adm-edit-msg' + (text ? (bad ? ' err' : ' ok') : ''); }
+  function loadAlerts() {
+    if (!window.coldSupabase) return;
+    window.coldSupabase.rpc('admin_sale_alerts_state').then(function (r) {
+      if (r.error) { alertMsg('admAlertMsg', 'Phone alerts could not be loaded: ' + r.error.message, true); return; }
+      ALERTS = r.data || {};
+      renderAlerts();
+    });
+  }
+  // Keeps the recent list current while the tab is open.
+  setInterval(function () {
+    var v = $('admSiteMgmtAlertsView');
+    if (v && !v.hidden && curPanel === 'sitemgmt' && !document.hidden) loadAlerts();
+  }, 20000);
+  function renderAlerts() {
+    var st = ALERTS && ALERTS.settings, devs = (ALERTS && ALERTS.devices) || [], rec = (ALERTS && ALERTS.recent) || [];
+    var on = !!(st && st.enabled && devs.some(function (d) { return d.enabled; }));
+    var badge = $('admAlertState');
+    if (badge) { badge.textContent = on ? 'On' : devs.length ? 'Off' : 'No phone yet'; badge.className = 'dt-badge' + (on ? ' ok' : ''); }
+    var ph = $('admAlertPhones');
+    if (ph) ph.innerHTML = devs.map(function (d) {
+      var line = d.last_error ? '<em class="is-err">Bark said: ' + esc(d.last_error) + '</em>' : d.last_sent_at ? 'Last alert ' + esc(relTime(d.last_sent_at)) : 'Not tested yet';
+      return '<div class="adm-alert-phone" data-id="' + esc(d.id) + '"><div class="adm-alert-main"><b>' + esc(d.name) + '</b><span>' + line + ' · key ending ' + esc(d.key_tail || '') + '</span></div>' +
+        '<div class="adm-row-actions"><button class="btn btn-secondary adm-btn-sm" data-act="test" type="button">Send test</button>' +
+        '<button class="btn btn-ghost adm-btn-sm" data-act="key" type="button">Encryption key</button>' +
+        '<button class="btn btn-ghost adm-btn-sm" data-act="remove" type="button">Remove</button></div></div>';
+    }).join('');
+    // The settings form is filled once (and after saving), so a refresh never undoes edits.
+    if (st && !ALERTS_FORM_SET) {
+      ALERTS_FORM_SET = true;
+      $('admAlertEnabled').checked = !!st.enabled;
+      ALERT_PFS.forEach(function (p) { var c = document.querySelector('#admAlertPfs input[value="' + p[0] + '"]'); if (c) c.checked = !st.platforms || st.platforms[p[0]] !== false; });
+      $('admAlertMin').value = Number(st.min_usd) > 0 ? Number(st.min_usd) : '';
+      $('admAlertQuietFrom').value = st.quiet_start ? String(st.quiet_start).slice(0, 5) : '';
+      $('admAlertQuietTo').value = st.quiet_end ? String(st.quiet_end).slice(0, 5) : '';
+      alertSoundDD.setValue(st.sound || 'paymentsuccess');
+      alertLevelDD.setValue(st.level || 'timeSensitive');
+      $('admAlertSoundUrl').value = st.sound_url || '';
+    }
+    var box = $('admAlertRecent');
+    if (box) box.innerHTML = rec.length ? rec.map(function (a) {
+      var label, cls = '';
+      if (a.sent_at && (!a.error || ALERT_SKIPS.indexOf(a.error) < 0 && !/alerts are off$/.test(a.error))) { label = 'Sent'; cls = ' ok'; }
+      else if (a.sent_at) label = a.error;
+      else if (a.attempts >= 5) { label = 'Failed'; cls = ' err'; }
+      else label = 'Sending';
+      return '<div class="adm-alert-row"><div class="adm-alert-main"><b>Sale for ' + esc(alertMoney(a.amount, a.currency)) + '!</b><span>' + esc(alertBody(a)) + '</span></div>' +
+        '<div class="adm-alert-side"><span class="dt-badge' + cls + '"' + (a.error && !a.sent_at ? ' title="' + esc(a.error) + '"' : '') + '>' + esc(label) + '</span><small>' + esc(relTime(a.created_at)) + '</small></div></div>';
+    }).join('') : '<p class="adm-hint">Every sale from now on shows here, with whether its alert was sent.</p>';
+  }
+  function showAlertSetup(key) {
+    var box = $('admAlertSetup'); if (!box) return;
+    box.innerHTML = '<p><b>One-time setup in Bark.</b> On Bark\'s home screen tap <b>Push Encryption</b>, then <b>Encryption Settings</b>. Choose <b>AES256</b> and <b>CBC</b>, paste this key and tap <b>Done</b>. Then press <b>Send test</b>.</p>' +
+      '<div class="adm-alert-key"><code>' + esc(key) + '</code><button class="btn btn-secondary adm-btn-sm" type="button" data-copy="' + esc(key) + '">Copy key</button></div>';
+    box.hidden = false;
+  }
+  document.addEventListener('click', function (e) {
+    var cp = e.target.closest('#admAlertSetup [data-copy]');
+    if (cp) {
+      var done = function () { cp.textContent = 'Copied'; setTimeout(function () { cp.textContent = 'Copy key'; }, 1600); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cp.getAttribute('data-copy')).then(done, done);
+      return;
+    }
+    var act = e.target.closest('#admAlertPhones [data-act]');
+    if (!act) return;
+    var id = act.closest('[data-id]').getAttribute('data-id'), what = act.getAttribute('data-act');
+    if (what === 'test') {
+      act.disabled = true; act.textContent = 'Sending…';
+      invokeAdminFn('sale-alerts', { action: 'test', device_id: id }, 'The test could not be sent.').then(function (d) {
+        var res = (d.results || [])[0];
+        alertMsg('admAlertMsg', res && res.ok ? 'Test sent. It should be on your phone now.' : 'Bark did not take it: ' + ((res && res.error) || 'unknown error'), !(res && res.ok));
+      }, function (err) { alertMsg('admAlertMsg', err.message, true); }).then(function () { act.disabled = false; act.textContent = 'Send test'; loadAlerts(); });
+    } else if (what === 'key') {
+      window.coldSupabase.rpc('admin_sale_alert_device_secret', { p_id: id }).then(function (r) {
+        if (r.error || !r.data) { alertMsg('admAlertMsg', 'The key could not be loaded.', true); return; }
+        showAlertSetup(r.data);
+      });
+    } else if (what === 'remove') {
+      dialogConfirm('This phone stops getting sale alerts. You can add it again any time.', { title: 'Remove phone', acceptLabel: 'Remove' }).then(function (ok) {
+        if (!ok) return;
+        window.coldSupabase.rpc('admin_sale_alert_device_update', { p_id: id, p_remove: true }).then(function (r) {
+          if (r.error) { alertMsg('admAlertMsg', r.error.message, true); return; }
+          $('admAlertSetup').hidden = true; alertMsg('admAlertMsg', 'Phone removed.'); loadAlerts();
+        });
+      });
+    }
+  });
+  if ($('admAlertAddBtn')) $('admAlertAddBtn').addEventListener('click', function () {
+    var btn = this, link = $('admAlertLink').value.trim(), name = $('admAlertName').value.trim();
+    if (!link) { alertMsg('admAlertMsg', 'Paste the link Bark shows first.', true); return; }
+    btn.disabled = true;
+    window.coldSupabase.rpc('admin_sale_alert_device_add', { p_name: name, p_link: link }).then(function (r) {
+      btn.disabled = false;
+      if (r.error) { alertMsg('admAlertMsg', r.error.message, true); return; }
+      $('admAlertLink').value = ''; $('admAlertName').value = '';
+      alertMsg('admAlertMsg', '');
+      showAlertSetup(r.data && r.data.enc_key);
+      loadAlerts();
+    });
+  });
+  if ($('admAlertSaveBtn')) $('admAlertSaveBtn').addEventListener('click', function () {
+    var btn = this, url = $('admAlertSoundUrl').value.trim(), pfs = {};
+    if (url && !/^https:\/\/\S+\.caf(\?\S*)?$/i.test(url)) { alertMsg('admAlertSaveMsg', 'The sound link must be an https link to a .caf file.', true); return; }
+    ALERT_PFS.forEach(function (p) { var c = document.querySelector('#admAlertPfs input[value="' + p[0] + '"]'); pfs[p[0]] = !c || c.checked; });
+    var p = { enabled: $('admAlertEnabled').checked, platforms: pfs, min_usd: Math.max(0, Number($('admAlertMin').value) || 0),
+      quiet_start: $('admAlertQuietFrom').value || '', quiet_end: $('admAlertQuietTo').value || '',
+      sound: alertSoundDD.getValue() || 'paymentsuccess', level: alertLevelDD.getValue() || 'timeSensitive', sound_url: url };
+    btn.disabled = true;
+    window.coldSupabase.rpc('admin_sale_alert_settings_save', { p: p }).then(function (r) {
+      btn.disabled = false;
+      if (r.error) { alertMsg('admAlertSaveMsg', r.error.message, true); return; }
+      alertMsg('admAlertSaveMsg', 'Saved.');
+      ALERTS_FORM_SET = false; loadAlerts();
+    });
   });
 
   /* ---- Sale Events ---- */

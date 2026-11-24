@@ -28,6 +28,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyRobloxCookieBroken } from "../_shared/roblox.ts";
+import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const ECON = "https://economy.roblox.com";
@@ -315,6 +316,9 @@ Deno.serve(async (req: Request) => {
     patch.updated_at = new Date().toISOString();
     await admin.from("robux_state").upsert({ id: true, ...patch }, { onConflict: "id" });
     if (errors.length) console.warn("[admin-robux-revenue] partial:", errors);
+    // New sales just saved: send their phone alerts now (the database trigger and the
+    // sale-alerts cron job are the backups).
+    await flushSaleAlerts(admin).catch(() => null);
     return json({ ok: true, configured: true, summary, errors });
   } catch (err) {
     console.error("[admin-robux-revenue] error:", err);

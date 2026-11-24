@@ -14,6 +14,7 @@
 // so a bad signature gets 401 and anything we choose to skip still gets 200.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
 
 // deno-lint-ignore no-explicit-any
 type Obj = Record<string, any>;
@@ -95,5 +96,8 @@ Deno.serve(async (req) => {
   };
   const up = await admin.from("platform_sales").upsert(row, { onConflict: "platform,external_id" });
   if (up.error) return json({ ok: false, error: up.error.message }, 500); // non-200 makes Payhip retry
+  // New sales just saved: send their phone alerts now (the database trigger and the
+  // sale-alerts cron job are the backups).
+  await flushSaleAlerts(admin).catch(() => null);
   return json({ ok: true, order: id, status: row.status });
 });

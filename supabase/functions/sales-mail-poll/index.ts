@@ -21,6 +21,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import PostalMime from "npm:postal-mime@2";
 import { forwardedSentAt, parseClearlyDevOrder } from "../_shared/clearlydev_email.ts";
+import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
 
 const MAX_PER_RUN = 25;
 // deno-lint-ignore no-explicit-any
@@ -238,5 +239,8 @@ Deno.serve(async (req) => {
     cookie_ok: loginOk, last_error: error || null, last_written: summary.written,
     ...(error ? {} : { last_ok_at: new Date().toISOString() }),
   });
+  // New sales just saved: send their phone alerts now (the database trigger and the
+  // sale-alerts cron job are the backups).
+  await flushSaleAlerts(admin).catch(() => null);
   return json({ ok: !error, ...summary, error: error || undefined });
 });

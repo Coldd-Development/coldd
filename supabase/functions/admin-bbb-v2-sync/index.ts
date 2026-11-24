@@ -30,6 +30,7 @@
 // saved in bbb2_state.cooldown_until so the next run waits it out too.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const V2 = "https://api.builtbybit.com";
@@ -338,6 +339,9 @@ Deno.serve(async (req: Request) => {
     patch.updated_at = new Date().toISOString();
     await admin.from("bbb2_state").upsert({ id: true, ...patch }, { onConflict: "id" });
     if (errors.length) console.warn("[admin-bbb-v2-sync] partial:", errors);
+    // New sales just saved: send their phone alerts now (the database trigger and the
+    // sale-alerts cron job are the backups).
+    await flushSaleAlerts(admin).catch(() => null);
     return json({ ok: true, configured: true, syncedAt: patch.updated_at, summary, errors });
   } catch (err) {
     console.error("[admin-bbb-v2-sync] error:", err);
