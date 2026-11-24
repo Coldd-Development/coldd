@@ -11774,7 +11774,7 @@
      ================================================================ */
   var FIN = { access: null, loading: null, loaded: false, settings: null, weeks: [], expenses: [], cats: [], instalments: [],
     view: 'main', range: 'month', sheet: 'weeks', editId: null, filter: { cats: [], from: '', to: '', q: '' }, salesTries: 0 };
-  var FIN_CATS = ['Developer payment', 'Licence purchase', 'Giveaway payout', 'Refunds', 'Software subscriptions', 'Utility subscriptions', 'Marketing', 'Misc'];
+  var FIN_CATS = ['Developer payment', 'Licence purchase', 'Giveaway payout', 'Refunds', 'Software subscriptions', 'Utility subscriptions', 'Marketing', 'Robux purchases', 'Fees'];
   var FIN_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767', '#4fb3c8', '#a8a35a', '#b07cc6', '#7f8c99'];
   var FIN_NUM_FIELDS = ['revenue', 'tcg_revenue', 'tcg_expenses', 'other_income', 'other_withheld'];
   var FIN_DD_CHEV = '<svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
@@ -12135,12 +12135,11 @@
   }
 
   /* ---- Expense log ---- */
-  var finCatDD = null, finFilterDD = null;
-  var FIN_PAY = ['Card', 'PayPal', 'Bank transfer', 'Stripe', 'Wise', 'Tebex', 'Crypto', 'Robux', 'Cash'];
+  var finCatPick = null, finPayPick = null, finFilterDD = null;
+  var FIN_PAY = ['Debit Card', 'PayPal', 'Wise', 'Coinbase', 'Bank Transfer'];
   var FIN_RCPT_BUCKET = 'finance-receipts';
   var FIN_CLIP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
-  function finCatOptions() { return finAllCats().map(function (c) { return { value: c, label: c }; }).concat([{ value: '__new', label: 'New category…' }]); }
-  // Past values first (most used), then the presets, for the "Paid to" and "Paid with" boxes.
+  // Past values first (most used), then the presets, for the "Paid to" box.
   function finUsed(field, presets) {
     var count = {};
     FIN.expenses.forEach(function (e) { var v = String(e[field] || '').trim(); if (v) count[v] = (count[v] || 0) + 1; });
@@ -12183,6 +12182,49 @@
     input.addEventListener('blur', function () { setTimeout(close, 120); });
   }
 
+  // A dropdown whose search box doubles as a text field: pick an option, or type a new one and press Enter.
+  function finPickHtml(id, label) {
+    return '<div class="adm-dd adm-dd-inline adm-fin-pick" id="' + id + '"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' + FIN_DD_CHEV + '</button>' +
+      '<div class="adm-dd-menu" role="listbox" aria-label="' + esc(label) + '" hidden><input type="text" class="adm-dd-search adm-input" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Search or type a new one" aria-label="Search ' + esc(label) + '" /><div class="adm-fin-pick-list"></div></div></div>';
+  }
+  function finPick(root, opts) {
+    if (!root) return null;
+    var btn = root.querySelector('.adm-dd-btn'), valEl = root.querySelector('.adm-dd-val'), menu = root.querySelector('.adm-dd-menu');
+    var search = root.querySelector('.adm-dd-search'), list = root.querySelector('.adm-fin-pick-list'), value = opts.value || '', items = [], hi = -1;
+    function label() { valEl.textContent = value || opts.placeholder; valEl.classList.toggle('placeholder', !value); }
+    function build() {
+      var q = search.value.trim(), ql = q.toLowerCase();
+      var all = opts.options();
+      var shown = all.filter(function (o) { return !ql || o.toLowerCase().indexOf(ql) >= 0; });
+      items = shown.map(function (o) { return { v: o, label: o }; });
+      if (q && !all.some(function (o) { return o.toLowerCase() === ql; })) items.unshift({ v: q, label: 'Add "' + q + '"', add: true });
+      if (hi >= items.length) hi = items.length - 1;
+      list.innerHTML = items.map(function (it, i) {
+        var on = !it.add && it.v === value;
+        return '<button type="button" class="adm-dd-opt' + (on ? ' active' : '') + (i === hi ? ' is-hi' : '') + (it.add ? ' is-add' : '') + '" role="option" aria-selected="' + on + '" data-i="' + i + '"><span>' + esc(it.label) + '</span><span class="adm-dd-radio"></span></button>';
+      }).join('') || '<div class="adm-fin-combo-empty">Type to add one</div>';
+    }
+    function open() { root.classList.add('open'); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); search.value = ''; hi = -1; build(); setTimeout(function () { search.focus(); }, 20); }
+    function close() { root.classList.remove('open'); menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    function set(v, silent) { value = String(v || '').trim(); label(); if (!silent && opts.onChange) opts.onChange(value); }
+    function choose(i) { var it = items[i]; if (!it) return; set(it.v); close(); btn.focus(); }
+    btn.addEventListener('click', function (e) { e.stopPropagation(); if (menu.hidden) open(); else close(); });
+    search.addEventListener('input', function () { hi = search.value.trim() ? 0 : -1; build(); });
+    search.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { hi = Math.min(items.length - 1, hi + 1); build(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { hi = Math.max(0, hi - 1); build(); e.preventDefault(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (hi >= 0) choose(hi); else if (search.value.trim()) { set(search.value); close(); } }
+      else if (e.key === 'Escape') { close(); btn.focus(); }
+    });
+    list.addEventListener('click', function (e) { var b = e.target.closest('[data-i]'); if (b) choose(+b.getAttribute('data-i')); });
+    root.__finPickClose = close;
+    label();
+    return { get: function () { return value; }, set: set };
+  }
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('.adm-fin-pick.open').forEach(function (p) { if (!p.contains(e.target) && p.__finPickClose) p.__finPickClose(); });
+  });
+
   /* Receipts: images or PDFs in the private finance-receipts bucket, shown through short-lived signed links. */
   FIN.signed = {};
   function finFormState(e) {
@@ -12201,19 +12243,16 @@
   }
   function finRenderReceipts() {
     var box = $('admFinRcpts'), st = FIN.form; if (!box || !st) return;
-    box.innerHTML = st.receipts.map(function (r) {
+    box.innerHTML = st.receipts.map(function (r, i) {
       var img = /^image\//.test(r.type || '');
-      return '<div class="adm-fin-rcpt"><a class="adm-fin-rcpt-open" target="_blank" rel="noopener" data-fin-rcpt-link="' + esc(r.path) + '" title="' + esc(r.name || 'Receipt') + '">' +
-        (img ? '<img alt="' + esc(r.name || 'Receipt') + '" />' : '<span class="adm-fin-pdf">PDF</span>') + '</a>' +
+      return '<div class="adm-fin-rcpt"><button type="button" class="adm-fin-rcpt-open" data-fin-rcpt-view="' + i + '" title="' + esc(r.name || 'Receipt') + '">' +
+        (img ? '<img alt="' + esc(r.name || 'Receipt') + '" data-fin-rcpt-img="' + esc(r.path) + '" />' : '<span class="adm-fin-pdf">PDF</span>') + '</button>' +
         '<button type="button" class="adm-fin-rcpt-del" data-fin-rcpt-del="' + esc(r.path) + '" aria-label="Remove receipt">×</button></div>';
     }).join('') + (st.uploading ? '<div class="adm-fin-rcpt is-loading" aria-label="Uploading"><span class="adm-fin-spin"></span></div>' : '');
-    box.querySelectorAll('[data-fin-rcpt-link]').forEach(function (a) {
-      finSignedUrl(a.getAttribute('data-fin-rcpt-link')).then(function (url) {
-        if (!url) return;
-        a.href = url;
-        var im = a.querySelector('img'); if (im) im.src = url;
-      });
+    box.querySelectorAll('[data-fin-rcpt-img]').forEach(function (im) {
+      finSignedUrl(im.getAttribute('data-fin-rcpt-img')).then(function (url) { if (url) im.src = url; });
     });
+    var hint = $('admFinRcptHint'); if (hint) hint.hidden = st.receipts.length > 0 || st.uploading > 0;
   }
   // Big photos are shrunk to 2400 px on the long side (still easy to read); PDFs and small images go as they are.
   function finPrepFile(f) {
@@ -12261,36 +12300,84 @@
     else st.removed.push(path);
     finRenderReceipts();
   }
+  // The receipt viewer: opens on the page, arrows step through an expense's receipts.
+  function finViewReceipts(list, start) {
+    if (!list || !list.length) return;
+    var box = $('admFinViewer');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'admFinViewer'; box.className = 'adm-fin-viewer'; box.hidden = true;
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', 'Receipt');
+      box.innerHTML = '<div class="adm-fin-viewer-bar"><span class="adm-fin-viewer-name"></span><span class="adm-fin-viewer-count"></span>' +
+        '<a class="btn btn-ghost adm-btn-sm adm-fin-viewer-orig" target="_blank" rel="noopener">Open original</a>' +
+        '<button type="button" class="adm-fin-viewer-x" aria-label="Close">×</button></div>' +
+        '<div class="adm-fin-viewer-body"></div>' +
+        '<button type="button" class="adm-fin-viewer-nav is-prev" aria-label="Previous receipt">‹</button><button type="button" class="adm-fin-viewer-nav is-next" aria-label="Next receipt">›</button>';
+      document.body.appendChild(box);
+      box.addEventListener('click', function (e) {
+        if (e.target === box || e.target.closest('.adm-fin-viewer-x')) { box.hidden = true; document.body.classList.remove('adm-fin-viewing'); return; }
+        if (e.target.closest('.is-prev')) box.__show(box.__i - 1);
+        if (e.target.closest('.is-next')) box.__show(box.__i + 1);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (box.hidden) return;
+        if (e.key === 'Escape') { box.hidden = true; document.body.classList.remove('adm-fin-viewing'); }
+        if (e.key === 'ArrowLeft') box.__show(box.__i - 1);
+        if (e.key === 'ArrowRight') box.__show(box.__i + 1);
+      });
+    }
+    box.__show = function (i) {
+      var L = box.__list; if (!L || !L.length) return;
+      i = (i + L.length) % L.length; box.__i = i;
+      var r = L[i], body = box.querySelector('.adm-fin-viewer-body');
+      box.querySelector('.adm-fin-viewer-name').textContent = r.name || 'Receipt';
+      box.querySelector('.adm-fin-viewer-count').textContent = L.length > 1 ? (i + 1) + ' of ' + L.length : '';
+      box.querySelectorAll('.adm-fin-viewer-nav').forEach(function (b) { b.hidden = L.length < 2; });
+      body.innerHTML = '<span class="adm-fin-spin"></span>';
+      finSignedUrl(r.path).then(function (url) {
+        if (box.__i !== i) return;
+        if (!url) { body.innerHTML = '<p class="adm-empty">Could not open this receipt.</p>'; return; }
+        box.querySelector('.adm-fin-viewer-orig').href = url;
+        body.innerHTML = /^image\//.test(r.type || '') ? '<img alt="' + esc(r.name || 'Receipt') + '" src="' + esc(url) + '" />' : '<iframe title="' + esc(r.name || 'Receipt') + '" src="' + esc(url) + '"></iframe>';
+      });
+    };
+    box.__list = list; box.hidden = false; document.body.classList.add('adm-fin-viewing');
+    box.__show(start || 0);
+  }
+  function finBindDrop() {
+    var zone = $('admFinRcptZone'); if (!zone) return;
+    ['dragenter', 'dragover'].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add('is-over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.remove('is-over'); }); });
+    zone.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) finUploadFiles(e.dataTransfer.files); });
+  }
 
   function finRenderExpForm() {
     var box = $('admFinExpForm'); if (!box) return;
     var e = FIN.editId ? FIN.expenses.filter(function (x) { return x.id === FIN.editId; })[0] : null;
     if (FIN.editId && !e) FIN.editId = null;
     var keep = FIN.form && FIN.form.key === (e ? e.id : 'new') && $('admFinExpAmt');
-    var prev = keep ? { date: $('admFinExpDate').value, amt: $('admFinExpAmt').value, cat: finCatDD ? finCatDD.getValue() : '', vendor: $('admFinExpVendor').querySelector('input').value, pay: $('admFinExpPay').querySelector('input').value, note: $('admFinExpNote').value } : null;
+    var prev = keep ? { date: $('admFinExpDate').value, amt: $('admFinExpAmt').value, cat: finCatPick ? finCatPick.get() : '', vendor: $('admFinExpVendor').querySelector('input').value, pay: finPayPick ? finPayPick.get() : '', note: $('admFinExpNote').value, notes: $('admFinExpNotes').value } : null;
     finFormState(e);
     box.innerHTML = (e ? '<p class="adm-fin-editing">Editing the ' + esc(finM(e.amount)) + ' expense from ' + esc(finLong(e.spent_on)) + '</p>' : '') +
-      '<div class="adm-fin-form">' +
+      '<div class="adm-fin-form adm-fin-form4">' +
         '<label class="adm-field"><span>Date</span><input type="date" class="adm-input" id="admFinExpDate" value="' + esc(prev ? prev.date : e ? e.spent_on : finToday()) + '" max="' + esc(finAdd(finToday(), 1)) + '" /></label>' +
         '<label class="adm-field"><span>Amount</span><input type="text" inputmode="decimal" class="adm-input" id="admFinExpAmt" placeholder="$0.00" value="' + esc(prev ? prev.amt : e ? finInVal(e.amount) : '') + '" autocomplete="off" /></label>' +
-        '<div class="adm-field"><span>Category</span><div class="adm-dd adm-dd-inline" id="admFinExpCatDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' + FIN_DD_CHEV +
-          '</button><div class="adm-dd-menu" role="listbox" aria-label="Category" hidden></div></div>' +
-          '<input type="text" maxlength="40" class="adm-input" id="admFinExpNewCat" placeholder="New category name" hidden /></div>' +
+        '<div class="adm-field"><span>Category</span>' + finPickHtml('admFinExpCat', 'Category') + '</div>' +
         '<div class="adm-field"><span>Paid to</span>' + finComboHtml('admFinExpVendor', prev ? prev.vendor : e && e.vendor, 'Search or add') + '</div>' +
-        '<div class="adm-field"><span>Payment processor</span>' + finComboHtml('admFinExpPay', prev ? prev.pay : e && e.payment_method, 'PayPal, card, bank…') + '</div>' +
-        '<label class="adm-field adm-fin-wide"><span>What it was for</span><input type="text" maxlength="300" class="adm-input" id="admFinExpNote" placeholder="e.g. Thumbnails for Catch a Fish" value="' + esc(prev ? prev.note : e && e.note || '') + '" /></label>' +
-        '<div class="adm-field adm-fin-wide"><span>Receipts</span><div class="adm-fin-rcpts"><div class="adm-fin-rcpt-list" id="admFinRcpts"></div>' +
-          '<label class="adm-fin-rcpt-add">' + FIN_CLIP + '<span>Add receipt</span><input type="file" id="admFinExpFiles" accept="image/*,application/pdf" multiple hidden /></label></div></div>' +
+        '<div class="adm-field"><span>Payment processor</span>' + finPickHtml('admFinExpPay', 'Payment processor') + '</div>' +
+        '<label class="adm-field adm-fin-span3"><span>Reason</span><input type="text" maxlength="300" class="adm-input" id="admFinExpNote" placeholder="e.g. Thumbnails for Catch a Fish" value="' + esc(prev ? prev.note : e && e.note || '') + '" /></label>' +
+        '<label class="adm-field adm-fin-span2"><span>Notes</span><textarea class="adm-input adm-fin-notes" id="admFinExpNotes" maxlength="1000" rows="4" placeholder="Anything else worth keeping">' + esc(prev ? prev.notes : e && e.notes || '') + '</textarea></label>' +
+        '<div class="adm-field adm-fin-span2"><span>Receipts</span><div class="adm-fin-rcpt-zone" id="admFinRcptZone"><div class="adm-fin-rcpt-list" id="admFinRcpts"></div>' +
+          '<label class="adm-fin-rcpt-add">' + FIN_CLIP + '<span>Add receipt</span><input type="file" id="admFinExpFiles" accept="image/*,application/pdf" multiple hidden /></label>' +
+          '<span class="adm-fin-rcpt-hint" id="admFinRcptHint">or drop images and PDFs here</span></div></div>' +
       '</div>' +
       '<div class="adm-fin-actions"><button class="btn btn-primary adm-btn-sm" type="button" id="admFinExpSave">' + (e ? 'Save changes' : 'Add expense') + '</button>' +
         (e ? '<button class="btn btn-ghost adm-btn-sm" type="button" id="admFinExpCancel">Cancel</button>' : '') + '</div>';
-    finCatDD = makeDropdown($('admFinExpCatDD'), { searchable: true, placeholder: 'Choose a category', onChange: function (v) {
-      var nc = $('admFinExpNewCat'); nc.hidden = v !== '__new'; if (v === '__new') nc.focus();
-    } });
-    finCatDD.setOptions(finCatOptions(), prev ? prev.cat : e ? e.category : '');
+    finCatPick = finPick($('admFinExpCat'), { options: finAllCats, value: prev ? prev.cat : e ? e.category : '', placeholder: 'Choose a category' });
+    finPayPick = finPick($('admFinExpPay'), { options: function () { return finUsed('payment_method', FIN_PAY).filter(function (p) { return FIN_PAY.indexOf(p) >= 0; }).concat(finUsed('payment_method').filter(function (p) { return FIN_PAY.indexOf(p) < 0; })); }, value: prev ? prev.pay : e ? e.payment_method || '' : 'Debit Card', placeholder: 'Choose' });
     finCombo($('admFinExpVendor'), function () { return finUsed('vendor'); }, 'No one paid yet: type a name');
-    finCombo($('admFinExpPay'), function () { return finUsed('payment_method', FIN_PAY); }, 'Type how you paid');
     finRenderReceipts();
+    finBindDrop();
   }
   function finCancelExpense() {
     var st = FIN.form;
@@ -12300,25 +12387,19 @@
   }
   function finSaveExpense() {
     var st = FIN.form;
-    var date = $('admFinExpDate').value, amt = finNum($('admFinExpAmt').value), cat = finCatDD ? finCatDD.getValue() : '';
-    var vendor = $('admFinExpVendor').querySelector('input').value.trim() || null, pay = $('admFinExpPay').querySelector('input').value.trim() || null;
-    var note = $('admFinExpNote').value.trim() || null;
+    var date = $('admFinExpDate').value, amt = finNum($('admFinExpAmt').value), cat = finCatPick ? finCatPick.get() : '';
+    var vendor = $('admFinExpVendor').querySelector('input').value.trim() || null, pay = (finPayPick ? finPayPick.get() : '') || null;
+    var note = $('admFinExpNote').value.trim() || null, notes = $('admFinExpNotes').value.trim() || null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { admToast('Pick a date.', false); return; }
     if (!(amt > 0)) { admToast('Enter an amount above zero.', false); return; }
     if (st && st.uploading) { admToast('Wait for the receipt to finish uploading.', false); return; }
-    var newCat = null;
-    if (cat === '__new') {
-      newCat = $('admFinExpNewCat').value.trim();
-      if (!newCat || newCat.length > 40) { admToast('Name the new category (up to 40 characters).', false); return; }
-      cat = newCat;
-    }
     if (!cat) { admToast('Choose a category.', false); return; }
+    if (cat.length > 40) { admToast('Keep the category under 40 characters.', false); return; }
     var sb = window.coldSupabase, btn = $('admFinExpSave');
     btn.disabled = true;
-    var saveCat = newCat && finAllCats().indexOf(newCat) < 0
-      ? sb.from('finance_expense_categories').insert({ name: newCat }).then(function (r) { if (!r.error) FIN.cats.push({ name: newCat }); })
-      : Promise.resolve();
-    var row = { spent_on: date, amount: amt, category: cat, vendor: vendor, payment_method: pay, note: note, receipts: st ? st.receipts : [], updated_at: new Date().toISOString() };
+    var isNew = finAllCats().indexOf(cat) < 0;
+    var saveCat = isNew ? sb.from('finance_expense_categories').insert({ name: cat }).then(function (r) { if (!r.error) FIN.cats.push({ name: cat }); }) : Promise.resolve();
+    var row = { spent_on: date, amount: amt, category: cat, vendor: vendor, payment_method: pay, note: note, notes: notes, receipts: st ? st.receipts : [], updated_at: new Date().toISOString() };
     var wasEdit = !!FIN.editId;
     saveCat.then(function () {
       return wasEdit ? sb.from('finance_expenses').update(row).eq('id', FIN.editId).select('*') : sb.from('finance_expenses').insert(row).select('*');
@@ -12357,7 +12438,7 @@
             '</button><div class="adm-dd-menu" role="listbox" aria-label="Categories" hidden></div></div>' +
           '<label class="adm-fin-inline"><span>From</span><input type="date" class="adm-input" id="admFinFrom" /></label>' +
           '<label class="adm-fin-inline"><span>To</span><input type="date" class="adm-input" id="admFinTo" /></label>' +
-          '<input type="search" class="adm-input adm-fin-search" id="admFinQ" placeholder="Search what it was for, who or how" autocomplete="off" />' +
+          '<input type="search" class="adm-input adm-fin-search" id="admFinQ" placeholder="Search reason, notes, who or how" autocomplete="off" />' +
           '<button type="button" class="btn btn-ghost adm-btn-sm" id="admFinClear">Clear</button>' +
           '<span class="adm-fin-count" id="admFinExpTotal"></span>' +
         '</div><div class="adm-fin-scroll adm-fin-scroll-list"><table class="adm-plat-table adm-fin-explist" id="admFinExpTable"></table></div>';
@@ -12375,19 +12456,19 @@
       if (f.cats.length && f.cats.indexOf(e.category) < 0) return false;
       if (f.from && e.spent_on < f.from) return false;
       if (f.to && e.spent_on > f.to) return false;
-      if (q && ((e.vendor || '') + ' ' + (e.note || '') + ' ' + (e.payment_method || '') + ' ' + e.category).toLowerCase().indexOf(q) < 0) return false;
+      if (q && ((e.vendor || '') + ' ' + (e.note || '') + ' ' + (e.notes || '') + ' ' + (e.payment_method || '') + ' ' + e.category).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     var total = list.reduce(function (s, e) { return s + Number(e.amount); }, 0);
     $('admFinExpTotal').textContent = list.length ? finEntries(list.length) + ', ' + finM(total) : '';
     var table = $('admFinExpTable');
     if (!list.length) { table.innerHTML = '<tbody><tr><td class="adm-empty">' + (FIN.expenses.length ? 'Nothing matches these filters.' : 'No expenses logged yet.') + '</td></tr></tbody>'; return; }
-    table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col">What it was for</th><th scope="col">Paid to</th><th scope="col">Paid with</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Receipts and actions</span></th></tr></thead><tbody>' +
+    table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col">Reason</th><th scope="col">Paid to</th><th scope="col">Paid with</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Receipts and actions</span></th></tr></thead><tbody>' +
       list.map(function (e) {
-        var n = Array.isArray(e.receipts) ? e.receipts.length : 0;
-        return '<tr><th scope="row">' + esc(finLong(e.spent_on)) + '</th><td><span class="adm-pf" style="--pf:' + finCatColor(e.category) + '"><b class="adm-dot"></b>' + esc(e.category) + '</span></td>' +
-          '<td class="adm-fin-note">' + esc(e.note || '') + '</td><td>' + esc(e.vendor || '') + '</td><td>' + esc(e.payment_method || '') + '</td><td class="is-strong">' + finM(e.amount) + '</td>' +
-          '<td class="adm-fin-rowact">' + (n ? '<button type="button" class="adm-fin-clip" data-fin-edit="' + esc(e.id) + '" title="' + (n === 1 ? '1 receipt' : n + ' receipts') + '">' + FIN_CLIP + (n > 1 ? '<span>' + n + '</span>' : '') + '</button>' : '') +
+        var n = Array.isArray(e.receipts) ? e.receipts.length : 0, unc = e.category === 'Uncategorised';
+        return '<tr><th scope="row">' + esc(finLong(e.spent_on)) + '</th><td><span class="adm-pf' + (unc ? ' adm-fin-unc' : '') + '" style="--pf:' + finCatColor(e.category) + '"><b class="adm-dot"></b>' + esc(e.category) + '</span></td>' +
+          '<td class="adm-fin-note"' + (e.notes ? ' title="' + esc(e.notes) + '"' : '') + '>' + esc(e.note || '') + '</td><td>' + esc(e.vendor || '') + '</td><td>' + esc(e.payment_method || '') + '</td><td class="is-strong">' + finM(e.amount) + '</td>' +
+          '<td class="adm-fin-rowact">' + (n ? '<button type="button" class="adm-fin-clip" data-fin-list-rcpt="' + esc(e.id) + '" title="' + (n === 1 ? 'Open the receipt' : 'Open the ' + n + ' receipts') + '">' + FIN_CLIP + (n > 1 ? '<span>' + n + '</span>' : '') + '</button>' : '') +
             '<button type="button" class="btn btn-ghost adm-btn-sm" data-fin-edit="' + esc(e.id) + '">Edit</button><button type="button" class="adm-fin-del" data-fin-del-exp="' + esc(e.id) + '" aria-label="Delete expense">×</button></td></tr>';
       }).join('') + '</tbody>';
   }
@@ -12527,6 +12608,8 @@
       if (e.target.closest('#admFinExpSave')) { finSaveExpense(); return; }
       if (e.target.closest('#admFinExpCancel')) { finCancelExpense(); return; }
       if ((b = e.target.closest('[data-fin-rcpt-del]'))) { finRemoveReceipt(b.getAttribute('data-fin-rcpt-del')); return; }
+      if ((b = e.target.closest('[data-fin-rcpt-view]'))) { finViewReceipts(FIN.form ? FIN.form.receipts : [], +b.getAttribute('data-fin-rcpt-view')); return; }
+      if ((b = e.target.closest('[data-fin-list-rcpt]'))) { var ex = FIN.expenses.filter(function (x) { return x.id === b.getAttribute('data-fin-list-rcpt'); })[0]; if (ex) finViewReceipts(ex.receipts, 0); return; }
       if ((b = e.target.closest('[data-fin-edit]'))) { if (FIN.form && FIN.form.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(FIN.form.added); FIN.form = null; FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       if ((b = e.target.closest('[data-fin-del-exp]'))) { finDeleteExpense(b.getAttribute('data-fin-del-exp')); return; }
       if (e.target.closest('#admFinSetSave')) { finSaveSettings(); return; }
