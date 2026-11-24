@@ -6443,3 +6443,35 @@ html[data-theme="light"] .adm-mkt .dash-stat { background: rgba(0,0,0,0.02); }
 }
 html[data-theme="light"] .adm-fin-sheet tr.is-latest th, html[data-theme="light"] .adm-fin-sheet tr.is-latest td { background: rgba(0,0,0,0.03); }
 html[data-theme="light"] .adm-fin-in:focus { background: rgba(0,0,0,0.03); }
+
+/* Finances: expense log extras */
+.adm-fin-sheet td.adm-fin-transfer { color: var(--fg-3); font-weight: 600; }
+.adm-fin-editing { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--warn); }
+.adm-fin-combo { position: relative; }
+.adm-fin-combo .adm-input { width: 100%; }
+.adm-fin-combo-menu { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; max-height: 240px; overflow-y: auto; padding: 4px;
+  background: var(--bg-2); border: 1px solid var(--hairline-strong); border-radius: var(--r-ctl); box-shadow: var(--e-3); }
+.adm-fin-combo-menu[hidden] { display: none; }
+.adm-fin-combo-opt { display: block; width: 100%; padding: 8px 10px; font: inherit; font-size: 13px; text-align: left; color: var(--fg-1);
+  background: none; border: 0; border-radius: var(--r-xs); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-fin-combo-opt:hover, .adm-fin-combo-opt.active { background: rgba(255,255,255,0.07); color: var(--fg); }
+.adm-fin-combo-opt.is-add { color: var(--fg); font-weight: 600; }
+.adm-fin-combo-empty { padding: 8px 10px; font-size: 12px; color: var(--fg-3); }
+.adm-fin-rcpts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.adm-fin-rcpt-list { display: contents; }
+.adm-fin-rcpt { position: relative; width: 64px; height: 64px; border-radius: var(--r-ctl); border: 1px solid var(--hairline); background: rgba(255,255,255,0.04); }
+.adm-fin-rcpt-open { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: inherit; overflow: hidden; }
+.adm-fin-rcpt img { width: 100%; height: 100%; object-fit: cover; }
+.adm-fin-pdf { font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--fg-2); }
+.adm-fin-rcpt-del { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; font: inherit; font-size: 13px; line-height: 1; color: var(--fg);
+  background: var(--bg-2); border: 1px solid var(--hairline-strong); border-radius: 50%; cursor: pointer; }
+.adm-fin-rcpt-del:hover { color: var(--warn); }
+.adm-fin-rcpt.is-loading { display: flex; align-items: center; justify-content: center; }
+.adm-fin-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--hairline-strong); border-top-color: var(--fg-2); animation: finSpin .8s linear infinite; }
+@keyframes finSpin { to { transform: rotate(360deg); } }
+.adm-fin-rcpt-add { display: inline-flex; align-items: center; gap: 6px; height: 64px; padding: 0 14px; font-size: 12px; font-weight: 600; color: var(--fg-2);
+  border: 1px dashed var(--hairline-strong); border-radius: var(--r-ctl); cursor: pointer; transition: color .15s, border-color .15s; }
+.adm-fin-rcpt-add:hover { color: var(--fg); border-color: var(--fg-3); }
+.adm-fin-clip { display: inline-flex; align-items: center; gap: 3px; height: 28px; padding: 0 6px; font: inherit; font-size: 12px; color: var(--fg-2); background: none; border: 0; border-radius: var(--r-xs); cursor: pointer; }
+.adm-fin-clip:hover { color: var(--fg); background: rgba(255,255,255,0.05); }
+.adm-fin-explist td:nth-child(5), .adm-fin-explist thead th:nth-child(5) { text-align: left; }
