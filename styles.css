@@ -6525,3 +6525,12 @@ body.adm-fin-viewing { overflow: hidden; }
 .adm-fin-explist tbody tr[data-fin-edit]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .adm-fin-explist tbody tr.is-editing > * { background: rgba(255,77,68,0.07); }
 .adm-fin-charge { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.35; color: var(--fg-3); letter-spacing: 0.01em; overflow-wrap: anywhere; }
+
+/* Analytics: External fees, Discounts & Promotions split (BuiltByBit / coldd.dev) on hover */
+.adm-xf-hassplit { position: relative; cursor: default; }
+.adm-xf-split { position: absolute; left: 0; top: calc(100% - 2px); z-index: 5; display: none; flex-direction: column; gap: 4px; min-width: 200px; padding: 9px 12px;
+  font-size: 12px; font-weight: 500; color: var(--fg); background: var(--surface-2, #1b1e24); border: 1px solid var(--hairline-strong); border-radius: var(--r-ctl); box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+.adm-xf-split > span { display: flex; justify-content: space-between; gap: 16px; }
+.adm-xf-split b { font-weight: 700; }
+.adm-xf-hassplit:hover .adm-xf-split, .adm-xf-hassplit:focus-visible .adm-xf-split { display: flex; }
+.adm-pc-tip .adm-xf-sub { padding-left: 18px; font-size: 11.5px; color: var(--fg-3); }

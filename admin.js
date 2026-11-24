@@ -588,12 +588,13 @@
       cat: product ? product.cat : null,
       platform: product ? product.platform : null,
       licence: first.licence || 'standard',
-      items: items.map(function (it) { return { slug: it.product_slug, title: it.title, licence: it.licence || 'standard' }; }),
+      items: items.map(function (it) { return { slug: it.product_slug, title: it.title, licence: it.licence || 'standard', price: Number(it.unit_price_usd) || 0, qty: it.qty || 1 }; }),
       addons: (row.order_addons || []).map(function (a) { return { title: a.title, slug: a.product_slug, price: Number(a.unit_price_usd) || 0, needsTicket: !!a.needs_ticket, fileName: a.file_name || '' }; }),
       qty: items.reduce(function (s, it) { return s + (it.qty || 1); }, 0),
       unitPrice: Number(first.unit_price_usd) || 0,
       subtotal: Number(row.subtotal_usd) || 0,
       couponCode: row.coupon_code || null,
+      saleEvent: row.sale_event_slug || null,
       discount: Number(row.discount_usd) || 0,
       total: Number(row.total_usd) || 0,
       totalRobux: Number(row.total_robux) || 0,
@@ -4648,14 +4649,18 @@
   // (AdFeePayment; ad credit BuiltByBit covered is not a cost), ClearlyDev's emailed net.
   // Estimated from published rates where it does not (XF_RATE): BuiltByBit's gateway fee,
   // ClearlyDev sales without an emailed net, Parcel's and coldd.dev's card, PayPal and
-  // crypto fees.
+  // crypto fees. Discounts & Promotions is the money given away below list price: BuiltByBit's
+  // ListPrice less FinalPrice on each purchase (curated sales, coupons, bundles) and coldd.dev's
+  // coupon discount plus any sale markdown on an order.
   var XF_CATS = [
     { key: 'proc', label: 'Payment Processor Fees', color: 'var(--pf-site)' },
     { key: 'creatorstore', label: 'Creator Store Fees', color: 'var(--pf-creatorstore)' },
     { key: 'clearlydev', label: 'ClearlyDev Fees', color: 'var(--pf-clearlydev)' },
     { key: 'bbb', label: 'BuiltByBit Fees', color: 'var(--pf-builtbybit)' },
-    { key: 'bbbad', label: 'BuiltByBit Advertising', color: '#f08c2e' }
+    { key: 'bbbad', label: 'BuiltByBit Advertising', color: '#f08c2e' },
+    { key: 'disc', label: 'Discounts & Promotions', color: '#e0559b' }
   ];
+  var XF_SRC = { builtbybit: 'BuiltByBit', site: 'coldd.dev' };
   var XF_RATE = {
     bbbGateway: { pct: 0.0249, fixedUsd: 0.40 },          // per checkout, split across its items by value
     clearlydev: { pct: 0.10, monthlyUsd: 2 },
@@ -4671,10 +4676,15 @@
     var src = [ORDERS, BBB.purchases, PSALES, BBB.configured];
     if (XF_CACHE.rows && src.every(function (v, i) { return v === XF_CACHE.src[i]; })) return XF_CACHE.rows;
     var R = XF_RATE, out = [];
-    function add(cat, t, aud, gross, n) { if (aud > 0 && isFinite(t)) out.push({ cat: cat, t: t, aud: aud, gross: gross, n: n }); }
+    function add(cat, t, aud, gross, n, src) { if (aud > 0 && isFinite(t)) out.push({ cat: cat, t: t, aud: aud, gross: gross, n: n, src: src || '' }); }
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted' || o.currency === 'robux') return;
-      var t = Date.parse(o.paidAt || o.date), aud = usdToAudAt(o.total, t);
+      var t = Date.parse(o.paidAt || o.date), aud = usdToAudAt(o.total, t), disc = Number(o.discount) || 0;
+      if (o.saleEvent) (o.items || []).forEach(function (it) {
+        var p = findProduct(it.slug), list = p ? Math.max(p.price || 0, p.wasPrice || 0) : 0;
+        if (list > it.price) disc += (list - it.price) * (it.qty || 1);
+      });
+      if (disc > 0) add('disc', t, usdToAudAt(disc, t), usdToAudAt((Number(o.total) || 0) + disc, t), 1, 'site');
       if (!(aud > 0)) return;
       var p = String(o.paymentProvider || '').toLowerCase(), c = String(o.cryptoProvider || '').toLowerCase();
       var f = p === 'paypal' ? aud * R.paypal.pct + R.paypal.fixedAud
@@ -4686,8 +4696,11 @@
       var cart = {};
       BBB.purchases.forEach(function (p) { if (bbbIsUsd(p) && p.price > 0 && p.external_tid) cart[p.external_tid] = (cart[p.external_tid] || 0) + p.price; });
       BBB.purchases.forEach(function (p) {
-        if (!bbbIsUsd(p) || !(p.price > 0)) return;
-        var t = Date.parse(p.purchased_at), share = p.external_tid && cart[p.external_tid] ? p.price / cart[p.external_tid] : 1;
+        if (!bbbIsUsd(p)) return;
+        var t = Date.parse(p.purchased_at), off = (p.list_price || 0) - p.price;
+        if (off > 0.004) add('disc', t, usdToAudAt(off, t), usdToAudAt(p.list_price, t), 1, 'builtbybit');
+        if (!(p.price > 0)) return;
+        var share = p.external_tid && cart[p.external_tid] ? p.price / cart[p.external_tid] : 1;
         var gross = usdToAudAt(p.price, t);
         add('bbb', t, usdToAudAt(p.fee + p.price * R.bbbGateway.pct + R.bbbGateway.fixedUsd * share, t), gross, 1);
         if (p.adFee > 0) add('bbbad', t, usdToAudAt(p.adFee, t), gross, 1);
@@ -4714,13 +4727,15 @@
     var box = $('admFeeChart'), mixBox = $('admFeeMix'); if (!box) return;
     var rows = extFees(), b = anBuckets(sales), buckets = b.buckets, n = buckets.length;
     var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
-    var byCat = {}, total = buckets.map(function () { return 0; });
+    var byCat = {}, total = buckets.map(function () { return 0; }), discSrc = {};
     XF_CATS.forEach(function (c) { byCat[c.key] = buckets.map(function () { return 0; }); });
+    Object.keys(XF_SRC).forEach(function (k) { discSrc[k] = buckets.map(function () { return 0; }); });
     rows.forEach(function (x) {
       if (x.t < first || x.t >= last) return;
       var lo = 0, hi = n - 1;
       while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
       byCat[x.cat][lo] += x.aud; total[lo] += x.aud;
+      if (x.cat === 'disc' && discSrc[x.src]) discSrc[x.src][lo] += x.aud;
     });
     if (!total.some(function (v) { return v > 0; })) { box.__chart = null; box.innerHTML = anEmpty('No fees in this range.'); }
     else {
@@ -4728,26 +4743,35 @@
         series: [{ key: 'fees', label: 'External fees', color: '#d95926', data: total, total: anSum(total) }],
         tip: function (i) {
           return XF_CATS.filter(function (c) { return byCat[c.key][i] > 0; }).map(function (c) {
-            return '<div style="--pf:' + c.color + '"><i></i>' + esc(c.label) + '<b>' + fmtA(byCat[c.key][i]) + '</b></div>';
+            return '<div style="--pf:' + c.color + '"><i></i>' + esc(c.label) + '<b>' + fmtA(byCat[c.key][i]) + '</b></div>' +
+              (c.key === 'disc' ? Object.keys(XF_SRC).filter(function (k) { return discSrc[k][i] > 0; }).map(function (k) {
+                return '<div class="adm-xf-sub">' + esc(XF_SRC[k]) + '<b>' + fmtA(discSrc[k][i]) + '</b></div>';
+              }).join('') : '');
           }).join('') + '<div class="adm-pc-tip-total">Total<b>' + fmtA(total[i]) + '</b></div>';
         } };
       drawPlatChart(box);
     }
     if (!mixBox) return;
     var s = w.start ? w.start.getTime() : -Infinity, e = w.end ? w.end.getTime() : Infinity, by = {}, spent = 0;
-    XF_CATS.forEach(function (c) { by[c.key] = { v: 0, g: 0 }; });
-    rows.forEach(function (x) { if (x.t < s || x.t >= e) return; by[x.cat].v += x.aud; by[x.cat].g += x.gross; spent += x.aud; });
+    XF_CATS.forEach(function (c) { by[c.key] = { v: 0, g: 0, src: {} }; });
+    rows.forEach(function (x) {
+      if (x.t < s || x.t >= e) return;
+      var r = by[x.cat]; r.v += x.aud; r.g += x.gross; spent += x.aud;
+      if (x.src) r.src[x.src] = (r.src[x.src] || 0) + x.aud;
+    });
+    function split(c) { return c.key !== 'disc' ? '' : Object.keys(XF_SRC).map(function (k) { return XF_SRC[k] + ' ' + fmtA(by.disc.src[k] || 0); }).join(', '); }
     var cats = XF_CATS.filter(function (c) { return by[c.key].v > 0; }).sort(function (a, b) { return by[b.key].v - by[a.key].v; });
     if (!cats.length) { mixBox.innerHTML = anEmpty('No fees in this range.'); return; }
     var gross = sumSales(sales, w.start, w.end).aud;
-    var slices = cats.map(function (c) { return { v: by[c.key].v, color: c.color, label: c.label, tip: sharePct(by[c.key].v / spent * 100) + ', ' + fmtA(by[c.key].v) }; });
+    var slices = cats.map(function (c) { return { v: by[c.key].v, color: c.color, label: c.label, tip: sharePct(by[c.key].v / spent * 100) + ', ' + fmtA(by[c.key].v) + (split(c) ? ' (' + split(c) + ')' : '') }; });
     mixBox.innerHTML = '<div class="adm-fin-mix">' +
       '<figure class="adm-pie">' + donutSvg(slices, { aria: 'External fees by category', center: fmtA(spent, spent >= 1000), sub: gross > 0 ? sharePct(spent / gross * 100) + ' of sales' : 'in fees' }) + '</figure>' +
       '<div class="adm-mix-table" role="table" aria-label="External fees by category">' +
         '<div class="adm-mix-row is-head adm-fin-catrow" role="row"><span role="columnheader">Category</span><span role="columnheader">Fees</span><span role="columnheader">Share</span><span role="columnheader" title="Fees as a share of the sales they were taken from">Rate</span></div>' +
         cats.map(function (c) {
           var r = by[c.key];
-          return '<div class="adm-mix-row adm-fin-catrow" role="row" style="--pf:' + c.color + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c.label) + '</span>' +
+          var sp = c.key === 'disc' ? '<span class="adm-xf-split" role="tooltip">' + Object.keys(XF_SRC).map(function (k) { return '<span>' + esc(XF_SRC[k]) + '<b>' + fmtA(r.src[k] || 0) + '</b></span>'; }).join('') + '</span>' : '';
+          return '<div class="adm-mix-row adm-fin-catrow' + (sp ? ' adm-xf-hassplit' : '') + '" role="row"' + (sp ? ' tabindex="0"' : '') + ' style="--pf:' + c.color + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c.label) + sp + '</span>' +
             '<span role="cell">' + fmtA(r.v) + '</span><span role="cell">' + sharePct(r.v / spent * 100) + '</span><span role="cell">' + (r.g > 0 ? sharePct(r.v / r.g * 100) : '–') + '</span></div>';
         }).join('') + '</div></div>';
   }
