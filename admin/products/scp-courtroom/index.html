@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261125y" />
+  <link rel="stylesheet" href="/styles.css?v=20261126a" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -317,7 +317,7 @@
             </div>
 
             <div class="adm-hp">
-              <div class="adm-hp-head"><div class="adm-hp-title"><h2>External fees</h2><span>Every platform and payment processor, Robux not included</span></div></div>
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>External fees</h2><span>Every platform and payment processor, Robux not included</span></div><div class="adm-xf-ofnet" id="admFeeOfNet"></div></div>
               <div class="adm-plat-chart" id="admFeeChart"><div class="adm-skel adm-skel-chart"></div></div>
               <div id="admFeeMix"></div>
             </div>
@@ -340,9 +340,20 @@
                 <div class="adm-hp-head"><div class="adm-hp-title"><h2>Categories</h2><span>Revenue by product category</span></div></div>
                 <div id="admAnCats"></div>
               </div>
-              <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Price points</h2><span>What each product sold for</span></div></div>
-                <div id="admAnPrices"></div>
+              <div class="adm-an-stack">
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Average Order Value</h2></div></div>
+                  <div id="admAnPrices"></div>
+                </div>
+                <div class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Payment methods</h2></div>
+                    <div class="adm-seg" id="admAnPmSeg" role="group" aria-label="Platform">
+                      <button type="button" data-pm-src="all" class="active">Global</button>
+                      <button type="button" data-pm-src="site">coldd.dev</button>
+                      <button type="button" data-pm-src="builtbybit">BuiltByBit</button>
+                    </div></div>
+                  <div id="admAnPm"></div>
+                </div>
               </div>
             </div>
 
@@ -1915,6 +1926,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261125y" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261125y"></script>
+  <script src="/catalog.js?v=20261126a" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126a"></script>
 </body>
 </html>

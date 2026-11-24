@@ -605,6 +605,9 @@
       stripePaymentIntentId: row.stripe_payment_intent_id,
       stripeCheckoutSessionId: row.stripe_checkout_session_id,
       paymentProvider: row.payment_provider || null,
+      paymentMethod: row.payment_method || null,
+      processorFee: row.processor_fee == null ? null : Number(row.processor_fee),
+      processorFeeCur: row.processor_fee_currency || null,
       isTest: !!row.is_test,
       storeCreditApplied:Number(row.store_credit_applied||0),
       paypalOrderId: row.paypal_order_id || null,
@@ -1838,8 +1841,9 @@
       if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: rbxNet(s.amount), n: 1 });
       else out.push({ pf: s.platform, t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0, n: 1 });
     });
-    // Parcel's Robux sales from the group ledger (what the group received; one sale each).
-    PARCEL_RBX.forEach(function (x) { out.push({ pf: 'parcel', t: x.t, aud: 0, robux: x.net, n: 1 }); });
+    // Parcel's Robux from the group ledger (what the group received): revenue in its period only,
+    // never counted as orders (the ledger is not a purchase log).
+    PARCEL_RBX.forEach(function (x) { out.push({ pf: 'parcel', t: x.t, aud: 0, robux: x.net, n: 0 }); });
     return out;
   }
   function sumSales(list, start, end, pf) {
@@ -4652,13 +4656,15 @@
   // at the rate of the sale's day. Robux is not included. Exact where the platform reports
   // it: Creator Store and Payhip nets, BuiltByBit's platform fee and featured-ad fee
   // (AdFeePayment; ad credit BuiltByBit covered is not a cost), ClearlyDev's emailed net.
-  // Estimated from published rates where it does not (XF_RATE): BuiltByBit's gateway fee,
+  // Estimated from published rates where it does not (XF_RATE): BuiltByBit's gateway fee for methods its table does not list,
   // ClearlyDev sales without an emailed net, Parcel's and coldd.dev's card, PayPal and
   // crypto fees. Discounts & Promotions is the money given away below list price: BuiltByBit's
   // ListPrice less FinalPrice on each purchase (curated sales, coupons, bundles) and coldd.dev's
   // coupon discount plus any sale markdown on an order.
   var XF_CATS = [
     { key: 'proc', label: 'Payment Processor Fees', color: 'var(--pf-site)' },
+    { key: 'payhip', label: 'Payhip Fees', color: 'var(--pf-payhip)' },
+    { key: 'parcel', label: 'Parcel Fees', color: 'var(--pf-parcel)' },
     { key: 'creatorstore', label: 'Creator Store Fees', color: 'var(--pf-creatorstore)' },
     { key: 'clearlydev', label: 'ClearlyDev Fees', color: 'var(--pf-clearlydev)' },
     { key: 'bbb', label: 'BuiltByBit Fees', color: 'var(--pf-builtbybit)' },
@@ -4667,7 +4673,6 @@
   ];
   var XF_SRC = { builtbybit: 'BuiltByBit', site: 'coldd.dev' };
   var XF_RATE = {
-    bbbGateway: { pct: 0.0249, fixedUsd: 0.40 },          // per checkout, split across its items by value
     clearlydev: { pct: 0.10, monthlyUsd: 2 },
     creatorstore: 0.098,                                  // only for a sale with no recorded net
     payhip: 0.143,                                        // only for a sale with no recorded net
@@ -4676,6 +4681,17 @@
     nowpayments: 0.005,
     coinbase: 0.01
   };
+  // BuiltByBit's gateway fee for each payment method (creators.builtbybit.com/fees): a percentage and
+  // a US$ fixed fee per checkout, the fixed part split across a cart's items by value. A method the
+  // table does not list (BLIK, CashApp, crypto, Klarna...) uses the card rate.
+  var BBB_GATEWAY = { 'credit/debit cards': [0.0249, 0.30], 'paypal': [0.0249, 0.40], 'pix': [0.0205, 0.20], 'alipay': [0.04, 0.26],
+    'banco do brasil': [0.0335, 0.20], 'bancontact': [0, 0.55], 'belfius direct net': [0.016, 0.45], 'boleto bancario': [0.0345, 0.20], 'bradesco': [0.0335, 0.20],
+    'efecty': [0.071, 0.20], 'eps': [0.02, 0.45], 'giropay': [0.02, 0.45], 'ideal': [0, 0.45], 'itau': [0.0335, 0.20], 'kbc/cbc': [0.016, 0.20], 'mach': [0.049, 0.20],
+    'mercado pago': [0.041, 0.20], 'mercado pago (mx)': [0.057, 0.20], 'multicaja': [0.05, 0.20], 'nequi': [0.045, 0.20], 'oxxo': [0.042, 0.20], 'pegoefectivo': [0.049, 0.20],
+    'pagofacil': [0.049, 0.20], 'paymaya wallet': [0.0349, 0.25], 'picpay': [0.0325, 0.20], 'przelewy24': [0.03, 0.45], 'pse': [0.067, 0.20], 'rapipago': [0.0445, 0.20],
+    'sencillito': [0.051, 0.20], 'sepa bank transfer': [0, 0.45], 'servipag': [0.05, 0.20], 'sofort banking': [0.024, 0.45], 'spei bank transfers': [0.025, 0.20],
+    'trustly': [0.04, 0.20], 'twint': [0.0285, 0.20], 'viabaloto': [0.06, 0.20], 'webpay': [0.05, 0.20] };
+  function bbbGatewayRate(g) { return BBB_GATEWAY[String(g || '').trim().toLowerCase()] || BBB_GATEWAY['credit/debit cards']; }
   var XF_CACHE = { src: [], rows: null };
   function extFees() {
     var src = [ORDERS, BBB.purchases, PSALES, BBB.configured];
@@ -4692,7 +4708,10 @@
       if (disc > 0) add('disc', t, usdToAudAt(disc, t), usdToAudAt((Number(o.total) || 0) + disc, t), 1, 'site');
       if (!(aud > 0)) return;
       var p = String(o.paymentProvider || '').toLowerCase(), c = String(o.cryptoProvider || '').toLowerCase();
-      var f = p === 'paypal' ? aud * R.paypal.pct + R.paypal.fixedAud
+      // The processor's own fee when it was recorded (Stripe balance transaction, PayPal capture), else its published rate.
+      var fx = o.processorFee, fc = String(o.processorFeeCur || '').toUpperCase();
+      var f = fx != null && fc === 'AUD' ? fx : fx != null && fc === 'USD' ? usdToAudAt(fx, t)
+        : p === 'paypal' ? aud * R.paypal.pct + R.paypal.fixedAud
         : p === 'crypto' ? aud * (c === 'coinbase' ? R.coinbase : R.nowpayments)
         : aud * R.stripe.pct + R.stripe.fixedAud;
       add('proc', t, f, aud, 1);
@@ -4707,7 +4726,8 @@
         if (!(p.price > 0)) return;
         var share = p.external_tid && cart[p.external_tid] ? p.price / cart[p.external_tid] : 1;
         var gross = usdToAudAt(p.price, t);
-        add('bbb', t, usdToAudAt(p.fee + p.price * R.bbbGateway.pct + R.bbbGateway.fixedUsd * share, t), gross, 1);
+        var gw = bbbGatewayRate(p.gateway);
+        add('bbb', t, usdToAudAt(p.fee + p.price * gw[0] + gw[1] * share, t), gross, 1);
         if (p.adFee > 0) add('bbbad', t, usdToAudAt(p.adFee, t), gross, 1);
       });
     }
@@ -4717,8 +4737,8 @@
       var gross = usdToAudAt(s.usd, s.t), fee = function (rate) { return usdToAudAt(s.net != null ? s.usd - s.net : s.usd * rate, s.t); };
       if (s.platform === 'creatorstore') add('creatorstore', s.t, fee(R.creatorstore), gross, 1);
       else if (s.platform === 'clearlydev') { add('clearlydev', s.t, fee(R.clearlydev.pct), gross, 1); if (s.t < cdFirst) cdFirst = s.t; }
-      else if (s.platform === 'payhip') add('proc', s.t, fee(R.payhip), gross, 1);
-      else if (s.platform === 'parcel') add('proc', s.t, gross * R.stripe.pct + R.stripe.fixedAud, gross, 1);
+      else if (s.platform === 'payhip') add('payhip', s.t, fee(R.payhip), gross, 1);
+      else if (s.platform === 'parcel') add('parcel', s.t, gross * R.stripe.pct + R.stripe.fixedAud, gross, 1);
     });
     // ClearlyDev's monthly charge, on the 1st of every month since the first sale.
     if (isFinite(cdFirst)) {
@@ -4730,6 +4750,7 @@
   }
   function renderAnFees(sales, w) {
     var box = $('admFeeChart'), mixBox = $('admFeeMix'); if (!box) return;
+    var ofNet = $('admFeeOfNet'); if (ofNet) ofNet.innerHTML = '';
     var rows = extFees(), b = anBuckets(sales), buckets = b.buckets, n = buckets.length;
     var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
     var byCat = {}, total = buckets.map(function () { return 0; }), discSrc = {};
@@ -4768,6 +4789,9 @@
     var cats = XF_CATS.filter(function (c) { return by[c.key].v > 0; }).sort(function (a, b) { return by[b.key].v - by[a.key].v; });
     if (!cats.length) { mixBox.innerHTML = anEmpty('No fees in this range.'); return; }
     var gross = sumSales(sales, w.start, w.end).aud;
+    // Net revenue = gross sales less what the platforms and processors kept (a discount is already out of gross).
+    var netRev = gross - (spent - (by.disc ? by.disc.v : 0));
+    if (ofNet && netRev > 0) { ofNet.innerHTML = '<b>' + sharePct(spent / netRev * 100) + '</b><span>of net revenue</span>'; ofNet.title = fmtA(spent) + ' in external fees against ' + fmtA(netRev) + ' net revenue (gross sales ' + fmtA(gross) + ' less platform and processor fees)'; }
     var slices = cats.map(function (c) { return { v: by[c.key].v, color: c.color, label: c.label, tip: sharePct(by[c.key].v / spent * 100) + ', ' + fmtA(by[c.key].v) + (split(c) ? ' (' + split(c) + ')' : '') }; });
     mixBox.innerHTML = '<div class="adm-fin-mix">' +
       '<figure class="adm-pie">' + donutSvg(slices, { aria: 'External fees by category', center: fmtA(spent, spent >= 1000), sub: gross > 0 ? sharePct(spent / gross * 100) + ' of sales' : 'in fees' }) + '</figure>' +
@@ -4846,8 +4870,8 @@
     var rows = ranked(g).map(function (c, i) {
       return '<div class="adm-catr-row" role="listitem">' +
         '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
-        '<span class="adm-catr-name"><b>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em></span>' +
-        '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span>' + change(c, i + 1) + '</div>';
+        '<span class="adm-catr-name"><b>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em>' + change(c, i + 1) + '</span>' +
+        '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span></div>';
     });
     var unc = g.Uncategorised;
     if (unc) {
@@ -4871,6 +4895,115 @@
     if (b) { var id = b.getAttribute('data-cat-open'); AN_CAT_OPEN[id] = !AN_CAT_OPEN[id]; renderAnCats(anWindow()); return; }
     var a = e.target.closest && e.target.closest('[data-cat-pid]');
     if (a && !(e.ctrlKey || e.metaKey || e.shiftKey || e.button)) { e.preventDefault(); openProductEdit(a.getAttribute('data-cat-pid')); }
+  });
+
+  // Payment methods: how buyers paid, the same method counted together across platforms.
+  // Cards everywhere (coldd.dev card / Apple Pay / Google Pay / Link, BuiltByBit cards,
+  // Creator Store, ClearlyDev and Parcel's Stripe) are "Debit card"; PayPal is BuiltByBit's
+  // and Payhip's; crypto is coldd.dev's and BuiltByBit's; Robux is coldd.dev's and Parcel's;
+  // methods both coldd.dev and BuiltByBit take (Klarna, Afterpay/Clearpay, BLIK, Pix,
+  // Bancontact, EPS, Przelewy24, iDeal, pay by bank / Open Banking) share one name.
+  var PM_SITE = { card: 'Debit card', apple_pay: 'Debit card', google_pay: 'Debit card', samsung_pay: 'Debit card', link: 'Debit card',
+    klarna: 'Klarna', afterpay_clearpay: 'Afterpay', zip: 'Zip', mb_way: 'MB WAY', satispay: 'Satispay', bancontact: 'Bancontact',
+    blik: 'BLIK', eps: 'EPS', p24: 'Przelewy24', bizum: 'Bizum', pay_by_bank: 'Open Banking', pix: 'Pix', ideal: 'iDeal', giropay: 'Giropay' };
+  function pmOfGateway(g) {
+    var s = String(g || '').trim(), l = s.toLowerCase();
+    if (!s || l === 'n/a') return 'Other';
+    if (/card/.test(l)) return 'Debit card';
+    if (/paypal/.test(l)) return 'PayPal';
+    if (/crypto/.test(l)) return 'Crypto';
+    if (/afterpay|clearpay/.test(l)) return 'Afterpay';
+    if (/klarna/.test(l)) return 'Klarna';
+    if (/open ba/.test(l)) return 'Open Banking';
+    if (/przelewy|^p24$/.test(l)) return 'Przelewy24';
+    if (l === 'ideal') return 'iDeal';
+    if (l === 'blik') return 'BLIK';
+    return s.replace(/\s*\([A-Z]{2}\)$/, '');
+  }
+  var PM_COLOR = { 'Debit card': '#3987e5', 'PayPal': '#c98500', 'Crypto': '#9085e9', 'Robux': '#199e70', 'Afterpay': '#4fb3c8', 'Klarna': '#d55181', 'Other methods': '#7f8c99' };
+  var PM_SPARE = ['#d95926', '#0ca30c', '#e66767', '#a8a35a', '#b07cc6', '#5c9ce6', '#c46a3d'];
+  function pmColor(m) {
+    if (PM_COLOR[m]) return PM_COLOR[m];
+    var h = 0; for (var i = 0; i < m.length; i++) h = (h * 31 + m.charCodeAt(i)) >>> 0;
+    return PM_SPARE[h % PM_SPARE.length];
+  }
+  var PM_CACHE = { src: [], rows: null };
+  function pmSales() {
+    var src = [ORDERS, BBB.purchases, PSALES, PARCEL_RBX, BBB.configured];
+    if (PM_CACHE.rows && src.every(function (v, i) { return v === PM_CACHE.src[i]; })) return PM_CACHE.rows;
+    var out = [];
+    ORDERS.forEach(function (o) {
+      if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
+      var t = Date.parse(o.paidAt || o.date), p = String(o.paymentProvider || '').toLowerCase();
+      if (o.currency === 'robux') { out.push({ src: 'site', pm: 'Robux', t: t, aud: 0, robux: rbxNet(o.totalRobux) }); return; }
+      var pm = p === 'paypal' ? 'PayPal' : p === 'crypto' ? 'Crypto' : (PM_SITE[String(o.paymentMethod || '').toLowerCase()] || 'Debit card');
+      out.push({ src: 'site', pm: pm, t: t, aud: usdToAudAt(o.total, t), robux: 0 });
+    });
+    if (BBB.configured) BBB.purchases.forEach(function (p) {
+      if (!bbbIsUsd(p)) return;
+      var t = Date.parse(p.purchased_at);
+      out.push({ src: 'builtbybit', pm: pmOfGateway(p.gateway), t: t, aud: usdToAudAt(p.price, t), robux: 0 });
+    });
+    PSALES.forEach(function (s) {
+      if (s.status === 'refunded') return;
+      if (s.currency === 'ROBUX') { out.push({ src: s.platform, pm: 'Robux', t: s.t, aud: 0, robux: rbxNet(s.amount) }); return; }
+      out.push({ src: s.platform, pm: s.platform === 'payhip' ? 'PayPal' : 'Debit card', t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0 });
+    });
+    PARCEL_RBX.forEach(function (x) { out.push({ src: 'parcel', pm: 'Robux', t: x.t, aud: 0, robux: x.net, n: 0 }); });
+    PM_CACHE = { src: src, rows: out };
+    return out;
+  }
+  var AN_PM_SRC = 'all';
+  try { AN_PM_SRC = localStorage.getItem('coldd_admin_pm_src_v1') || 'all'; } catch (_) {}
+  function renderAnPm(w) {
+    var box = $('admAnPm'); if (!box) return;
+    document.querySelectorAll('#admAnPmSeg [data-pm-src]').forEach(function (b) {
+      var on = b.getAttribute('data-pm-src') === AN_PM_SRC; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on));
+    });
+    var all = pmSales().filter(function (x) { return AN_PM_SRC === 'all' || x.src === AN_PM_SRC; });
+    function inWin(a, b) { var s = a ? a.getTime() : -Infinity, e = b ? b.getTime() : Infinity; return all.filter(function (x) { return x.t >= s && x.t < e; }); }
+    var cur = inWin(w.start, w.end), prev = w.prevStart ? inWin(w.prevStart, w.prevEnd) : null;
+    if (!cur.length) { box.innerHTML = anEmpty(AN_PM_SRC === 'site' ? 'No coldd.dev orders in this range.' : 'No sales in this range.'); return; }
+    function group(list) {
+      var g = {};
+      list.forEach(function (x) { var c = g[x.pm] = g[x.pm] || { aud: 0, robux: 0, n: 0, v: 0 }; c.aud += x.aud; c.robux += x.robux; c.n += x.n == null ? 1 : x.n; c.v += anVal(x.aud, x.robux); });
+      return g;
+    }
+    function order(g) { return Object.keys(g).sort(function (a, b) { return g[b].v - g[a].v || g[b].n - g[a].n; }); }
+    var g = group(cur), gp = prev ? group(prev) : null, keys = order(g), rest = [];
+    // BuiltByBit takes 30+ methods: after the top 6 the rest share one row.
+    if (keys.length > 7) {
+      rest = keys.slice(6); keys = keys.slice(0, 6);
+      var fold = function (src) { var o = { aud: 0, robux: 0, n: 0, v: 0 }; rest.forEach(function (k) { if (src[k]) ['aud', 'robux', 'n', 'v'].forEach(function (f) { o[f] += src[k][f]; }); }); return o; };
+      g['Other methods'] = fold(g); if (gp) gp['Other methods'] = fold(gp); keys.push('Other methods');
+    }
+    var tot = anSum(keys.map(function (k) { return g[k].v; }));
+    var was = {}; if (gp) order(gp).filter(function (k) { return k !== 'Other methods'; }).forEach(function (k, i) { was[k] = i + 1; });
+    function money(x) { return x.aud || !x.robux ? fmtA(x.aud) : robuxRaw(x.robux); }
+    function sub(x) { return (x.aud && x.robux ? robuxRaw(x.robux) + ' · ' : '') + plural(x.n, 'sale'); }
+    function change(k, rank) {
+      if (!gp) return '';
+      var move = k === 'Other methods' ? '' : !was[k] ? '<b class="up">New</b>' : was[k] > rank ? '<b class="up">▲ ' + (was[k] - rank) + '</b>' : was[k] < rank ? '<b class="down">▼ ' + (rank - was[k]) + '</b>' : '<b class="same">–</b>';
+      var pv = gp[k] ? gp[k].v : 0, pct = pv ? (g[k].v - pv) / pv * 100 : null;
+      return '<span class="adm-catr-chg">' + move + (pct == null ? '' : '<small class="' + (pct >= 0 ? 'up' : 'down') + '">' + (pct >= 0 ? '+' : '−') + fmtPctAbs(pct) + '</small>') + '</span>';
+    }
+    var rows = keys.map(function (k, i) {
+      var other = k === 'Other methods';
+      return '<div class="adm-catr-row" role="listitem"' + (other ? ' title="' + esc(rest.join(', ')) + '"' : '') + '>' +
+        '<span class="adm-catr-rank">' + (other ? '' : i + 1) + '</span>' +
+        '<span class="adm-catr-name"><b>' + esc(k) + '</b><em>' + sharePct(tot ? g[k].v / tot * 100 : 0) + '</em>' + change(k, i + 1) + '</span>' +
+        '<span class="adm-catr-val"><b>' + money(g[k]) + '</b><small>' + sub(g[k]) + '</small></span></div>';
+    });
+    var slices = keys.map(function (k) { return { v: g[k].v, color: pmColor(k), label: k, tip: sharePct(tot ? g[k].v / tot * 100 : 0) + ', ' + money(g[k]) }; });
+    box.innerHTML = '<div class="adm-catr-pie">' + donutSvg(slices, { size: 176, aria: 'Revenue share by payment method', center: tot ? fmtA(tot, true) : 'A$0', sub: 'revenue' }) + '</div>' +
+      '<div class="adm-catr' + (gp ? '' : ' no-chg') + '" role="list" aria-label="Revenue by payment method">' + rows.join('') + '</div>';
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#admAnPmSeg [data-pm-src]');
+    if (!b) return;
+    AN_PM_SRC = b.getAttribute('data-pm-src');
+    try { localStorage.setItem('coldd_admin_pm_src_v1', AN_PM_SRC); } catch (_) {}
+    renderAnPm(anWindow());
   });
 
   // Price points: what each product sold for, in AU$ bands.
@@ -5005,6 +5138,7 @@
     renderAnFees(sales, w);
     renderAnCats(w);
     renderAnPrices(w);
+    renderAnPm(w);
     renderAnHeat(sales, w);
     renderAnCust(w);
   }
@@ -12535,6 +12669,132 @@
     box.__list = list; box.hidden = false; document.body.classList.add('adm-fin-viewing');
     box.__show(start || 0);
   }
+  /* ---- Expense panel: one expense with its receipts large on the left and the details (or the edit form) on the right ---- */
+  function finPanelExpense() { return FIN.panel ? FIN.expenses.filter(function (x) { return x.id === FIN.panel.id; })[0] : null; }
+  function finShowReceipt(el, r) {
+    var tok = el.__tok = (el.__tok || 0) + 1;
+    el.innerHTML = '<span class="adm-fin-spin"></span>';
+    finSignedUrl(r.path).then(function (url) {
+      if (el.__tok !== tok) return;
+      if (!url) { el.innerHTML = '<p class="adm-empty">Could not open this receipt.</p>'; return; }
+      if (r.type === 'text/html') {
+        return fetch(url).then(function (x) { return x.text(); }).then(function (html) {
+          if (el.__tok !== tok) return;
+          el.innerHTML = '<iframe sandbox="" title="' + esc(r.name || 'Email') + '"></iframe>';
+          el.querySelector('iframe').srcdoc = html;
+        });
+      }
+      el.innerHTML = /^image\//.test(r.type || '') ? '<img alt="' + esc(r.name || 'Receipt') + '" src="' + esc(url) + '" />' : '<iframe title="' + esc(r.name || 'Receipt') + '" src="' + esc(url) + '"></iframe>';
+    }).catch(function () { if (el.__tok === tok) el.innerHTML = '<p class="adm-empty">Could not open this receipt.</p>'; });
+  }
+  function finOpenExpense(id) {
+    if (!FIN.expenses.some(function (x) { return x.id === id; })) return;
+    var box = $('admFinExpPanel');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'admFinExpPanel'; box.className = 'adm-fin-exppanel'; box.hidden = true;
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', 'Expense');
+      box.innerHTML = '<div class="adm-fin-ep-card"><div class="adm-fin-ep-media"><div class="adm-fin-ep-view"></div><div class="adm-fin-ep-thumbs"></div></div>' +
+        '<div class="adm-fin-ep-side"><button type="button" class="adm-fin-viewer-x adm-fin-ep-x" aria-label="Close">×</button><div class="adm-fin-ep-body"></div></div></div>';
+      document.body.appendChild(box);
+      box.addEventListener('click', finPanelClick);
+      box.addEventListener('change', function (ev) { if (ev.target.id === 'admFinExpFiles') { finUploadFiles(ev.target.files); ev.target.value = ''; } });
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Escape' || !FIN.panel || FIN.panel.mode !== 'view') return;
+        var v = $('admFinViewer'); if (v && !v.hidden) return;
+        if (document.querySelector('.confirm-overlay:not([hidden])')) return;
+        finClosePanel();
+      });
+    }
+    if (FIN.panel && FIN.panel.mode === 'edit') { FIN.panel.mode = 'view'; finCancelExpense(); }
+    FIN.panel = { id: id, mode: 'view', i: 0 };
+    box.hidden = false; document.body.classList.add('adm-fin-panel-open');
+    finRenderPanel();
+    box.querySelector('.adm-fin-ep-x').focus();
+  }
+  function finRenderPanelMedia(e) {
+    var box = $('admFinExpPanel'), P = FIN.panel; if (!box || !P) return;
+    var list = Array.isArray(e.receipts) ? e.receipts : [];
+    if (P.i >= list.length) P.i = 0;
+    var view = box.querySelector('.adm-fin-ep-view'), thumbs = box.querySelector('.adm-fin-ep-thumbs');
+    thumbs.hidden = list.length < 2;
+    thumbs.innerHTML = list.map(function (r, i) {
+      return '<button type="button" class="adm-fin-ep-thumb' + (i === P.i ? ' is-on' : '') + '" data-ep-rcpt="' + i + '" title="' + esc(r.name || 'Receipt') + '" aria-label="' + esc('Show ' + (r.name || 'receipt')) + '">' +
+        (/^image\//.test(r.type || '') ? '<img alt="" data-fin-rcpt-img="' + esc(r.path) + '" />' : '<span class="adm-fin-pdf">' + (r.type === 'text/html' ? 'EMAIL' : 'PDF') + '</span>') + '</button>';
+    }).join('');
+    thumbs.querySelectorAll('[data-fin-rcpt-img]').forEach(function (im) { finSignedUrl(im.getAttribute('data-fin-rcpt-img')).then(function (u) { if (u) im.src = u; }); });
+    if (!list.length) { view.__tok = (view.__tok || 0) + 1; view.innerHTML = '<div class="adm-fin-ep-none">' + FIN_CLIP + '<p>No receipt yet</p><small>Edit the expense to add one.</small></div>'; }
+    else finShowReceipt(view, list[P.i]);
+  }
+  function finRenderPanel() {
+    var box = $('admFinExpPanel'), P = FIN.panel, e = finPanelExpense();
+    if (!box || !P) return;
+    if (!e) { finClosePanel(); return; }
+    finRenderPanelMedia(e);
+    var body = box.querySelector('.adm-fin-ep-body');
+    if (P.mode === 'edit') {
+      var form = $('admFinExpForm');
+      if (form && form.parentNode !== body) {
+        if (!FIN.formHome) FIN.formHome = { parent: form.parentNode, next: form.nextSibling };
+        body.innerHTML = '<h2 class="adm-fin-ep-title">Edit expense</h2>'; body.appendChild(form);
+      }
+      return;
+    }
+    finPanelRestoreForm();
+    var list = Array.isArray(e.receipts) ? e.receipts : [], charge = finCharge(e);
+    var prod = e.product_id ? allProducts().filter(function (p) { return p.dbId === e.product_id; })[0] : null;
+    function row(k, v) { return v ? '<div class="adm-fin-ep-row"><dt>' + esc(k) + '</dt><dd>' + v + '</dd></div>' : ''; }
+    body.innerHTML = '<p class="adm-fin-ep-date">' + esc(finLong(e.spent_on)) + '</p>' +
+      '<h2 class="adm-fin-ep-title">' + esc(e.note || e.vendor || e.category) + '</h2>' +
+      '<p class="adm-fin-ep-amt">' + finM(e.amount) + '</p>' +
+      '<dl class="adm-fin-ep-list">' +
+        row('Category', '<span class="adm-pf' + (e.category === 'Uncategorised' ? ' adm-fin-unc' : '') + '" style="--pf:' + finCatColor(e.category) + '"><b class="adm-dot"></b>' + esc(e.category) + '</span>') +
+        row('Paid to', esc(e.vendor || '')) +
+        row('Payment processor', esc(e.payment_method || '')) +
+        row('Associated product', prod ? esc(prod.title) : '') +
+        row('Bank charge', charge ? '<span class="adm-fin-ep-mono">' + esc(charge) + '</span>' : '') +
+        row('Notes', e.notes ? '<span class="adm-fin-ep-notes">' + esc(e.notes) + '</span>' : '') +
+        row('Receipts', list.length ? esc(plural(list.length, 'file')) : 'None yet') +
+        row('Added', esc(e.source === 'bank' ? 'From the bank statement' : e.source === 'sheet' ? 'From the Finance Tracker' : 'By hand') + (e.created_at ? ' · ' + esc(relTime(e.created_at)) : '')) +
+      '</dl>' +
+      '<div class="adm-fin-ep-actions"><button type="button" class="btn btn-primary adm-btn-sm" data-ep="edit">Edit</button>' +
+        (list.length ? '<button type="button" class="btn btn-ghost adm-btn-sm" data-ep="full">Full screen</button>' : '') +
+        '<button type="button" class="btn btn-ghost adm-btn-sm adm-fin-ep-del" data-ep="delete">Delete</button></div>';
+  }
+  function finPanelRestoreForm() {
+    var form = $('admFinExpForm'), h = FIN.formHome; if (!form || !h) return;
+    h.parent.insertBefore(form, h.next && h.next.parentNode === h.parent ? h.next : null);
+    FIN.formHome = null;
+  }
+  function finClosePanel() {
+    var box = $('admFinExpPanel'), P = FIN.panel; if (!P) return;
+    if (P.mode === 'edit') { P.mode = 'view'; finCancelExpense(); }
+    FIN.panel = null; finPanelRestoreForm();
+    if (box) { box.hidden = true; var v = box.querySelector('.adm-fin-ep-view'); v.__tok = (v.__tok || 0) + 1; v.innerHTML = ''; }
+    document.body.classList.remove('adm-fin-panel-open');
+    finRenderExpList();
+  }
+  function finPanelClick(ev) {
+    var t = ev.target, b, P = FIN.panel; if (!P) return;
+    if ((t === ev.currentTarget && P.mode === 'view') || t.closest('.adm-fin-ep-x')) { finClosePanel(); return; }
+    if ((b = t.closest('[data-ep-rcpt]'))) { P.i = +b.getAttribute('data-ep-rcpt'); var cur = finPanelExpense(); if (cur) finRenderPanelMedia(cur); return; }
+    if ((b = t.closest('[data-ep]'))) {
+      var a = b.getAttribute('data-ep');
+      if (a === 'edit') {
+        if (FIN.form && FIN.form.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(FIN.form.added);
+        FIN.form = null; FIN.editId = P.id; P.mode = 'edit';
+        finRenderPanel(); finRenderExpForm(); finRenderExpList();
+        return;
+      }
+      if (a === 'delete') { finDeleteExpense(P.id); return; }
+      if (a === 'full') { var ex = finPanelExpense(); if (ex) finViewReceipts(ex.receipts, P.i); return; }
+    }
+    // The edit form's own controls (the form is moved in here while editing).
+    if (t.closest('#admFinExpSave')) { finSaveExpense(); return; }
+    if (t.closest('#admFinExpCancel')) { P.mode = 'view'; finCancelExpense(); finRenderPanel(); return; }
+    if ((b = t.closest('[data-fin-rcpt-del]'))) { finRemoveReceipt(b.getAttribute('data-fin-rcpt-del')); return; }
+    if ((b = t.closest('[data-fin-rcpt-view]'))) { finViewReceipts(FIN.form ? FIN.form.receipts : [], +b.getAttribute('data-fin-rcpt-view')); return; }
+  }
   function finBindDrop() {
     var zone = $('admFinRcptZone'); if (!zone) return;
     ['dragenter', 'dragover'].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add('is-over'); }); });
@@ -12542,12 +12802,13 @@
     zone.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) finUploadFiles(e.dataTransfer.files); });
   }
 
+  var finProdDD = null;
   function finRenderExpForm() {
     var box = $('admFinExpForm'); if (!box) return;
     var e = FIN.editId ? FIN.expenses.filter(function (x) { return x.id === FIN.editId; })[0] : null;
     if (FIN.editId && !e) FIN.editId = null;
     var keep = FIN.form && FIN.form.key === (e ? e.id : 'new') && $('admFinExpAmt');
-    var prev = keep ? { date: $('admFinExpDate').value, amt: $('admFinExpAmt').value, cat: finCatPick ? finCatPick.get() : '', vendor: $('admFinExpVendor').querySelector('input').value, pay: finPayPick ? finPayPick.get() : '', note: $('admFinExpNote').value, notes: $('admFinExpNotes').value } : null;
+    var prev = keep ? { date: $('admFinExpDate').value, amt: $('admFinExpAmt').value, cat: finCatPick ? finCatPick.get() : '', vendor: $('admFinExpVendor').querySelector('input').value, pay: finPayPick ? finPayPick.get() : '', note: $('admFinExpNote').value, notes: $('admFinExpNotes').value, prod: finProdDD ? finProdDD.getValue() : '' } : null;
     finFormState(e);
     box.innerHTML = (e ? '<p class="adm-fin-editing">Editing the ' + esc(finM(e.amount)) + ' expense from ' + esc(finLong(e.spent_on)) + '</p>' : '') +
       '<div class="adm-fin-form adm-fin-form4">' +
@@ -12556,7 +12817,8 @@
         '<div class="adm-field"><span>Category</span>' + finPickHtml('admFinExpCat', 'Category') + '</div>' +
         '<div class="adm-field"><span>Paid to</span>' + finComboHtml('admFinExpVendor', prev ? prev.vendor : e && e.vendor, 'Search or add') + '</div>' +
         '<div class="adm-field"><span>Payment processor</span>' + finPickHtml('admFinExpPay', 'Payment processor') + '</div>' +
-        '<label class="adm-field adm-fin-span3"><span>Reason</span><input type="text" maxlength="300" class="adm-input" id="admFinExpNote" placeholder="e.g. Thumbnails for Catch a Fish" value="' + esc(prev ? prev.note : e && e.note || '') + '" /></label>' +
+        '<div class="adm-field"><span>Associated product</span><div class="adm-dd adm-dd-inline adm-fin-pick" id="admFinExpProd"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="adm-dd-val"></span>' + FIN_DD_CHEV + '</button><div class="adm-dd-menu" role="listbox" aria-label="Associated product" hidden></div></div></div>' +
+        '<label class="adm-field adm-fin-span2"><span>Reason</span><input type="text" maxlength="300" class="adm-input" id="admFinExpNote" placeholder="e.g. Thumbnails for Catch a Fish" value="' + esc(prev ? prev.note : e && e.note || '') + '" /></label>' +
         '<label class="adm-field adm-fin-span2"><span>Notes</span><textarea class="adm-input adm-fin-notes" id="admFinExpNotes" maxlength="1000" rows="4" placeholder="Anything else worth keeping">' + esc(prev ? prev.notes : e && e.notes || '') + '</textarea></label>' +
         '<div class="adm-field adm-fin-span2"><span>Receipts</span><div class="adm-fin-rcpt-zone" id="admFinRcptZone"><div class="adm-fin-rcpt-list" id="admFinRcpts"></div>' +
           '<label class="adm-fin-rcpt-add">' + FIN_CLIP + '<span>Add receipt</span><input type="file" id="admFinExpFiles" accept="image/*,application/pdf" multiple hidden /></label>' +
@@ -12567,6 +12829,9 @@
     finCatPick = finPick($('admFinExpCat'), { options: finAllCats, value: prev ? prev.cat : e ? e.category : '', placeholder: 'Choose a category' });
     finPayPick = finPick($('admFinExpPay'), { options: function () { return finUsed('payment_method', FIN_PAY).filter(function (p) { return FIN_PAY.indexOf(p) >= 0; }).concat(finUsed('payment_method').filter(function (p) { return FIN_PAY.indexOf(p) < 0; })); }, value: prev ? prev.pay : e ? e.payment_method || '' : 'Debit Card', placeholder: 'Choose' });
     finCombo($('admFinExpVendor'), function () { return finUsed('vendor'); }, 'No one paid yet: type a name');
+    finProdDD = makeDropdown($('admFinExpProd'), { placeholder: 'None', searchable: true });
+    finProdDD.setOptions([{ value: '', label: 'None' }].concat(allProducts().filter(function (p) { return p.dbId; }).slice().sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); })
+      .map(function (p) { return { value: p.dbId, label: p.title }; })), prev ? prev.prod : (e && e.product_id) || '');
     finRenderReceipts();
     finBindDrop();
   }
@@ -12590,7 +12855,7 @@
     btn.disabled = true;
     var isNew = finAllCats().indexOf(cat) < 0;
     var saveCat = isNew ? sb.from('finance_expense_categories').insert({ name: cat }).then(function (r) { if (!r.error) FIN.cats.push({ name: cat }); }) : Promise.resolve();
-    var row = { spent_on: date, amount: amt, category: cat, vendor: vendor, payment_method: pay, note: note, notes: notes, receipts: st ? st.receipts : [], updated_at: new Date().toISOString() };
+    var row = { spent_on: date, amount: amt, category: cat, vendor: vendor, payment_method: pay, note: note, notes: notes, product_id: (finProdDD && finProdDD.getValue()) || null, receipts: st ? st.receipts : [], updated_at: new Date().toISOString() };
     var wasEdit = !!FIN.editId;
     saveCat.then(function () {
       return wasEdit ? sb.from('finance_expenses').update(row).eq('id', FIN.editId).select('*') : sb.from('finance_expenses').insert(row).select('*');
@@ -12604,6 +12869,7 @@
       admToast(wasEdit ? 'Expense saved.' : 'Expense logged.', true);
       FIN.form = null; FIN.editId = null;
       finRenderExpForm(); finRenderExpList(); finAfterChange();
+      if (FIN.panel && FIN.panel.id === saved.id) { FIN.panel.mode = 'view'; finRenderPanel(); }
     });
   }
   function finDeleteExpense(id) {
@@ -12616,6 +12882,7 @@
         if (n) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(e.receipts.map(function (x) { return x.path; }));
         FIN.expenses = FIN.expenses.filter(function (x) { return x.id !== id; });
         if (FIN.editId === id) { FIN.form = null; FIN.editId = null; finRenderExpForm(); }
+        if (FIN.panel && FIN.panel.id === id) finClosePanel();
         finRenderExpList(); finAfterChange();
       });
     });
@@ -12657,7 +12924,7 @@
     table.innerHTML = '<thead><tr><th scope="col">Date</th><th scope="col">Reason</th><th scope="col">Paid to</th><th scope="col">Paid with</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Receipts and delete</span></th></tr></thead><tbody>' +
       list.map(function (e) {
         var n = Array.isArray(e.receipts) ? e.receipts.length : 0, charge = finCharge(e);
-        return '<tr data-fin-edit="' + esc(e.id) + '" tabindex="0" aria-label="Edit ' + esc((e.note || e.vendor || 'expense') + ', ' + finLong(e.spent_on)) + '"' + (FIN.editId === e.id ? ' class="is-editing"' : '') + '>' +
+        return '<tr data-fin-edit="' + esc(e.id) + '" tabindex="0" aria-label="Open ' + esc((e.note || e.vendor || 'expense') + ', ' + finLong(e.spent_on)) + '"' + (FIN.editId === e.id ? ' class="is-editing"' : '') + '>' +
           '<th scope="row">' + esc(finLong(e.spent_on)) + '</th>' +
           '<td class="adm-fin-note">' + esc(e.note || '') + (charge ? '<small class="adm-fin-charge">' + esc(charge) + '</small>' : '') + '</td>' +
           '<td>' + esc(e.vendor || '') + '</td><td>' + esc(e.payment_method || '') + '</td><td class="is-strong">' + finM(e.amount) + '</td>' +
@@ -12836,7 +13103,7 @@
       if ((b = e.target.closest('[data-fin-inbox-rcpt]'))) { var ib = (FIN.inbox || []).filter(function (x) { return x.id === b.getAttribute('data-fin-inbox-rcpt'); })[0]; if (ib) finViewReceipts(ib.files, 0); return; }
       if ((b = e.target.closest('[data-fin-list-rcpt]'))) { var ex = FIN.expenses.filter(function (x) { return x.id === b.getAttribute('data-fin-list-rcpt'); })[0]; if (ex) finViewReceipts(ex.receipts, 0); return; }
       if ((b = e.target.closest('[data-fin-del-exp]'))) { finDeleteExpense(b.getAttribute('data-fin-del-exp')); return; }
-      if ((b = e.target.closest('[data-fin-edit]'))) { if (FIN.form && FIN.form.added.length) window.coldSupabase.storage.from(FIN_RCPT_BUCKET).remove(FIN.form.added); FIN.form = null; FIN.editId = b.getAttribute('data-fin-edit'); finRenderExpForm(); finRenderExpList(); $('admFinExpCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if ((b = e.target.closest('[data-fin-edit]'))) { finOpenExpense(b.getAttribute('data-fin-edit')); return; }
       if (e.target.closest('#admFinSetSave')) { finSaveSettings(); return; }
     });
     // Weekly cells and instalments save when they lose focus (or on Enter; Escape undoes).
