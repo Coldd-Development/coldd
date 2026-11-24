@@ -146,6 +146,9 @@
   // (e.g. websiteRevenue().robux, summed from orders.total_robux) - do not
   // multiply it by ROBUX_PER_USD again.
   function robuxRaw(n) { return 'R$ ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+  // What the group receives from a Robux sale: Roblox keeps 30%, rounded down
+  // (a 99 R$ pass pays 70 R$), the same figure the group's sale ledger records.
+  function rbxNet(price) { price = Math.round(Number(price) || 0); return price - Math.floor(price * 3 / 10); }
   // The Robux icon, for "Includes [robux] 1,234" style notes.
   var RBX_IC = '<img class="adm-rbx-ic" src="/mp-logos/robux.png" alt="Robux" width="14" height="14" />';
   function pct(n) { return (Math.round((Number(n) || 0) * 10) / 10) + '%'; }
@@ -1799,12 +1802,19 @@
     var w = whole || Math.abs(v) >= 10000;
     return 'A$' + v.toLocaleString('en-AU', { minimumFractionDigits: w ? 0 : 2, maximumFractionDigits: w ? 0 : 2 });
   }
-  function pfValue(key, aud, robux, whole) { return PF_ROBUX[key] ? fmtA(aud, whole) + '<span class="adm-rbx"> | ' + robuxRaw(robux) + '</span>' : fmtA(aud, whole); }
+  // Platforms that sell only in Robux: Robux first, its DevEx value in AU$ greyed.
+  var PF_RBX_MAIN = { parcel: true };
+  function rbxAud(robux, t) { return (Number(robux) || 0) * DEVEX_USD_PER_ROBUX * audRateOn(t || Date.now()); }
+  function pfValue(key, aud, robux, whole, t) {
+    if (PF_RBX_MAIN[key]) return robuxRaw(robux) + '<span class="adm-rbx"> | ' + fmtA(rbxAud(robux, t), whole) + '</span>';
+    return PF_ROBUX[key] ? fmtA(aud, whole) + '<span class="adm-rbx"> | ' + robuxRaw(robux) + '</span>' : fmtA(aud, whole);
+  }
   function plural(n, word) { return num(n) + ' ' + word + (n === 1 ? '' : 's'); }
   function fmtPctAbs(p) { p = Math.abs(p); return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%'; }
 
-  // Every sale on every platform as { pf, t, aud, robux, n }, BEFORE FEES: what
-  // the buyer paid, converted at the rate of the day of the sale. Website orders
+  // Every sale on every platform as { pf, t, aud, robux, n }. Money sales BEFORE FEES:
+  // what the buyer paid, converted at the rate of the day of the sale. Robux sales are
+  // what the group receives, after Roblox's 30% (rbxNet). Website orders
   // count once paid (no tests, no admin grants); BuiltByBit is FinalPrice;
   // platform_sales rows use the sale amount; Parcel's Robux sales come from the group
   // sale ledger (PARCEL_RBX). Refunds are left out.
@@ -1813,7 +1823,7 @@
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted') return;
       var t = Date.parse(o.paidAt || o.date);
-      if (o.currency === 'robux') out.push({ pf: 'site', t: t, aud: 0, robux: o.totalRobux, n: 1 });
+      if (o.currency === 'robux') out.push({ pf: 'site', t: t, aud: 0, robux: rbxNet(o.totalRobux), n: 1 });
       else out.push({ pf: 'site', t: t, aud: usdToAudAt(o.total, t), robux: 0, n: 1 });
     });
     if (BBB.configured) BBB.purchases.forEach(function (p) {
@@ -1824,11 +1834,11 @@
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
       // One row is one order, however many items it held (a ClearlyDev cart can carry several).
-      if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: s.amount, n: 1 });
+      if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: rbxNet(s.amount), n: 1 });
       else out.push({ pf: s.platform, t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0, n: 1 });
     });
-    // Parcel's Robux sales from the group ledger (price paid; one sale each).
-    PARCEL_RBX.forEach(function (x) { out.push({ pf: 'parcel', t: x.t, aud: 0, robux: x.robux, n: 1 }); });
+    // Parcel's Robux sales from the group ledger (what the group received; one sale each).
+    PARCEL_RBX.forEach(function (x) { out.push({ pf: 'parcel', t: x.t, aud: 0, robux: x.net, n: 1 }); });
     return out;
   }
   function sumSales(list, start, end, pf) {
@@ -1937,7 +1947,8 @@
   // group's Parcel hub; synced by admin-robux-revenue every minute). Revenue only:
   // the products are named after their price, so they count on the platform figures
   // but are not listed as orders or products (the Discord bot will name them).
-  // robux = the price the buyer paid (the number in the product name).
+  // robux = the price the buyer paid (the number in the product name); net = what the
+  // group received after Roblox's 30%, which is what the figures count.
   var PARCEL_RBX = [], PARCEL_RBX_LOADED = false, PARCEL_RBX_LOADING = false, PARCEL_RBX_SIG = '';
   function refreshParcelRobux() {
     if (!window.coldSupabase || PARCEL_RBX_LOADING) return Promise.resolve();
@@ -2206,7 +2217,7 @@
       // order (HOME_PLATFORMS), never re-sorted by value.
       if (CH.tip) tip.innerHTML = head + CH.tip(i);
       else tip.innerHTML = head +
-        CH.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i]) + '</b></div>'; }).join('') +
+        CH.series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + pfValue(s.key, s.data[i], s.robux[i], false, m.start.getTime()) + '</b></div>'; }).join('') +
         '<div class="adm-pc-tip-total">All platforms<b>' + fmtA(total) + '</b></div>' +
         (rbx ? '<p class="adm-pc-tip-note">Includes ' + RBX_IC + ' ' + num(rbx) + '</p>' : '');
       tip.hidden = false;
@@ -2256,7 +2267,11 @@
     var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: cmp ? sumSales(sales, pS, pE, p.key) : null }; });
     var tot = sumSales(sales, cS, cE), totP = cmp ? sumSales(sales, pS, pE) : null;
     // R$ sits under the A$ (not beside it), so the table fits without scrolling.
-    function cell(key, r) { return fmtA(r.aud) + (PF_ROBUX[key] ? '<small>' + robuxRaw(r.robux) + '</small>' : ''); }
+    function cell(key, r) {
+      // Robux-only platforms (Parcel): Robux on top, its DevEx value in AU$ under it.
+      if (PF_RBX_MAIN[key]) return robuxRaw(r.robux) + '<small>' + fmtA(rbxAud(r.robux)) + '</small>';
+      return fmtA(r.aud) + (PF_ROBUX[key] ? '<small>' + robuxRaw(r.robux) + '</small>' : '');
+    }
     function rbx(n) { return n ? '<small>' + robuxRaw(n) + '</small>' : ''; }
     // Shares and changes count Robux at the DevEx rate, like the chart's totals.
     var rate = DEVEX_USD_PER_ROBUX * audRateOn(now);
@@ -4263,7 +4278,7 @@
       var items = o.items && o.items.length ? o.items : [{ slug: o.productId, title: o.title }];
       var sh = items.length > 1 ? orderShares(items.map(function (it) { var p = findProduct(it.slug); return p && p.priceNum > 0 ? p.priceNum : 0; })) : [1];
       items.forEach(function (it, j) {
-        add({ pf: 'site', t: t, id: it.slug, title: it.title, aud: rb ? 0 : usdToAudAt((Number(o.total) || 0) * sh[j], t), robux: rb ? (Number(o.totalRobux) || 0) * sh[j] : 0,
+        add({ pf: 'site', t: t, id: it.slug, title: it.title, aud: rb ? 0 : usdToAudAt((Number(o.total) || 0) * sh[j], t), robux: rb ? rbxNet(o.totalRobux) * sh[j] : 0,
           buyer: who ? 'site:' + who : '', buyerName: o.userName, order: 'site:' + o.id });
       });
     });
@@ -4278,7 +4293,7 @@
       var rb = s.currency === 'ROBUX', names = splitOrderNames(s.name, s.qty || 1), sh = saleShares(s, names);
       names.forEach(function (raw, j) {
         var nm = canonName(raw, rb ? 0 : s.usd * sh[j]);
-        add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? s.amount * sh[j] : 0,
+        add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? rbxNet(s.amount) * sh[j] : 0,
           buyer: s.buyer ? s.platform + ':' + String(s.buyer).toLowerCase() : '', buyerName: s.buyer, order: s.platform + ':' + s.id });
       });
     });
@@ -4350,13 +4365,14 @@
     var size = o.size || 168, r = size / 2, ri = r * 0.62, cx = r, cy = r;
     var tot = anSum(slices.map(function (s) { return s.v; }));
     var out = '<svg class="adm-donut" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + esc(o.aria || '') + '">';
-    if (!(tot > 0)) out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" stroke-width="' + (r - ri) + '" class="adm-donut-empty"/>';
+    if (!(tot > 0)) out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" style="stroke-width:' + (r - ri) + 'px" class="adm-donut-empty"/>';
     else {
       var live = slices.filter(function (s) { return s.v > 0; }), a0 = -Math.PI / 2;
       live.forEach(function (s) {
         var tip = esc(s.label) + '|' + esc(s.tip || sharePct(s.v / tot * 100));
         if (live.length === 1) {
-          out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" stroke-width="' + (r - ri) + '" style="stroke:' + s.color + '" data-tip="' + tip + '"/>';
+          // One source has it all: a full ring (an arc can't close on itself).
+          out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" style="stroke:' + s.color + ';stroke-width:' + (r - ri) + 'px" data-tip="' + tip + '"/>';
           return;
         }
         var a1 = a0 + s.v / tot * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0;
