@@ -131,6 +131,10 @@ Deno.serve(async (req: Request) => {
         receipt_email: paypalOrder?.payer?.email_address || null,
         paid_at: new Date().toISOString(),
         paypal_capture_id: capture?.id ?? null,
+        payment_method: "paypal",
+        // PayPal's actual fee on this capture (for Analytics "External fees").
+        processor_fee: capture?.seller_receivable_breakdown?.paypal_fee?.value != null ? Number(capture.seller_receivable_breakdown.paypal_fee.value) : null,
+        processor_fee_currency: capture?.seller_receivable_breakdown?.paypal_fee?.currency_code ?? null,
       })
       .eq("id", order.id)
       .neq("status", "paid")

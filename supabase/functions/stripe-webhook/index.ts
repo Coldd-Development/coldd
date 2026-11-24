@@ -97,6 +97,25 @@ Deno.serve(async (req: Request) => {
           if (!receipt.ok) console.error("[stripe-webhook] receipt email failed:", receipt.error);
           if (updated.marketing_opt_in) await recordMarketingOptIn(admin, guestEmail, updated.user_id);
         }
+        // Which payment method the buyer used (card, apple_pay, afterpay_clearpay, klarna, blik...),
+        // for Analytics. Never allowed to fail the webhook.
+        if (paymentIntentId) {
+          try {
+            const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ["latest_charge.balance_transaction"] });
+            const ch = pi.latest_charge as Stripe.Charge | null;
+            const d = ch?.payment_method_details;
+            const bt = ch?.balance_transaction as Stripe.BalanceTransaction | string | null | undefined;
+            const method = d ? (d.type === "card" && d.card?.wallet?.type ? d.card.wallet.type : d.type) : null;
+            const patch: Record<string, unknown> = {};
+            if (method) patch.payment_method = method;
+            // Stripe's actual fee on this payment, in the account's settlement currency.
+            if (bt && typeof bt === "object" && typeof bt.fee === "number") {
+              patch.processor_fee = bt.fee / 100;
+              patch.processor_fee_currency = String(bt.currency || "").toUpperCase();
+            }
+            if (Object.keys(patch).length) await admin.from("orders").update(patch).eq("id", orderId);
+          } catch (e) { console.error("[stripe-webhook] payment method:", (e as Error).message); }
+        }
       }
     } else if (event.type === "checkout.session.async_payment_failed" || event.type === "checkout.session.expired") {
       const session = event.data.object as Stripe.Checkout.Session;

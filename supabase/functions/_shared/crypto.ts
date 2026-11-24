@@ -52,7 +52,8 @@ export interface CryptoProvider {
    * every real payment or (worse) accept a short one.
    */
   verifyWebhook(rawBody: string, headers: Headers): Promise<
-    { orderId: string; providerId: string; settleAmount: number; settleCurrency: string } | null
+    // outcomeAmount/outcomeCurrency: what the provider actually passes on to us, when it says.
+    { orderId: string; providerId: string; settleAmount: number; settleCurrency: string; outcomeAmount?: number; outcomeCurrency?: string } | null
   >;
 }
 
@@ -177,6 +178,8 @@ export const nowPayments: CryptoProvider = {
       // tampered-but-signed payload cannot under-pay.
       settleAmount: Number(parsed.price_amount ?? NaN),
       settleCurrency: "usd",
+      outcomeAmount: Number(parsed.outcome_amount ?? NaN),
+      outcomeCurrency: String(parsed.outcome_currency ?? ""),
     };
   },
 };

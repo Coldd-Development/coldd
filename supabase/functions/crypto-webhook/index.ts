@@ -83,6 +83,13 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, ignored: true });
     }
 
+    // The processor's real fee when the provider says what it passed on in a US-dollar coin
+    // (NOWPayments "outcome"): invoice less outcome = service fee + network costs.
+    const outCur = String(verified.outcomeCurrency || "").toLowerCase();
+    const outAmt = Number(verified.outcomeAmount);
+    const feeUsd = Number.isFinite(outAmt) && outAmt > 0 && /^(usd|usdt|usdc)/.test(outCur) && Number.isFinite(verified.settleAmount)
+      ? Math.max(0, Math.round((verified.settleAmount - outAmt) * 100) / 100) : null;
+
     // 5. Conditional transition doubles as the replay guard.
     const { data: updated } = await admin
       .from("orders")
@@ -90,6 +97,8 @@ Deno.serve(async (req: Request) => {
         status: "paid",
         paid_at: new Date().toISOString(),
         crypto_payment_id: verified.providerId || null,
+        payment_method: "crypto",
+        ...(feeUsd != null ? { processor_fee: feeUsd, processor_fee_currency: "USD" } : {}),
       })
       .eq("id", order.id)
       .neq("status", "paid")
