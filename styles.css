@@ -678,30 +678,20 @@
     .review-by img.ra { object-fit: cover; }
     .review-by .rn { display: flex; flex-direction: column; font-size: 14px; font-weight: 600; }
     .review-by .rn small { font-weight: 500; font-size: 12px; color: var(--fg-3); }
-    /* Homepage reviews carousel (app.js reviewCarousel): one card slides in at a time, the bar
-       under it fills until the next slide and pauses while hovered, focused or off screen. */
+    /* Homepage reviews strip (app.js reviewCarousel): scrolls on its own, drags with the mouse or a
+       finger, fades out at both edges. Cards keep their own height. */
     .rv-carousel { position: relative; }
-    .rv-viewport { overflow: hidden; margin: -6px; padding: 6px; box-sizing: border-box; transition: height .6s var(--ease); }
-    .rv-track { display: flex; gap: 18px; align-items: flex-start; transition: transform .75s var(--ease); will-change: transform; touch-action: pan-y; }
-    .rv-track > .review { flex: 0 0 calc((100% - 36px) / 3); min-width: 0; opacity: .25; transform: scale(.96);
-      transition: opacity .6s var(--ease), transform .6s var(--ease); }
-    .rv-track > .review.is-on { opacity: 1; transform: none; }
-    .rv-controls { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 22px; }
-    .rv-carousel.is-static .rv-controls { display: none; }
-    .rv-nav { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
-      color: var(--fg); background: transparent; border: 1px solid var(--hairline-strong);
-      transition: color .2s, border-color .2s, transform .2s var(--ease); }
-    .rv-nav:hover { color: var(--accent-ink); border-color: var(--accent); }
-    .rv-nav:active { transform: scale(.92); }
-    .rv-progress { position: relative; width: 120px; height: 3px; border-radius: 999px; overflow: hidden; background: var(--hairline-strong); }
-    .rv-progress span { position: absolute; inset: 0; transform-origin: left center; transform: scaleX(0); background: var(--accent);
-      animation: rvBar 6s linear forwards; }
-    .rv-carousel:hover .rv-progress span, .rv-carousel.is-held .rv-progress span, .rv-carousel.is-away .rv-progress span { animation-play-state: paused; }
-    .rv-carousel.is-reduced .rv-progress { display: none; }
-    @keyframes rvBar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-    @media (max-width: 980px) { .rv-track > .review { flex-basis: calc((100% - 18px) / 2); } }
-    @media (max-width: 640px) { .rv-track > .review { flex-basis: 100%; } }
-    @media (prefers-reduced-motion: reduce) { .rv-track, .rv-track > .review { transition: none; } }
+    .rv-viewport { overflow: hidden; padding: 6px 0;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); }
+    .rv-track { display: flex; gap: 18px; align-items: flex-start; width: max-content; will-change: transform;
+      touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+    .rv-carousel.is-dragging .rv-track { cursor: grabbing; }
+    .rv-track img { -webkit-user-drag: none; pointer-events: none; }
+    .rv-track > .review { flex: 0 0 auto; width: clamp(270px, 28vw, 370px); }
+    .rv-carousel.is-reduced .rv-viewport { overflow-x: auto; -webkit-mask-image: none; mask-image: none; scroll-snap-type: x mandatory; }
+    .rv-carousel.is-reduced .rv-track { cursor: auto; width: auto; }
+    .rv-carousel.is-reduced .rv-track > .review { scroll-snap-align: start; }
     .reviews-more-wrap { text-align: center; margin-top: 30px; }
     .reviews-more { font-size: 15px; font-weight: 600; color: var(--fg); text-decoration: none;
       padding: 8px 4px; border-bottom: 1px solid var(--hairline-strong); transition: color .2s, border-color .2s; }

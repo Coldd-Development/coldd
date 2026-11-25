@@ -1645,83 +1645,88 @@
         }
       }
 
-      // Homepage reviews: a carousel of every five-star (or "Recommends this") review with
+      // Homepage reviews: a scrolling strip of every five-star (or "Recommends this") review with
       // something to say: pinned ones first (reviews.home_pin), then the newest, critical ones last.
-      // Slides one card at a time every few seconds (the progress bar under it times the next
-      // slide), loops back to the start, pauses while hovered, focused, off screen or when the
-      // tab is hidden, and follows the arrows and a swipe. With reduced motion it only moves on
-      // the arrows or a swipe.
+      // A strip of reviews that scrolls on its own, endlessly (the cards are drawn twice and the
+      // strip wraps by one set). It slows to a stop while hovered or focused so a review can be
+      // read, and the mouse or a finger can drag it (with a little momentum) or a trackpad swipe
+      // it sideways. Off screen or in a hidden tab it rests. With reduced motion it does not move
+      // by itself and is a plain sideways-scrolling row.
       function reviewCarousel(root, track) {
         if (!root || !track || root.__rv) return;
         root.__rv = true;
-        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var cards = track.children, idx = 0, seen = false;
-        var bar = root.querySelector('.rv-progress span');
-        function perView() {
-          var vw = track.parentNode.clientWidth, cw = cards[0] ? cards[0].getBoundingClientRect().width : vw;
-          return Math.max(1, Math.round(vw / Math.max(1, cw)));
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { root.classList.add('is-reduced'); return; }
+        var n = track.children.length;
+        track.insertAdjacentHTML('beforeend', track.innerHTML);
+        for (var c = n; c < track.children.length; c++) {
+          track.children[c].setAttribute('aria-hidden', 'true');
+          track.children[c].querySelectorAll('a, button').forEach(function (el) { el.setAttribute('tabindex', '-1'); });
         }
-        function last() { return Math.max(0, cards.length - perView()); }
-        // The cards in view set the height: each card is as tall as the tallest one showing, and
-        // the window eases to it, so a long review elsewhere never leaves short ones half empty.
-        // Growing happens at once; shrinking waits for the slide to end so the card on its way
-        // out is never cut off.
-        var shrinkT = null, curTall = 0;
-        function paint() {
-          var pv = perView(), tall = 0, i;
-          track.style.transform = 'translate3d(' + (cards[idx] ? -cards[idx].offsetLeft : 0) + 'px,0,0)';
-          for (i = 0; i < cards.length; i++) cards[i].style.minHeight = '';
-          for (i = idx; i < Math.min(cards.length, idx + pv); i++) tall = Math.max(tall, cards[i].offsetHeight);
-          for (i = 0; i < cards.length; i++) {
-            var on = i >= idx && i < idx + pv;
-            cards[i].classList.toggle('is-on', on);
-            cards[i].setAttribute('aria-hidden', on ? 'false' : 'true');
+        var SPEED = 34;
+        var setW = 0, x = 0, pace = 1, want = 1, fling = 0, seen = true, last = 0;
+        var drag = null, moved = false;
+        function measure() { setW = track.children[n] ? track.children[n].offsetLeft - track.children[0].offsetLeft : 0; }
+        function wrap() { if (setW > 0) x = ((x % setW) + setW) % setW; }
+        function frame(t) {
+          var dt = last ? Math.min(0.064, (t - last) / 1000) : 0;
+          last = t;
+          pace += (want - pace) * Math.min(1, dt * 3.5);
+          if (!drag && seen && !document.hidden) {
+            x += SPEED * pace * dt + fling * dt;
+            fling *= Math.pow(0.04, dt);
+            if (Math.abs(fling) < 4) fling = 0;
           }
-          function size(h) {
-            curTall = h;
-            for (var j = 0; j < cards.length; j++) cards[j].style.minHeight = h + 'px';
-            track.parentNode.style.height = (h + 12) + 'px';
-          }
-          clearTimeout(shrinkT);
-          if (tall >= curTall || reduce) size(tall);
-          else {
-            for (i = 0; i < cards.length; i++) cards[i].style.minHeight = curTall + 'px';
-            shrinkT = setTimeout(function () { size(tall); }, 700);
-          }
-          root.classList.toggle('is-static', cards.length <= pv);
+          wrap();
+          track.style.transform = 'translate3d(' + (-x).toFixed(2) + 'px,0,0)';
+          requestAnimationFrame(frame);
         }
-        function restartBar() {
-          if (!bar || reduce) return;
-          bar.style.animation = 'none';
-          void bar.offsetWidth;
-          bar.style.animation = '';
-        }
-        function go(i) { var l = last(); idx = i > l ? 0 : i < 0 ? l : i; paint(); restartBar(); }
-        root.addEventListener('click', function (e) {
-          var b = e.target.closest && e.target.closest('[data-rv]');
-          if (b) go(idx + (b.getAttribute('data-rv') === 'next' ? 1 : -1));
+        root.addEventListener('mouseenter', function () { want = 0; });
+        root.addEventListener('mouseleave', function () { if (!drag) want = 1; });
+        root.addEventListener('focusin', function () { want = 0; });
+        root.addEventListener('focusout', function () { want = 1; });
+        track.addEventListener('pointerdown', function (e) {
+          if (e.button !== 0) return;
+          drag = { id: e.pointerId, x0: e.clientX, from: x, lx: e.clientX, lt: performance.now(), v: 0 };
+          moved = false; fling = 0;
         });
-        if (bar && !reduce) bar.addEventListener('animationend', function () { if (seen) go(idx + 1); else restartBar(); });
-        // Pause off screen: the bar only runs once the carousel has been seen and while it is visible.
-        if ('IntersectionObserver' in window) {
-          new IntersectionObserver(function (es) {
-            es.forEach(function (en) { seen = seen || en.isIntersecting; root.classList.toggle('is-away', !en.isIntersecting); });
-          }, { threshold: 0.35 }).observe(root);
-        } else seen = true;
-        root.addEventListener('focusin', function () { root.classList.add('is-held'); });
-        root.addEventListener('focusout', function () { root.classList.remove('is-held'); });
-        var x0 = null, y0 = 0;
-        track.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse') { x0 = e.clientX; y0 = e.clientY; } });
-        track.addEventListener('pointerup', function (e) {
-          if (x0 == null) return;
-          var dx = e.clientX - x0, dy = e.clientY - y0; x0 = null;
-          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(idx + (dx < 0 ? 1 : -1));
+        track.addEventListener('pointermove', function (e) {
+          if (!drag || e.pointerId !== drag.id) return;
+          var dx = e.clientX - drag.x0;
+          if (!moved && Math.abs(dx) > 5) {
+            moved = true;
+            root.classList.add('is-dragging');
+            try { track.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+          if (!moved) return;
+          var now = performance.now(), step = now - drag.lt;
+          if (step > 0) drag.v = drag.v * 0.6 + ((drag.lx - e.clientX) / step * 1000) * 0.4;
+          drag.lx = e.clientX; drag.lt = now;
+          x = drag.from - dx;
+          wrap();
         });
-        track.addEventListener('pointercancel', function () { x0 = null; });
+        function release(e) {
+          if (!drag || (e && e.pointerId !== drag.id)) return;
+          if (moved) fling = Math.max(-2400, Math.min(2400, drag.v));
+          drag = null;
+          root.classList.remove('is-dragging');
+          if (!root.matches(':hover')) want = 1;
+        }
+        track.addEventListener('pointerup', release);
+        track.addEventListener('pointercancel', release);
+        // A drag is not a click on the product link under the pointer.
+        track.addEventListener('click', function (e) { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+        track.addEventListener('dragstart', function (e) { e.preventDefault(); });
+        root.addEventListener('wheel', function (e) {
+          if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+          e.preventDefault();
+          x += e.deltaX; wrap();
+        }, { passive: false });
+        if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { seen = es[0].isIntersecting; }).observe(root);
         var rt = null;
-        window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (idx > last()) idx = last(); paint(); }, 120); });
-        if (reduce) root.classList.add('is-reduced');
-        paint();
+        window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(measure, 120); });
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+        measure();
+        requestAnimationFrame(frame);
       }
       var homeRevGrid = document.getElementById('homeReviewsGrid');
       var homeRevSection = document.getElementById('homeReviewsSection');
