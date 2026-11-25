@@ -4,8 +4,9 @@
 // (ClearlyDev, Parcel, Creator Store, Payhip). Writes public.platform_sales,
 // which the admin home page totals next to the website and BuiltByBit.
 //
-// Callers: the Creator Store userscript (create.roblox.com), and later the
-// Parcel Discord bot and the ClearlyDev email monitor.
+// Callers: the Creator Store userscript (create.roblox.com) and the ClearlyDev email
+// monitor. coldd's Discord bot sends Parcel's messages here too: a body with a `bot`
+// field goes to _shared/discord_feed.ts, which signs the bot in with its own key.
 //
 //   supabase functions deploy platform-sales-ingest --no-verify-jwt
 //
@@ -28,6 +29,7 @@
 // -> { ok, received, written, matched, skipped: [{ index, reason }] }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { handleBot } from "../_shared/discord_feed.ts";
 
 const PLATFORMS = ["clearlydev", "parcel", "creatorstore", "payhip"];
 const SOURCES = ["userscript", "discord", "email", "api", "manual"];
@@ -39,7 +41,7 @@ const DEVEX_USD_PER_ROBUX = 0.0038;
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "content-type, x-ingest-key",
+    "Access-Control-Allow-Headers": "content-type, x-ingest-key, x-bot-key",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 }
@@ -81,12 +83,17 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "Body must be JSON." }, 400); }
+
+  if (body && typeof body === "object" && typeof body.bot === "string") {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    return handleBot(req, body, admin);
+  }
+
   const key = Deno.env.get("PLATFORM_INGEST_KEY") || "";
   if (key.length < 24) return json({ error: "Ingest is not set up yet (PLATFORM_INGEST_KEY missing)." }, 503);
   if (!sameKey(req.headers.get("x-ingest-key") || "", key)) return json({ error: "Wrong ingest key." }, 401);
-
-  let body: any;
-  try { body = await req.json(); } catch { return json({ error: "Body must be JSON." }, 400); }
 
   const platform = String(body?.platform || "");
   if (!PLATFORMS.includes(platform)) return json({ error: "Unknown platform." }, 400);

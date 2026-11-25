@@ -1844,11 +1844,11 @@
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
       // One row is one order, however many items it held (a ClearlyDev cart can carry several).
-      if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: rbxNet(s.amount), n: 1 });
+      if (s.currency === 'ROBUX') out.push({ pf: s.platform, t: s.t, aud: 0, robux: psRbx(s), n: 1 });
       else out.push({ pf: s.platform, t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0, n: 1 });
     });
-    // Parcel's Robux from the group ledger (what the group received): revenue in its period only,
-    // never counted as orders (the ledger is not a purchase log).
+    // Parcel's Robux from the group ledger (what the group received) that no Parcel order covers:
+    // revenue in its period only, never counted as orders (the ledger is not a purchase log).
     PARCEL_RBX.forEach(function (x) { out.push({ pf: 'parcel', t: x.t, aud: 0, robux: x.net, n: 0 }); });
     return out;
   }
@@ -1914,6 +1914,8 @@
   // public.platform_sales: ClearlyDev / Parcel / Creator Store / Payhip sales,
   // written by platform-sales-ingest (userscript, bots, email) or by hand.
   var PSALES = [], PSALES_LOADED = false, PSALES_SIG = '';
+  // What the group received for a Robux platform sale: the recorded net, else the price less Roblox's 30%.
+  function psRbx(s) { return s.netRbx != null ? s.netRbx : rbxNet(s.amount); }
   var PSYNC = {}; // platform_sync_state rows by platform (background syncs, e.g. creator-store-sync)
   var MAIL_FAILED = 0; // ClearlyDev order emails in the last 7 days the parser could not read
   function refreshPlatformSales() {
@@ -1931,7 +1933,7 @@
       renderWork();
     });
     return fetchAllRows(function () {
-      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_usd, quantity, status, source').order('sold_at', { ascending: false }).order('id');
+      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_amount, net_usd, quantity, status, source, method:raw->>method, sale_type:raw->>sale_type').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
       var firstLoad = !PSALES_LOADED;
       PSALES_LOADED = true;
@@ -1945,7 +1947,10 @@
         // exactly on the hour: its time is not known.
         var tms = Date.parse(r.sold_at);
         return { dateOnly: (r.source === 'manual' || r.source === 'csv') && tms % 3600000 === 0,
-          id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: untagName(r.product_name) || r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd), qty: r.quantity || 1, status: r.status, source: r.source || '' };
+          id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: untagName(r.product_name) || r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd),
+          // A Robux sale's net_amount is what the group received (Parcel orders take it from the group ledger).
+          netRbx: r.currency === 'ROBUX' && r.net_amount != null ? Number(r.net_amount) : null, method: r.method || '', saleType: r.sale_type || '',
+          qty: r.quantity || 1, status: r.status, source: r.source || '' };
       });
       if (curPanel === 'orders') renderOrders();
       if (curPanel === 'analytics') renderAnalytics();
@@ -1957,7 +1962,9 @@
   // Parcel's Robux sales, from the group sale ledger (developer products in the
   // group's Parcel hub; synced by admin-robux-revenue every minute). Revenue only:
   // the products are named after their price, so they count on the platform figures
-  // but are not listed as orders or products (the Discord bot will name them).
+  // but are not listed as orders or products. Sales the Discord bot matched to a
+  // Parcel purchase message are orders in platform_sales (ledger_ref) and the RPC
+  // leaves them out here, so nothing counts twice.
   // robux = the price the buyer paid (the number in the product name); net = what the
   // group received after Roblox's 30%, which is what the figures count.
   var PARCEL_RBX = [], PARCEL_RBX_LOADED = false, PARCEL_RBX_LOADING = false, PARCEL_RBX_SIG = '';
@@ -4401,7 +4408,7 @@
       var rb = s.currency === 'ROBUX', names = splitOrderNames(s.name, s.qty || 1), sh = saleShares(s, names);
       names.forEach(function (raw, j) {
         var nm = canonName(raw, rb ? 0 : s.usd * sh[j]);
-        add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? rbxNet(s.amount) * sh[j] : 0,
+        add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? psRbx(s) * sh[j] : 0,
           buyer: s.buyer ? s.platform + ':' + String(s.buyer).toLowerCase() : '', buyerName: s.buyer, order: s.platform + ':' + s.id });
       });
     });
@@ -4952,7 +4959,7 @@
     });
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
-      if (s.currency === 'ROBUX') { out.push({ src: s.platform, pm: 'Robux', t: s.t, aud: 0, robux: rbxNet(s.amount) }); return; }
+      if (s.currency === 'ROBUX') { out.push({ src: s.platform, pm: 'Robux', t: s.t, aud: 0, robux: psRbx(s) }); return; }
       out.push({ src: s.platform, pm: s.platform === 'payhip' ? 'PayPal' : 'Debit card', t: s.t, aud: usdToAudAt(s.usd, s.t), robux: 0 });
     });
     PARCEL_RBX.forEach(function (x) { out.push({ src: 'parcel', pm: 'Robux', t: x.t, aud: 0, robux: x.net, n: 0 }); });
@@ -8865,7 +8872,7 @@
 
   // ---- Order info popup: everything we know about one order ----
   var OI_EL = null, OI_RETURN = null;
-  var PS_SOURCE = { email: 'Order email', userscript: 'Creator Store page', api: 'Imported from the platform', webhook: 'Payhip webhook', manual: 'Added by hand', csv: 'Sales export', ingest: 'Sales feed' };
+  var PS_SOURCE = { email: 'Order email', userscript: 'Creator Store page', api: 'Imported from the platform', webhook: 'Payhip webhook', manual: 'Added by hand', csv: 'Sales export', ingest: 'Sales feed', discord: 'Parcel purchase log (Discord) + group ledger' };
   function oiRow(label, value) { return value == null || value === '' ? '' : '<div class="adm-oi-row"><dt>' + esc(label) + '</dt><dd>' + value + '</dd></div>'; }
   function oiMono(v) { return v ? '<span class="dt-mono">' + esc(v) + '</span>' : ''; }
   function oiUsd(n) { return 'US$' + (Number(n) || 0).toFixed(2); }
@@ -8938,6 +8945,8 @@
         oiRow('Quantity', s.qty > 1 ? num(s.qty) : '') +
         oiRow('Sold', s.dateOnly ? esc(fmtDate(new Date(s.t))) + ' <span class="adm-sub">(time unknown)</span>' : esc(fmtDateTime(new Date(s.t)))) +
         oiRow('Amount', rb ? '<b>' + robuxRaw(s.amount) + '</b>' : oiMoney(s.usd, s.t)) +
+        oiRow('Group received', rb && s.netRbx != null ? robuxRaw(s.netRbx) : '') +
+        oiRow('Paid with', s.method ? esc(s.method) + (s.saleType && !/^normal$/i.test(s.saleType) ? ' <span class="adm-sub">(' + esc(s.saleType.toLowerCase()) + ')</span>' : '') : '') +
         oiRow('Charged in', !rb && s.currency && s.currency !== 'USD' ? esc(Number(s.amount).toFixed(2) + ' ' + s.currency) : '') +
         oiRow('Platform fee', !rb && s.net != null && s.usd - s.net > 0.004 ? oiUsd(s.usd - s.net) : '') +
         oiRow('Recorded from', esc(PS_SOURCE[s.source] || s.source || ''));

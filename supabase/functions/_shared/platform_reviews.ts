@@ -1,5 +1,5 @@
-// Reviews left on BuiltByBit and the Roblox Creator Store, stored in public.reviews
-// (admin-bbb-v2-sync and creator-store-sync call this).
+// Reviews left on BuiltByBit, the Roblox Creator Store and Parcel, stored in public.reviews
+// (admin-bbb-v2-sync, creator-store-sync and the Parcel Discord feed call this).
 //
 // Matching uses the admin's sales rules (admin.js matchProduct), against the products on the
 // site (is_active): a BuiltByBit listing imported through bbb_imports is that product; else the
@@ -7,7 +7,9 @@
 // other with only generic extra words, numbers agreeing. A wrong match is worse than none.
 //
 // A review with no product is stored hidden (hidden_reason 'unmatched'); sweepUnmatched runs
-// every sync and publishes it as soon as a product with that name is on the site.
+// every sync and publishes it as soon as a product with that name is on the site. BuiltByBit
+// passes skipUnmatched instead: a listing that is not on the catalog keeps no reviews here
+// (the sync re-reads every review each run, so one is imported once its product is added).
 // New reviews have admin_reviewed_at null (the admin's "New reviews needing a look" task);
 // a backfill passes markSeen so old reviews never raise it.
 
@@ -16,7 +18,7 @@ type Obj = Record<string, any>;
 
 export type PlatformReview = {
   external_id: string;
-  source: "BuiltByBit" | "Creator Store";
+  source: "BuiltByBit" | "Creator Store" | "Parcel";
   listing_name: string;
   listing_ref: string;
   bbb_resource_id?: number | null;
@@ -113,8 +115,8 @@ export async function buildMatcher(admin: Obj): Promise<Matcher> {
 // Saves platform reviews by external_id. A new one is published on its product (or hidden as
 // unmatched); one already stored gets its text and rating refreshed (the reviewer can edit it)
 // but keeps its product, status and any reply, so an admin's own hide or reply is never undone.
-export async function savePlatformReviews(admin: Obj, list: PlatformReview[], opts: { markSeen?: boolean; matcher?: Matcher } = {}) {
-  const out = { read: list.length, added: 0, updated: 0, matched: 0, unmatched: 0 };
+export async function savePlatformReviews(admin: Obj, list: PlatformReview[], opts: { markSeen?: boolean; matcher?: Matcher; skipUnmatched?: boolean } = {}) {
+  const out = { read: list.length, added: 0, updated: 0, matched: 0, unmatched: 0, skipped: 0 };
   if (!list.length) return out;
   const seen = new Set<string>();
   list = list.filter((r) => r.external_id && !seen.has(r.external_id) && seen.add(r.external_id));
@@ -147,6 +149,7 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
       continue;
     }
     const pid = matcher.match(r);
+    if (!pid && opts.skipUnmatched) { out.skipped++; continue; }
     if (pid) out.matched++; else out.unmatched++;
     inserts.push({
       product_id: pid, user_id: null, stars: r.stars, recommended: r.recommended, text: r.text,
