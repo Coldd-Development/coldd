@@ -12352,36 +12352,26 @@
     var paid = FIN.instalments.filter(function (x) { return x.fy === fl; }).reduce(function (s, x) { return s + (Number(x.amount_paid) || 0); }, 0);
     return { owed: owed, paid: paid, need: owed - paid };
   }
-  // End of year estimate: the weeks so far plus the rest of the year at a weekly pace, the tax on
-  // that profit, against the PAYG instalments (as paid, or at the instalment rate) and tax withheld.
+  // Where the year stands with the ATO if it ended today (no forecast): tax on this year's profit
+  // so far against the PAYG instalments paid and tax withheld. Anything owing is already in the
+  // tax transfers: each week's transfer covers the tax on the profit so far once that is more than
+  // the instalment rate, so the reserve always holds it.
   function finEofy() {
-    var fy = finFy(finToday()), rows = finRows(fy);
+    var fy = finFy(finToday()), rows = finRows(fy), fl = finFyLabel(fy);
     if (!rows.length) return null;
-    var last = rows[rows.length - 1], rate = Number(FIN.settings.instalment_rate) || 0, qs = finQuarters(fy, rows), future = [];
-    for (var we = finAdd(last.we, 7); we <= (fy + 1) + '-06-30'; we = finAdd(we, 7)) future.push(we);
-    function pace(list) {
-      var n = list.length;
-      return list.reduce(function (a, r) { a.profit += (r.rev - r.exp + r.tr - r.te + r.oi) / n; a.income += (r.rev + r.tr) / n; a.wh += r.wh / n; return a; }, { profit: 0, income: 0, wh: 0 });
-    }
-    function at(p) {
-      var profit = last.P + future.length * p.profit, wh = last.W + future.length * p.wh, inst = 0;
-      qs.forEach(function (q) {
-        var inc = q.income + future.filter(function (w) { return w >= q.start && w <= q.end; }).length * p.income;
-        inst += q.paid != null ? q.paid : inc * rate;
-      });
-      var tax = finTaxOn(profit);
-      return { pace: p.profit, profit: profit, tax: tax, inst: inst, wh: wh, refund: inst + wh - tax.total };
-    }
-    var n = Math.min(8, rows.length);
-    return { weeks: n, recent: at(pace(rows.slice(-n))), year: at(pace(rows)) };
+    var last = rows[rows.length - 1], tax = finTaxOn(last.P);
+    var paid = FIN.instalments.filter(function (x) { return x.fy === fl; }).reduce(function (s, x) { return s + (Number(x.amount_paid) || 0); }, 0);
+    return { profit: last.P, tax: tax, paid: paid, wh: last.W, weeks: rows.length, refund: paid + last.W - tax.total };
   }
-  function finEofyLine(x) { return x.refund >= 0 ? finM0(x.refund) + ' estimated refund' : finM0(-x.refund) + ' estimated to pay'; }
+  function finEofyLine(e) { return e.refund >= 0 ? finM0(e.refund) + ' estimated refund' : finM0(-e.refund) + ' owing, already in your transfers'; }
   function finEofyTitle(e) {
-    var r = e.recent;
-    return 'End of financial year, if the rest of the year matches the last ' + plural(e.weeks, 'week') + ' (' + finM0(r.pace) + ' profit a week): ' +
-      finM0(r.profit) + ' taxable profit, ' + finM0(r.tax.total) + ' tax (' + finM0(r.tax.income) + ' income tax, less ' + finM0(r.tax.lito) + ' low income offset, plus ' + finM0(r.tax.medicare) + ' Medicare levy), against ' +
-      finM0(r.inst) + ' of PAYG instalments' + (r.wh > 0.5 ? ' and ' + finM0(r.wh) + ' withheld' : '') + ' (paid ones as paid, the rest at the instalment rate).\n' +
-      'At this year\'s average pace (' + finM0(e.year.pace) + ' a week) it would be ' + finEofyLine(e.year) + '.';
+    var free = (finBrackets().filter(function (b) { return b.rate > 0; })[0] || { start: 0 }).start;
+    var taxTxt = e.tax.total > 0.005
+      ? finM(e.tax.total) + ' tax (' + finM(e.tax.income) + ' income tax, less ' + finM(e.tax.lito) + ' low income offset, plus ' + finM(e.tax.medicare) + ' Medicare levy)'
+      : '$0 tax' + (e.profit < free ? ' (under the ' + finM0(free) + ' tax-free threshold)' : '');
+    return 'End of financial year if it ended today (' + plural(e.weeks, 'week') + ' so far, no forecast): ' + finM(e.profit) + ' taxable profit, ' + taxTxt +
+      ', against ' + finM(e.paid) + ' of PAYG instalments paid' + (e.wh > 0.005 ? ' and ' + finM(e.wh) + ' withheld' : '') + '. ' +
+      (e.refund >= 0 ? 'The ATO would refund ' + finM(e.refund) + '.' : 'You would owe ' + finM(-e.refund) + ', which your weekly tax transfers have already set aside.');
   }
 
   /* ---- Loading ---- */
@@ -13160,10 +13150,10 @@
             '<button type="button" class="adm-fin-del" data-fin-del-exp="' + esc(e.id) + '" aria-label="Delete expense">×</button></td></tr>';
       }).join('') + '</tbody>';
   }
-  // The bank's own name for a charge, from an imported statement line ("CommBank: <name>, USD 9.00, posted ...").
+  // The bank's own name for a charge, from an imported statement line ("CommBank: <name>, USD 9.00, value date ...").
   function finCharge(e) {
     var m = /^CommBank:\s*(.+)$/m.exec(e.notes || '');
-    return m ? m[1].split(/,\s*(?:[A-Z]{3}\s[\d.,]+|posted\b)/)[0].trim() : '';
+    return m ? m[1].split(/,\s*(?:[A-Z]{3}\s[\d.,]+|posted\b|value date\b|charged\b)/)[0].trim() : '';
   }
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Enter' && ev.key !== ' ') return;

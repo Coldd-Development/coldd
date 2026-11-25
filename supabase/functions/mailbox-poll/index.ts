@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
   // has a receipt is only taken when nothing else fits (and then reported, not doubled).
   async function findExpense(vendor: string, day: string, amounts: number[], src: string) {
     const { data } = await admin.from("finance_expenses").select("id, spent_on, amount, receipts")
-      .eq("vendor", vendor).gte("spent_on", addDays(day, -2)).lte("spent_on", addDays(day, 6)).limit(50);
+      .eq("vendor", vendor).gte("spent_on", addDays(day, -2)).lte("spent_on", addDays(day, 9)).limit(50);
     const list = ((data || []) as Obj[]).filter((e) => !(e.receipts || []).some((r: Obj) => r.src === src));
     if (!list.length) return null;
     const score = (e: Obj) => (amounts.some((a) => Math.abs(a - Number(e.amount)) < 0.005) ? -1000 : 0) + ((e.receipts || []).length ? 500 : 0) + Math.abs(dayGap(e.spent_on, day));
