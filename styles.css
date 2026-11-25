@@ -6187,36 +6187,67 @@ html[data-theme="light"] .adm-mkt-new { background: rgba(0,0,0,0.02); }
 .adm-prods:not([hidden]) { display: flex; flex-direction: column; gap: 16px; }
 .adm-prods .dash-head.adm-home-head { margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
 .adm-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.adm-pr-head, .adm-pr-row { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) 100px 96px 108px 104px; align-items: center; gap: 12px; }
-.adm-pr-head { position: relative; margin: 0 -10px; padding: 0 10px 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
-.adm-pr-head::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 1px; background: var(--hairline); }
-.adm-pr-head span:nth-child(n+3):nth-child(-n+5) { text-align: right; }
-.adm-pr-row { position: relative; padding: 9px 10px; margin: 0 -10px; border-radius: var(--r-ctl); cursor: pointer; transition: background .18s; }
-.adm-pr-row + .adm-pr-row::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 1px; background: var(--hairline); }
-@media (hover: hover) and (pointer: fine) { .adm-pr-row:hover { background: rgba(255,255,255,0.03); } }
-.adm-pr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.adm-pr-row.is-hidden .adm-or-thumb { opacity: .5; }
-.adm-pr-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.adm-pr-name b { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.adm-pr-name em { flex: 0 0 auto; font-style: normal; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); color: var(--fg-2); background: rgba(255,255,255,0.06); border: 1px solid var(--hairline); }
-.adm-pr-cat { font-size: 13px; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.adm-pr-num { text-align: right; font-size: 14px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Products: one card per product, laid out as a grid of big covers (.is-grid, default) or a
+   list (.is-list). Covers keep the product image's 16:9 shape so products are easy to tell apart. */
+.adm-pr-view { margin-left: auto; }
+.adm-pr-list.is-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.adm-pr-row { position: relative; cursor: pointer; border-radius: 12px; transition: background .18s, border-color .18s, transform .18s var(--ease, ease); }
+.adm-pr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.adm-pr-img { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; background: var(--bg-2) center / cover no-repeat;
+  border-radius: 9px; box-shadow: inset 0 0 0 1px var(--hairline); font-size: 22px; font-weight: 700; color: var(--fg-3); overflow: hidden; }
+.adm-pr-img em { position: absolute; left: 8px; top: 8px; font-style: normal; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: var(--r-pill);
+  color: #fff; background: rgba(0,0,0,0.62); backdrop-filter: blur(6px); }
+.adm-pr-row.is-hidden .adm-pr-img { filter: grayscale(.7); opacity: .6; }
+.adm-pr-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.adm-pr-main b { font-size: 14.5px; font-weight: 650; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-pr-main small { font-size: 12.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-pr-num { font-size: 14px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .adm-pr-num small { display: block; font-size: 12px; font-weight: 500; color: var(--fg-3); }
-.adm-pr-num .adm-star { font-size: 12px; }
-.adm-pr-act { display: flex; justify-content: flex-end; gap: 2px; }
+.adm-pr-act { display: flex; gap: 2px; }
 .adm-pr-act .adm-icon-btn { color: var(--fg-3); }
+
+/* Grid: cover on top, name, then price and sales side by side; the actions sit on the cover. */
+.adm-pr-list.is-grid .adm-pr-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "img img" "main main" "price sales";
+  gap: 10px 12px; padding: 10px 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--hairline); }
+.adm-pr-list.is-grid .adm-pr-img { grid-area: img; }
+.adm-pr-list.is-grid .adm-pr-main { grid-area: main; padding: 0 2px; }
+.adm-pr-list.is-grid .adm-pr-price { grid-area: price; padding-left: 2px; }
+.adm-pr-list.is-grid .adm-pr-sales { grid-area: sales; text-align: right; padding-right: 2px; }
+.adm-pr-list.is-grid .adm-pr-act { position: absolute; top: 16px; right: 16px; padding: 3px; border-radius: 10px; background: rgba(10,11,14,0.72); backdrop-filter: blur(8px);
+  opacity: 0; transform: translateY(-3px); transition: opacity .18s, transform .18s; }
+.adm-pr-list.is-grid .adm-pr-act .adm-icon-btn { color: #fff; }
+.adm-pr-list.is-grid .adm-pr-row:hover .adm-pr-act, .adm-pr-list.is-grid .adm-pr-row:focus-within .adm-pr-act { opacity: 1; transform: none; }
+@media (hover: none) { .adm-pr-list.is-grid .adm-pr-act { opacity: 1; transform: none; } }
+@media (hover: hover) and (pointer: fine) { .adm-pr-list.is-grid .adm-pr-row:hover { border-color: var(--hairline-strong); background: rgba(255,255,255,0.035); transform: translateY(-2px); } }
+
+/* List: a wide cover, name and category, price, sales, actions. */
+.adm-pr-head, .adm-pr-list.is-list .adm-pr-row { display: grid; grid-template-columns: 128px minmax(0, 1fr) 112px 150px 104px; align-items: center; gap: 16px; }
+.adm-pr-head { position: relative; margin: 0 -10px; padding: 0 10px 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.adm-pr-head[hidden] { display: none; }
+.adm-pr-head::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 1px; background: var(--hairline); }
+.adm-pr-head span:nth-child(3), .adm-pr-head span:nth-child(4) { text-align: right; }
+.adm-pr-list.is-list .adm-pr-row { padding: 10px; margin: 0 -10px; }
+.adm-pr-list.is-list .adm-pr-row + .adm-pr-row::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 1px; background: var(--hairline); }
+.adm-pr-list.is-list .adm-pr-img { width: 128px; border-radius: 8px; }
+.adm-pr-list.is-list .adm-pr-main b { font-size: 15px; }
+.adm-pr-list.is-list .adm-pr-num { text-align: right; }
+.adm-pr-list.is-list .adm-pr-act { justify-content: flex-end; }
+@media (hover: hover) and (pointer: fine) { .adm-pr-list.is-list .adm-pr-row:hover { background: rgba(255,255,255,0.03); } }
 .adm-pr-top { display: block; max-width: 100%; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adm-prods .adm-kpi-value b { min-width: 0; }
-html[data-theme="light"] .adm-pr-row:hover { background: rgba(0,0,0,0.03); }
-html[data-theme="light"] .adm-pr-name em { background: rgba(0,0,0,0.04); }
+html[data-theme="light"] .adm-pr-list.is-grid .adm-pr-row { background: rgba(0,0,0,0.015); }
+html[data-theme="light"] .adm-pr-list.is-list .adm-pr-row:hover, html[data-theme="light"] .adm-pr-list.is-grid .adm-pr-row:hover { background: rgba(0,0,0,0.03); }
 @media (max-width: 1100px) {
-  .adm-pr-head, .adm-pr-row { grid-template-columns: minmax(0, 2fr) 96px 104px 104px; }
-  .adm-pr-head span:nth-child(2), .adm-pr-cat, .adm-pr-head span:nth-child(4), .adm-pr-row > .adm-pr-num:nth-child(4) { display: none; }
+  .adm-pr-head, .adm-pr-list.is-list .adm-pr-row { grid-template-columns: 112px minmax(0, 1fr) 104px 130px 104px; gap: 12px; }
+  .adm-pr-list.is-list .adm-pr-img { width: 112px; }
 }
 @media (max-width: 680px) {
   .adm-pr-head { display: none; }
-  .adm-pr-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .adm-pr-row > .adm-pr-num:nth-child(3), .adm-pr-act { display: none; }
+  .adm-pr-list.is-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .adm-pr-list.is-list .adm-pr-row { grid-template-columns: 96px minmax(0, 1fr) auto; }
+  .adm-pr-list.is-list .adm-pr-img { width: 96px; }
+  .adm-pr-list.is-list .adm-pr-price, .adm-pr-list.is-list .adm-pr-act { display: none; }
+  .adm-pr-view { margin-left: 0; }
 }
 
 /* Admin Reviews (2026-11-24) -------------------------------------------------

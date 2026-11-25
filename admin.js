@@ -1148,6 +1148,9 @@
      PRODUCT LIST SORT (persisted across sessions, default newest)
      ================================================================ */
   var PROD_SORT = lsGet('coldd_admin_prod_sort_v1', 'newest');
+  if (PROD_SORT === 'rating-desc') PROD_SORT = 'newest';
+  // Products as a grid of big covers (default) or a list.
+  var PROD_VIEW = lsGet('coldd_admin_prod_view_v1', 'grid') === 'list' ? 'list' : 'grid';
 
   /* ================================================================
      DATE RANGE
@@ -5228,7 +5231,6 @@
       if (mode === 'oldest') return (a.created - b.created) || (a.i - b.i);
       if (mode === 'sales-desc') return (b.sales - a.sales) || (a.i - b.i);
       if (mode === 'sales-asc') return (a.sales - b.sales) || (a.i - b.i);
-      if (mode === 'rating-desc') return (b.p.rating - a.p.rating) || (a.i - b.i);
       if (mode === 'price-desc') return (b.p.priceNum - a.p.priceNum) || (a.i - b.i);
       if (mode === 'price-asc') return (a.p.priceNum - b.p.priceNum) || (a.i - b.i);
       return (b.created - a.created) || (a.i - b.i); // newest (default)
@@ -5254,12 +5256,8 @@
   function renderProdKpis(all, ready) {
     var grid = $('admProdKpis'); if (!grid) return;
     var live = all.filter(function (p) { return p.visible; }).length;
-    var rated = all.filter(function (p) { return p.reviews > 0; });
-    var reviews = rated.reduce(function (s, p) { return s + p.reviews; }, 0);
-    var avg = rated.length ? rated.reduce(function (s, p) { return s + p.rating * p.reviews; }, 0) / reviews : 0;
     var cells = [
-      kpiCell({ label: 'Products', value: num(live), count: 'live', delta: '', sub: all.length - live ? num(all.length - live) + ' hidden' : 'Every product is live' }),
-      kpiCell({ label: 'Average rating', value: reviews ? avg.toFixed(2) + '<span class="adm-star">★</span>' : '–', delta: '', sub: reviews ? plural(reviews, 'review') + ' on ' + plural(rated.length, 'product') : 'No reviews yet' })
+      kpiCell({ label: 'Products', value: num(live), count: 'live', delta: '', sub: all.length - live ? num(all.length - live) + ' hidden' : 'Every product is live' })
     ];
     if (ready) {
       var list = anAllItems(), now = Date.now();
@@ -5270,9 +5268,13 @@
       all.forEach(function (p) { var s = ps[p.id]; if (s && s.a30 > 0 && (!top || s.a30 > ps[top.id].a30)) top = p; });
       var never = all.filter(function (p) { return p.visible && !(ps[p.id] && ps[p.id].units); }).length;
       cells.splice(1, 0, kpiCell({ label: 'Sold in 30 days', value: num(cur.length), delta: delta, sub: 'On every platform' }));
+      // Revenue, 30 days: every platform, Robux at its DevEx value (like Analytics' Top products).
+      var rev = cur.reduce(function (s, x) { return s + anVal(x.aud, x.robux); }, 0), revP = prev.reduce(function (s, x) { return s + anVal(x.aud, x.robux); }, 0);
+      var rd = revP ? (rev - revP) / revP * 100 : null;
+      cells.splice(2, 0, kpiCell({ label: 'Revenue, 30 days', value: fmtA(rev, true), delta: rd == null || Math.abs(rd) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (rd > 0 ? 'up' : 'down') + '">' + homeIcon(rd > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(rd) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>', sub: 'Robux counted at DevEx' }));
       cells.push(kpiCell({ label: 'Best seller, 30 days', value: top ? '<span class="adm-pr-top" title="' + esc(top.title) + '">' + esc(top.title) + '</span>' : '–', delta: '', sub: top ? fmtA(ps[top.id].a30) + ' from ' + plural(ps[top.id].u30, 'sale') + (never ? ', ' + num(never) + ' live never sold' : '') : '' }));
     } else {
-      cells.splice(1, 0, '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">Sold in 30 days</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">&nbsp;</span></div>');
+      ['Sold in 30 days', 'Revenue, 30 days'].forEach(function (l, i) { cells.splice(1 + i, 0, '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">&nbsp;</span></div>'); });
       cells.push('<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">Best seller, 30 days</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">&nbsp;</span></div>');
     }
     grid.innerHTML = cells.join('');
@@ -5286,16 +5288,19 @@
       return !q || p.title.toLowerCase().indexOf(q) >= 0 || String(p.cat || '').toLowerCase().indexOf(q) >= 0;
     }));
     var sum = $('admProdSum'); if (sum) sum.textContent = plural(rows.length, 'product');
+    // Grid (big covers, the default) or List; the same markup, laid out by .is-grid / .is-list.
+    body.classList.toggle('is-grid', PROD_VIEW === 'grid'); body.classList.toggle('is-list', PROD_VIEW !== 'grid');
+    var head = body.parentNode && body.parentNode.querySelector('.adm-pr-head'); if (head) head.hidden = PROD_VIEW === 'grid';
+    document.querySelectorAll('#admProdView [data-pr-view]').forEach(function (b) { var on = b.getAttribute('data-pr-view') === PROD_VIEW; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
     var ICON_VIEW = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
     body.innerHTML = rows.map(function (p) {
       var s = ps[p.id] || { units: 0, aud: 0, robux: 0 };
+      var img = p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '';
       return '<div class="adm-pr-row' + (p.visible ? '' : ' is-hidden') + '" data-id="' + esc(p.id) + '" tabindex="0" role="button" aria-label="Edit ' + esc(p.title) + '">' +
-        '<span class="adm-or-prod"><span class="adm-or-thumb"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>' +
-          '<span class="adm-pr-name"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b>' + (p.visible ? '' : '<em>Hidden</em>') + '</span></span>' +
-        '<span class="adm-pr-cat">' + esc(p.cat || 'Uncategorised') + '</span>' +
-        '<span class="adm-pr-num">' + (p.priceNum > 0 ? fmtA(usdToAud(p.priceNum)) + '<small>US$' + p.priceNum.toFixed(2) + '</small>' : 'Free') + '</span>' +
-        '<span class="adm-pr-num">' + (p.reviews ? p.rating.toFixed(1) + '<span class="adm-star">★</span><small>' + plural(p.reviews, 'review') + '</small>' : '<small>No reviews</small>') + '</span>' +
-        '<span class="adm-pr-num">' + (ready ? num(s.units) + '<small>' + (s.aud || !s.robux ? fmtA(s.aud, true) : '') + (s.robux ? (s.aud ? ' | ' : '') + robuxRaw(s.robux) : '') + '</small>' : '<span class="adm-skel adm-skel-amt"></span>') + '</span>' +
+        '<span class="adm-pr-img' + (p.image ? '' : ' is-empty') + '"' + img + '>' + (p.image ? '' : esc(String(p.title || '?').charAt(0).toUpperCase())) + (p.visible ? '' : '<em>Hidden</em>') + '</span>' +
+        '<span class="adm-pr-main"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><small>' + esc(p.cat || 'Uncategorised') + '</small></span>' +
+        '<span class="adm-pr-num adm-pr-price">' + (p.priceNum > 0 ? fmtA(usdToAud(p.priceNum)) + '<small>US$' + p.priceNum.toFixed(2) + '</small>' : 'Free') + '</span>' +
+        '<span class="adm-pr-num adm-pr-sales">' + (ready ? num(s.units) + ' sold<small>' + (s.aud || !s.robux ? fmtA(s.aud, true) : '') + (s.robux ? (s.aud ? ' | ' : '') + robuxRaw(s.robux) : '') + '</small>' : '<span class="adm-skel adm-skel-amt"></span>') + '</span>' +
         '<span class="adm-pr-act">' +
           '<a class="adm-icon-btn adm-prod-view" href="/product/' + esc(p.id) + '/" target="_blank" rel="noopener" title="View on coldd.dev" aria-label="View on coldd.dev">' + ICON_VIEW + '</a>' +
           '<button class="adm-icon-btn adm-prod-download" type="button" title="Download product file" aria-label="Download">' + ADM_ICON_DOWNLOAD + '</button>' +
@@ -5341,6 +5346,13 @@
   });
   var prodSearch = $('admProdSearch');
   if (prodSearch) prodSearch.addEventListener('input', renderProducts);
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#admProdView [data-pr-view]');
+    if (!b) return;
+    PROD_VIEW = b.getAttribute('data-pr-view') === 'list' ? 'list' : 'grid';
+    lsSet('coldd_admin_prod_view_v1', PROD_VIEW);
+    renderProducts();
+  });
 
   /* ---- Product edit panel ---- */
   var ADM_ICON_TRASH = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -5925,7 +5937,6 @@
     { value: 'oldest', label: 'Oldest' },
     { value: 'sales-desc', label: 'Highest Sales' },
     { value: 'sales-asc', label: 'Lowest Sales' },
-    { value: 'rating-desc', label: 'Highest Rated' },
     { value: 'price-desc', label: 'Price: High to Low' },
     { value: 'price-asc', label: 'Price: Low to High' }
   ], PROD_SORT);
