@@ -679,12 +679,12 @@
     .review-by .rn { display: flex; flex-direction: column; font-size: 14px; font-weight: 600; }
     .review-by .rn small { font-weight: 500; font-size: 12px; color: var(--fg-3); }
     /* Homepage reviews strip (app.js reviewCarousel): scrolls on its own, drags with the mouse or a
-       finger, fades out at both edges. Cards keep their own height. */
+       finger, fades out at both edges. Every card is the same size (long reviews stay on /reviews). */
     .rv-carousel { position: relative; }
     .rv-viewport { overflow: hidden; padding: 6px 0;
       -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
       mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); }
-    .rv-track { display: flex; gap: 18px; align-items: flex-start; width: max-content; will-change: transform;
+    .rv-track { display: flex; gap: 18px; align-items: stretch; width: max-content; will-change: transform;
       touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
     .rv-carousel.is-dragging .rv-track { cursor: grabbing; }
     .rv-track img { -webkit-user-drag: none; pointer-events: none; }
@@ -692,6 +692,7 @@
     .rv-carousel.is-reduced .rv-viewport { overflow-x: auto; -webkit-mask-image: none; mask-image: none; scroll-snap-type: x mandatory; }
     .rv-carousel.is-reduced .rv-track { cursor: auto; width: auto; }
     .rv-carousel.is-reduced .rv-track > .review { scroll-snap-align: start; }
+    .rv-carousel + .reviews-more-wrap { margin-top: 18px; }
     .reviews-more-wrap { text-align: center; margin-top: 30px; }
     .reviews-more { font-size: 15px; font-weight: 600; color: var(--fg); text-decoration: none;
       padding: 8px 4px; border-bottom: 1px solid var(--hairline-strong); transition: color .2s, border-color .2s; }

@@ -1646,7 +1646,9 @@
       }
 
       // Homepage reviews: a scrolling strip of every five-star (or "Recommends this") review with
-      // something to say: pinned ones first (reviews.home_pin), then the newest, critical ones last.
+      // something to say that fits a card (longer ones are on /reviews), so every card is the same
+      // size: pinned ones first (reviews.home_pin), then the newest, critical ones last.
+      var HOME_REVIEW_MAX_CHARS = 240;
       // A strip of reviews that scrolls on its own, endlessly (the cards are drawn twice and the
       // strip wraps by one set). It slows to a stop while hovered or focused so a review can be
       // read, and the mouse or a finger can drag it (with a little momentum) or a trackpad swipe
@@ -1735,7 +1737,7 @@
         (window.__CATALOG || []).forEach(function (p) { homeRevById[p.id] = p; });
         var allRev = (window.__REVIEWS || []).slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
         var crit = function (r) { return !!(window.__reviewCritical && window.__reviewCritical(r)); };
-        var revPicks = allRev.filter(function (r) { return (r.stars === 5 || (!(r.stars > 0) && r.recommended === true)) && String(r.text || '').trim().length > 0; })
+        var revPicks = allRev.filter(function (r) { var len = String(r.text || '').trim().length; return (r.stars === 5 || (!(r.stars > 0) && r.recommended === true)) && len > 0 && len <= HOME_REVIEW_MAX_CHARS; })
           .sort(function (a, b) { return ((a.homePin > 0 ? a.homePin : 1e6) - (b.homePin > 0 ? b.homePin : 1e6)) || (crit(a) - crit(b)) || (new Date(b.date) - new Date(a.date)); });
         // The carousel animates its own cards, so they skip the page's scroll reveal.
         homeRevGrid.innerHTML = revPicks.map(function (r) { return window.__reviewCardHtml(r, homeRevById[r.productId]).replace('glass review reveal', 'glass review'); }).join('');
