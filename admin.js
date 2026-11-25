@@ -12238,7 +12238,8 @@
      every finance_* table (RLS), so for any other account every read comes
      back empty and every write is refused. The lock screen is only the message.
      Tax transfer per week = the rise in max(tax on this year's total income
-     less tax already withheld, instalment rate x this year's revenue), split
+     (coldd, TCG and job pay) less tax withheld from the pay, instalment rate x
+     this year's revenue), split
      between coldd and TCG by that week's revenue, as the sheet does. The tax
      reserve should hold everything owed so far less the instalments paid.
      All money here is AU$, shown with a plain $.
@@ -12602,18 +12603,21 @@
       { rev: 0, exp: 0, profit: 0, t: 0, tr: 0, te: 0, oi: 0, wh: 0 });
     var latest = rows[rows.length - 1].we;
     table.innerHTML = '<thead><tr><th scope="col">Week</th><th scope="col">Net revenue</th><th scope="col">Expenses</th><th scope="col">Profit</th><th scope="col">Tax transfer</th>' +
-      '<th scope="col" class="adm-fin-oth">TCG revenue</th><th scope="col">TCG expenses</th><th scope="col">Other income</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead><tbody>' +
+      '<th scope="col" class="adm-fin-oth">TCG revenue</th><th scope="col">TCG expenses</th>' +
+      '<th scope="col" class="adm-fin-oth" title="Your job\'s gross pay (before tax) from the payslip, in the week you were paid. Any other taxable income goes here too.">Job pay</th>' +
+      '<th scope="col" title="The tax your employer took out of that pay (PAYG withholding), from the payslip.">Tax withheld</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead><tbody>' +
       rows.slice().reverse().map(function (r) {
         var tip = Math.abs(r.tcgT) >= 0.005 ? 'TCG part: ' + finM(r.tcgT) : '';
         return '<tr' + (r.we === latest ? ' class="is-latest"' : '') + '><th scope="row" title="' + esc(finWeekDates(r.we)) + '">' + esc(finWeekLabel(r.we)) + '</th>' + inp(r, 'revenue', 'Net revenue') +
           '<td><button type="button" class="adm-fin-exp" data-fin-week-exp="' + r.we + '" title="See or log this week\'s expenses">' + finM(r.exp) + '</button></td>' +
           '<td class="' + (r.profit < 0 ? 'is-neg' : '') + '">' + finM(r.profit) + '</td>' +
           '<td class="adm-fin-transfer"' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + finM(r.colddT) + '</td>' +
-          '<td class="adm-fin-oth">' + inp(r, 'tcg_revenue', 'TCG revenue').slice(4) + inp(r, 'tcg_expenses', 'TCG expenses') + inp(r, 'other_income', 'Other income') +
+          '<td class="adm-fin-oth">' + inp(r, 'tcg_revenue', 'TCG revenue').slice(4) + inp(r, 'tcg_expenses', 'TCG expenses') +
+          '<td class="adm-fin-oth">' + inp(r, 'other_income', 'Job pay').slice(4) + inp(r, 'other_withheld', 'Tax withheld') +
           '<td><button type="button" class="adm-fin-del" data-fin-del-week="' + r.we + '" aria-label="Remove ' + esc(finWeekLabel(r.we)) + '">×</button></td></tr>';
       }).join('') + '</tbody>' +
       '<tfoot><tr><th scope="row">This year</th><td>' + finM(tot.rev) + '</td><td>' + finM(tot.exp) + '</td><td>' + finM(tot.profit) + '</td><td>' + finM(tot.t) + '</td>' +
-      '<td class="adm-fin-oth">' + finM(tot.tr) + '</td><td>' + finM(tot.te) + '</td><td>' + finM(tot.oi) + '</td><td></td></tr></tfoot>';
+      '<td class="adm-fin-oth">' + finM(tot.tr) + '</td><td>' + finM(tot.te) + '</td><td class="adm-fin-oth">' + finM(tot.oi) + '</td><td>' + finM(tot.wh) + '</td><td></td></tr></tfoot>';
   }
   function finRenderMonths(table) {
     var fy = finFy(finToday()), rows = finRows(fy), months = [];
@@ -13186,9 +13190,9 @@
     var curB = br.filter(function (b) { return P >= b.start; }).pop() || br[0];
     function line(label, v, cls) { return '<div class="adm-fin-line' + (cls ? ' ' + cls : '') + '"><span>' + label + '</span><b>' + v + '</b></div>'; }
     $('admFinIncomeTax').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>Income tax</h2><span>this year so far</span></div></div>' +
-      line('coldd profit', finM(cP)) + line('TCG profit', finM(tP)) + line('Other income', finM(oI)) + line('Taxable income', finM(P), 'is-total') +
+      line('coldd profit', finM(cP)) + line('TCG profit', finM(tP)) + line('Job pay and other income', finM(oI)) + line('Taxable income', finM(P), 'is-total') +
       line('Tax on brackets', finM(tx.income)) + line('Low income tax offset', '-' + finM(tx.lito)) + line('Medicare levy', finM(tx.medicare)) +
-      (last.W ? line('Tax already withheld', '-' + finM(last.W)) : '') + line('Tax owing so far', finM(owing), 'is-total') +
+      (last.W ? line('Tax withheld from your pay', '-' + finM(last.W)) : '') + line('Tax owing so far', finM(owing), 'is-total') +
       '<p class="adm-hint" style="margin:10px 0 14px;">At this year\'s pace (' + plural(rows.length, 'week') + ' so far): about ' + finM0(pace) + ' taxable income and ' + finM0(paceTax.total) + ' tax for the full year.</p>' +
       '<div class="adm-plat-tablewrap"><table class="adm-plat-table"><thead><tr><th scope="col">Bracket from</th><th scope="col">Rate</th><th scope="col">Tax at start</th><th scope="col">Away</th></tr></thead><tbody>' +
       br.map(function (b) {
