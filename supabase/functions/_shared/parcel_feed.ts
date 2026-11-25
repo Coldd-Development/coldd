@@ -18,6 +18,8 @@
 // (source 'Parcel', external_id parcel:<message>): on its product, or hidden until the
 // product is on the site. Old reviews (a backfill) never raise the admin's new-review task.
 //
+// A reviewer's newer review on the same product replaces their older one (keepNewestPerReviewer).
+//
 // Gifts and revokes by staff, statistics and other bots' posts are 'ignored'.
 
 import { buildMatcher, savePlatformReviews, type Matcher, type PlatformReview } from "./platform_reviews.ts";
@@ -310,6 +312,7 @@ async function readReviews(sb: Obj, list: Array<{ m: Msg; f: Record<string, stri
       external_id: "parcel:" + m.message_id, source: "Parcel", listing_name: product, listing_ref: m.message_id,
       stars: filled >= 1 && filled <= 5 ? filled : null, recommended: null, text,
       user_name: roblox.name || discord.name, avatar_url: roblox.id ? "uid:" + roblox.id : null,
+      external_author: roblox.id ? "roblox:" + roblox.id : discord.id ? "discord:" + discord.id : null,
       reply: null, reply_at: null, created_at: new Date(at).toISOString(),
     };
     (now - new Date(m.posted_at).getTime() > REVIEW_FRESH_MS ? old : fresh).push(review);
@@ -329,6 +332,35 @@ async function readReviews(sb: Obj, list: Array<{ m: Msg; f: Record<string, stri
   for (const r of all) r.avatar_url = shot.get(String(r.avatar_url || "").replace(/^uid:/, "")) ?? null;
   if (fresh.length) await savePlatformReviews(sb, fresh, { matcher });
   if (old.length) await savePlatformReviews(sb, old, { matcher, markSeen: true });
+  await keepNewestPerReviewer(sb, all.map((r) => r.external_author).filter((a): a is string => !!a));
+}
+
+// A reviewer's newer Parcel review on a product replaces their older one: the older reviews
+// are deleted and blocked (review_blocks) so re-reading old messages never brings them back.
+export async function keepNewestPerReviewer(sb: Obj, authors: string[]) {
+  const list = [...new Set(authors)];
+  let removed = 0;
+  for (let i = 0; i < list.length; i += 100) {
+    const { data, error } = await sb.from("reviews").select("id, external_id, external_author, listing_name, user_name, created_at, reply, home_pin")
+      .eq("source", "Parcel").in("external_author", list.slice(i, i + 100));
+    if (error) throw new Error("read reviewer reviews: " + error.message);
+    const groups = new Map<string, Obj[]>();
+    for (const r of (data ?? []) as Obj[]) {
+      const k = r.external_author + "|" + String(r.listing_name || "").trim().toLowerCase();
+      groups.set(k, [...(groups.get(k) ?? []), r]);
+    }
+    for (const g of groups.values()) {
+      if (g.length < 2) continue;
+      g.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+      for (const old of g.slice(1)) {
+        await sb.from("review_blocks").upsert({ external_id: old.external_id, source: "Parcel", listing_name: old.listing_name, user_name: old.user_name, deleted_at: new Date().toISOString() }, { onConflict: "external_id" });
+        const { error: delErr } = await sb.from("reviews").delete().eq("id", old.id);
+        if (delErr) throw new Error("remove older review: " + delErr.message);
+        removed++;
+      }
+    }
+  }
+  return removed;
 }
 
 // Messages still waiting (ledger not synced yet, or saved before the reading existed),

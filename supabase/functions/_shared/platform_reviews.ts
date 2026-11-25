@@ -28,6 +28,8 @@ export type PlatformReview = {
   text: string;
   user_name: string | null;
   avatar_url: string | null;
+  // Who left it on the platform (Parcel: roblox:<id>), for replacing a reviewer's older review.
+  external_author?: string | null;
   reply: string | null;
   reply_at: string | null;
   created_at: string;
@@ -150,7 +152,8 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
       const { error } = await admin.from("reviews").update({
         text: r.text, stars: r.stars, recommended: r.recommended,
         ...(takeReply ? { reply: r.reply, reply_at: r.reply_at ?? now } : {}),
-        user_name: r.user_name, ...(r.avatar_url ? { avatar_url: r.avatar_url } : {}), updated_at: now,
+        user_name: r.user_name, ...(r.avatar_url ? { avatar_url: r.avatar_url } : {}),
+        ...(r.external_author ? { external_author: r.external_author } : {}), updated_at: now,
       }).eq("id", old.id);
       if (error) throw new Error("update review: " + error.message);
       out.updated++;
@@ -164,7 +167,7 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
       status: pid ? "approved" : "hidden", hidden_reason: pid ? null : "unmatched",
       user_name: r.user_name, avatar_url: r.avatar_url, reply: r.reply, reply_at: r.reply ? (r.reply_at ?? r.created_at) : null,
       created_at: r.created_at, updated_at: now, source: r.source, external_id: r.external_id,
-      listing_name: r.listing_name, listing_ref: r.listing_ref, auto_imported: true,
+      listing_name: r.listing_name, listing_ref: r.listing_ref, auto_imported: true, external_author: r.external_author ?? null,
       admin_reviewed_at: opts.markSeen ? now : null,
     });
   }
