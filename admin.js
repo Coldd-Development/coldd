@@ -12099,7 +12099,7 @@
      ================================================================ */
   var FIN = { access: null, loading: null, loaded: false, settings: null, weeks: [], expenses: [], cats: [], instalments: [],
     view: 'main', range: 'month', sheet: 'weeks', editId: null, filter: { cats: [], from: '', to: '', q: '' }, salesTries: 0 };
-  var FIN_CATS = ['Developer payment', 'Licence purchase', 'Giveaway payout', 'Refunds', 'Software subscriptions', 'Utility subscriptions', 'Marketing', 'Robux purchases', 'Fees'];
+  var FIN_CATS = ['Developer payment', 'Licence purchase', 'Giveaway payout', 'Refunds', 'AI Tools', 'Software Subscriptions', 'Utility subscriptions', 'Marketing', 'Robux purchases', 'Fees'];
   var FIN_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767', '#4fb3c8', '#a8a35a', '#b07cc6', '#7f8c99'];
   var FIN_NUM_FIELDS = ['revenue', 'tcg_revenue', 'tcg_expenses', 'other_income', 'other_withheld'];
   var FIN_DD_CHEV = '<svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
