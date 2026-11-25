@@ -4462,7 +4462,10 @@
       if (!m.image) m.image = x.image;
       m.pfs[x.pf] = true; m.aud += x.aud; m.robux += x.robux; m.units++;
     });
-    var all = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux) || (b.units - a.units); });
+    // Robux sales count at their DevEx value in the A$ figure; the Robux (what the group
+    // received after Roblox's cut) shows under it.
+    var all = Object.keys(map).map(function (k) { var m = map[k]; m.v = anVal(m.aud, m.robux); return m; })
+      .sort(function (a, b) { return (b.v - a.v) || (b.units - a.units); });
     var cnt = $('admBestCount'); if (cnt) cnt.textContent = '';
     box.innerHTML = all.length ? all.slice(0, 20).map(function (p, i) {
       var img = p.image || bbbCoverFor(p.title);
@@ -4470,7 +4473,7 @@
       return '<div class="adm-an-prod"><span class="adm-an-rank">' + (i + 1) + '</span>' +
         '<span class="adm-or-thumb"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '></span>' +
         '<span class="adm-an-pname"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><span class="adm-an-pfs">' + pfs + '<em>' + plural(p.units, 'sale') + '</em></span></span>' +
-        '<span class="adm-an-pval">' + (p.aud || !p.robux ? fmtA(p.aud) : '') + (p.robux ? (p.aud ? '<small>' : '') + robuxRaw(p.robux) + (p.aud ? '</small>' : '') : '') + '</span></div>';
+        '<span class="adm-an-pval">' + fmtA(p.v) + (p.robux ? '<small title="' + esc(robuxRaw(p.robux) + ' after Roblox\'s cut, ' + fmtA(anVal(0, p.robux)) + ' at DevEx') + '">' + robuxRaw(p.robux) + '</small>' : '') + '</span></div>';
     }).join('') : anEmpty('No sales in this range.');
   }
 
@@ -4484,7 +4487,8 @@
     else {
       var live = slices.filter(function (s) { return s.v > 0; }), a0 = -Math.PI / 2;
       live.forEach(function (s) {
-        var tip = esc(s.label) + '|' + esc(s.tip || sharePct(s.v / tot * 100));
+        // tipHtml: the slice's tip is already escaped HTML (a line break and a small note).
+        var tip = esc(s.label) + '|' + (s.tipHtml ? esc(s.tip) : esc(s.tip || sharePct(s.v / tot * 100)));
         if (live.length === 1) {
           // One source has it all: a full ring (an arc can't close on itself).
           out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((r + ri) / 2) + '" fill="none" style="stroke:' + s.color + ';stroke-width:' + (r - ri) + 'px" data-tip="' + tip + '"/>';
@@ -4536,19 +4540,27 @@
     var keys = HOME_PLATFORMS.map(function (p) { return p.key; });
     function tally(s, e) { return keys.map(function (k) { return sumSales(sales, s, e, k); }); }
     var cur = tally(w.start, w.end), prev = w.prevStart ? tally(w.prevStart, w.prevEnd) : null;
-    var rev = cur.map(function (r) { return r.aud; }), ord = cur.map(function (r) { return r.n; });
+    // Revenue counts Robux (Parcel, coldd.dev Robux orders) at its DevEx value; the hover says
+    // how much of it was Robux.
+    var rev = cur.map(function (r) { return anVal(r.aud, r.robux); }), ord = cur.map(function (r) { return r.n; });
     var totA = anSum(rev), totN = anSum(ord);
     if (!totN) { box.innerHTML = anEmpty('No sales in this range.'); return; }
     var revS = divScore(rev), ordS = divScore(ord);
-    var revP = prev ? divScore(prev.map(function (r) { return r.aud; })) : null, ordP = prev ? divScore(prev.map(function (r) { return r.n; })) : null;
+    var revP = prev ? divScore(prev.map(function (r) { return anVal(r.aud, r.robux); })) : null, ordP = prev ? divScore(prev.map(function (r) { return r.n; })) : null;
+    function robuxNote(i) {
+      var rb = cur[i].robux;
+      return rb ? robuxRaw(rb) + ' after Roblox\'s cut = ' + fmtA(anVal(0, rb)) + ' at DevEx' : '';
+    }
     function lead(vals, tot, verb) {
-      if (!tot) return 'No AU$ sales in this range';
+      if (!tot) return 'No revenue in this range';
       var i = vals.indexOf(Math.max.apply(null, vals));
       return esc(HOME_PLATFORMS[i].label) + ' ' + verb + ' ' + sharePct(vals[i] / tot * 100);
     }
     function slices(vals, tot, money) {
       return keys.map(function (k, i) {
-        return { v: vals[i], color: pfVar(k), label: HOME_PLATFORMS[i].label, mark: pfMark(k), tip: sharePct(tot ? vals[i] / tot * 100 : 0) + ', ' + (money ? fmtA(vals[i]) : plural(vals[i], 'order')) };
+        var note = money ? robuxNote(i) : '';
+        return { v: vals[i], color: pfVar(k), label: HOME_PLATFORMS[i].label, mark: pfMark(k), tipHtml: true,
+          tip: esc(sharePct(tot ? vals[i] / tot * 100 : 0) + ', ' + (money ? fmtA(vals[i]) : plural(vals[i], 'order'))) + (note ? '<br><small>' + esc(note) + '</small>' : '') };
       });
     }
     box.innerHTML = '<div class="adm-an-figs">' +
@@ -4562,7 +4574,7 @@
         '<div class="adm-mix-row is-head" role="row"><span role="columnheader">Platform</span><span role="columnheader">Revenue</span><span role="columnheader">Orders</span></div>' +
         keys.map(function (k, i) {
           return '<div class="adm-mix-row" role="row" style="--pf:' + pfVar(k) + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + pfMark(k) + esc(HOME_PLATFORMS[i].label) + '</span>' +
-            '<span role="cell">' + (totA ? sharePct(rev[i] / totA * 100) : '–') + '</span><span role="cell">' + sharePct(ord[i] / totN * 100) + '</span></div>';
+            '<span role="cell"' + (robuxNote(i) ? ' title="' + esc(fmtA(rev[i]) + ': ' + robuxNote(i)) + '"' : '') + '>' + (totA ? sharePct(rev[i] / totA * 100) : '–') + '</span><span role="cell">' + sharePct(ord[i] / totN * 100) + '</span></div>';
         }).join('') + '</div>';
   }
 
