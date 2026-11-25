@@ -2390,7 +2390,7 @@
     html += open.concat(done).map(function (t) {
       return '<div class="adm-work-item is-task' + (t.done ? ' is-done' : '') + '" data-todo="' + esc(t.id) + '">' +
         '<button type="button" class="adm-work-check" aria-pressed="' + (t.done ? 'true' : 'false') + '" aria-label="' + (t.done ? 'Mark not done' : 'Mark done') + '"><span></span></button>' +
-        '<span class="adm-work-text">' + esc(t.title) + '<small>' + esc((t.done ? 'Done' + (t.done_by_name ? ' by ' + t.done_by_name : '') : t.kind === 'email' ? (t.label || 'Email') + (t.mail_from ? ' from ' + t.mail_from : '') : 'Added' + (t.created_by_name ? ' by ' + t.created_by_name : '')) + ' · ' + relTime(t.done ? t.done_at : t.created_at)) + '</small></span>' +
+        '<span class="adm-work-text">' + esc(t.title) + '<small>' + esc((t.done ? 'Done' + (t.done_by_name ? ' by ' + t.done_by_name : '') : t.kind === 'email' ? (t.label || 'Email') + (t.mail_from ? ' from ' + t.mail_from : '') : t.kind === 'review_dispute' ? 'Review dispute' + (t.created_by_name ? ', added by ' + t.created_by_name : '') : 'Added' + (t.created_by_name ? ' by ' + t.created_by_name : '')) + ' · ' + relTime(t.done ? t.done_at : t.created_at)) + '</small></span>' +
         '<button type="button" class="adm-work-del" aria-label="Delete task">' + homeIcon('close', 16) + '</button></div>';
     }).join('');
     if (!html) html = '<p class="adm-work-empty">' + (TODOS_LOADED ? 'Nothing needs you today.' : 'Loading…') + '</p>';
@@ -9664,8 +9664,9 @@
     if (REV_OWNER !== null || !window.coldSupabase) return Promise.resolve(!!REV_OWNER);
     return window.coldSupabase.rpc('finance_allowed').then(function (r) { REV_OWNER = !r.error && r.data === true; return REV_OWNER; });
   }
-  // Where a review was left, as the admin shows it (Creator Store reviews read as Roblox).
-  function revPlatform(src) { return !src || src === 'Website' ? 'coldd.dev' : src === 'Creator Store' ? 'Roblox' : String(src); }
+  // Where a review was left, as the admin shows it: each platform by its own name (the storefront
+  // shows Creator Store and Parcel reviews as Roblox).
+  function revPlatform(src) { return !src || src === 'Website' ? 'coldd.dev' : String(src); }
   var reviewPlatformDropdown = makeDropdown($('admReviewPlatformDD'), {
     valueInput: $('admReviewPlatform'),
     onChange: function (v) { REVIEW_PLATFORM = v || 'all'; renderReviews(); }
@@ -9744,7 +9745,7 @@
     renderRevOverview();
     var seen = {};
     REVIEWS.forEach(function (r) { seen[revPlatform(r.source)] = true; });
-    var order = ['coldd.dev', 'BuiltByBit', 'Roblox'];
+    var order = ['coldd.dev', 'BuiltByBit', 'Creator Store', 'Parcel'];
     var plats = order.concat(Object.keys(seen).filter(function (p) { return order.indexOf(p) < 0; }).sort());
     if (plats.join('|') !== REV_PLATFORM_SIG) {
       REV_PLATFORM_SIG = plats.join('|');
@@ -9793,9 +9794,24 @@
     var id = card.getAttribute('data-id');
     var r = REVIEWS.filter(function (x) { return x.id === id; })[0]; if (!r) return;
     if (e.target.classList.contains('adm-rev-hide')) {
+      var hidOn = r.productTitle || (r.listingName ? untagName(r.listingName) : 'the store');
       callModerateReview(r.dbId, 'hide').then(function () {
-        logAudit('Hid review by ' + r.user + ' on "' + (r.productTitle || r.listingName || 'the store') + '"');
-        return refreshReviews();
+        logAudit('Hid review by ' + r.user + ' on "' + hidOn + '"');
+        refreshReviews();
+        // A hidden review can still be disputed on its platform: offer a task for it.
+        return dialogConfirm('Would you like to add a task to dispute this?', { title: 'Review hidden', acceptLabel: 'Add task' });
+      }).then(function (yes) {
+        if (!yes) return;
+        var rating = r.stars ? r.stars + '-star ' : r.recommended === false ? 'thumbs-down ' : '';
+        var snippet = String(r.text || '').replace(/\s+/g, ' ').trim();
+        var title = 'Dispute ' + r.user + '\'s ' + rating + 'review on ' + hidOn + ' (' + revPlatform(r.source) + ')' + (snippet ? ': "' + snippet + '"' : '');
+        if (title.length > 300) title = title.slice(0, 296) + '..."';
+        return window.coldSupabase.from('admin_todos').insert({ title: title, kind: 'review_dispute', label: 'Review dispute', created_by: ADMIN.id, created_by_name: currentRole().name })
+          .select().single().then(function (res) {
+            if (res.error) { admToast('Could not add the task: ' + res.error.message, false); return; }
+            TODOS.push(res.data); renderWork();
+            admToast('Task added to dispute the review.', true);
+          });
       }).catch(function (err) { alert(err.message || 'Could not hide review.'); });
     } else if (e.target.classList.contains('adm-rev-show')) {
       callModerateReview(r.dbId, 'show').then(function () {
@@ -9860,7 +9876,7 @@
     { value: '2', label: '★★ (2)' }, { value: '1', label: '★ (1)' }
   ], '5');
   var importReviewPlatformDropdown = makeDropdown($('admImportReviewPlatformDD'), { valueInput: $('admImportReviewPlatform') });
-  importReviewPlatformDropdown.setOptions(['BuiltByBit', 'ClearlyDev', 'Discord', { value: 'Creator Store', label: 'Roblox' }, 'Other'], 'BuiltByBit');
+  importReviewPlatformDropdown.setOptions(['BuiltByBit', 'ClearlyDev', 'Discord', 'Creator Store', 'Other'], 'BuiltByBit');
 
   var importReviewForm = $('admImportReviewForm');
   if (importReviewForm) importReviewForm.addEventListener('submit', function (e) {
