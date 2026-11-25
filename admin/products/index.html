@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261126j" />
+  <link rel="stylesheet" href="/styles.css?v=20261126k" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -286,6 +286,7 @@
             <div class="adm-hp adm-plat">
               <div class="adm-hp-head">
                 <div class="adm-hp-title"><h2>Gross sales by platform</h2></div>
+                <div class="adm-dd adm-dd-inline adm-an-pf" data-an-pf="gross"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div>
               </div>
               <div class="adm-plat-chart" id="admAnChart"></div>
               <div class="adm-plat-tablewrap"><table class="adm-plat-table" id="admAnPlatTable"></table></div>
@@ -294,7 +295,7 @@
 
             <div class="adm-an-grid">
               <div class="adm-hp adm-an-top">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top products</h2><span>Every platform</span></div><span class="adm-an-count" id="admBestCount"></span></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top products</h2><span id="admAnTopSub">Every platform</span></div><span class="adm-an-count" id="admBestCount"></span><div class="adm-dd adm-dd-inline adm-an-pf" data-an-pf="top"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div></div>
                 <div class="adm-an-list adm-an-scroll" id="admBestSellers" tabindex="0" role="region" aria-label="Top products"></div>
               </div>
               <div class="adm-hp">
@@ -304,13 +305,14 @@
             </div>
 
             <div class="adm-hp">
-              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Order volume</h2><span>Orders on every platform</span></div>
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Order volume</h2><span id="admAnVolSub">Orders on every platform</span></div>
+                <div class="adm-an-tools"><div class="adm-dd adm-dd-inline adm-an-pf" data-an-pf="vol"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div>
                 <div class="adm-seg adm-vol-grain" role="group" aria-label="Group orders by" id="admVolGrain">
                   <button type="button" data-grain="hour">Hourly</button>
                   <button type="button" data-grain="day">Daily</button>
                   <button type="button" data-grain="week">Weekly</button>
                   <button type="button" data-grain="month">Monthly</button>
-                </div></div>
+                </div></div></div>
               <div class="adm-an-facts" id="admVolStats"></div>
               <div class="adm-plat-chart" id="admVolChart"><div class="adm-skel adm-skel-chart"></div></div>
               <div class="adm-vol-legend" id="admVolLegend"></div>
@@ -337,21 +339,17 @@
 
             <div class="adm-an-grid">
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Categories</h2><span>Revenue by product category</span></div></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Categories</h2><span>Revenue by product category</span></div><div class="adm-dd adm-dd-inline adm-an-pf" data-an-pf="cats"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div></div>
                 <div id="admAnCats"></div>
               </div>
               <div class="adm-an-stack">
                 <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Average Order Value</h2></div></div>
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Average Order Value</h2></div><div class="adm-dd adm-dd-inline adm-an-pf" data-an-pf="aov"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div></div>
                   <div id="admAnPrices"></div>
                 </div>
                 <div class="adm-hp">
                   <div class="adm-hp-head"><div class="adm-hp-title"><h2>Payment methods</h2></div>
-                    <div class="adm-seg" id="admAnPmSeg" role="group" aria-label="Platform">
-                      <button type="button" data-pm-src="all" class="active">Global</button>
-                      <button type="button" data-pm-src="site">coldd.dev</button>
-                      <button type="button" data-pm-src="builtbybit">BuiltByBit</button>
-                    </div></div>
+                    <div class="adm-dd adm-dd-inline adm-an-pf" data-an-pf="pm"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div></div>
                   <div id="admAnPm"></div>
                 </div>
               </div>
@@ -1927,6 +1925,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261126j" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126j"></script>
+  <script src="/catalog.js?v=20261126k" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126k"></script>
 </body>
 </html>

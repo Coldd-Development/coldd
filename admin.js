@@ -2158,7 +2158,8 @@
     var padL = 56, padR = narrow || CH.single ? 16 : 118, padT = 12, padB = 28;
     var iw = W - padL - padR, ih = H - padT - padB;
     var max = 0;
-    series.forEach(function (s) { s.data.forEach(function (v) { if (v > max) max = v; }); });
+    // s.plot (when given) is what the line draws; s.data stays what the hover reports.
+    series.forEach(function (s) { (s.plot || s.data).forEach(function (v) { if (v > max) max = v; }); });
     var sc = niceScale(max);
     function X(i) { return padL + (n === 1 ? iw / 2 : i / (n - 1) * iw); }
     function Y(v) { return padT + ih - (v / sc.top) * ih; }
@@ -2178,7 +2179,7 @@
     // Flat-at-zero platforms first, so a platform with sales is never hidden under one without.
     var order = series.slice().sort(function (a, b) { return (a.total > 0) - (b.total > 0); });
     order.forEach(function (s) {
-      var pts = s.data.map(function (v, i) { return X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
+      var pts = (s.plot || s.data).map(function (v, i) { return X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
       var color = s.color || pfVar(s.key);
       // The newest point is still filling up, so its segment is dashed.
       svg += '<path class="pc-line" style="stroke:' + color + '" d="M' + (n > 1 && !CH.complete ? pts.slice(0, n - 1) : pts).join('L') + '"/>';
@@ -2186,7 +2187,7 @@
     });
     // End labels with a short key line, nudged apart so they never overlap.
     if (!narrow && !CH.single) {
-      var labels = series.map(function (s) { return { s: s, y: Y(s.data[n - 1]) }; }).sort(function (a, b) { return a.y - b.y; });
+      var labels = series.map(function (s) { return { s: s, y: Y((s.plot || s.data)[n - 1]) }; }).sort(function (a, b) { return a.y - b.y; });
       var gap = 16, bottom = padT + ih + 4;
       for (var i = 1; i < labels.length; i++) if (labels[i].y < labels[i - 1].y + gap) labels[i].y = labels[i - 1].y + gap;
       var over = labels[labels.length - 1].y - bottom;
@@ -2221,8 +2222,9 @@
       CH.series.forEach(function (s) {
         var dot = box.querySelector('.pc-dot[data-pf="' + s.key + '"]');
         if (!dot) return;
-        dot.setAttribute('cx', cx); dot.setAttribute('cy', pc.Y(s.data[i]).toFixed(1));
-        dot.setAttribute('visibility', s.data[i] > 0 ? 'visible' : 'hidden');
+        var pv = (s.plot || s.data)[i];
+        dot.setAttribute('cx', cx); dot.setAttribute('cy', pc.Y(pv).toFixed(1));
+        dot.setAttribute('visibility', pv > 0 ? 'visible' : 'hidden');
       });
       // The total adds Robux at the DevEx rate (US$38 per 10,000), in AU$ at that
       // time's rate; each platform's own line still shows its Robux as Robux.
@@ -2282,7 +2284,8 @@
     var cS = own ? o.start : new Date(now - 30 * DAY_MS), cE = own ? o.end : new Date(now + 60000);
     var pS = own ? o.prevStart : new Date(now - 60 * DAY_MS), pE = own ? o.prevEnd : cS;
     var cmp = !!pS;
-    var rows = HOME_PLATFORMS.map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: cmp ? sumSales(sales, pS, pE, p.key) : null }; });
+    var rows = HOME_PLATFORMS.filter(function (p) { return !o.only || p.key === o.only; })
+      .map(function (p) { return { p: p, cur: sumSales(sales, cS, cE, p.key), prev: cmp ? sumSales(sales, pS, pE, p.key) : null }; });
     var tot = sumSales(sales, cS, cE), totP = cmp ? sumSales(sales, pS, pE) : null;
     // R$ sits under the A$ (not beside it), so the table fits without scrolling.
     function cell(key, r) {
@@ -4457,7 +4460,9 @@
   function renderAnTop(w) {
     var box = $('admBestSellers'); if (!box) return;
     var map = {};
+    var topSub = $('admAnTopSub'); if (topSub) topSub.textContent = AN_PF.top === 'all' ? 'Every platform' : anPfLabel('top');
     anIn(anAllItems(), w.start, w.end).forEach(function (x) {
+      if (!anPfOk('top', x.pf)) return;
       var m = map[x.key] = map[x.key] || { title: x.title, image: '', pfs: {}, aud: 0, robux: 0, units: 0 };
       if (!m.image) m.image = x.image;
       m.pfs[x.pf] = true; m.aud += x.aud; m.robux += x.robux; m.units++;
@@ -4642,7 +4647,8 @@
     });
     var b = volBuckets(sales, grain), buckets = b.buckets, n = buckets.length;
     var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
-    var series = HOME_PLATFORMS.map(function (p) { return { key: p.key, label: p.label, data: buckets.map(function () { return 0; }) }; });
+    var volSub = $('admAnVolSub'); if (volSub) volSub.textContent = AN_PF.vol === 'all' ? 'Orders on every platform' : 'Orders on ' + anPfLabel('vol');
+    var series = HOME_PLATFORMS.filter(function (p) { return anPfOk('vol', p.key); }).map(function (p) { return { key: p.key, label: p.label, data: buckets.map(function () { return 0; }) }; });
     var at = {}; series.forEach(function (s, i) { at[s.key] = i; });
     sales.forEach(function (x) {
       if (x.t < first || x.t >= last || at[x.pf] == null) return;
@@ -4658,7 +4664,7 @@
       series: [{ key: 'orders', label: 'Orders', color: 'var(--info)', data: allOrders, total: anSum(allOrders) }],
       tip: function (i) {
         return series.map(function (s) { return '<div style="--pf:' + pfVar(s.key) + '"><i></i>' + esc(s.label) + '<b>' + num(s.data[i]) + '</b></div>'; }).join('') +
-          '<div class="adm-pc-tip-total">All platforms<b>' + plural(allOrders[i], 'order') + '</b></div>';
+          '<div class="adm-pc-tip-total">' + (AN_PF.vol === 'all' ? 'All platforms' : esc(anPfLabel('vol'))) + '<b>' + plural(allOrders[i], 'order') + '</b></div>';
       } };
     drawPlatChart(box);
     var totals = buckets.map(function (_, i) { return anSum(series.map(function (s) { return s.data[i]; })); });
@@ -4866,7 +4872,7 @@
   }
   function renderAnCats(w) {
     var box = $('admAnCats'); if (!box) return;
-    var all = anAllItems().filter(function (x) { return !/minecraft/i.test(x.cat); });
+    var all = anAllItems().filter(function (x) { return !/minecraft/i.test(x.cat) && anPfOk('cats', x.pf); });
     var cur = anIn(all, w.start, w.end), prev = w.prevStart ? anIn(all, w.prevStart, w.prevEnd) : null;
     if (!cur.length) { box.innerHTML = anEmpty('No sales in this range.'); return; }
     function group(list) {
@@ -4978,17 +4984,30 @@
     PM_CACHE = { src: src, rows: out };
     return out;
   }
-  var AN_PM_SRC = 'all';
-  try { AN_PM_SRC = localStorage.getItem('coldd_admin_pm_src_v1') || 'all'; } catch (_) {}
+  // Platform filters on the Analytics panels ('all' = every platform), remembered per panel.
+  var AN_PF = { gross: 'all', top: 'all', vol: 'all', cats: 'all', aov: 'all', pm: 'all' };
+  try {
+    var anPfSaved = JSON.parse(localStorage.getItem('coldd_admin_an_pf_v1') || '{}') || {};
+    Object.keys(AN_PF).forEach(function (k) { if (typeof anPfSaved[k] === 'string') AN_PF[k] = anPfSaved[k]; });
+    if (!anPfSaved.pm) AN_PF.pm = localStorage.getItem('coldd_admin_pm_src_v1') || 'all';
+  } catch (_) {}
+  function anPfOk(key, pf) { return AN_PF[key] === 'all' || pf === AN_PF[key]; }
+  function anPfLabel(key) { var p = HOME_PLATFORMS.filter(function (x) { return x.key === AN_PF[key]; })[0]; return p ? p.label : ''; }
+  document.querySelectorAll('[data-an-pf]').forEach(function (el) {
+    var key = el.getAttribute('data-an-pf');
+    var drop = makeDropdown(el, { onChange: function (v) {
+      AN_PF[key] = v || 'all';
+      try { localStorage.setItem('coldd_admin_an_pf_v1', JSON.stringify(AN_PF)); } catch (_) {}
+      if (curPanel === 'analytics') renderAnalytics();
+    } });
+    drop.setOptions([{ value: 'all', label: 'Global' }].concat(HOME_PLATFORMS.map(function (p) { return { value: p.key, label: p.label }; })), AN_PF[key]);
+  });
   function renderAnPm(w) {
     var box = $('admAnPm'); if (!box) return;
-    document.querySelectorAll('#admAnPmSeg [data-pm-src]').forEach(function (b) {
-      var on = b.getAttribute('data-pm-src') === AN_PM_SRC; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on));
-    });
-    var all = pmSales().filter(function (x) { return AN_PM_SRC === 'all' || x.src === AN_PM_SRC; });
+    var all = pmSales().filter(function (x) { return anPfOk('pm', x.src); });
     function inWin(a, b) { var s = a ? a.getTime() : -Infinity, e = b ? b.getTime() : Infinity; return all.filter(function (x) { return x.t >= s && x.t < e; }); }
     var cur = inWin(w.start, w.end), prev = w.prevStart ? inWin(w.prevStart, w.prevEnd) : null;
-    if (!cur.length) { box.innerHTML = anEmpty(AN_PM_SRC === 'site' ? 'No coldd.dev orders in this range.' : 'No sales in this range.'); return; }
+    if (!cur.length) { box.innerHTML = anEmpty(AN_PF.pm === 'all' ? 'No sales in this range.' : 'No ' + esc(anPfLabel('pm')) + ' sales in this range.'); return; }
     function group(list) {
       var g = {};
       list.forEach(function (x) { var c = g[x.pm] = g[x.pm] || { aud: 0, robux: 0, n: 0, v: 0 }; c.aud += x.aud; c.robux += x.robux; c.n += x.n == null ? 1 : x.n; c.v += anVal(x.aud, x.robux); });
@@ -5023,20 +5042,15 @@
     box.innerHTML = '<div class="adm-catr-pie">' + donutSvg(slices, { size: 176, aria: 'Revenue share by payment method', center: tot ? fmtA(tot, true) : 'A$0', sub: 'revenue' }) + '</div>' +
       '<div class="adm-catr' + (gp ? '' : ' no-chg') + '" role="list" aria-label="Revenue by payment method">' + rows.join('') + '</div>';
   }
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('#admAnPmSeg [data-pm-src]');
-    if (!b) return;
-    AN_PM_SRC = b.getAttribute('data-pm-src');
-    try { localStorage.setItem('coldd_admin_pm_src_v1', AN_PM_SRC); } catch (_) {}
-    renderAnPm(anWindow());
-  });
 
   // Price points: what each product sold for, in AU$ bands.
   var AN_BANDS = [[0, 5, 'Under A$5'], [5, 10, 'A$5 to A$10'], [10, 20, 'A$10 to A$20'], [20, 40, 'A$20 to A$40'], [40, 80, 'A$40 to A$80'], [80, Infinity, 'A$80 and up']];
   function renderAnPrices(w) {
     var box = $('admAnPrices'); if (!box) return;
-    var list = anIn(anAllItems(), w.start, w.end).filter(function (x) { return x.aud > 0; });
-    if (!list.length) { box.innerHTML = anEmpty('No AU$ sales in this range.'); return; }
+    // Robux sales count at their DevEx value (like Top products), so a Robux platform has figures too.
+    var list = anIn(anAllItems(), w.start, w.end).filter(function (x) { return anPfOk('aov', x.pf); })
+      .map(function (x) { return { aud: anVal(x.aud, x.robux) }; }).filter(function (x) { return x.aud > 0; });
+    if (!list.length) { box.innerHTML = anEmpty(AN_PF.aov === 'all' ? 'No sales in this range.' : 'No ' + esc(anPfLabel('aov')) + ' sales in this range.'); return; }
     var b = AN_BANDS.map(function () { return { n: 0, aud: 0 }; });
     list.forEach(function (x) { for (var i = 0; i < AN_BANDS.length; i++) if (x.aud < AN_BANDS[i][1]) { b[i].n++; b[i].aud += x.aud; break; } });
     var totA = anSum(b.map(function (x) { return x.aud; })), maxN = Math.max.apply(null, b.map(function (x) { return x.n; }));
@@ -5044,7 +5058,7 @@
     var topRev = 0; b.forEach(function (x, i) { if (x.aud > b[topRev].aud) topRev = i; });
     box.innerHTML = '<div class="adm-an-figs">' +
         anFig('Typical price', fmtA(med), '', '', '') +
-        anFig('Most revenue from', esc(AN_BANDS[topRev][2]), '', '', sharePct(b[topRev].aud / totA * 100) + ' of AU$ sales') + '</div>' +
+        anFig('Most revenue from', esc(AN_BANDS[topRev][2]), '', '', sharePct(b[topRev].aud / totA * 100) + ' of revenue') + '</div>' +
       '<div class="adm-bars" role="table" aria-label="Sales by price">' + b.map(function (x, i) {
         return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + esc(AN_BANDS[i][2]) + '<small>' + plural(x.n, 'sale') + '</small></span>' +
           '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (x.n ? Math.max(1.5, x.n / maxN * 100) : 0).toFixed(1) + '%"></i></span>' +
@@ -5148,18 +5162,28 @@
     }
     var sales = homeSales();
     renderAnKpis(sales, w);
+    // A panel's platform filter keeps only that platform's sales.
+    function only(key) { return AN_PF[key] === 'all' ? sales : sales.filter(function (x) { return x.pf === AN_PF[key]; }); }
+    var gross = only('gross');
     var chart = $('admAnChart');
     if (chart) {
       var b = anBuckets(sales);
-      chart.__chart = pfChartData(sales, b.buckets, b.step, 'Gross sales in AU$ for each platform over the selected range');
+      chart.__chart = pfChartData(gross, b.buckets, b.step, 'Gross sales in AU$ for each platform over the selected range');
+      // One platform: its Robux joins the line at the DevEx rate, so a Robux platform (Parcel)
+      // is not a flat line at A$0; the hover still shows its own A$ and R$.
+      if (AN_PF.gross !== 'all') chart.__chart.series = chart.__chart.series.filter(function (s) { return s.key === AN_PF.gross; }).map(function (s) {
+        if (!s.robuxTotal) return s;
+        s.plot = s.data.map(function (v, i) { return v + (s.robux[i] || 0) * DEVEX_USD_PER_ROBUX * audRateOn(b.buckets[i].start.getTime()); });
+        return s;
+      });
       drawPlatChart(chart);
     }
     var label = RANGE_DAYS === 1 ? '24h' : RANGE_DAYS + 'd';
-    renderPlatTable(sales, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
-      curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label });
+    renderPlatTable(gross, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
+      curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label, only: AN_PF.gross === 'all' ? null : AN_PF.gross });
     renderAnTop(w);
     renderAnMix(sales, w);
-    renderAnVolume(sales, w);
+    renderAnVolume(only('vol'), w);
     renderAnFees(sales, w);
     renderAnCats(w);
     renderAnPrices(w);

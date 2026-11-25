@@ -5523,6 +5523,10 @@ html[data-theme="light"] {
 .dash-panel:not([hidden]) .adm-ro { animation-delay: .04s; }
 .dash-panel:not([hidden]) .adm-home-grid .adm-hp { animation-delay: .08s; }
 .adm-hp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Analytics platform filter (Global or one platform), and a head holding it beside other controls. */
+.adm-an-pf .adm-dd-btn { min-width: 150px; }
+.adm-an-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adm-an-top .adm-hp-head .adm-an-count:empty { display: none; }
 .adm-hp-title { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; min-width: 0; }
 .adm-hp-title h2 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; }
 .adm-hp-title span { font-size: 12px; font-weight: 500; color: var(--fg-3); }
