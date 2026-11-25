@@ -52,24 +52,33 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // A tag before the name ("[COMPLETE] Catch a Fish") is not part of the product's name.
 const norm = (s: string) => String(s || "").replace(/^\s*(?:\[[^\]]*\]\s*)+/, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-// Same id rule as the userscript, so the two never make duplicate rows.
+// The first all-digit value of several possible field paths.
+function firstId(...vals: unknown[]) {
+  for (const v of vals) { const s = String(v ?? ""); if (/^\d+$/.test(s)) return s; }
+  return "";
+}
+
+// Same id rule as the userscript, so the two never make duplicate rows. Roblox puts the asset
+// under basePayment.productKey.productTargetId and the buyer under purchaser.entity.longValue
+// (the userscript's paths); the older field names are kept as fallbacks.
 function toRow(p: Obj) {
   const base = p.basePayment || {};
   const when = new Date(base.paymentDateTime || 0);
   if (isNaN(when.getTime())) return null;
-  const assetId = String(base.assetId || base.productId || "");
+  const assetId = firstId(base.productKey?.productTargetId, base.productKey?.targetId, base.assetId, base.productId);
+  const buyerId = firstId(p.purchaser?.entity?.longValue, p.purchaser?.entity?.id, p.purchaserId, p.purchaser?.id);
   const gross = (Number(base.totalAmount?.quantity?.significand) || 0) / DIVISOR;
   const net = (Number(p.netAmount?.quantity?.significand) || 0) / DIVISOR;
   const currency = String(base.totalAmount?.currencyCode || base.totalAmount?.currency || "USD").toUpperCase();
   return {
-    external_id: String(base.paymentId || `${base.paymentDateTime}|${p.purchaserId || p.purchaserName}|${assetId}`).slice(0, 200),
+    external_id: String(base.paymentId || `${base.paymentDateTime}|${p.purchaserId || p.purchaserName}|${base.assetId || base.productId || ""}`).slice(0, 200),
     sold_at: when.toISOString(),
     product_name: String(base.productName || "Unknown asset").slice(0, 300),
     currency: /^[A-Z]{3}$/.test(currency) ? currency : "USD",
     amount: Math.round(gross * 10000) / 10000,
     net_amount: Math.round(net * 10000) / 10000,
     buyer_name: p.purchaserName ? String(p.purchaserName).slice(0, 200) : null,
-    buyer_ref: p.purchaserId ? String(p.purchaserId) : null,
+    buyer_ref: buyerId || null,
     raw: { assetId, assetType: base.assetType || null },
   };
 }
@@ -171,13 +180,18 @@ Deno.serve(async (req) => {
 
   // Incremental: stop once a whole page is older than (newest stored sale - 3 days).
   const { data: newestRow } = await admin.from("platform_sales").select("sold_at").eq("platform", "creatorstore").order("sold_at", { ascending: false }).limit(1).maybeSingle();
-  const cutoff = newestRow?.sold_at ? new Date(newestRow.sold_at).getTime() - OVERLAP_MS : 0;
+  let cutoff = newestRow?.sold_at ? new Date(newestRow.sold_at).getTime() - OVERLAP_MS : 0;
+  // Sales saved before the asset id was read correctly: the whole history is read again (once
+  // the first page proves the ids come through) so every purchased asset is known.
+  const { count: blankAssets } = await admin.from("platform_sales").select("id", { count: "exact", head: true })
+    .eq("platform", "creatorstore").eq("raw->>assetId", "");
+  let refill = false;
   const deadline = Date.now() + BUDGET_MS;
 
   const rows: Obj[] = [];
   // Quick run (cron every minute): one page, stopping when it is all stored; the 3-day
   // re-read (late or changed payments) runs every 15 minutes.
-  const deep = body.force === true || new Date().getUTCMinutes() % 15 === 0 || !newestRow;
+  let deep = body.force === true || new Date().getUTCMinutes() % 15 === 0 || !newestRow;
   let cursor = "", pages = 0, error = "", cookieOk: boolean | null = true;
   try {
     while (pages < MAX_PAGES && Date.now() < deadline) {
@@ -196,6 +210,7 @@ Deno.serve(async (req) => {
         if (new Date(r.sold_at).getTime() >= cutoff) anyNew = true;
         rows.push(r);
       }
+      if (pages === 1 && (blankAssets ?? 0) > 0 && rows.some((r) => r.raw?.assetId)) { refill = true; cutoff = 0; deep = true; anyNew = true; }
       if (!data.pageInfo?.hasMore || !data.pageInfo?.nextCursor) break;
       if (cutoff && !anyNew) break;
       if (!deep) {
@@ -235,6 +250,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  // After a full re-read, a sale still without an asset id is not in Roblox's history any more:
+  // it is marked 'unknown' so it never starts another full re-read.
+  if (refill && !error) {
+    const { data: left } = await admin.from("platform_sales").select("id, raw").eq("platform", "creatorstore").eq("raw->>assetId", "").limit(500);
+    for (const r of (left ?? []) as Obj[]) await admin.from("platform_sales").update({ raw: { ...(r.raw ?? {}), assetId: "unknown" } }).eq("id", r.id);
+  }
+
   if (cookieOk === false && prev?.cookie_ok !== false) {
     await notifyRobloxCookieBroken("the Creator Store sync cookie (ROBLOX_CREATOR_COOKIE) was rejected. Sign in to Roblox in an incognito window and paste the new cookie into Supabase secrets.");
   }
@@ -269,5 +291,5 @@ Deno.serve(async (req) => {
       await admin.from("platform_sync_state").upsert({ platform: "creatorstore-reviews", last_run_at: now.toISOString(), updated_at: new Date().toISOString(), last_error: (e as Error).message.slice(0, 500) });
     }
   }
-  return json({ ok: !error, pages, read: rows.length, written, reviews, error: error || undefined });
+  return json({ ok: !error, pages, read: rows.length, written, refill, blankAssets, withAsset: rows.filter((r) => r.raw?.assetId).length, reviews, error: error || undefined });
 });
