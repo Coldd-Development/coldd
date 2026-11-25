@@ -12352,6 +12352,37 @@
     var paid = FIN.instalments.filter(function (x) { return x.fy === fl; }).reduce(function (s, x) { return s + (Number(x.amount_paid) || 0); }, 0);
     return { owed: owed, paid: paid, need: owed - paid };
   }
+  // End of year estimate: the weeks so far plus the rest of the year at a weekly pace, the tax on
+  // that profit, against the PAYG instalments (as paid, or at the instalment rate) and tax withheld.
+  function finEofy() {
+    var fy = finFy(finToday()), rows = finRows(fy);
+    if (!rows.length) return null;
+    var last = rows[rows.length - 1], rate = Number(FIN.settings.instalment_rate) || 0, qs = finQuarters(fy, rows), future = [];
+    for (var we = finAdd(last.we, 7); we <= (fy + 1) + '-06-30'; we = finAdd(we, 7)) future.push(we);
+    function pace(list) {
+      var n = list.length;
+      return list.reduce(function (a, r) { a.profit += (r.rev - r.exp + r.tr - r.te + r.oi) / n; a.income += (r.rev + r.tr) / n; a.wh += r.wh / n; return a; }, { profit: 0, income: 0, wh: 0 });
+    }
+    function at(p) {
+      var profit = last.P + future.length * p.profit, wh = last.W + future.length * p.wh, inst = 0;
+      qs.forEach(function (q) {
+        var inc = q.income + future.filter(function (w) { return w >= q.start && w <= q.end; }).length * p.income;
+        inst += q.paid != null ? q.paid : inc * rate;
+      });
+      var tax = finTaxOn(profit);
+      return { pace: p.profit, profit: profit, tax: tax, inst: inst, wh: wh, refund: inst + wh - tax.total };
+    }
+    var n = Math.min(8, rows.length);
+    return { weeks: n, recent: at(pace(rows.slice(-n))), year: at(pace(rows)) };
+  }
+  function finEofyLine(x) { return x.refund >= 0 ? finM0(x.refund) + ' estimated refund' : finM0(-x.refund) + ' estimated to pay'; }
+  function finEofyTitle(e) {
+    var r = e.recent;
+    return 'End of financial year, if the rest of the year matches the last ' + plural(e.weeks, 'week') + ' (' + finM0(r.pace) + ' profit a week): ' +
+      finM0(r.profit) + ' taxable profit, ' + finM0(r.tax.total) + ' tax (' + finM0(r.tax.income) + ' income tax, less ' + finM0(r.tax.lito) + ' low income offset, plus ' + finM0(r.tax.medicare) + ' Medicare levy), against ' +
+      finM0(r.inst) + ' of PAYG instalments' + (r.wh > 0.5 ? ' and ' + finM0(r.wh) + ' withheld' : '') + ' (paid ones as paid, the rest at the instalment rate).\n' +
+      'At this year\'s average pace (' + finM0(e.year.pace) + ' a week) it would be ' + finEofyLine(e.year) + '.';
+  }
 
   /* ---- Loading ---- */
   function finCheckAccess() {
@@ -12467,13 +12498,14 @@
     var net = weeks.reduce(function (s, w) { return s + (Number(w.revenue) || 0); }, 0);
     var exps = FIN.expenses.filter(function (e) { return e.spent_on >= per.from && e.spent_on <= per.to; });
     var spent = exps.reduce(function (s, e) { return s + Number(e.amount); }, 0);
-    var profit = net - spent, gross = finGross(per.from, per.to), res = finReserve();
+    var profit = net - spent, gross = finGross(per.from, per.to), res = finReserve(), eofy = finEofy();
     if (gross == null && FIN.salesTries++ < 40) setTimeout(function () { if (curPanel === 'finances' && FIN.view === 'main') finRenderOverview(); }, 1500);
     $('admFinKpis').innerHTML = [
       finKpi({ label: 'Net revenue', value: finK(net), sub: gross == null ? 'Loading gross…' : finK(gross) + ' gross', title: 'Gross: all platforms, before fees and payout delays' }),
       finKpi({ label: 'Expenses', value: finK(spent), sub: net > 0 ? finPct(spent / net) + ' of net revenue' : '' }),
       finKpi({ label: 'Profit margin', value: net > 0 ? finPct(profit / net) : '–', sub: finM(profit) + ' profit' }),
-      finKpi({ label: 'Tax reserve', value: finM(res.need), sub: 'Should be in the tax account now', title: finM(res.owed) + ' owed this year so far, less ' + finM(res.paid) + ' paid to the ATO' })
+      finKpi({ label: 'Tax reserve', value: finM(res.need), sub: eofy ? finEofyLine(eofy.recent) : 'Should be in the tax account now',
+        title: 'Tax reserve: ' + finM(res.owed) + ' owed this year so far, less ' + finM(res.paid) + ' paid to the ATO.' + (eofy ? '\n' + finEofyTitle(eofy) : '') })
     ].join('');
     finRenderNetChart(per);
     finRenderExpChart(per);
