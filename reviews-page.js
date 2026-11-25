@@ -1,8 +1,10 @@
 /* Renders the /reviews page's grid from window.__REVIEWS (populated by catalog.js from the real
    reviews table, approved-only). Only 4 and 5 star reviews and Roblox "recommends" show here
-   (product pages show every review). The order is random on each visit but weighted toward the
-   best looking reviews, so the strongest ones usually lead without the page always opening on
-   the same few. Each card is app.js's window.__reviewCardHtml, the same one the homepage uses. */
+   (product pages show every review). Glowing reviews come first and four-star or critical ones
+   (app.js's window.__reviewCritical) after them; within each group the order is random on each
+   visit but weighted toward the best looking reviews, so the strongest ones usually lead without
+   the page always opening on the same few. Each card is app.js's window.__reviewCardHtml, the
+   same one the homepage uses. */
 (function () {
   var grid = document.getElementById('allReviewsGrid');
   if (!grid || !window.__reviewCardHtml) return;
@@ -31,8 +33,9 @@
     // to land higher while every visit still gets a different order.
     var reviews = (window.__REVIEWS || []).filter(good).map(function (r) {
       var product = catalogById[r.productId];
-      return { r: r, product: product, key: Math.pow(Math.random(), 1 / looks(r, product)) };
-    }).sort(function (a, b) { return b.key - a.key; });
+      var critical = window.__reviewCritical ? window.__reviewCritical(r) : r.stars !== 5;
+      return { r: r, product: product, low: critical ? 1 : 0, key: Math.pow(Math.random(), 1 / looks(r, product)) };
+    }).sort(function (a, b) { return a.low - b.low || b.key - a.key; });
     if (!reviews.length) { grid.innerHTML = '<p class="pd-empty">No reviews yet.</p>'; return; }
     grid.innerHTML = reviews.map(function (x) { return window.__reviewCardHtml(x.r, x.product); }).join('');
     // app.js's scroll-reveal observer already ran by the time this fires (this script is chained

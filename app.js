@@ -21,11 +21,21 @@
         '" fill="currentColor" aria-hidden="true"><path d="' + d + '"/></svg>';
     };
 
-    // Reviews from another platform say where they were left (BuiltByBit, Creator Store, or the
-    // platform a review was imported from; Creator Store reads as Roblox); coldd.dev's own say nothing.
+    // Where a review from another platform was left, for the product page's "Originally reviewed
+    // on ..." line (Creator Store and Parcel both read as Roblox); coldd.dev's own say nothing.
     window.__reviewPlatform = function (src) {
       if (!src || src === 'Website' || src === 'Other') return '';
-      return src === 'Creator Store' ? 'Roblox' : String(src);
+      return src === 'Creator Store' || src === 'Parcel' ? 'Roblox' : String(src);
+    };
+    // A review that is less than glowing: under five stars, or text that complains or asks for
+    // more ("but", "however", "doesn't work", "please add"). The homepage leaves these out and
+    // /reviews shows them after the rest.
+    var REVIEW_CRITICAL = /\b(however|but|although|though|unfortunately|sadly|wish|would be (nice|better|good)|could (be|use|have)|should (be|have)|needs? (to|more|a|some)|lacking|missing|excessive|overpriced|too (much|many|expensive|pricey|big|small|heavy|laggy)|hard to (use|edit|set ?up|install|understand|move)|(does|did|is|was)n'?t work|not work(ing)?|broken|bugg?y|bugs|glitch(y|es)?|crash(es|ed)?|disappoint\w*|refund|pls add|please add|plz add)\b/i;
+    window.__reviewCritical = function (r) {
+      if (r.stars > 0 && r.stars < 5) return true;
+      if (r.recommended === false) return true;
+      var t = String(r.text || '');
+      return REVIEW_CRITICAL.test(t) || /жаль|но\s/i.test(t);
     };
     // A review's rating: stars, or a Creator Store review's thumbs up or down (it has no stars).
     window.__reviewRatingHtml = function (r, starSvg) {
@@ -38,7 +48,8 @@
       return '<div class="rv-thumb ' + (r.recommended ? 'up' : 'down') + '">' + window.msym(r.recommended ? 'thumb_up' : 'thumb_down', 15) +
         (r.recommended ? 'Recommends this' : 'Doesn\'t recommend this') + '</div>';
     };
-    // One review card for the homepage and /reviews (window.__REVIEWS rows, see catalog.js).
+    // One review card for the homepage and /reviews (window.__REVIEWS rows, see catalog.js). Where it
+    // was left only shows on the product page.
     window.__reviewCardHtml = function (r, product) {
       function e(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
       var star = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.1l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.16l-5.9 3.11 1.13-6.57L2.45 9.04l6.6-.96z"/></svg>';
@@ -46,11 +57,9 @@
       var img = /^(https:\/\/|\/(?!\/))[^\s"'<>]+$/.test(String(r.avatar || '')) ? r.avatar : '';
       var av = img ? '<img class="ra" src="' + e(img) + '" alt="" width="38" height="38" loading="lazy" referrerpolicy="no-referrer" />' : '<span class="ra">' + e(initial) + '</span>';
       var sub = product ? '<a class="rv-prod" href="/product/' + encodeURIComponent(product.id) + '">' + e(product.title) + '</a>' : r.byline ? e(r.byline) : '';
-      var plat = window.__reviewPlatform(r.source);
       return '<article class="glass review reveal">' + window.__reviewRatingHtml(r, star) +
-        (r.text ? '<p>"' + e(r.text) + '"</p>' : '<p></p>') +
-        '<div class="review-by">' + av + '<span class="rn">' + e(r.user) + (sub ? '<small>' + sub + '</small>' : '') + '</span></div>' +
-        (plat ? '<div class="rv-src">Review originally left on ' + e(plat) + '</div>' : '') + '</article>';
+        (r.text ? '<p>' + e(r.text) + '</p>' : '<p></p>') +
+        '<div class="review-by">' + av + '<span class="rn">' + e(r.user) + (sub ? '<small>' + sub + '</small>' : '') + '</span></div></article>';
     };
 
     // Browser alert()/confirm()/prompt() windows break the visual system and
@@ -1636,19 +1645,98 @@
         }
       }
 
-      // Homepage reviews: the three newest good reviews with something to say (every review is
-      // on /reviews).
+      // Homepage reviews: a carousel of every five-star (or "Recommends this") review with
+      // something to say: pinned ones first (reviews.home_pin), then the newest, critical ones last.
+      // Slides one card at a time every few seconds (the progress bar under it times the next
+      // slide), loops back to the start, pauses while hovered, focused, off screen or when the
+      // tab is hidden, and follows the arrows and a swipe. With reduced motion it only moves on
+      // the arrows or a swipe.
+      function reviewCarousel(root, track) {
+        if (!root || !track || root.__rv) return;
+        root.__rv = true;
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var cards = track.children, idx = 0, seen = false;
+        var bar = root.querySelector('.rv-progress span');
+        function perView() {
+          var vw = track.parentNode.clientWidth, cw = cards[0] ? cards[0].getBoundingClientRect().width : vw;
+          return Math.max(1, Math.round(vw / Math.max(1, cw)));
+        }
+        function last() { return Math.max(0, cards.length - perView()); }
+        // The cards in view set the height: each card is as tall as the tallest one showing, and
+        // the window eases to it, so a long review elsewhere never leaves short ones half empty.
+        // Growing happens at once; shrinking waits for the slide to end so the card on its way
+        // out is never cut off.
+        var shrinkT = null, curTall = 0;
+        function paint() {
+          var pv = perView(), tall = 0, i;
+          track.style.transform = 'translate3d(' + (cards[idx] ? -cards[idx].offsetLeft : 0) + 'px,0,0)';
+          for (i = 0; i < cards.length; i++) cards[i].style.minHeight = '';
+          for (i = idx; i < Math.min(cards.length, idx + pv); i++) tall = Math.max(tall, cards[i].offsetHeight);
+          for (i = 0; i < cards.length; i++) {
+            var on = i >= idx && i < idx + pv;
+            cards[i].classList.toggle('is-on', on);
+            cards[i].setAttribute('aria-hidden', on ? 'false' : 'true');
+          }
+          function size(h) {
+            curTall = h;
+            for (var j = 0; j < cards.length; j++) cards[j].style.minHeight = h + 'px';
+            track.parentNode.style.height = (h + 12) + 'px';
+          }
+          clearTimeout(shrinkT);
+          if (tall >= curTall || reduce) size(tall);
+          else {
+            for (i = 0; i < cards.length; i++) cards[i].style.minHeight = curTall + 'px';
+            shrinkT = setTimeout(function () { size(tall); }, 700);
+          }
+          root.classList.toggle('is-static', cards.length <= pv);
+        }
+        function restartBar() {
+          if (!bar || reduce) return;
+          bar.style.animation = 'none';
+          void bar.offsetWidth;
+          bar.style.animation = '';
+        }
+        function go(i) { var l = last(); idx = i > l ? 0 : i < 0 ? l : i; paint(); restartBar(); }
+        root.addEventListener('click', function (e) {
+          var b = e.target.closest && e.target.closest('[data-rv]');
+          if (b) go(idx + (b.getAttribute('data-rv') === 'next' ? 1 : -1));
+        });
+        if (bar && !reduce) bar.addEventListener('animationend', function () { if (seen) go(idx + 1); else restartBar(); });
+        // Pause off screen: the bar only runs once the carousel has been seen and while it is visible.
+        if ('IntersectionObserver' in window) {
+          new IntersectionObserver(function (es) {
+            es.forEach(function (en) { seen = seen || en.isIntersecting; root.classList.toggle('is-away', !en.isIntersecting); });
+          }, { threshold: 0.35 }).observe(root);
+        } else seen = true;
+        root.addEventListener('focusin', function () { root.classList.add('is-held'); });
+        root.addEventListener('focusout', function () { root.classList.remove('is-held'); });
+        var x0 = null, y0 = 0;
+        track.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse') { x0 = e.clientX; y0 = e.clientY; } });
+        track.addEventListener('pointerup', function (e) {
+          if (x0 == null) return;
+          var dx = e.clientX - x0, dy = e.clientY - y0; x0 = null;
+          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(idx + (dx < 0 ? 1 : -1));
+        });
+        track.addEventListener('pointercancel', function () { x0 = null; });
+        var rt = null;
+        window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (idx > last()) idx = last(); paint(); }, 120); });
+        if (reduce) root.classList.add('is-reduced');
+        paint();
+      }
       var homeRevGrid = document.getElementById('homeReviewsGrid');
       var homeRevSection = document.getElementById('homeReviewsSection');
       if (homeRevGrid && window.__reviewCardHtml) {
         var homeRevById = {};
         (window.__CATALOG || []).forEach(function (p) { homeRevById[p.id] = p; });
         var allRev = (window.__REVIEWS || []).slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
-        var goodRev = allRev.filter(function (r) { return (r.stars >= 4 || (r.stars == null && r.recommended === true)) && String(r.text || '').trim().length >= 30; });
-        var revPicks = (goodRev.length >= 3 ? goodRev : allRev).slice(0, 3);
-        homeRevGrid.innerHTML = revPicks.map(function (r) { return window.__reviewCardHtml(r, homeRevById[r.productId]); }).join('');
+        var crit = function (r) { return !!(window.__reviewCritical && window.__reviewCritical(r)); };
+        var revPicks = allRev.filter(function (r) { return (r.stars === 5 || (!(r.stars > 0) && r.recommended === true)) && String(r.text || '').trim().length > 0; })
+          .sort(function (a, b) { return ((a.homePin > 0 ? a.homePin : 1e6) - (b.homePin > 0 ? b.homePin : 1e6)) || (crit(a) - crit(b)) || (new Date(b.date) - new Date(a.date)); });
+        // The carousel animates its own cards, so they skip the page's scroll reveal.
+        homeRevGrid.innerHTML = revPicks.map(function (r) { return window.__reviewCardHtml(r, homeRevById[r.productId]).replace('glass review reveal', 'glass review'); }).join('');
         if (homeRevSection) homeRevSection.hidden = !revPicks.length;
-        if (window.__scanReveal) window.__scanReveal(homeRevGrid);
+        if (revPicks.length) reviewCarousel(document.getElementById('homeReviewsCarousel'), homeRevGrid);
+        if (window.__scanReveal) window.__scanReveal(homeRevSection);
       }
 
       // Homepage "Bundle & save": the bundles an admin picked (admin > Content > Homepage), in
@@ -3292,7 +3380,7 @@
               (rating ? '<span class="pd-rev-dot">·</span>' + rating : '') +
               '<span class="pd-rev-dot">·</span><span class="pd-rev-meta">' + esc(fmtRevDate(r.date)) + '</span></div>' +
               (r.text ? '<p class="pd-rev-body">' + esc(r.text) + '</p>' : '') +
-              (plat ? '<p class="pd-rev-src">Review originally left on ' + esc(plat) + '</p>' : '') + reply + '</div>';
+              (plat ? '<p class="pd-rev-src">Originally reviewed on ' + esc(plat) + '</p>' : '') + reply + '</div>';
           }).join('') : '<p class="pd-empty">No reviews yet. Be the first to review this product.</p>';
         }
         // `existing` is {stars, text} when this account already has a

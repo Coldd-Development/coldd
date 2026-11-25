@@ -296,7 +296,9 @@ Deno.serve(async (req: Request) => {
     } catch (e) { errors.push("resources: " + (e as Error).message); }
 
     // 2b) reviews: every review on our listings (one request per 100). A new one is published on
-    //     its coldd.dev product, or waits hidden until one with that name is on the site.
+    //     its coldd.dev product; one whose listing is not on the catalog is not kept (it is read
+    //     again every run and imported once that product is added). Reviews pinned to the
+    //     homepage (home_pin) are never removed.
     try {
       if (force || age(st.reviews_at) >= REVIEWS_EVERY_MS) {
         const firstRun = !st.reviews_at;
@@ -351,11 +353,11 @@ Deno.serve(async (req: Request) => {
         else if (gone.length) {
           const goneSet = new Set(gone);
           for (let i = list.length - 1; i >= 0; i--) if (goneSet.has(Number(list[i].bbb_resource_id))) list.splice(i, 1);
-          const { error: delErr } = await admin.from("reviews").delete().eq("source", "BuiltByBit").in("listing_ref", gone.map(String));
+          const { error: delErr } = await admin.from("reviews").delete().eq("source", "BuiltByBit").is("home_pin", null).in("listing_ref", gone.map(String));
           if (delErr) throw new Error("remove unpublished: " + delErr.message);
         }
         const matcher = await buildMatcher(admin);
-        const saved = await savePlatformReviews(admin, list, { markSeen: firstRun, matcher });
+        const saved = await savePlatformReviews(admin, list, { markSeen: firstRun, matcher, skipUnmatched: true });
         const swept = await sweepUnmatched(admin, matcher);
         patch.reviews_at = new Date().toISOString();
         summary.reviews = { ...saved, swept };

@@ -30,7 +30,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261126s" />
+  <link rel="stylesheet" href="/styles.css?v=20261126t" />
   <!-- ld:start -->
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "@id": "https://coldd.dev/#organization", "name": "coldd Development", "url": "https://coldd.dev/", "logo": {"@type": "ImageObject", "url": "https://coldd.dev/logo.png", "width": 256, "height": 256}, "description": "A studio building game-ready Roblox assets.", "email": "support@coldd.dev", "sameAs": ["https://discord.gg/coldd", "https://x.com/ColddDev", "https://www.youtube.com/@ColddDev", "https://www.tiktok.com/@coldddev"]}</script>
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "@id": "https://coldd.dev/#website", "name": "coldd Development", "url": "https://coldd.dev/", "publisher": {"@id": "https://coldd.dev/#organization"}, "inLanguage": "en"}</script>
@@ -239,7 +239,14 @@
         <div class="sec-head reveal">
           <h2>See what our customers think</h2>
         </div>
-        <div class="reviews" id="homeReviewsGrid"></div>
+        <div class="rv-carousel reveal" id="homeReviewsCarousel" role="region" aria-roledescription="carousel" aria-label="Customer reviews">
+          <div class="rv-viewport"><div class="rv-track" id="homeReviewsGrid"></div></div>
+          <div class="rv-controls">
+            <button class="rv-nav" type="button" data-rv="prev" aria-label="Previous review"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+            <span class="rv-progress" aria-hidden="true"><span></span></span>
+            <button class="rv-nav" type="button" data-rv="next" aria-label="Next review"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </div>
         <div class="reveal reviews-more-wrap">
           <a class="reviews-more has-arrow" href="/reviews">See all reviews</a>
         </div>
@@ -296,7 +303,7 @@
       <div class="wrap">
         <div class="glass resell reveal">
           <div class="resell-body">
-            <h2>Sell our products as your own</h2>
+            <h2>Start your own store</h2>
             <p>Grab a resell licence on any eligible product and you're cleared to sell it in your own store, under your name. You keep what you make on every sale, we keep the products updated. Terms apply.</p>
             <div class="resell-cta">
               <a class="btn btn-primary" href="/shop?cat=resell">Get a licence</a>
@@ -516,7 +523,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261126s" data-then="/app.js?v=20261026-credit"></script>
+  <script src="/catalog.js?v=20261126t" data-then="/app.js?v=20261026-credit"></script>
   <script>
     // Cart badge/total sync from localStorage, ahead of app.js. The fab
     // markup above ships hardcoded at "0"/"$0", and the cart module that

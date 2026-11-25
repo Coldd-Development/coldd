@@ -645,6 +645,8 @@
       // ('Website' = coldd.dev).
       recommended: row.recommended == null ? null : !!row.recommended,
       source: row.source || 'Website',
+      // Pinned to the homepage (1 first), see app.js.
+      homePin: row.home_pin == null ? null : Number(row.home_pin),
       text: row.text,
       date: row.created_at,
       reply: row.reply ? { text: row.reply, date: row.reply_at } : null
@@ -982,7 +984,7 @@
     window.coldSupabase.from('products').select(PRODUCT_PUBLIC_COLS).eq('is_active', true).limit(20000),
     window.coldSupabase
       .from('reviews')
-      .select('id, stars, text, created_at, reply, reply_at, user_name, byline, avatar_url, source, recommended, products(slug)')
+      .select('id, stars, text, created_at, reply, reply_at, user_name, byline, avatar_url, source, recommended, home_pin, products(slug)')
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
       .limit(20000),
