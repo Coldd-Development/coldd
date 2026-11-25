@@ -1650,10 +1650,10 @@
       // size: pinned ones first (reviews.home_pin), then the newest, critical ones last.
       var HOME_REVIEW_MAX_CHARS = 240;
       // A strip of reviews that scrolls on its own, endlessly (the cards are drawn twice and the
-      // strip wraps by one set). It slows to a stop while hovered or focused so a review can be
-      // read, and the mouse or a finger can drag it (with a little momentum) or a trackpad swipe
-      // it sideways. Off screen or in a hidden tab it rests. With reduced motion it does not move
-      // by itself and is a plain sideways-scrolling row.
+      // strip wraps by one set). It keeps moving under the mouse; the mouse or a finger can drag it
+      // (with a little momentum) or a trackpad swipe it sideways, and keyboard focus on a card
+      // slows it to a stop. Off screen or in a hidden tab it rests. With reduced motion it does
+      // not move by itself and is a plain sideways-scrolling row.
       function reviewCarousel(root, track) {
         if (!root || !track || root.__rv) return;
         root.__rv = true;
@@ -1664,7 +1664,7 @@
           track.children[c].setAttribute('aria-hidden', 'true');
           track.children[c].querySelectorAll('a, button').forEach(function (el) { el.setAttribute('tabindex', '-1'); });
         }
-        var SPEED = 34;
+        var SPEED = 58;
         var setW = 0, x = 0, pace = 1, want = 1, fling = 0, seen = true, last = 0;
         var drag = null, moved = false;
         function measure() { setW = track.children[n] ? track.children[n].offsetLeft - track.children[0].offsetLeft : 0; }
@@ -1682,8 +1682,6 @@
           track.style.transform = 'translate3d(' + (-x).toFixed(2) + 'px,0,0)';
           requestAnimationFrame(frame);
         }
-        root.addEventListener('mouseenter', function () { want = 0; });
-        root.addEventListener('mouseleave', function () { if (!drag) want = 1; });
         root.addEventListener('focusin', function () { want = 0; });
         root.addEventListener('focusout', function () { want = 1; });
         track.addEventListener('pointerdown', function (e) {
@@ -1711,7 +1709,6 @@
           if (moved) fling = Math.max(-2400, Math.min(2400, drag.v));
           drag = null;
           root.classList.remove('is-dragging');
-          if (!root.matches(':hover')) want = 1;
         }
         track.addEventListener('pointerup', release);
         track.addEventListener('pointercancel', release);
