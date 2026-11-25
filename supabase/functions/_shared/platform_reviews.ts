@@ -6,8 +6,9 @@
 // listing name, after product_name_aliases, exact first, then one name's words all inside the
 // other with only generic extra words, numbers agreeing. A wrong match is worse than none.
 //
-// A review with no product is stored hidden (hidden_reason 'unmatched'); sweepUnmatched runs
-// every sync and publishes it as soon as a product with that name is on the site. BuiltByBit
+// A review with no product on the site yet is published straight away (shown without a product
+// link) and marked hidden_reason 'unmatched'; sweepUnmatched runs every sync and links it to its
+// product as soon as one with that name is on the site. BuiltByBit
 // passes skipUnmatched instead: a listing that is not on the catalog keeps no reviews here
 // (the sync re-reads every review each run, so one is imported once its product is added).
 // New reviews have admin_reviewed_at null (the admin's "New reviews needing a look" task);
@@ -164,7 +165,7 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
     if (pid) out.matched++; else out.unmatched++;
     inserts.push({
       product_id: pid, user_id: null, stars: r.stars, recommended: r.recommended, text: r.text,
-      status: pid ? "approved" : "hidden", hidden_reason: pid ? null : "unmatched",
+      status: "approved", hidden_reason: pid ? null : "unmatched",
       user_name: r.user_name, avatar_url: r.avatar_url, reply: r.reply, reply_at: r.reply ? (r.reply_at ?? r.created_at) : null,
       created_at: r.created_at, updated_at: now, source: r.source, external_id: r.external_id,
       listing_name: r.listing_name, listing_ref: r.listing_ref, auto_imported: true, external_author: r.external_author ?? null,
@@ -179,7 +180,8 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
   return out;
 }
 
-// Publishes unmatched reviews whose product is now on the site.
+// Links reviews waiting for their product once it is on the site (their shown/hidden state is
+// left as it is, so a review an admin hid stays hidden).
 export async function sweepUnmatched(admin: Obj, matcher?: Matcher) {
   const { data, error } = await admin.from("reviews").select("id, source, listing_name, listing_ref")
     .eq("hidden_reason", "unmatched").limit(2000);
@@ -192,7 +194,7 @@ export async function sweepUnmatched(admin: Obj, matcher?: Matcher) {
       bbb_resource_id: r.source === "BuiltByBit" && /^\d+$/.test(String(r.listing_ref || "")) ? Number(r.listing_ref) : null,
     });
     if (!pid) continue;
-    const { error: e } = await admin.from("reviews").update({ product_id: pid, status: "approved", hidden_reason: null, updated_at: new Date().toISOString() })
+    const { error: e } = await admin.from("reviews").update({ product_id: pid, hidden_reason: null, updated_at: new Date().toISOString() })
       .eq("id", r.id).eq("hidden_reason", "unmatched");
     if (!e) n++;
   }

@@ -9676,8 +9676,9 @@
      ================================================================ */
   // Reviews (2026-11-26): overview, star breakdown, most reviewed, and one list, newest first,
   // with a platform dropdown (Global by default). BuiltByBit and Creator Store reviews come in on
-  // their own (admin-bbb-v2-sync, creator-store-sync); one whose product is not on the site waits
-  // hidden (hiddenReason 'unmatched') and the sync publishes it once that product is added.
+  // their own (admin-bbb-v2-sync, creator-store-sync, the Parcel Discord feed); one whose product is
+  // not on the site yet shows without a product link (hiddenReason 'unmatched') and the sync links
+  // it once that product is added.
   var REVIEW_PLATFORM = 'all';
   var REV_PLATFORM_SIG = '';
   // Reviews that were new when the owner opened the list keep their New badge for this visit.
@@ -9732,7 +9733,7 @@
       kpiCell({ label: 'Average rating', value: avg != null ? avg.toFixed(2) + '<span class="adm-star">★</span>' : '–', delta: '', sub: rated.length ? 'From ' + plural(rated.length, 'star rating') : 'No star ratings yet' }),
       kpiCell({ label: 'Reviews, 30 days', value: num(m30.length), delta: d == null || Math.abs(d) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (d > 0 ? 'up' : 'down') + '">' + homeIcon(d > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(d) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>', sub: avg30 != null ? avg30.toFixed(2) + '★ average this month' : '' }),
       kpiCell({ label: 'New to read', value: num(fresh), delta: '', sub: fresh ? 'Reading the list below marks them read' : 'All caught up' }),
-      kpiCell({ label: 'Hidden', value: num(hidden), delta: '', sub: waiting ? plural(waiting, 'review') + ' waiting for its product on the site' : REVIEWS.length ? sharePct(hidden / REVIEWS.length * 100) + ' of all reviews' : '' })
+      kpiCell({ label: 'Hidden', value: num(hidden), delta: '', sub: REVIEWS.length ? sharePct(hidden / REVIEWS.length * 100) + ' of all reviews' + (waiting ? ', ' + num(waiting) + ' with no product yet' : '') : '' })
     ].join('');
     var st = $('admRevStars');
     if (st) {
@@ -9763,7 +9764,7 @@
       }).join('') + '</div>' : anEmpty('No product reviews yet.');
     }
     var hc = $('admRevHiddenCount');
-    if (hc) { hc.hidden = !hidden; hc.textContent = hidden ? num(hidden) + ' hidden' : ''; hc.title = waiting ? plural(waiting, 'review') + ' waiting for its product on the site' : ''; }
+    if (hc) { hc.hidden = !hidden; hc.textContent = hidden ? num(hidden) + ' hidden' : ''; hc.title = ''; }
   }
   function renderReviews() {
     renderRevOverview();
@@ -9781,7 +9782,7 @@
       var plat = revPlatform(r.source), img = revImg(r.avatar);
       var where = r.productTitle ? esc(r.productTitle) : r.listingName ? esc(untagName(r.listingName)) : 'General review';
       var actions = (r.status !== 'hidden' ? '<button class="btn btn-ghost adm-btn-sm adm-rev-hide" type="button">Hide</button>' :
-          !r.hiddenReason ? '<button class="btn btn-ghost adm-btn-sm adm-rev-show" type="button">Unhide</button>' : '') +
+          '<button class="btn btn-ghost adm-btn-sm adm-rev-show" type="button">Unhide</button>') +
         '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>' +
         (r.productId ? '<a class="btn btn-ghost adm-btn-sm" href="/product/' + encodeURIComponent(r.productId) + '/" target="_blank" rel="noopener">Go to product</a>' : '') +
         '<button class="btn btn-ghost adm-btn-sm adm-rev-delete" type="button">Delete</button>';
@@ -9791,7 +9792,8 @@
           '<span class="adm-rv-who"><b>' + esc(r.user) + '</b><small>' + where + ' · ' + esc(plat) + ' · ' + esc(fmtDate(new Date(r.date))) + '</small></span>' +
           (r.stars ? revStars(r.stars) : revThumb(r)) +
           (!r.adminReviewedAt || REV_NEW_SEEN[r.id] ? '<span class="dt-badge warn">New</span>' : '') +
-          (r.hiddenReason === 'unmatched' ? '<span class="dt-badge err" title="Published automatically once a product with this name is on the site">Hidden: no matching product</span>' : r.status === 'hidden' ? '<span class="dt-badge mute">Hidden</span>' : '') + '</div>' +
+          (r.hiddenReason === 'unmatched' ? '<span class="dt-badge warn" title="Shown without a product link; it links itself once a product with this name is on the site">No product yet</span>' : '') +
+          (r.status === 'hidden' ? '<span class="dt-badge mute">Hidden</span>' : '') + '</div>' +
         (r.text ? '<p class="adm-review-text">' + esc(r.text) + '</p>' : '') +
         // Replies are shown on coldd.dev only; a reply left on the platform is imported once, when
         // the site has none.

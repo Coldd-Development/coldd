@@ -64,7 +64,8 @@
       var initial = String(r.user || '?').trim().charAt(0).toUpperCase() || '?';
       var img = /^(https:\/\/|\/(?!\/))[^\s"'<>]+$/.test(String(r.avatar || '')) ? r.avatar : '';
       var av = img ? '<img class="ra" src="' + e(img) + '" alt="" width="38" height="38" loading="lazy" referrerpolicy="no-referrer" />' : '<span class="ra">' + e(initial) + '</span>';
-      var sub = product ? '<a class="rv-prod" href="/product/' + encodeURIComponent(product.id) + '">' + e(product.title) + '</a>' : r.byline ? e(r.byline) : '';
+      // A review whose product is not on the site yet names the product it was left on, unlinked.
+      var sub = product ? '<a class="rv-prod" href="/product/' + encodeURIComponent(product.id) + '">' + e(product.title) + '</a>' : r.byline ? e(r.byline) : r.listingName ? e(r.listingName) : '';
       return '<article class="glass review reveal">' + window.__reviewRatingHtml(r, star) +
         '<p>' + e(window.__reviewText(r)) + '</p>' +
         '<div class="review-by">' + av + '<span class="rn">' + e(r.user) + (sub ? '<small>' + sub + '</small>' : '') + '</span></div></article>';
