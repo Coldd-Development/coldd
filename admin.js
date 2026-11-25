@@ -5255,30 +5255,51 @@
   }
   function renderProdKpis(all, ready) {
     var grid = $('admProdKpis'); if (!grid) return;
-    var live = all.filter(function (p) { return p.visible; }).length;
-    var cells = [
-      kpiCell({ label: 'Products', value: num(live), count: 'live', delta: '', sub: all.length - live ? num(all.length - live) + ' hidden' : 'Every product is live' })
-    ];
-    if (ready) {
-      var list = anAllItems(), now = Date.now();
-      var cur = anIn(list, new Date(now - 30 * DAY_MS), new Date(now + 60000)), prev = anIn(list, new Date(now - 60 * DAY_MS), new Date(now - 30 * DAY_MS));
-      var d = prev.length ? (cur.length - prev.length) / prev.length * 100 : null;
-      var delta = d == null ? '' : Math.abs(d) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (d > 0 ? 'up' : 'down') + '">' + homeIcon(d > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(d) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>';
-      var ps = productSales(), top = null;
-      all.forEach(function (p) { var s = ps[p.id]; if (s && s.a30 > 0 && (!top || s.a30 > ps[top.id].a30)) top = p; });
-      var never = all.filter(function (p) { return p.visible && !(ps[p.id] && ps[p.id].units); }).length;
-      cells.splice(1, 0, kpiCell({ label: 'Sold in 30 days', value: num(cur.length), delta: delta, sub: 'On every platform' }));
-      // Revenue, 30 days: every platform, Robux at its DevEx value (like Analytics' Top products).
-      var rev = cur.reduce(function (s, x) { return s + anVal(x.aud, x.robux); }, 0), revP = prev.reduce(function (s, x) { return s + anVal(x.aud, x.robux); }, 0);
-      var rd = revP ? (rev - revP) / revP * 100 : null;
-      cells.splice(2, 0, kpiCell({ label: 'Revenue, 30 days', value: fmtA(rev, true), delta: rd == null || Math.abs(rd) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (rd > 0 ? 'up' : 'down') + '">' + homeIcon(rd > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(rd) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>', sub: 'Robux counted at DevEx' }));
-      cells.push(kpiCell({ label: 'Best seller, 30 days', value: top ? '<span class="adm-pr-top" title="' + esc(top.title) + '">' + esc(top.title) + '</span>' : '–', delta: '', sub: top ? fmtA(ps[top.id].a30) + ' from ' + plural(ps[top.id].u30, 'sale') + (never ? ', ' + num(never) + ' live never sold' : '') : '' }));
-    } else {
-      ['Sold in 30 days', 'Revenue, 30 days'].forEach(function (l, i) { cells.splice(1 + i, 0, '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">&nbsp;</span></div>'); });
-      cells.push('<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">Best seller, 30 days</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">&nbsp;</span></div>');
+    grid.classList.add('adm-pr-over');
+    var live = all.filter(function (p) { return p.visible; }), hidden = all.length - live.length;
+    var ps = ready ? productSales() : {};
+    var never = ready ? live.filter(function (p) { return !(ps[p.id] && ps[p.id].units); }).length : 0;
+    var newest = live.slice().sort(function (a, b) { return (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0); }).slice(0, 4);
+    function cover(p, cls) { return '<i class="' + cls + '"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + ' title="' + esc(p.title) + '"></i>'; }
+    function loading(l) { return '<div class="adm-kpi-cell is-loading"><span class="adm-kpi-label">' + l + '</span><span class="adm-kpi-value"><b class="adm-skel"></b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">&nbsp;</span></div>'; }
+    function delta(c, p) {
+      var d = p ? (c - p) / p * 100 : null;
+      return d == null || Math.abs(d) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (d > 0 ? 'up' : 'down') + '">' + homeIcon(d > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(d) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>';
     }
+    var cells = ['<div class="adm-kpi-cell"><span class="adm-kpi-label">Products</span>' +
+      '<span class="adm-kpi-value"><b>' + num(live.length) + '</b><em>live</em></span>' +
+      '<span class="adm-kpi-line"><span class="adm-pr-stack" aria-hidden="true">' + newest.map(function (p) { return cover(p, ''); }).join('') + '</span><span class="adm-pr-stack-lbl">Newest</span></span>' +
+      '<span class="adm-kpi-sub">' + [hidden ? num(hidden) + ' hidden' : 'Every product is live', never ? num(never) + ' live never sold' : ''].filter(Boolean).join(' · ') + '</span></div>'];
+    if (!ready) { grid.innerHTML = cells.concat(['Sold in 30 days', 'Revenue, 30 days', 'Best seller, 30 days'].map(loading)).join(''); return; }
+    // The last 30 days, day by day (today last), for the small charts.
+    var list = anAllItems(), now = Date.now(), day0 = new Date(); day0.setHours(0, 0, 0, 0);
+    var start = day0.getTime() - 29 * DAY_MS, days = [];
+    for (var i = 0; i < 30; i++) days.push({ n: 0, v: 0 });
+    var cur = anIn(list, new Date(now - 30 * DAY_MS), new Date(now + 60000)), prev = anIn(list, new Date(now - 60 * DAY_MS), new Date(now - 30 * DAY_MS));
+    list.forEach(function (x) { var k = Math.floor((x.t - start) / DAY_MS); if (k >= 0 && k < 30) { days[k].n++; days[k].v += anVal(x.aud, x.robux); } });
+    var rev = cur.reduce(function (s, x) { return s + anVal(x.aud, x.robux); }, 0), revP = prev.reduce(function (s, x) { return s + anVal(x.aud, x.robux); }, 0);
+    var maxN = Math.max.apply(null, days.map(function (d) { return d.n; }).concat([1])), maxV = Math.max.apply(null, days.map(function (d) { return d.v; }).concat([1]));
+    var bars = '<svg class="adm-pr-mini" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true">' + days.map(function (d, i) {
+      var h = d.n ? Math.max(2, d.n / maxN * 32) : 1;
+      return '<rect x="' + (i * 10 + 1.5) + '" y="' + (34 - h).toFixed(1) + '" width="7" height="' + h.toFixed(1) + '" rx="1.5"' + (d.n ? '' : ' class="is-zero"') + '></rect>';
+    }).join('') + '</svg>';
+    var pts = days.map(function (d, i) { return [(i / 29 * 300).toFixed(1), (32 - d.v / maxV * 28).toFixed(1)]; });
+    var area = '<svg class="adm-pr-mini is-area" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"><path class="fill" d="M0,34 L' + pts.map(function (p) { return p.join(','); }).join(' L') + ' L300,34 Z"></path>' +
+      '<path class="line" d="M' + pts.map(function (p) { return p.join(','); }).join(' L') + '"></path></svg>';
+    cells.push('<div class="adm-kpi-cell"><span class="adm-kpi-label">Sold in 30 days</span><span class="adm-kpi-value"><b>' + num(cur.length) + '</b><em>sales</em></span>' +
+      '<span class="adm-kpi-line">' + delta(cur.length, prev.length) + '</span>' + bars + '</div>');
+    cells.push('<div class="adm-kpi-cell"><span class="adm-kpi-label">Revenue, 30 days</span><span class="adm-kpi-value"><b>' + fmtA(rev, true) + '</b></span>' +
+      '<span class="adm-kpi-line">' + delta(rev, revP) + '</span>' + area + '</div>');
+    var top = null;
+    all.forEach(function (p) { var s = ps[p.id]; if (s && s.a30 > 0 && (!top || s.a30 > ps[top.id].a30)) top = p; });
+    cells.push(top ? '<div class="adm-kpi-cell adm-pr-best" data-pid="' + esc(top.id) + '" role="button" tabindex="0" aria-label="Edit ' + esc(top.title) + '"><span class="adm-kpi-label">Best seller, 30 days</span>' +
+      '<span class="adm-pr-best-row">' + cover(top, 'adm-pr-best-img') + '<span class="adm-pr-best-txt"><b>' + esc(top.title) + '</b><small>' + fmtA(ps[top.id].a30) + ' from ' + plural(ps[top.id].u30, 'sale') + '</small></span></span></div>'
+      : '<div class="adm-kpi-cell"><span class="adm-kpi-label">Best seller, 30 days</span><span class="adm-kpi-value"><b>–</b></span><span class="adm-kpi-line"></span><span class="adm-kpi-sub">No sales in 30 days</span></div>');
     grid.innerHTML = cells.join('');
   }
+  var prodKpiBox = $('admProdKpis');
+  if (prodKpiBox) prodKpiBox.addEventListener('click', function (e) { var b = e.target.closest('.adm-pr-best[data-pid]'); if (b) openProductEdit(b.getAttribute('data-pid')); });
+  if (prodKpiBox) prodKpiBox.addEventListener('keydown', function (e) { var b = e.target.closest('.adm-pr-best[data-pid]'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProductEdit(b.getAttribute('data-pid')); } });
   function renderProducts() {
     var body = $('admProdBody'); if (!body) return;
     var q = (($('admProdSearch') || {}).value || '').trim().toLowerCase();
@@ -5299,7 +5320,7 @@
       return '<div class="adm-pr-row' + (p.visible ? '' : ' is-hidden') + '" data-id="' + esc(p.id) + '" tabindex="0" role="button" aria-label="Edit ' + esc(p.title) + '">' +
         '<span class="adm-pr-img' + (p.image ? '' : ' is-empty') + '"' + img + '>' + (p.image ? '' : esc(String(p.title || '?').charAt(0).toUpperCase())) + (p.visible ? '' : '<em>Hidden</em>') + '</span>' +
         '<span class="adm-pr-main"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><small>' + esc(p.cat || 'Uncategorised') + '</small></span>' +
-        '<span class="adm-pr-num adm-pr-price">' + (p.priceNum > 0 ? fmtA(usdToAud(p.priceNum)) + '<small>US$' + p.priceNum.toFixed(2) + '</small>' : 'Free') + '</span>' +
+        '<span class="adm-pr-num adm-pr-price">' + (p.priceNum > 0 ? '$' + p.priceNum.toFixed(2) : 'Free') + '</span>' +
         '<span class="adm-pr-num adm-pr-sales">' + (ready ? num(s.units) + ' sold<small>' + (s.aud || !s.robux ? fmtA(s.aud, true) : '') + (s.robux ? (s.aud ? ' | ' : '') + robuxRaw(s.robux) : '') + '</small>' : '<span class="adm-skel adm-skel-amt"></span>') + '</span>' +
         '<span class="adm-pr-act">' +
           '<a class="adm-icon-btn adm-prod-view" href="/product/' + esc(p.id) + '/" target="_blank" rel="noopener" title="View on coldd.dev" aria-label="View on coldd.dev">' + ICON_VIEW + '</a>' +
@@ -6266,7 +6287,7 @@
     return invokeAdminFn('admin-unreleased-files', { action: 'list' }).then(function (d) {
       UNRELEASED_FILES = d.files || [];
       var badge = $('admUnreleasedCount');
-      if (badge) { badge.hidden = !UNRELEASED_FILES.length; badge.textContent = UNRELEASED_FILES.length ? '(' + UNRELEASED_FILES.length + ')' : ''; }
+      if (badge) { badge.hidden = !UNRELEASED_FILES.length; badge.textContent = UNRELEASED_FILES.length ? String(UNRELEASED_FILES.length) : ''; }
       renderAll();
     }).catch(function (err) { console.error('[admin] failed to load unreleased files:', err.message); });
   }
