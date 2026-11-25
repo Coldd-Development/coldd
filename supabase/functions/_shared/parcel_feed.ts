@@ -8,6 +8,8 @@
 // is saved in platform_sales (platform 'parcel', source 'discord', external_id dc:<message>)
 // linked to that ledger sale (ledger_ref), so the admin never counts it twice.
 // A gift names the receiver, so it takes the free ledger sale closest before the message.
+// A card purchase ("Stripe (USD)") has no ledger sale and no price in the message: it links
+// to a sale entered by hand, else takes the product's coldd.dev price.
 // A purchase whose ledger sale has not synced yet waits (status 'new') and is retried
 // every few minutes; after LEDGER_GIVE_UP it is marked failed.
 //
@@ -238,14 +240,39 @@ async function readPurchases(sb: Obj, list: Array<{ m: Msg; f: Record<string, st
       continue;
     }
 
-    // Card / PayPal purchases are not in the group ledger: the price has to be in the message.
-    const priced = money(f["price"] ?? f["amount"] ?? f["total"]);
+    // Card purchases ("Stripe (USD)") are not in the group ledger and Parcel's message has no
+    // price. A sale already entered by hand for that product around then is that purchase (it
+    // gets the buyer); otherwise the price is the message's, else the product's coldd.dev price
+    // (Parcel's card prices match it), else its last Parcel card sale.
+    const raw = { via: "parcel-discord", message_id: m.message_id, method, sale_type: saleType, roblox, discord };
+    const { data: hand } = await sb.from("platform_sales").select("id, raw").eq("platform", "parcel").eq("source", "manual")
+      .ilike("product_name", product).is("buyer_name", null)
+      .gte("sold_at", new Date(posted - 36 * 3600_000).toISOString()).lte("sold_at", new Date(posted + 36 * 3600_000).toISOString()).limit(1);
+    if (hand?.length) {
+      const { error } = await sb.from("platform_sales").update({ buyer_name: base.buyer_name, buyer_ref: base.buyer_ref, raw: { ...(hand[0].raw ?? {}), ...raw }, updated_at: base.updated_at }).eq("id", hand[0].id);
+      if (error) throw new Error("link hand-entered sale: " + error.message);
+      parsed.linked_sale = hand[0].id;
+      results.set(m.message_id, { status: "parsed", parsed, sale_id: hand[0].id });
+      continue;
+    }
+    const cur = /\(([A-Z]{3})\)/.exec(method)?.[1] ?? "USD";
+    let priced = money(f["price"] ?? f["amount"] ?? f["total"]);
+    let priceFrom = "message";
+    if (!priced && base.product_id) {
+      const { data: p } = await sb.from("products").select("price_usd").eq("id", base.product_id).maybeSingle();
+      if (Number(p?.price_usd) > 0 && cur === "USD") { priced = { amount: Number(p!.price_usd), currency: "USD" }; priceFrom = "coldd.dev price"; }
+    }
+    if (!priced) {
+      const { data: last } = await sb.from("platform_sales").select("amount, currency").eq("platform", "parcel").neq("currency", "ROBUX")
+        .ilike("product_name", product).lt("sold_at", m.posted_at).order("sold_at", { ascending: false }).limit(1);
+      if (last?.length) { priced = { amount: Number(last[0].amount), currency: String(last[0].currency) }; priceFrom = "last Parcel card sale"; }
+    }
     if (!priced) { results.set(m.message_id, { status: "failed", parsed, error: "no price for a " + (method || "non-Robux") + " purchase" }); continue; }
-    parsed.price = priced;
+    parsed.price = { ...priced, from: priceFrom };
     rows.push({
       ...base, ledger_ref: null, sold_at: m.posted_at, currency: priced.currency, amount: priced.amount,
       amount_usd: priced.currency === "USD" ? priced.amount : null, net_amount: null, net_usd: null,
-      raw: { via: "parcel-discord", message_id: m.message_id, method, sale_type: saleType, roblox, discord },
+      raw: { ...raw, price_from: priceFrom },
     });
     results.set(m.message_id, { status: "parsed", parsed });
   }
