@@ -120,6 +120,14 @@ export async function savePlatformReviews(admin: Obj, list: PlatformReview[], op
   if (!list.length) return out;
   const seen = new Set<string>();
   list = list.filter((r) => r.external_id && !seen.has(r.external_id) && seen.add(r.external_id));
+  // Reviews an admin deleted for good (review_blocks) are never imported again.
+  const blocked = new Set<string>();
+  for (let i = 0; i < list.length; i += 200) {
+    const { data, error } = await admin.from("review_blocks").select("external_id").in("external_id", list.slice(i, i + 200).map((r) => r.external_id));
+    if (error) throw new Error("read review blocks: " + error.message);
+    for (const r of (data ?? []) as Obj[]) blocked.add(String(r.external_id));
+  }
+  if (blocked.size) list = list.filter((r) => !blocked.has(r.external_id));
   const have = new Map<string, Obj>();
   for (let i = 0; i < list.length; i += 200) {
     const { data, error } = await admin.from("reviews").select("id, external_id, text, stars, recommended, reply, user_name, avatar_url")

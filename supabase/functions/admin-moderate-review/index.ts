@@ -11,7 +11,10 @@
 // panel, which just clears the new-review flag without changing anything
 // else - not a user-facing button of its own.
 //
-// Body: { id, action: 'hide'|'reply'|'seen', reply? }
+// 'delete' wipes a review for good, hidden ones included. An imported review (BuiltByBit,
+// Creator Store, Parcel) also goes into review_blocks so the syncs never bring it back.
+//
+// Body: { id, action: 'hide'|'show'|'reply'|'seen'|'delete', reply? }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyUser } from "../_shared/notify.ts";
@@ -60,7 +63,23 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || "");
     const action = body.action;
-    if (!id || !["hide", "show", "reply", "seen"].includes(action)) return json({ ok: false, error: "Invalid request." }, 400);
+    if (!id || !["hide", "show", "reply", "seen", "delete"].includes(action)) return json({ ok: false, error: "Invalid request." }, 400);
+
+    if (action === "delete") {
+      const { data: row, error: readErr } = await admin.from("reviews").select("id, external_id, source, listing_name, user_name").eq("id", id).maybeSingle();
+      if (readErr) return json({ ok: false, error: "Could not read review." }, 500);
+      if (!row) return json({ ok: true, gone: true });
+      if (row.external_id) {
+        const { error: blockErr } = await admin.from("review_blocks").upsert({
+          external_id: row.external_id, source: row.source, listing_name: row.listing_name, user_name: row.user_name,
+          deleted_by: userData.user.id, deleted_at: new Date().toISOString(),
+        }, { onConflict: "external_id" });
+        if (blockErr) return json({ ok: false, error: "Could not block the review from coming back." }, 500);
+      }
+      const { error: delErr } = await admin.from("reviews").delete().eq("id", id);
+      if (delErr) return json({ ok: false, error: "Could not delete review." }, 500);
+      return json({ ok: true });
+    }
 
     let update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (action === "hide") { update.status = "hidden"; update.admin_reviewed_at = new Date().toISOString(); }

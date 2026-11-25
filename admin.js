@@ -9758,7 +9758,8 @@
       var actions = (r.status !== 'hidden' ? '<button class="btn btn-ghost adm-btn-sm adm-rev-hide" type="button">Hide</button>' :
           !r.hiddenReason ? '<button class="btn btn-ghost adm-btn-sm adm-rev-show" type="button">Unhide</button>' : '') +
         '<button class="btn btn-ghost adm-btn-sm adm-rev-reply-toggle" type="button">' + (r.reply ? 'Edit reply' : 'Reply') + '</button>' +
-        (r.productId ? '<a class="btn btn-ghost adm-btn-sm" href="/product/' + encodeURIComponent(r.productId) + '/" target="_blank" rel="noopener">Go to product</a>' : '');
+        (r.productId ? '<a class="btn btn-ghost adm-btn-sm" href="/product/' + encodeURIComponent(r.productId) + '/" target="_blank" rel="noopener">Go to product</a>' : '') +
+        '<button class="btn btn-ghost adm-btn-sm adm-rev-delete" type="button">Delete</button>';
       return '<div class="adm-review adm-rv' + (r.status === 'hidden' ? ' is-hidden' : '') + '" data-id="' + r.id + '">' +
         '<div class="adm-rv-head">' +
           (img ? '<span class="adm-rv-av has-img" style="background-image:url(\'' + img + '\')" aria-hidden="true"></span>' : '<span class="adm-rv-av" aria-hidden="true">' + esc(String(r.user || '?').charAt(0).toUpperCase()) + '</span>') +
@@ -9801,6 +9802,20 @@
         logAudit('Unhid review by ' + r.user + ' on "' + (r.productTitle || r.listingName || 'the store') + '"');
         return refreshReviews();
       }).catch(function (err) { alert(err.message || 'Could not unhide review.'); });
+    } else if (e.target.classList.contains('adm-rev-delete')) {
+      // Gone for good: an imported review is also blocked so its platform's sync never brings it back.
+      var on = r.productTitle || (r.listingName ? untagName(r.listingName) : 'the store');
+      dialogConfirm('Delete ' + r.user + '\'s review on "' + on + '" for good? It is removed from coldd.dev' +
+        (r.auto ? ' and will not be imported again from ' + revPlatform(r.source) : '') + '. This cannot be undone.',
+        { title: 'Delete review', acceptLabel: 'Delete for good' }).then(function (ok) {
+        if (!ok) return;
+        return callModerateReview(r.dbId, 'delete').then(function () {
+          logAudit('Deleted review by ' + r.user + ' on "' + on + '"');
+          REVIEWS = REVIEWS.filter(function (x) { return x.id !== r.id; });
+          renderReviews();
+          return refreshReviews();
+        });
+      }).catch(function (err) { alert(err.message || 'Could not delete review.'); });
     } else if (e.target.classList.contains('adm-rev-reply-toggle')) {
       var form = card.querySelector('.adm-review-reply-form');
       form.hidden = !form.hidden;

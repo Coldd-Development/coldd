@@ -6378,6 +6378,8 @@ body.adm-oi-open { overflow: hidden; }
 .adm-oi-row .dt-badge { font-size: 11px; padding: 2px 8px; }
 .adm-oi-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hairline); }
 .adm-oi-actions .is-danger { color: #ff6b6b; }
+.adm-row-actions .adm-rev-delete { margin-left: auto; color: #ff6b6b; }
+.adm-row-actions .adm-rev-delete:hover { color: #ff8585; border-color: rgba(255,107,107,.45); }
 html[data-theme="light"] .adm-oi-back { background: rgba(10,12,16,0.35); }
 @media (max-width: 560px) { .adm-oi { padding: 16px; } .adm-oi-row { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 
