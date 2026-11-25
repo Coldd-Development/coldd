@@ -68,9 +68,22 @@ function person(v: string | undefined) {
   const name = lines.find((l) => l !== id) ?? null;
   return { name, id };
 }
+// Same rule as the database's parcel_robux_price(): a developer product named after its price
+// is that price; otherwise the price is worked back from the group's take, and of the prices
+// that leave that take (99 and 100 both give 70) the one ending in 9 wins.
 export function ledgerPrice(row: { item_name?: string | null; amount: number }) {
   const m = /^\s*(\d+)(\s*-\s*\d+)?\s*$/.exec(String(row.item_name ?? ""));
-  return m ? Number(m[1]) : Math.round(Number(row.amount) / 0.7);
+  if (m) return Number(m[1]);
+  const net = Number(row.amount);
+  if (!(net > 0)) return 0;
+  const base = Math.round(net / 0.7);
+  let best = 0;
+  for (let p = Math.max(1, base - 3); p <= base + 3; p++) {
+    if (p - Math.floor(p * 3 / 10) !== net) continue;
+    if (p % 10 === 9) return p;
+    if (!best) best = p;
+  }
+  return best || base;
 }
 function money(text: string | undefined) {
   const m = /([$€£]|usd|aud|eur|gbp)?\s*(\d+(?:[.,]\d{1,2})?)/i.exec(clean(text));

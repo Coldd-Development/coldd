@@ -29,6 +29,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyRobloxCookieBroken } from "../_shared/roblox.ts";
 import { flushSaleAlerts } from "../_shared/sale_alerts.ts";
+import { retryWaiting } from "../_shared/parcel_feed.ts";
 
 const ALLOWED_ORIGIN = "https://coldd.dev";
 const ECON = "https://economy.roblox.com";
@@ -204,6 +205,9 @@ Deno.serve(async (req: Request) => {
       }
       if (deep && !full && finished) patch.reconcile = { ...rc, recent_at: patch.last_sync_at };
       summary.ledger = { mode: full ? "full" : deep ? "recent" : "quick", pages: pagesRead, saved: rowsSaved, skipped, finished };
+      // Parcel orders: a purchase message the Discord bot sent before its sale reached the ledger
+      // is read now, so the order (and its named sale alert) follows within the same minute.
+      try { summary.parcel = await retryWaiting(admin, 200); } catch (e) { errors.push("parcel: " + (e as Error).message); }
     } catch (e) {
       const f = e as ApiFail;
       errors.push("ledger: " + f.message);
