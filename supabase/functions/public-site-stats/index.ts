@@ -42,20 +42,24 @@ Deno.serve(async (req: Request) => {
 
     // Purchases on every platform: coldd.dev paid orders (not test orders or free
     // grants), BuiltByBit, the marketplace sales table (Creator Store, ClearlyDev,
-    // Payhip, Parcel by hand) and Parcel's Robux sales (developer products in the
-    // group ledger). Game passes are left out: those are coldd.dev Robux orders,
-    // already counted with the orders.
+    // Payhip, Parcel orders from the Discord purchase log) and Parcel's Robux sales in the
+    // group ledger that no Parcel order covers (an order linked to its ledger sale by
+    // ledger_ref is counted once, as the order). Game passes are left out: those are
+    // coldd.dev Robux orders, already counted with the orders.
     const head = { count: "exact" as const, head: true };
-    const [productRes, discordRes, siteRes, bbbRes, psRes, parcelRes] = await Promise.all([
+    const [productRes, discordRes, siteRes, bbbRes, psRes, parcelRes, linkedRes] = await Promise.all([
       admin.from("products").select("*", { count: "exact", head: true }).eq("is_active", true),
       fetch(`https://discord.com/api/v10/invites/${INVITE_CODE}?with_counts=true`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       admin.from("orders").select("id", head).eq("status", "paid").eq("is_test", false).neq("source", "granted"),
       admin.from("bbb2_purchases").select("purchase_id", head),
       admin.from("platform_sales").select("id", head).neq("status", "refunded"),
       admin.from("robux_sales").select("id_hash", head).eq("item_type", "DeveloperProduct"),
+      admin.from("platform_sales").select("id", head).not("ledger_ref", "is", null),
     ]);
-    const parts = [siteRes, bbbRes, psRes, parcelRes];
-    const purchaseCount = parts.every((r) => typeof r.count === "number") ? parts.reduce((s, r) => s + (r.count as number), 0) : null;
+    const parts = [siteRes, bbbRes, psRes, parcelRes, linkedRes];
+    const purchaseCount = parts.every((r) => typeof r.count === "number")
+      ? (siteRes.count as number) + (bbbRes.count as number) + (psRes.count as number) + Math.max(0, (parcelRes.count as number) - (linkedRes.count as number))
+      : null;
 
     return json({
       ok: true,
