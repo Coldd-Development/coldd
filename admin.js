@@ -12494,7 +12494,7 @@
       finKpi({ label: 'Net revenue', value: finK(net), sub: gross == null ? 'Loading gross…' : finK(gross) + ' gross', title: 'Gross: all platforms, before fees and payout delays' }),
       finKpi({ label: 'Expenses', value: finK(spent), sub: net > 0 ? finPct(spent / net) + ' of net revenue' : '' }),
       finKpi({ label: 'Profit margin', value: net > 0 ? finPct(profit / net) : '–', sub: finM(profit) + ' profit' }),
-      finKpi({ label: 'Tax reserve', value: finM(res.need), sub: eofy ? finEofyLine(eofy.recent) : 'Should be in the tax account now',
+      finKpi({ label: 'Tax reserve', value: finM(res.need), sub: eofy ? finEofyLine(eofy) : 'Should be in the tax account now',
         title: 'Tax reserve: ' + finM(res.owed) + ' owed this year so far, less ' + finM(res.paid) + ' paid to the ATO.' + (eofy ? '\n' + finEofyTitle(eofy) : '') })
     ].join('');
     finRenderNetChart(per);
