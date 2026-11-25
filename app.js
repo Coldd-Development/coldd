@@ -37,6 +37,14 @@
       var t = String(r.text || '');
       return REVIEW_CRITICAL.test(t) || /жаль|но\s/i.test(t);
     };
+    // What a review with no text says instead: its rating in words ("Five stars").
+    var STAR_WORDS = ['One', 'Two', 'Three', 'Four', 'Five'];
+    window.__reviewText = function (r) {
+      var t = String(r.text || '').trim();
+      if (t) return t;
+      var s = Math.round(Number(r.stars) || 0);
+      return s >= 1 && s <= 5 ? STAR_WORDS[s - 1] + (s === 1 ? ' star' : ' stars') : '';
+    };
     // A review's rating: stars, or a Creator Store review's thumbs up or down (it has no stars).
     window.__reviewRatingHtml = function (r, starSvg) {
       if (r.stars > 0) {
@@ -58,7 +66,7 @@
       var av = img ? '<img class="ra" src="' + e(img) + '" alt="" width="38" height="38" loading="lazy" referrerpolicy="no-referrer" />' : '<span class="ra">' + e(initial) + '</span>';
       var sub = product ? '<a class="rv-prod" href="/product/' + encodeURIComponent(product.id) + '">' + e(product.title) + '</a>' : r.byline ? e(r.byline) : '';
       return '<article class="glass review reveal">' + window.__reviewRatingHtml(r, star) +
-        (r.text ? '<p>' + e(r.text) + '</p>' : '<p></p>') +
+        '<p>' + e(window.__reviewText(r)) + '</p>' +
         '<div class="review-by">' + av + '<span class="rn">' + e(r.user) + (sub ? '<small>' + sub + '</small>' : '') + '</span></div></article>';
     };
 
@@ -3383,7 +3391,7 @@
             return '<div class="pd-rev"><div class="pd-rev-head"><span class="pd-rev-name">' + esc(r.user) + '</span>' +
               (rating ? '<span class="pd-rev-dot">·</span>' + rating : '') +
               '<span class="pd-rev-dot">·</span><span class="pd-rev-meta">' + esc(fmtRevDate(r.date)) + '</span></div>' +
-              (r.text ? '<p class="pd-rev-body">' + esc(r.text) + '</p>' : '') +
+              (window.__reviewText(r) ? '<p class="pd-rev-body">' + esc(window.__reviewText(r)) + '</p>' : '') +
               (plat ? '<p class="pd-rev-src">Originally reviewed on ' + esc(plat) + '</p>' : '') + reply + '</div>';
           }).join('') : '<p class="pd-empty">No reviews yet. Be the first to review this product.</p>';
         }
