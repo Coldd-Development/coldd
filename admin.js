@@ -8373,12 +8373,14 @@
       live.forEach(function (p) { var st = mpStatus(p.dbId, key); if (st === 'live') r.live++; else if (st === 'needs_update') r.upd++; else r.none++; });
       return r;
     }
+    // The platform tiles are the filter: click one to see only its tasks, click it again for all.
     $('admMpStats').innerHTML = MP_TASK_TARGETS.map(function (m) {
       var n = items.filter(function (i) { return i.mk === m.key; }).length;
       var c = m.key === 'site' ? null : cover(m.key);
-      return '<div class="adm-kpi-cell"><span class="adm-kpi-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span>' +
-        '<span class="adm-kpi-value"><b>' + num(n) + '</b><em>' + (n ? 'to do' : '') + '</em></span><span class="adm-kpi-line"></span>' +
-        '<span class="adm-kpi-sub">' + (c ? num(c.live) + ' of ' + num(live.length) + ' live' : (n ? 'Site tasks' : 'All caught up')) + '</span></div>';
+      return '<button type="button" class="adm-kpi-cell adm-mp-stat mk-' + m.key + (MP_FILTER === m.key ? ' is-active' : '') + (MP_FILTER !== 'all' && MP_FILTER !== m.key ? ' is-dim' : '') + '" data-mp="' + m.key + '" aria-pressed="' + (MP_FILTER === m.key) + '">' +
+        '<span class="adm-kpi-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span>' +
+        '<span class="adm-kpi-value"><b>' + num(n) + '</b><em>' + (n ? 'to do' : 'done') + '</em></span><span class="adm-kpi-line"></span>' +
+        '<span class="adm-kpi-sub">' + (c ? num(c.live) + ' of ' + num(live.length) + ' live' : (n ? 'Site tasks' : 'All caught up')) + '</span></button>';
     }).join('');
     var cov = $('admMpCoverage');
     if (cov) cov.innerHTML = live.length ? '<div class="adm-mp-cov">' + MARKETPLACES.map(function (m) {
@@ -8390,9 +8392,8 @@
         '<span class="adm-mp-cov-sub">' + num(c.live) + ' live' + (c.upd ? ' · ' + num(c.upd) + ' to update' : '') + (c.none ? ' · ' + num(c.none) + ' not uploaded' : '') + '</span></div>';
     }).join('') + '</div><div class="adm-mp-cov-key" aria-hidden="true"><span><i class="is-live"></i>Live</span><span><i class="is-upd"></i>Needs update</span><span><i class="is-none"></i>Not uploaded</span></div>' : anEmpty('No live products yet.');
 
-    $('admMpFilter').innerHTML = [{ key: 'all', label: 'All' }].concat(MP_TASK_TARGETS).map(function (m) {
-      return '<button type="button" class="' + (m.key === 'all' ? '' : 'mk-' + m.key) + (MP_FILTER === m.key ? ' active' : '') + '" data-mp="' + m.key + '">' + (m.key === 'all' ? '' : mpLogo(m.key)) + esc(m.label) + '</button>';
-    }).join('');
+    var showing = $('admMpShowing'); if (showing) showing.textContent = MP_FILTER === 'all' ? 'Every marketplace' : mpLabel(MP_FILTER) + ' only';
+    var showAll = $('admMpShowAll'); if (showAll) showAll.hidden = MP_FILTER === 'all';
 
     var shown = items.filter(function (i) { return MP_FILTER === 'all' || i.mk === MP_FILTER; });
     var groups = {}, order = [];
@@ -8401,20 +8402,35 @@
       groups[i.product.dbId].rows.push(i);
     });
     order.sort(function (a, b) { return groups[a].product.title.localeCompare(groups[b].product.title); });
+    // One row per task (the same task on several marketplaces shares a row), a chip per marketplace.
+    var KIND_ORDER = { upload: 0, update: 1, task: 2 };
     $('admMpTasks').innerHTML = order.map(function (id) {
-      var g = groups[id], p = g.product;
+      var g = groups[id], p = g.product, rows = {}, rowOrder = [];
+      g.rows.forEach(function (r) {
+        var k = r.kind + '|' + (r.kind === 'task' ? r.text.trim().toLowerCase() : '');
+        if (!rows[k]) { rows[k] = { kind: r.kind, text: r.kind === 'upload' ? 'Upload' : r.kind === 'update' ? 'Update the listing' : r.text, items: [] }; rowOrder.push(k); }
+        rows[k].items.push(r);
+      });
+      rowOrder.sort(function (a, b) { return KIND_ORDER[rows[a].kind] - KIND_ORDER[rows[b].kind]; });
+      var mks = {}; g.rows.forEach(function (r) { mks[r.mk] = 1; });
       return '<article class="adm-mp-card">' +
-        '<header class="adm-mp-card-head"><span class="adm-mp-thumb" style="background-image:url(\'' + p.image + '\')"></span>' +
-        '<div class="adm-mp-card-title"><strong>' + esc(p.title) + '</strong><span>' + g.rows.length + (g.rows.length === 1 ? ' task' : ' tasks') + '</span></div></header>' +
-        '<ul class="adm-mp-list">' + g.rows.map(function (r) {
-          var attrs = ' data-pid="' + esc(p.dbId) + '" data-mk="' + r.mk + '" data-kind="' + r.kind + '"' + (r.taskId ? ' data-task="' + esc(r.taskId) + '"' : '');
-          var what = r.kind === 'upload' ? 'Upload' : r.kind === 'update' ? 'Update' : esc(r.text);
-          var btn = r.kind === 'upload' ? 'Mark uploaded' : r.kind === 'update' ? 'Mark updated' : 'Done';
-          return '<li class="adm-mp-item"><span class="adm-mp-tag mk-' + r.mk + '">' + mpLogo(r.mk) + esc(mpLabel(r.mk)) + '</span>' +
-            '<span class="adm-mp-what">' + what + '</span>' +
-            '<button type="button" class="adm-mp-done" data-act="done"' + attrs + '>' + btn + '</button>' +
-            (r.kind === 'task' ? '<button type="button" class="adm-mp-del" data-act="delete"' + attrs + ' title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') +
-            '</li>';
+        '<header class="adm-mp-card-head"><span class="adm-mp-thumb"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>' +
+        '<div class="adm-mp-card-title"><strong>' + esc(p.title) + '</strong><span>' + plural(g.rows.length, 'task') + ' on ' + plural(Object.keys(mks).length, 'marketplace') + '</span></div></header>' +
+        '<ul class="adm-mp-list">' + rowOrder.map(function (k) {
+          var row = rows[k];
+          // The same task more than once on a marketplace is one chip with a count.
+          var byMk = {}, mkOrder = [];
+          row.items.forEach(function (r) { if (!byMk[r.mk]) { byMk[r.mk] = []; mkOrder.push(r.mk); } byMk[r.mk].push(r); });
+          var chips = mkOrder.map(function (mk) {
+            var list = byMk[mk], ids = list.map(function (r) { return r.taskId; }).filter(Boolean);
+            return '<button type="button" class="adm-mp-chipbtn mk-' + mk + '" data-act="done" data-pid="' + esc(p.dbId) + '" data-mk="' + mk + '" data-kind="' + row.kind + '"' + (ids.length ? ' data-task="' + esc(ids.join(',')) + '"' : '') +
+              ' title="Mark done on ' + esc(mpLabel(mk)) + '">' + mpLogo(mk) + '<span>' + esc(mpLabel(mk)) + '</span>' + (list.length > 1 ? '<b class="adm-mp-x">×' + list.length + '</b>' : '') + '<svg class="adm-mp-chk" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' + '</button>';
+          }).join('');
+          return '<li class="adm-mp-item adm-mp-row" data-kind="' + row.kind + '" data-pid="' + esc(p.dbId) + '">' +
+            '<span class="adm-mp-what">' + esc(row.text) + '</span>' +
+            '<span class="adm-mp-chips">' + chips + '</span>' +
+            '<span class="adm-mp-rowact">' + (mkOrder.length > 1 ? '<button type="button" class="adm-mp-done" data-act="done-row">All done</button>' : '') +
+            (row.kind === 'task' ? '<button type="button" class="adm-mp-del" data-act="delete-row" title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') + '</span></li>';
         }).join('') + '</ul></article>';
     }).join('') || '<p class="adm-empty adm-mp-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
 
@@ -8452,41 +8468,44 @@
   var mpTasksBox = $('admMpTasks');
   if (mpTasksBox) mpTasksBox.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-act]'); if (!btn || !can('admin')) return;
-    var pid = btn.getAttribute('data-pid'), mk = btn.getAttribute('data-mk'), kind = btn.getAttribute('data-kind'), taskId = btn.getAttribute('data-task');
+    var act = btn.getAttribute('data-act'), row = btn.closest('.adm-mp-row'); if (!row) return;
+    // A chip is that one marketplace; All done and Delete take every chip in the row.
+    var chips = act === 'done' ? [btn] : Array.prototype.slice.call(row.querySelectorAll('.adm-mp-chipbtn'));
+    if (!chips.length) return;
+    var pid = row.getAttribute('data-pid'), kind = row.getAttribute('data-kind');
     var p = allProducts().filter(function (x) { return x.dbId === pid; })[0];
     var title = p ? p.title : 'a product';
-    var isDelete = btn.getAttribute('data-act') === 'delete';
-    var what = kind === 'upload' ? 'upload to ' + mpLabel(mk) : kind === 'update' ? 'update on ' + mpLabel(mk) : (btn.closest('.adm-mp-item').querySelector('.adm-mp-what') || {}).textContent;
-    var question = isDelete
-      ? 'Delete the task "' + what + '" for ' + title + '?'
-      : 'Mark "' + what + '" for ' + title + ' as done? It will be logged under your name.';
-    btn.disabled = true;
+    var what = (row.querySelector('.adm-mp-what') || {}).textContent || 'task';
+    var mks = chips.map(function (c) { return c.getAttribute('data-mk'); });
+    var names = mks.map(mpLabel), where = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+    var isDelete = act === 'delete-row';
+    var question = isDelete ? 'Delete "' + what + '" for ' + title + ' on ' + where + '?'
+      : 'Mark "' + what + '" done on ' + where + ' for ' + title + '? It will be logged under your name.';
+    var lock = [btn].concat(chips); lock.forEach(function (b) { b.disabled = true; });
     dialogConfirm(question, { title: isDelete ? 'Delete task' : 'Complete task', acceptLabel: isDelete ? 'Delete' : 'Mark done' }).then(function (ok) {
-      if (!ok) { btn.disabled = false; return; }
+      if (!ok) { lock.forEach(function (b) { b.disabled = false; }); return; }
+      var ids = [];
+      chips.forEach(function (c) { String(c.getAttribute('data-task') || '').split(',').forEach(function (id) { if (id) ids.push(id); }); });
       var op;
-      if (isDelete) {
-        op = window.coldSupabase.from('marketplace_tasks').delete().eq('id', taskId);
-      } else if (kind === 'task') {
-        op = window.coldSupabase.from('marketplace_tasks').update({ done: true, done_at: new Date().toISOString(), done_by: ADMIN.id, done_by_name: currentRole().name }).eq('id', taskId);
-      } else {
-        op = mpSaveListings(pid, [{ key: mk, status: 'live' }]);
-      }
-      return finishMpAction(op);
+      if (isDelete) op = window.coldSupabase.from('marketplace_tasks').delete().in('id', ids);
+      else if (kind === 'task') op = window.coldSupabase.from('marketplace_tasks').update({ done: true, done_at: new Date().toISOString(), done_by: ADMIN.id, done_by_name: currentRole().name }).in('id', ids);
+      else op = mpSaveListings(pid, mks.map(function (k) { return { key: k, status: 'live' }; }));
+      return Promise.resolve(op).then(function (res) {
+        if (res && res.error) { admToast('Could not update the task', false); lock.forEach(function (b) { b.disabled = false; }); return; }
+        logAudit('Marketplaces: ' + (isDelete ? 'deleted "' + what + '"' : 'marked "' + what + '" done') + ' on ' + where + ' for "' + title + '"');
+        return refreshMarketplaces();
+      });
     });
-    function finishMpAction(op) {
-    return Promise.resolve(op).then(function (res) {
-      if (res && res.error) { admToast('Could not update the task', false); btn.disabled = false; return; }
-      logAudit('Marketplaces: ' + (btn.getAttribute('data-act') === 'delete' ? 'deleted a task' : 'marked "' + (kind === 'upload' ? 'upload' : kind === 'update' ? 'update' : 'task') + '" done') + ' on ' + mpLabel(mk) + ' for "' + title + '"');
-      return refreshMarketplaces();
-    });
-    }
   });
 
-  var mpFilterBox = $('admMpFilter');
-  if (mpFilterBox) mpFilterBox.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-mp]'); if (!b) return;
-    MP_FILTER = b.getAttribute('data-mp'); renderMarketplaces();
+  var mpStatsBox = $('admMpStats');
+  if (mpStatsBox) mpStatsBox.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-mp]'); if (!b) return;
+    var k = b.getAttribute('data-mp');
+    MP_FILTER = MP_FILTER === k ? 'all' : k; renderMarketplaces();
   });
+  var mpShowAll = $('admMpShowAll');
+  if (mpShowAll) mpShowAll.addEventListener('click', function () { MP_FILTER = 'all'; renderMarketplaces(); });
 
   var mpMatrixBox = $('admMpMatrix');
   if (mpMatrixBox) mpMatrixBox.addEventListener('click', function (e) {

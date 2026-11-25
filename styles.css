@@ -6294,8 +6294,39 @@ html[data-theme="light"] .adm-rv-av { background: rgba(0,0,0,0.05); }
 .adm-mps .adm-mp-statlabel .adm-mp-logo { width: 16px; height: 16px; border-radius: 4px; }
 .adm-mps-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .adm-mps-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.adm-mps .adm-mp-card { background: none; border: 0; box-shadow: none; padding: 12px 0; border-top: 1px solid var(--hairline); border-radius: 0; }
+.adm-mps .adm-mp-card { background: none; border: 0; box-shadow: none; padding: 14px 0; border-top: 1px solid var(--hairline); border-radius: 0; gap: 4px; }
 .adm-mps .adm-mp-card:first-child { border-top: 0; padding-top: 0; }
+/* Platform tiles double as the filter. */
+.adm-mp-stat { font: inherit; color: inherit; text-align: left; background: none; border: 0; cursor: pointer; position: relative; transition: background .18s, opacity .18s; }
+.adm-mp-stat::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 2px; border-radius: 2px; background: var(--mk, var(--accent)); transform: scaleX(0); transition: transform .2s var(--ease, ease); }
+.adm-mp-stat.mk-site { --mk: var(--fg-2); }
+.adm-mp-stat.is-active::after { transform: none; }
+.adm-mp-stat.is-active { background: color-mix(in srgb, var(--mk, #888) 7%, transparent); }
+.adm-mp-stat.is-dim { opacity: .55; }
+@media (hover: hover) and (pointer: fine) { .adm-mp-stat:hover { background: rgba(255,255,255,0.03); opacity: 1; } }
+.adm-mp-stat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.adm-mp-stat .adm-kpi-value em { font-style: normal; }
+/* A product: a wide cover, then one row per task with a chip for each marketplace. */
+.adm-mps .adm-mp-card-head { padding-bottom: 8px; }
+.adm-mps .adm-mp-thumb { width: 96px; height: 54px; border-radius: 8px; }
+.adm-mp-row { display: grid; grid-template-columns: minmax(120px, 0.9fr) minmax(0, 2fr) auto; align-items: center; gap: 10px 14px; padding: 10px 0; }
+.adm-mp-row .adm-mp-what { font-size: 13.5px; }
+.adm-mp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-mp-chipbtn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12px; font-weight: 700; padding: 4px 10px 4px 5px; border-radius: 999px; cursor: pointer;
+  color: var(--mk, var(--fg-2)); background: color-mix(in srgb, var(--mk, #888) 12%, transparent); border: 1px solid color-mix(in srgb, var(--mk, #888) 34%, transparent);
+  transition: background .15s, border-color .15s, color .15s; }
+.adm-mp-chipbtn.mk-site { --mk: var(--fg-2); }
+.adm-mp-chipbtn .adm-mp-logo { width: 18px; height: 18px; border-radius: 4px; }
+.adm-mp-chipbtn .adm-mp-chk { opacity: 0; width: 0; margin-left: -4px; transition: opacity .15s, width .15s, margin .15s; }
+@media (hover: hover) and (pointer: fine) {
+  .adm-mp-chipbtn:hover { background: color-mix(in srgb, var(--mk, #888) 22%, transparent); border-color: var(--mk, var(--accent)); }
+  .adm-mp-chipbtn:hover .adm-mp-chk { opacity: 1; width: 13px; margin-left: 0; }
+}
+.adm-mp-chipbtn:disabled { opacity: .5; cursor: default; }
+.adm-mp-chipbtn .adm-mp-x { font-size: 11px; font-weight: 800; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--mk, #888) 22%, transparent); }
+.adm-mp-rowact { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.adm-mp-rowact .adm-mp-done { padding: 6px 12px; }
+@media (max-width: 680px) { .adm-mp-row { grid-template-columns: minmax(0, 1fr) auto; } .adm-mp-chips { grid-column: 1 / -1; order: 3; } }
 .adm-mp-cov { display: flex; flex-direction: column; }
 .adm-mp-cov-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 10px 0; border-top: 1px solid var(--hairline); }
 .adm-mp-cov-row:first-child { border-top: 0; padding-top: 0; }
