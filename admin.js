@@ -3200,9 +3200,10 @@
      abandoned carts, and email open / click rates. */
   function renderCampaignFigs() {
     var box = $('admCampaignFigs'); if (!box) return;
-    if (!CAMPAIGNS.length) { box.innerHTML = ''; box.hidden = true; return; }
-    box.hidden = false;
     var t = CAMPAIGNS.reduce(function (a, c) { a.clicks += c.clicks || 0; a.conv += c.conversions || 0; a.rev += c.revenue || 0; if (c.active) a.live++; return a; }, { clicks: 0, conv: 0, rev: 0, live: 0 });
+    // Totals only once a link has been clicked; all zeros say nothing.
+    if (!CAMPAIGNS.length || !t.clicks) { box.innerHTML = ''; box.hidden = true; return; }
+    box.hidden = false;
     var best = CAMPAIGNS.slice().sort(function (a, b) { return (b.revenue || 0) - (a.revenue || 0) || (b.conversions || 0) - (a.conversions || 0); })[0];
     box.innerHTML = [
       anFig('Clicks', num(t.clicks), '', '', plural(t.live, 'active link')),
@@ -3310,19 +3311,28 @@
 
     if ($('admMktStats')) {
       var ta = totalAudience();
-      var robuxOwed = REFERRALS.reduce(function (s, r) { return s + Math.max(0, (r.earnedRobux || 0) - (r.paidRobux || 0)); }, 0);
-      var rates = ta.channels.filter(function (c) { return c.engRate != null; });
-      var eng = rates.length ? Math.round(rates.reduce(function (s, c) { return s + c.engRate; }, 0) / rates.length * 100) / 100 : null;
       var dc = ta.channels.filter(function (c) { return c.key === 'discord'; })[0];
+      // Social followers: X, YouTube and TikTok together, with each one under it.
+      var soc = ta.channels.filter(function (c) { return c.key !== 'discord'; });
+      var socTotal = 0, socPrev = 0, socHasPrev = soc.length > 0;
+      soc.forEach(function (c) { socTotal += c.count || 0; var d = histDelta(c.history, function (r) { return r.followers; }); if (d) socPrev += d.base; else socHasPrev = false; });
+      function short(n) { n = Number(n) || 0; return n >= 10000 ? (Math.round(n / 100) / 10) + 'k' : num(n); }
+      // Where buyers found us (survey) and searches that found nothing, over the range.
+      var heard = howHeard(), heardTot = anSum(heard.map(function (r) { return r.count; }));
+      var start = RANGE_DAYS ? rangeStart() : new Date(0), sTot = 0, sEmpty = 0;
+      CLIENT_EVENT_ROWS.forEach(function (e) { if (e.type !== 'search' || !e.meta || !e.meta.q || new Date(e.d) < start) return; sTot++; if (e.meta.results === 0) sEmpty++; });
+      var missing = topSearches(10).filter(function (x) { return x.noResults && x.noResults === x.count; })[0];
       $('admMktStats').innerHTML = [
-        kpiCell({ label: 'Audience', value: ta.channels.length ? num(ta.total) : '–', count: ta.channels.length ? plural(ta.channels.length, 'channel') : '',
-          delta: mktDelta(ta.delta), sub: eng != null ? eng + '% average engagement' : 'Every connected channel' }),
         kpiCell({ label: 'Discord members', value: DISCORD_STATS.memberCount != null ? num(DISCORD_STATS.memberCount) : '–',
           delta: mktDelta(dc ? histDelta(dc.history, function (r) { return r.followers; }) : null),
-          sub: DISCORD_STATS.onlineCount != null ? num(DISCORD_STATS.onlineCount) + ' online now' : '' }),
-        kpiCell({ label: 'Email subscribers', value: num(EMAIL_STATS.optedIn), delta: '', sub: num(EMAIL_STATS.allAccounts) + ' accounts in total' }),
-        kpiCell({ label: 'Referral sales', value: num(sales), delta: '',
-          sub: owed > 0.004 || robuxOwed ? fmtA(usdToAud(owed)) + (robuxOwed ? ' | ' + robuxRaw(robuxOwed) : '') + ' owed to affiliates' : 'Nothing owed to affiliates' })
+          sub: DISCORD_STATS.onlineCount != null ? num(DISCORD_STATS.onlineCount) + ' online now' : 'Not connected' }),
+        kpiCell({ label: 'Social followers', value: soc.length ? num(socTotal) : '–',
+          delta: socHasPrev ? mktDelta({ abs: socTotal - socPrev, pct: socPrev ? (socTotal - socPrev) / socPrev * 100 : null }) : '',
+          sub: soc.length ? soc.map(function (c) { return c.name + ' ' + short(c.count); }).join(' · ') : 'No channel connected' }),
+        kpiCell({ label: 'Buyers found us through', value: heardTot ? esc(heard[0].label) : '–', delta: '',
+          sub: heardTot ? sharePct(heard[0].count / heardTot * 100) + ' of ' + plural(heardTot, 'answer') : 'No survey answers in this range' }),
+        kpiCell({ label: 'Searches that found nothing', value: sTot ? sharePct(sEmpty / sTot * 100) : '–', delta: '',
+          sub: sTot ? (missing ? 'Most wanted: "' + esc(missing.q) + '"' : num(sEmpty) + ' of ' + num(sTot) + ' searches') : 'No searches in this range' })
       ].join('');
     }
 
@@ -3343,12 +3353,12 @@
         // render, not all four every time regardless.
         var adNow = { today: s ? s.today : 0, last7d: s ? s.last_7d : 0, last30d: s ? s.last_30d : 0, allTime: s ? s.all_time : 0 };
         var adPrev = ADBLOX_STAT_PREV;
-        $('admAdbloxStats').innerHTML = [
+        $('admAdbloxStats').innerHTML = adNow.allTime ? [
           anFig('Sent today', num(adNow.today), '', '', s ? num(s.yesterday) + ' yesterday' : ''),
           anFig('Last 7 days', num(adNow.last7d), '', '', ''),
           anFig('Last 30 days', num(adNow.last30d), '', '', ''),
           anFig('All time', num(adNow.allTime), '', '', '')
-        ].join('');
+        ].join('') : '<p class="adm-mkt-line">No ads sent yet.</p>';
         ADBLOX_STAT_PREV = adNow;
       } else {
         $('admAdbloxStats').innerHTML = '';
@@ -3357,6 +3367,9 @@
     }
 
     if ($('admAdbloxServersBody')) {
+      var srvWrap = $('admAdbloxServersBody').closest('.adm-po-wrap'), srvHead = srvWrap && srvWrap.previousElementSibling;
+      if (srvWrap) srvWrap.hidden = !ADBLOX_SERVERS.length;
+      if (srvHead && srvHead.classList.contains('adm-mkt-h3')) srvHead.hidden = !ADBLOX_SERVERS.length;
       var serversSorted = ADBLOX_SERVERS.slice().sort(function (a, b) { return (b.sent || 0) - (a.sent || 0); });
       $('admAdbloxServersBody').innerHTML = serversSorted.map(function (sv) {
         return '<tr><td>' +
@@ -3604,7 +3617,11 @@
     if ($('admEmailStats')) {
       var att = emailAttributedRevenue();
       var er = emailRates();
-      $('admEmailStats').innerHTML = [
+      var sentAny = EMAIL_CAMPAIGNS.some(function (c) { return c.status === 'sent' || c.status === 'sending' || (c.sent_count || 0) > 0; });
+      if ($('admEmailSentHead')) $('admEmailSentHead').hidden = !EMAIL_CAMPAIGNS.length;
+      if ($('admEmailSentWrap')) $('admEmailSentWrap').hidden = !EMAIL_CAMPAIGNS.length;
+      if (!sentAny) $('admEmailStats').innerHTML = '<p class="adm-mkt-line">No campaigns sent yet. ' + plural(EMAIL_STATS.optedIn, 'subscriber') + ' opted in, out of ' + plural(EMAIL_STATS.allAccounts, 'account') + '.</p>';
+      else $('admEmailStats').innerHTML = [
         anFig('Subscribers', num(EMAIL_STATS.optedIn), '', '', num(EMAIL_STATS.unsubscribed) + ' unsubscribed, ' + num(EMAIL_STATS.allAccounts) + ' accounts in all'),
         anFig('Opened', er ? sharePct(er.open) : '–', '', '', er ? 'Across ' + plural(er.n, 'campaign') : 'No tracked sends yet'),
         anFig('Clicked', er ? sharePct(er.click) : '–', '', '', er ? 'Of delivered emails' : ''),

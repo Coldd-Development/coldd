@@ -14,7 +14,7 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=20261126n" />
+  <link rel="stylesheet" href="/styles.css?v=20261126o" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -383,6 +383,7 @@
               <div class="adm-kpi-grid" id="admMktStats"></div>
             </div>
 
+            <div class="adm-mkt-sec"><h2>Growth</h2><span>Your audience and how buyers find coldd</span></div>
             <div class="adm-mkt-grid">
               <div class="adm-hp">
                 <div class="adm-hp-head"><div class="adm-hp-title"><h2>Audience</h2><span>Open a channel for its charts</span></div></div>
@@ -394,6 +395,21 @@
               </div>
             </div>
 
+            <div class="adm-mkt-sec"><h2>Demand</h2><span>What people look for and leave behind</span></div>
+            <div class="adm-mkt-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>What people search for</h2><span>On coldd.dev</span></div></div>
+                <div id="admMktSearches"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Abandoned carts</h2><span>Carts not bought yet</span></div></div>
+                <div class="adm-an-figs is-3" id="admCartFigs"></div>
+                <div class="adm-cart-list" id="admAbandonedBody"></div>
+                <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admAbandonedMore" hidden>Show all carts</button>
+              </div>
+            </div>
+
+            <div class="adm-mkt-sec"><h2>Promotion</h2><span>Links, referrals and ads</span></div>
             <div class="adm-hp">
               <div class="adm-hp-head"><div class="adm-hp-title"><h2>Campaign links</h2><span>Trackable links for partners and promotions</span></div>
                 <button type="button" class="btn btn-ghost adm-btn-sm" id="admCampaignNewToggle" aria-expanded="false" aria-controls="admCampaignNew">+ New link</button></div>
@@ -424,17 +440,34 @@
                 </table></div>
               </div>
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>What people search for</h2><span>On coldd.dev</span></div></div>
-                <div id="admMktSearches"></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Ads</h2><span>AdBlox on Discord</span></div><div style="display:flex;gap:8px;"><button class="btn btn-ghost adm-btn-sm" id="admAdbloxRefresh" type="button"><span class="btn-label">Refresh</span><span class="btn-spinner" hidden></span></button><a class="btn btn-ghost adm-btn-sm" href="https://adblox.xyz/dashboard/ads" target="_blank" rel="noopener">Edit ads</a></div></div>
+                <div class="adm-an-figs" id="admAdbloxStats"></div>
+                <div class="adm-edit-msg" id="admAdbloxMsg"></div>
+                <h3 class="adm-mkt-h3">Top servers <span>Last 30 days</span></h3>
+                <div class="adm-po-wrap"><table class="adm-an-table">
+                  <thead><tr><th>Server</th><th class="is-num">Sent</th><th class="is-num">Failed</th><th>Last sent</th></tr></thead>
+                  <tbody id="admAdbloxServersBody"></tbody>
+                </table></div>
+                <details class="adm-mkt-more">
+                  <summary>Recent sends<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+                  <div class="adm-mkt-more-body">
+                    <div class="adm-po-wrap"><table class="adm-an-table">
+                      <thead><tr><th>Time</th><th>Ad</th><th>Server</th><th>Channel</th><th>Status</th></tr></thead>
+                      <tbody id="admAdbloxLogsBody"></tbody>
+                    </table></div>
+                    <button class="btn btn-ghost adm-btn-sm" id="admAdbloxLoadMore" type="button" hidden style="margin-top:12px;">Load more</button>
+                  </div>
+                </details>
               </div>
             </div>
 
+            <div class="adm-mkt-sec"><h2>Messages</h2><span>Email and in-app notifications</span></div>
             <div class="adm-hp">
               <div class="adm-hp-head"><div class="adm-hp-title"><h2>Email</h2><span>From noreply@coldd.dev</span></div></div>
               <div id="admEmailConfigWarning"></div>
               <div class="adm-an-figs is-4" id="admEmailStats"></div>
-              <h3 class="adm-mkt-h3">Sent campaigns</h3>
-              <div class="adm-po-wrap"><table class="adm-an-table">
+              <h3 class="adm-mkt-h3" id="admEmailSentHead">Sent campaigns</h3>
+              <div class="adm-po-wrap" id="admEmailSentWrap"><table class="adm-an-table">
                 <thead><tr><th>Date</th><th>Subject</th><th>Status</th><th class="is-num">Sent</th><th class="is-num">Failed</th><th class="is-num">Opened</th><th class="is-num">Clicked</th></tr></thead>
                 <tbody id="admEmailCampaignsBody"></tbody>
               </table></div>
@@ -509,35 +542,6 @@
 
             <div class="adm-mkt-grid">
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Abandoned carts</h2><span>Carts not bought yet</span></div></div>
-                <div class="adm-an-figs is-3" id="admCartFigs"></div>
-                <div class="adm-cart-list" id="admAbandonedBody"></div>
-                <button type="button" class="btn btn-ghost adm-btn-sm adm-more-btn" id="admAbandonedMore" hidden>Show all carts</button>
-              </div>
-              <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Ads</h2><span>AdBlox on Discord</span></div><div style="display:flex;gap:8px;"><button class="btn btn-ghost adm-btn-sm" id="admAdbloxRefresh" type="button"><span class="btn-label">Refresh</span><span class="btn-spinner" hidden></span></button><a class="btn btn-ghost adm-btn-sm" href="https://adblox.xyz/dashboard/ads" target="_blank" rel="noopener">Edit ads</a></div></div>
-                <div class="adm-an-figs" id="admAdbloxStats"></div>
-                <div class="adm-edit-msg" id="admAdbloxMsg"></div>
-                <h3 class="adm-mkt-h3">Top servers <span>Last 30 days</span></h3>
-                <div class="adm-po-wrap"><table class="adm-an-table">
-                  <thead><tr><th>Server</th><th class="is-num">Sent</th><th class="is-num">Failed</th><th>Last sent</th></tr></thead>
-                  <tbody id="admAdbloxServersBody"></tbody>
-                </table></div>
-                <details class="adm-mkt-more">
-                  <summary>Recent sends<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-                  <div class="adm-mkt-more-body">
-                    <div class="adm-po-wrap"><table class="adm-an-table">
-                      <thead><tr><th>Time</th><th>Ad</th><th>Server</th><th>Channel</th><th>Status</th></tr></thead>
-                      <tbody id="admAdbloxLogsBody"></tbody>
-                    </table></div>
-                    <button class="btn btn-ghost adm-btn-sm" id="admAdbloxLoadMore" type="button" hidden style="margin-top:12px;">Load more</button>
-                  </div>
-                </details>
-              </div>
-            </div>
-
-            <div class="adm-mkt-grid">
-              <div class="adm-hp">
                 <div class="adm-hp-head"><div class="adm-hp-title"><h2>Broadcast notification</h2><span>An in-app bell notification, not an email</span></div></div>
                 <form class="adm-form" id="admBroadcastForm" style="flex-direction:column;align-items:stretch;gap:10px;">
                 <div style="display:flex;gap:14px;flex-wrap:wrap;">
@@ -572,6 +576,7 @@
                 <div id="admAutomationsBody"></div>
               </div>
             </div>
+
           </section>
 
           <div class="pay-overlay" id="admBroadcastConfirmOverlay" hidden>
@@ -1926,6 +1931,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=20261126n" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126n"></script>
+  <script src="/catalog.js?v=20261126o" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=20261126o"></script>
 </body>
 </html>

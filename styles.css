@@ -6754,3 +6754,13 @@ html[data-theme="light"] .adm-fin-ep-card { background: #fff; }
   .adm-fin-ep-card { grid-template-columns: minmax(0, 1fr); grid-template-rows: 42vh minmax(0, 1fr); height: 100%; border-radius: 0; }
   .adm-fin-ep-media { border-right: 0; border-bottom: 1px solid var(--hairline); }
 }
+
+/* Admin Marketing (2026-11-25): labelled sections, and one line in place of all-zero stats. */
+.adm-mkt-sec { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 10px 2px -4px; }
+.adm-mkt-sec h2 { font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); margin: 0; }
+.adm-mkt-sec span { font-size: 12.5px; color: var(--fg-3); }
+.adm-mkt-line { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--r-ctl); font-size: 13px; color: var(--fg-2); background: rgba(255,255,255,0.03); border: 1px solid var(--hairline); }
+html[data-theme="light"] .adm-mkt-line { background: rgba(0,0,0,0.025); }
+.adm-an-figs:has(> .adm-mkt-line) { display: block; margin: 0 0 14px; border-bottom: 0; }
+.adm-an-figs > .adm-mkt-line { margin: 0; }
+#admEmailSentHead[hidden], #admEmailSentWrap[hidden], .adm-mkt .adm-po-wrap[hidden], .adm-mkt .adm-mkt-h3[hidden] { display: none; }
