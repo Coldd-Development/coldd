@@ -5637,8 +5637,6 @@ html[data-theme="light"] .adm-range-dock .adm-range { background: color-mix(in s
 @media (max-width: 720px) { .adm-range-dock { top: auto; bottom: 16px; right: 50%; transform: translateX(50%); animation: none; } }
 @media (prefers-reduced-motion: reduce) { .adm-range-dock { animation: none; } }
 .adm-pc-tip .adm-pc-tip-total { margin-top: 4px; padding-top: 5px; border-top: 1px solid var(--hairline); color: var(--fg-1); font-weight: 600; }
-.adm-cs-pay { min-width: 420px; }
-.adm-cs-pay tr.is-paid th, .adm-cs-pay tr.is-paid td { color: var(--fg-3); }
 .adm-plat-tablewrap { margin: 8px -20px 0; padding: 0 20px; overflow-x: auto; border-top: 1px solid var(--hairline); }
 .adm-plat-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13px; }
 .adm-plat-table thead th { padding: 12px 8px 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); text-align: right; white-space: nowrap; }
@@ -5997,19 +5995,6 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
 .adm-bar-val small { display: inline-flex; align-items: center; gap: 6px; }
 .adm-bar-val .adm-chg { font-size: 12px; }
 
-/* When people buy */
-.adm-heat { position: relative; display: flex; flex-direction: column; gap: 3px; }
-.adm-heat-row, .adm-heat-axis { display: grid; grid-template-columns: 34px repeat(24, minmax(0, 1fr)); gap: 3px; align-items: center; }
-.adm-heat-row > span, .adm-heat-axis span { font-size: 11px; color: var(--fg-3); white-space: nowrap; }
-.adm-heat-row i { display: block; aspect-ratio: 1; min-height: 8px; max-height: 22px; border-radius: 3px; background: rgba(255,255,255,0.04); }
-.adm-heat-row i[style*="--a:0."], .adm-heat-row i[style*="--a:1"] { background: color-mix(in srgb, var(--info) calc(var(--a) * 100%), rgba(255,255,255,0.04)); }
-.adm-heat-axis { margin-top: 2px; }
-.adm-heat-axis span { overflow: visible; }
-.adm-heat .adm-pc-tip { min-width: 0; white-space: nowrap; }
-.adm-heat-key { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: 11px; color: var(--fg-3); }
-.adm-heat-key i { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--info) calc(var(--a) * 100%), rgba(255,255,255,0.04)); }
-.adm-heat-key span:first-child { margin-right: 2px; } .adm-heat-key span:last-child { margin-left: 2px; }
-
 /* Customers */
 .adm-cust-list { display: flex; flex-direction: column; }
 .adm-cust-row { display: grid; grid-template-columns: 18px 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--hairline); }
@@ -6021,14 +6006,9 @@ html[data-theme="light"] .adm-nav a.active svg { color: var(--fg); }
 
 html[data-theme="light"] .adm-mix-bar, html[data-theme="light"] .adm-bar-track { background: rgba(0,0,0,0.06); }
 html[data-theme="light"] .vc-hover { fill: rgba(0,0,0,0.05); }
-html[data-theme="light"] .adm-heat-row i { background: rgba(0,0,0,0.05); }
-html[data-theme="light"] .adm-heat-row i[style*="--a:0."], html[data-theme="light"] .adm-heat-row i[style*="--a:1"],
-html[data-theme="light"] .adm-heat-key i { background: color-mix(in srgb, var(--info) calc(var(--a) * 100%), rgba(0,0,0,0.05)); }
 @media (max-width: 720px) {
   .adm-an-figs.is-3, .adm-an-facts { grid-template-columns: minmax(0, 1fr); }
   .adm-an-figs.is-3 .adm-an-fig + .adm-an-fig, .adm-an-facts .adm-an-fig + .adm-an-fig { border-left: 0; border-top: 1px solid var(--hairline); padding-top: 12px; }
-  .adm-heat-row, .adm-heat-axis { grid-template-columns: 30px repeat(24, minmax(0, 1fr)); gap: 2px; }
-  .adm-heat-row i { border-radius: 2px; }
 }
 @media (max-width: 480px) {
   .adm-an-figs { grid-template-columns: minmax(0, 1fr); }
@@ -6129,6 +6109,12 @@ html[data-theme="light"] .adm-donut-empty { stroke: rgba(0,0,0,0.06) !important;
 @media (hover: hover) and (pointer: fine) { .adm-catr-row.is-btn:hover .adm-catr-chev, .adm-catr-row.is-btn:hover .adm-catr-name b { color: var(--fg); } }
 .adm-dot.is-unc { background: repeating-linear-gradient(135deg, var(--cat-unc-line) 0 2px, transparent 2px 4px) !important; box-shadow: inset 0 0 0 1px var(--cat-unc-line); }
 .adm-catr-unc .adm-cat-sub { padding-left: 36px; }
+.adm-catr-grp { border-top: 1px solid var(--hairline); }
+.adm-catr-grp > .adm-catr-row { border-top: 0; }
+.adm-catr-row.is-cat, .adm-catr.no-chg .adm-catr-row.is-cat { grid-template-columns: 22px minmax(0, 1fr) auto 16px; }
+@media (max-width: 560px) { .adm-catr-row.is-cat, .adm-catr.no-chg .adm-catr-row.is-cat { grid-template-columns: 18px minmax(0, 1fr) auto 16px; } }
+.adm-catr-grp.is-open .adm-catr-chev { transform: rotate(180deg); }
+.adm-catr-grp .adm-cat-sub { padding-left: 36px; }
 html[data-theme="light"] .adm-catr-name em { background: rgba(0,0,0,0.05); }
 @media (max-width: 560px) { .adm-catr-row { grid-template-columns: 18px minmax(0, 1fr) auto; } .adm-catr-chg:not(.adm-catr-chev) { display: none; } }
 .adm-cat-sub { display: flex; flex-direction: column; gap: 1px; padding: 0 0 12px 19px; }
@@ -6662,15 +6648,6 @@ body.adm-fin-viewing { overflow: hidden; }
 .adm-fin-explist tbody tr.is-editing > * { background: rgba(255,77,68,0.07); }
 .adm-fin-charge { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.35; color: var(--fg-3); letter-spacing: 0.01em; overflow-wrap: anywhere; }
 
-/* Analytics: External fees, Discounts & Promotions split (BuiltByBit / coldd.dev) on hover */
-.adm-xf-hassplit { position: relative; cursor: default; }
-.adm-xf-split { position: absolute; left: 0; top: calc(100% - 2px); z-index: 5; display: none; flex-direction: column; gap: 4px; min-width: 200px; padding: 9px 12px;
-  font-size: 12px; font-weight: 500; color: var(--fg); background: var(--surface-2, #1b1e24); border: 1px solid var(--hairline-strong); border-radius: var(--r-ctl); box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
-.adm-xf-split > span { display: flex; justify-content: space-between; gap: 16px; }
-.adm-xf-split b { font-weight: 700; }
-.adm-xf-hassplit:hover .adm-xf-split, .adm-xf-hassplit:focus-visible .adm-xf-split { display: flex; }
-.adm-pc-tip .adm-xf-sub { padding-left: 18px; font-size: 11.5px; color: var(--fg-3); }
-
 /* Finances: month picker beside the periods; the whole bar pins like the Analytics range */
 .adm-fin-monthdd[hidden] { display: none; }
 .adm-fin-monthdd .adm-dd-btn { min-width: 150px; padding: 7px 13px; border-radius: var(--r-pill); font-size: 12px; background: var(--ink-25); color: var(--fg-2); }
@@ -6712,8 +6689,8 @@ html[data-theme="light"] .adm-range-dock .adm-fin-tools { background: color-mix(
 @media (max-width: 560px) { .adm-catr-name { flex-wrap: wrap; row-gap: 4px; } }
 
 /* Analytics: External fees share of net revenue (top right) */
-.adm-xf-ofnet { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; cursor: default; }
-.adm-xf-ofnet b { font-size: 20px; font-weight: 800; color: var(--fg); font-variant-numeric: tabular-nums; }
+.adm-xf-ofnet { display: flex; align-items: baseline; gap: 6px; cursor: default; }
+.adm-xf-ofnet b { font-size: 15px; font-weight: 800; color: var(--fg); font-variant-numeric: tabular-nums; }
 .adm-xf-ofnet span { font-size: 12px; color: var(--fg-3); }
 
 /* Finances: expense panel (receipt large on the left, details or the edit form on the right) */

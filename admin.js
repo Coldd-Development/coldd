@@ -2268,6 +2268,7 @@
   }
   wirePlatChart($('admPlatChart'));
   wirePlatChart($('admAnChart'));
+  wirePlatChart($('admAnNetChart'));
 
   // A share as people read it: whole numbers from 10%, one decimal from 1%,
   // two below that, so a small platform never shows a flat 0%.
@@ -4273,19 +4274,30 @@
     var n = moneyN(w.start, w.end), nP = w.prevStart ? moneyN(w.prevStart, w.prevEnd) : 0;
     var avg = n ? cur.aud / n : 0, avgP = nP ? prev.aud / nP : 0;
     var v = viewsIn(w.start, w.end), vP = w.prevStart ? viewsIn(w.prevStart, w.prevEnd) : null;
-    var site = sumSales(sales, w.start, w.end, 'site'), siteP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd, 'site') : null;
-    var conv = v.sessions ? site.n / v.sessions * 100 : 0, convP = vP && vP.sessions ? siteP.n / vP.sessions * 100 : 0;
     grid.innerHTML = [
-      kpiCell({ label: 'Gross sales', value: fmtA(cur.aud, cur.aud >= 1000), count: plural(cur.n, 'sale'), delta: anDelta(cur.aud, prev && prev.aud, w),
+      kpiCell({ label: 'Gross sales', value: fmtA(cur.aud, cur.aud >= 1000), delta: anDelta(cur.aud, prev && prev.aud, w),
         sub: cur.robux ? '+ ' + robuxRaw(cur.robux) + ' in Robux sales' : 'No Robux sales', panel: 'orders' }),
-      kpiCell({ label: 'Average sale', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? '' : 'No money sales' }),
-      kpiCell({ label: 'Site visits', value: num(v.sessions), delta: anDelta(v.sessions, vP && vP.sessions, w), sub: num(v.views) + ' page views' + (w.start ? '' : ', last 120 days') }),
-      kpiCell({ label: 'Site conversion', value: v.sessions ? pct(conv) : '–', delta: anDelta(conv, convP, w), sub: plural(site.n, 'site order') + ' from ' + plural(v.sessions, 'visit') })
+      kpiCell({ label: 'Order volume', value: num(cur.n), delta: anDelta(cur.n, prev && prev.n, w),
+        sub: RANGE_DAYS > 1 ? (Math.round(cur.n / RANGE_DAYS * 10) / 10) + ' a day on average' : RANGE_DAYS ? 'In the last 24 hours' : 'Every order so far', panel: 'orders' }),
+      kpiCell({ label: 'Average sale price', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? plural(n, 'money sale') : 'No money sales' }),
+      kpiCell({ label: 'Site visits', value: num(v.sessions), delta: anDelta(v.sessions, vP && vP.sessions, w), sub: num(v.views) + ' page views' + (w.start ? '' : ', last 120 days') })
     ].join('');
   }
+  // Conversion: coldd.dev visits against the orders placed on the site.
+  function renderAnConv(sales, w) {
+    var box = $('admAnConv'); if (!box) return;
+    var v = viewsIn(w.start, w.end), vP = w.prevStart ? viewsIn(w.prevStart, w.prevEnd) : null;
+    var site = sumSales(sales, w.start, w.end, 'site'), siteP = w.prevStart ? sumSales(sales, w.prevStart, w.prevEnd, 'site') : null;
+    var conv = v.sessions ? site.n / v.sessions * 100 : 0, convP = vP && vP.sessions ? siteP.n / vP.sessions * 100 : 0;
+    var rpv = v.sessions ? site.aud / v.sessions : 0, rpvP = vP && vP.sessions ? siteP.aud / vP.sessions : 0;
+    box.innerHTML =
+      anFig('Site visits', num(v.sessions), '', anDelta(v.sessions, vP && vP.sessions, w), num(v.views) + ' page views' + (w.start ? '' : ', last 120 days')) +
+      anFig('Site orders', num(site.n), '', anDelta(site.n, siteP && siteP.n, w), site.robux ? '+ ' + robuxRaw(site.robux) + ' in Robux' : fmtA(site.aud) + ' in sales') +
+      anFig('Conversion rate', v.sessions ? pct(conv) : '–', '', anDelta(conv, convP, w), plural(site.n, 'order') + ' from ' + plural(v.sessions, 'visit')) +
+      anFig('Revenue per visit', v.sessions ? fmtA(rpv) : '–', '', anDelta(rpv, rpvP, w), 'Site sales over site visits');
+  }
   /* ---- Analytics below the platform chart (rebuilt 2026-11-24) ----
-     Top products, platform mix, order volume, categories, price points, when
-     people buy and customers. Product-level figures come from anAllItems():
+     Top products, platform mix, order volume, categories and price points. Product-level figures come from anAllItems():
      one entry per product sold on any platform, multi-product orders split the
      same way the Orders page splits them, matched to our products live (a
      product added to the database later is picked up on the next render). */
@@ -4673,7 +4685,6 @@
     });
     var b = volBuckets(sales, grain), buckets = b.buckets, n = buckets.length;
     var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
-    var volSub = $('admAnVolSub'); if (volSub) volSub.textContent = AN_PF.vol === 'all' ? 'Orders on every platform' : 'Orders on ' + anPfLabel('vol');
     var series = HOME_PLATFORMS.filter(function (p) { return anPfOk('vol', p.key); }).map(function (p) { return { key: p.key, label: p.label, data: buckets.map(function () { return 0; }) }; });
     var at = {}; series.forEach(function (s, i) { at[s.key] = i; });
     sales.forEach(function (x) {
@@ -4735,8 +4746,8 @@
     var prods = allProducts().filter(function (p) { return p.visible; }), cov = { live: 0, upd: 0 };
     prods.forEach(function (p) { var st = mpStatus(p.dbId, 'creatorstore'); if (st === 'live') cov.live++; else if (st === 'needs_update') cov.upd++; });
     facts.innerHTML =
-      anFig('Next payout', fmtA(p1 ? p1.aud : 0), '', '', p1 ? csDay(p1.day) + ', ' + plural(p1.n, 'sale') : 'Nothing waiting') +
-      anFig('The one after', fmtA(p2 ? p2.aud : 0), '', '', p2 ? csDay(p2.day) + ', so far' : 'No sales for it yet') +
+      anFig('Upcoming payout', fmtA(p1 ? p1.aud : 0), '', '', p1 ? csDay(p1.day) + ', ' + plural(p1.n, 'sale') : 'Nothing waiting') +
+      anFig('Next payout', fmtA(p2 ? p2.aud : 0), '', '', p2 ? csDay(p2.day) + ', still adding sales' : 'No sales for it yet') +
       anFig('In escrow', fmtA(escrow), '', '', plural(escrowN, 'sale') + ' from the last 30 days') +
       anFig('Coverage', prods.length ? sharePct(cov.live / prods.length * 100) : '–', '', '',
         num(cov.live) + ' of ' + plural(prods.length, 'live product') + ' listed' + (cov.upd ? ', ' + num(cov.upd) + ' to update' : ''));
@@ -4757,23 +4768,11 @@
         tip: function (i) {
           return '<div style="--pf:' + pfVar('creatorstore') + '"><i></i>Revenue<b>' + fmtA(gross[i]) + '</b></div>' +
             '<div><i></i>Roblox fees<b>' + fmtA(gross[i] - net[i]) + '</b></div>' +
-            '<div class="adm-pc-tip-total">' + plural(cnt[i], 'sale') + ', you keep<b>' + fmtA(net[i]) + '</b></div>';
+            '<div class="adm-pc-tip-total">Net revenue<b>' + fmtA(net[i]) + '</b></div>';
         } };
       drawPlatChart(box);
-      var sub = $('admCsSub');
-      if (sub) sub.textContent = fmtA(anSum(gross), true) + ' revenue, ' + fmtA(anSum(net), true) + ' after fees ' + (RANGE_DAYS ? 'in the last ' + anRangeWord() : 'all time');
     }
 
-    var tbl = $('admCsPayouts');
-    if (tbl) {
-      var shown = keys.filter(function (k) { return k <= now; }).slice(-3).concat(ahead);
-      tbl.innerHTML = shown.length ? '<thead><tr><th scope="col">Payout</th><th scope="col">Sales</th><th scope="col">Amount</th><th scope="col">Status</th></tr></thead><tbody>' +
-        shown.slice().reverse().map(function (k) {
-          var p = pays[k], open = k - CS_ESCROW_MS > now;
-          var st = k <= now ? 'Paid out' : open ? 'Still adding sales' : 'Upcoming';
-          return '<tr' + (k <= now ? ' class="is-paid"' : '') + '><th scope="row">' + csDay(p.day) + '</th><td>' + num(p.n) + '</td><td>' + fmtA(p.aud) + '</td><td>' + st + '</td></tr>';
-        }).join('') + '</tbody>' : '';
-    }
   }
   wirePlatChart($('admCsChart'));
 
@@ -4783,9 +4782,7 @@
   // (AdFeePayment; ad credit BuiltByBit covered is not a cost), ClearlyDev's net from its transactions ledger.
   // Estimated from published rates where it does not (XF_RATE): BuiltByBit's gateway fee for methods its table does not list,
   // ClearlyDev sales without a net yet, Parcel's and coldd.dev's card, PayPal and
-  // crypto fees. Discounts & Promotions is the money given away below list price: BuiltByBit's
-  // ListPrice less FinalPrice on each purchase (curated sales, coupons, bundles) and coldd.dev's
-  // coupon discount plus any sale markdown on an order.
+  // crypto fees. Discounts are not fees (that money never reached us as a sale), so they are left out.
   var XF_CATS = [
     { key: 'proc', label: 'Payment Processor Fees', color: 'var(--pf-site)' },
     { key: 'payhip', label: 'Payhip Fees', color: 'var(--pf-payhip)' },
@@ -4793,10 +4790,23 @@
     { key: 'creatorstore', label: 'Creator Store Fees', color: 'var(--pf-creatorstore)' },
     { key: 'clearlydev', label: 'ClearlyDev Fees', color: 'var(--pf-clearlydev)' },
     { key: 'bbb', label: 'BuiltByBit Fees', color: 'var(--pf-builtbybit)' },
-    { key: 'bbbad', label: 'BuiltByBit Advertising', color: '#f08c2e' },
-    { key: 'disc', label: 'Discounts & Promotions', color: '#e0559b' }
+    { key: 'bbbad', label: 'BuiltByBit Advertising', color: '#f08c2e' }
   ];
-  var XF_SRC = { builtbybit: 'BuiltByBit', site: 'coldd.dev' };
+  // The platform each fee comes out of (Net sales by platform).
+  var XF_PF = { proc: 'site', payhip: 'payhip', parcel: 'parcel', creatorstore: 'creatorstore', clearlydev: 'clearlydev', bbb: 'builtbybit', bbbad: 'builtbybit' };
+  // A platform chart's money less the fees taken from it (never below zero).
+  function anNetOff(ch) {
+    var b = ch.buckets, n = b.length, first = b[0].start.getTime(), ends = b.map(function (x) { return x.end.getTime(); }), last = ends[n - 1], at = {};
+    ch.series.forEach(function (s) { at[s.key] = s; });
+    extFees().forEach(function (x) {
+      var s = at[XF_PF[x.cat]]; if (!s || x.t < first || x.t >= last) return;
+      var lo = 0, hi = n - 1;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
+      s.data[lo] -= x.aud;
+    });
+    ch.series.forEach(function (s) { s.data = s.data.map(function (v) { return Math.max(0, v); }); s.total = anSum(s.data); });
+    return ch;
+  }
   var XF_RATE = {
     clearlydev: { pct: 0.175, monthlyUsd: 2 },            // pct only for a sale with no recorded net (the ledger averages 17.5%); US$2 every month
     creatorstore: 0.098,                                  // only for a sale with no recorded net
@@ -4825,12 +4835,7 @@
     function add(cat, t, aud, gross, n, src) { if (aud > 0 && isFinite(t)) out.push({ cat: cat, t: t, aud: aud, gross: gross, n: n, src: src || '' }); }
     ORDERS.forEach(function (o) {
       if (o.isTest || o.status !== 'completed' || o.source === 'granted' || o.currency === 'robux') return;
-      var t = Date.parse(o.paidAt || o.date), aud = usdToAudAt(o.total, t), disc = Number(o.discount) || 0;
-      if (o.saleEvent) (o.items || []).forEach(function (it) {
-        var p = findProduct(it.slug), list = p ? Math.max(p.price || 0, p.wasPrice || 0) : 0;
-        if (list > it.price) disc += (list - it.price) * (it.qty || 1);
-      });
-      if (disc > 0) add('disc', t, usdToAudAt(disc, t), usdToAudAt((Number(o.total) || 0) + disc, t), 1, 'site');
+      var t = Date.parse(o.paidAt || o.date), aud = usdToAudAt(o.total, t);
       if (!(aud > 0)) return;
       var p = String(o.paymentProvider || '').toLowerCase(), c = String(o.cryptoProvider || '').toLowerCase();
       // The processor's own fee when it was recorded (Stripe balance transaction, PayPal capture), else its published rate.
@@ -4846,8 +4851,7 @@
       BBB.purchases.forEach(function (p) { if (bbbIsUsd(p) && p.price > 0 && p.external_tid) cart[p.external_tid] = (cart[p.external_tid] || 0) + p.price; });
       BBB.purchases.forEach(function (p) {
         if (!bbbIsUsd(p)) return;
-        var t = Date.parse(p.purchased_at), off = (p.list_price || 0) - p.price;
-        if (off > 0.004) add('disc', t, usdToAudAt(off, t), usdToAudAt(p.list_price, t), 1, 'builtbybit');
+        var t = Date.parse(p.purchased_at);
         if (!(p.price > 0)) return;
         var share = p.external_tid && cart[p.external_tid] ? p.price / cart[p.external_tid] : 1;
         var gross = usdToAudAt(p.price, t);
@@ -4878,15 +4882,13 @@
     var ofNet = $('admFeeOfNet'); if (ofNet) ofNet.innerHTML = '';
     var rows = extFees(), b = anBuckets(sales), buckets = b.buckets, n = buckets.length;
     var first = buckets[0].start.getTime(), ends = buckets.map(function (x) { return x.end.getTime(); }), last = ends[n - 1];
-    var byCat = {}, total = buckets.map(function () { return 0; }), discSrc = {};
+    var byCat = {}, total = buckets.map(function () { return 0; });
     XF_CATS.forEach(function (c) { byCat[c.key] = buckets.map(function () { return 0; }); });
-    Object.keys(XF_SRC).forEach(function (k) { discSrc[k] = buckets.map(function () { return 0; }); });
     rows.forEach(function (x) {
       if (x.t < first || x.t >= last) return;
       var lo = 0, hi = n - 1;
       while (lo < hi) { var mid = (lo + hi) >> 1; if (x.t < ends[mid]) hi = mid; else lo = mid + 1; }
       byCat[x.cat][lo] += x.aud; total[lo] += x.aud;
-      if (x.cat === 'disc' && discSrc[x.src]) discSrc[x.src][lo] += x.aud;
     });
     if (!total.some(function (v) { return v > 0; })) { box.__chart = null; box.innerHTML = anEmpty('No fees in this range.'); }
     else {
@@ -4894,10 +4896,7 @@
         series: [{ key: 'fees', label: 'External fees', color: '#d95926', data: total, total: anSum(total) }],
         tip: function (i) {
           return XF_CATS.filter(function (c) { return byCat[c.key][i] > 0; }).map(function (c) {
-            return '<div style="--pf:' + c.color + '"><i></i>' + esc(c.label) + '<b>' + fmtA(byCat[c.key][i]) + '</b></div>' +
-              (c.key === 'disc' ? Object.keys(XF_SRC).filter(function (k) { return discSrc[k][i] > 0; }).map(function (k) {
-                return '<div class="adm-xf-sub">' + esc(XF_SRC[k]) + '<b>' + fmtA(discSrc[k][i]) + '</b></div>';
-              }).join('') : '');
+            return '<div style="--pf:' + c.color + '"><i></i>' + esc(c.label) + '<b>' + fmtA(byCat[c.key][i]) + '</b></div>';
           }).join('') + '<div class="adm-pc-tip-total">Total<b>' + fmtA(total[i]) + '</b></div>';
         } };
       drawPlatChart(box);
@@ -4910,22 +4909,20 @@
       var r = by[x.cat]; r.v += x.aud; r.g += x.gross; spent += x.aud;
       if (x.src) r.src[x.src] = (r.src[x.src] || 0) + x.aud;
     });
-    function split(c) { return c.key !== 'disc' ? '' : Object.keys(XF_SRC).map(function (k) { return XF_SRC[k] + ' ' + fmtA(by.disc.src[k] || 0); }).join(', '); }
     var cats = XF_CATS.filter(function (c) { return by[c.key].v > 0; }).sort(function (a, b) { return by[b.key].v - by[a.key].v; });
     if (!cats.length) { mixBox.innerHTML = anEmpty('No fees in this range.'); return; }
     var gross = sumSales(sales, w.start, w.end).aud;
-    // Net revenue = gross sales less what the platforms and processors kept (a discount is already out of gross).
-    var netRev = gross - (spent - (by.disc ? by.disc.v : 0));
+    // Net revenue = gross sales less what the platforms and processors kept.
+    var netRev = gross - spent;
     if (ofNet && netRev > 0) { ofNet.innerHTML = '<b>' + sharePct(spent / netRev * 100) + '</b><span>of net revenue</span>'; ofNet.title = fmtA(spent) + ' in external fees against ' + fmtA(netRev) + ' net revenue (gross sales ' + fmtA(gross) + ' less platform and processor fees)'; }
-    var slices = cats.map(function (c) { return { v: by[c.key].v, color: c.color, label: c.label, tip: sharePct(by[c.key].v / spent * 100) + ', ' + fmtA(by[c.key].v) + (split(c) ? ' (' + split(c) + ')' : '') }; });
+    var slices = cats.map(function (c) { return { v: by[c.key].v, color: c.color, label: c.label, tip: sharePct(by[c.key].v / spent * 100) + ', ' + fmtA(by[c.key].v) }; });
     mixBox.innerHTML = '<div class="adm-fin-mix">' +
       '<figure class="adm-pie">' + donutSvg(slices, { aria: 'External fees by category', center: fmtA(spent, spent >= 1000), sub: gross > 0 ? sharePct(spent / gross * 100) + ' of sales' : 'in fees' }) + '</figure>' +
       '<div class="adm-mix-table" role="table" aria-label="External fees by category">' +
         '<div class="adm-mix-row is-head adm-fin-catrow" role="row"><span role="columnheader">Category</span><span role="columnheader">Fees</span><span role="columnheader">Share</span><span role="columnheader" title="Fees as a share of the sales they were taken from">Rate</span></div>' +
         cats.map(function (c) {
           var r = by[c.key];
-          var sp = c.key === 'disc' ? '<span class="adm-xf-split" role="tooltip">' + Object.keys(XF_SRC).map(function (k) { return '<span>' + esc(XF_SRC[k]) + '<b>' + fmtA(r.src[k] || 0) + '</b></span>'; }).join('') + '</span>' : '';
-          return '<div class="adm-mix-row adm-fin-catrow' + (sp ? ' adm-xf-hassplit' : '') + '" role="row"' + (sp ? ' tabindex="0"' : '') + ' style="--pf:' + c.color + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c.label) + sp + '</span>' +
+          return '<div class="adm-mix-row adm-fin-catrow" role="row" style="--pf:' + c.color + '"><span role="cell" class="adm-pf"><b class="adm-dot"></b>' + esc(c.label) + '</span>' +
             '<span role="cell">' + fmtA(r.v) + '</span><span role="cell">' + sharePct(r.v / spent * 100) + '</span><span role="cell">' + (r.g > 0 ? sharePct(r.v / r.g * 100) : '–') + '</span></div>';
         }).join('') + '</div></div>';
   }
@@ -4964,6 +4961,17 @@
           : '<div class="adm-cat-sub-row">' + inner + '</div>';
       }).join('') + (items.length > shown.length ? '<p class="adm-cat-hint">And ' + num(items.length - shown.length) + ' more</p>' : '') + '</div>';
   }
+  // A category's five best sellers in the range.
+  function anCatTopList(x) {
+    return '<div class="adm-cat-sub">' + anCatItems(x).slice(0, 5).map(function (it) {
+      var pid = it.key.indexOf('p:') === 0 ? it.key.slice(2) : '';
+      var logos = Object.keys(it.pfs).map(pfMark).join('');
+      var thumb = it.image ? '<span class="adm-cat-thumb" style="background-image:url(\'' + esc(it.image) + '\')"></span>' : '<span class="adm-cat-thumb is-logo">' + pfMark(Object.keys(it.pfs)[0]) + '</span>';
+      var inner = thumb + '<span class="adm-cat-sub-name"><b title="' + esc(it.title) + '">' + esc(it.title) + '</b><small>' + logos + plural(it.n, 'sale') + '</small></span>' +
+        '<span class="adm-cat-sub-val">' + moneyBoth(it.aud, it.robux) + '</span><span></span>';
+      return pid ? '<a class="adm-cat-sub-row" href="/admin/products/' + esc(pid) + '/" data-cat-pid="' + esc(pid) + '">' + inner + '</a>' : '<div class="adm-cat-sub-row">' + inner + '</div>';
+    }).join('') + '</div>';
+  }
   function renderAnCats(w) {
     var box = $('admAnCats'); if (!box) return;
     var all = anAllItems().filter(function (x) { return !/minecraft/i.test(x.cat) && anPfOk('cats', x.pf); });
@@ -4993,10 +5001,14 @@
       return '<span class="adm-catr-chg">' + move + (pct == null ? '' : '<small class="' + (pct >= 0 ? 'up' : 'down') + '">' + (pct >= 0 ? '+' : '−') + fmtPctAbs(pct) + '</small>') + '</span>';
     }
     var rows = ranked(g).map(function (c, i) {
-      return '<div class="adm-catr-row" role="listitem">' +
-        '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
-        '<span class="adm-catr-name"><b>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em>' + change(c, i + 1) + '</span>' +
-        '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span></div>';
+      var id = 'c:' + c, open = !!AN_CAT_OPEN[id];
+      return '<div class="adm-catr-grp' + (open ? ' is-open' : '') + '" role="listitem">' +
+        '<button type="button" class="adm-catr-row is-btn is-cat" data-cat-open="' + esc(id) + '" aria-expanded="' + open + '">' +
+          '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
+          '<span class="adm-catr-name"><b>' + esc(c) + '</b><em>' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</em>' + change(c, i + 1) + '</span>' +
+          '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span>' +
+          '<span class="adm-catr-chev">' + AN_CAT_CHEV + '</span>' +
+        '</button>' + (open ? anCatTopList(g[c]) : '') + '</div>';
     });
     var unc = g.Uncategorised;
     if (unc) {
@@ -5160,87 +5172,6 @@
       }).join('') + '</div>';
   }
 
-  // When people buy: orders by weekday and hour, in the viewer's own time zone.
-  // Sales recorded with a date but no time (emailed orders, the Payhip CSV import)
-  // land exactly on the hour, so those are left out.
-  var AN_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  function anHour(h) { return new Date(2000, 0, 1, h).toLocaleTimeString('en-AU', { hour: 'numeric' }).replace(/\s/g, ' '); }
-  function renderAnHeat(sales, w) {
-    var box = $('admAnHeat'); if (!box) return;
-    var s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), grid = [], d, h, total = 0;
-    for (d = 0; d < 7; d++) { grid.push([]); for (h = 0; h < 24; h++) grid[d].push(0); }
-    sales.forEach(function (x) {
-      if (x.t < s || x.t >= e || x.t % 3600000 === 0) return;
-      var dt = new Date(x.t);
-      grid[(dt.getDay() + 6) % 7][dt.getHours()] += x.n; total += x.n;
-    });
-    if (!total) { box.innerHTML = anEmpty('No sales in this range.'); return; }
-    var max = 0, bd = 0, bh = 0;
-    for (d = 0; d < 7; d++) for (h = 0; h < 24; h++) if (grid[d][h] > max) { max = grid[d][h]; bd = d; bh = h; }
-    var days = grid.map(function (r) { return anSum(r); }), topDay = days.indexOf(Math.max.apply(null, days));
-    var hours = []; for (h = 0; h < 24; h++) hours.push(anSum(grid.map(function (r) { return r[h]; })));
-    var quiet = days.indexOf(Math.min.apply(null, days));
-    var rows = grid.map(function (r, di) {
-      return '<div class="adm-heat-row"><span>' + AN_DAYS[di].slice(0, 3) + '</span>' + r.map(function (v, hi) {
-        return '<i data-d="' + di + '" data-h="' + hi + '" data-v="' + v + '" style="--a:' + (v ? (0.14 + 0.86 * v / max).toFixed(3) : 0) + '"></i>';
-      }).join('') + '</div>';
-    }).join('');
-    var axis = '<div class="adm-heat-axis" aria-hidden="true"><span></span>';
-    for (h = 0; h < 24; h++) axis += '<span>' + (h % 6 ? '' : anHour(h)) + '</span>';
-    axis += '</div>';
-    box.innerHTML = '<div class="adm-an-figs">' +
-        anFig('Busiest time', esc(AN_DAYS[bd].slice(0, 3) + ', ' + anHour(bh)), '', '', plural(max, 'order') + ' in that hour') +
-        anFig('Busiest day', esc(AN_DAYS[topDay]), '', '', sharePct(days[topDay] / total * 100) + ' of orders; quietest is ' + AN_DAYS[quiet]) + '</div>' +
-      '<div class="adm-heat" role="img" aria-label="Orders by weekday and hour; busiest ' + esc(AN_DAYS[bd] + ' ' + anHour(bh)) + '">' + rows + axis + '<div class="adm-pc-tip" hidden></div></div>' +
-      '<div class="adm-heat-key" aria-hidden="true"><span>Fewer</span><i style="--a:.14"></i><i style="--a:.42"></i><i style="--a:.71"></i><i style="--a:1"></i><span>More orders</span></div>';
-  }
-  (function wireHeat(box) {
-    if (!box) return;
-    box.addEventListener('mouseover', function (e) {
-      var c = e.target.closest('.adm-heat i[data-d]'), heat = box.querySelector('.adm-heat'), tip = heat && heat.querySelector('.adm-pc-tip');
-      if (!tip) return;
-      if (!c) { tip.hidden = true; return; }
-      var hh = +c.getAttribute('data-h'), v = +c.getAttribute('data-v');
-      tip.innerHTML = '<h4>' + esc(AN_DAYS[+c.getAttribute('data-d')]) + ', ' + esc(anHour(hh)) + ' to ' + esc(anHour((hh + 1) % 24)) + '</h4><div>Orders<b>' + num(v) + '</b></div>';
-      tip.hidden = false;
-      var hb = heat.getBoundingClientRect(), cb = c.getBoundingClientRect();
-      var left = cb.left - hb.left + cb.width / 2 - tip.offsetWidth / 2;
-      tip.style.left = Math.max(0, Math.min(hb.width - tip.offsetWidth, left)) + 'px';
-      tip.style.top = Math.max(0, cb.top - hb.top - tip.offsetHeight - 8) + 'px';
-    });
-    box.addEventListener('mouseleave', function () { var tip = box.querySelector('.adm-heat .adm-pc-tip'); if (tip) tip.hidden = true; });
-  })($('admAnHeat'));
-
-  // Customers: buyers, how many come back, and the biggest spenders. A buyer
-  // is matched within one platform (a BuiltByBit member, a Creator Store
-  // username, a ClearlyDev email, a coldd.dev account).
-  function renderAnCust(w) {
-    var box = $('admAnCust'); if (!box) return;
-    var all = anAllItems(), s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), first = {}, by = {}, items = 0, named = 0;
-    all.forEach(function (x) { if (x.buyer && (!(x.buyer in first) || x.t < first[x.buyer])) first[x.buyer] = x.t; });
-    all.forEach(function (x) {
-      if (x.t < s || x.t >= e) return;
-      items++;
-      if (!x.buyer) return;
-      named++;
-      var b = by[x.buyer] = by[x.buyer] || { name: x.buyerName || 'Unknown', pf: x.pf, orders: {}, aud: 0, robux: 0, first: first[x.buyer] };
-      b.orders[x.order] = 1; b.aud += x.aud; b.robux += x.robux;
-    });
-    var list = Object.keys(by).map(function (k) { var b = by[k]; b.n = Object.keys(b.orders).length; b.back = b.first < s || b.n > 1; return b; });
-    if (!list.length) { box.innerHTML = anEmpty(items ? 'None of the sales in this range name a buyer.' : 'No sales in this range.'); return; }
-    var back = list.filter(function (b) { return b.back; }), totA = anSum(list.map(function (b) { return b.aud; })), backA = anSum(back.map(function (b) { return b.aud; }));
-    var top = list.slice().sort(function (a, b) { return (b.aud - a.aud) || (b.robux - a.robux) || (b.n - a.n); }).slice(0, 8);
-    box.innerHTML = '<div class="adm-an-figs is-3">' +
-        anFig('Buyers', num(list.length), '', '', sharePct(named / items * 100) + ' of sales name the buyer') +
-        anFig('Returning', sharePct(back.length / list.length * 100), '', '', plural(back.length, 'buyer') + ' bought before or more than once') +
-        anFig('From returning', totA ? sharePct(backA / totA * 100) : '–', '', '', totA ? fmtA(backA) + ' of ' + fmtA(totA) : '') + '</div>' +
-      '<div class="adm-cust-list">' + top.map(function (b, i) {
-        var label = (HOME_PLATFORMS.filter(function (p) { return p.key === b.pf; })[0] || {}).label || b.pf;
-        return '<div class="adm-cust-row"><span class="adm-an-rank">' + (i + 1) + '</span><span class="adm-cust-pf" title="' + esc(label) + '">' + pfMark(b.pf) + '</span>' +
-          '<span class="adm-cust-name"><b title="' + esc(b.name) + '">' + esc(b.name) + '</b><small>' + plural(b.n, 'order') + (b.back ? ' · returning' : '') + '</small></span>' +
-          '<span class="adm-an-pval">' + moneyBoth(b.aud, b.robux) + '</span></div>';
-      }).join('') + '</div>';
-  }
   function renderAnalytics() {
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });
     // The Robux panel has its own data (the group ledger and Roblox's summary): drawn straight away.
@@ -5273,6 +5204,18 @@
       drawPlatChart(chart);
     }
     var label = RANGE_DAYS === 1 ? '24h' : RANGE_DAYS + 'd';
+    var netBox = $('admAnNetChart');
+    if (netBox) {
+      var nb = anBuckets(sales);
+      netBox.__chart = anNetOff(pfChartData(gross, nb.buckets, nb.step, 'Net sales in AU$, after platform and processor fees, for each platform over the selected range'));
+      if (AN_PF.gross !== 'all') netBox.__chart.series = netBox.__chart.series.filter(function (s) { return s.key === AN_PF.gross; }).map(function (s) {
+        if (!s.robuxTotal) return s;
+        s.plot = s.data.map(function (v, i) { return v + (s.robux[i] || 0) * DEVEX_USD_PER_ROBUX * audRateOn(nb.buckets[i].start.getTime()); });
+        return s;
+      });
+      drawPlatChart(netBox);
+    }
+    renderAnConv(sales, w);
     renderPlatTable(gross, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
       curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label, only: AN_PF.gross === 'all' ? null : AN_PF.gross });
     renderAnTop(w);
@@ -5283,8 +5226,6 @@
     renderAnCats(w);
     renderAnPrices(w);
     renderAnPm(w);
-    renderAnHeat(sales, w);
-    renderAnCust(w);
   }
 
   /* ================================================================
