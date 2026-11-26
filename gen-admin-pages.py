@@ -47,6 +47,7 @@ ADMIN_DIR = ROOT / 'admin'
 TOP_LEVEL_SECTIONS = [
     'finances', 'tasks', 'products', 'sales', 'marketing', 'marketplaces', 'analytics',
     'orders', 'giveaways', 'resellers', 'reviews', 'content', 'sitemgmt',
+    'commissions', 'leads', 'devs', 'payouts', 'services',
 ]
 # Single fixed sub-pages under /admin/products/ that aren't per-product.
 PRODUCT_SUBPAGES = ['new', 'unreleased']

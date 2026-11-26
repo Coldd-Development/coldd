@@ -1620,7 +1620,7 @@
   /* ================================================================
      NAV / PANEL SWITCHING
      ================================================================ */
-  var PANELS = ['home', 'finances', 'tasks', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content'];
+  var PANELS = ['home', 'finances', 'tasks', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content', 'commissions', 'commission', 'leads', 'devs', 'payouts', 'services'];
   var curPanel = 'home';
 
   /* ---- URL routing ----
@@ -1638,9 +1638,10 @@
     home: '/admin/', finances: '/admin/finances/', tasks: '/admin/tasks/', products: '/admin/products/', sales: '/admin/sales/',
     marketing: '/admin/marketing/', marketplaces: '/admin/marketplaces/', analytics: '/admin/analytics/', orders: '/admin/orders/',
     giveaways: '/admin/giveaways/', resellers: '/admin/resellers/', reviews: '/admin/reviews/', content: '/admin/content/',
-    sitemgmt: '/admin/sitemgmt/'
+    sitemgmt: '/admin/sitemgmt/',
+    commissions: '/admin/commissions/', leads: '/admin/leads/', devs: '/admin/devs/', payouts: '/admin/payouts/', services: '/admin/services/'
   };
-  var PANEL_PARENT = { 'product-edit': 'products', 'product-update': 'products', unreleased: 'products', 'order-detail': 'orders', 'giveaway-detail': 'giveaways', 'reseller-edit': 'resellers' };
+  var PANEL_PARENT = { 'product-edit': 'products', 'product-update': 'products', unreleased: 'products', 'order-detail': 'orders', 'giveaway-detail': 'giveaways', 'reseller-edit': 'resellers', commission: 'commissions' };
   function urlForPanel(name, extra) {
     if (PANEL_PATH[name]) return PANEL_PATH[name];
     var parent = PANEL_PARENT[name];
@@ -1665,6 +1666,8 @@
       if (location.pathname !== url) history.pushState({ panel: name, extra: opts.extra || null }, '', url);
     }
   }
+  // The Agency pages (admin-agency.js) route through this same engine.
+  window.admShowPanel = showPanel;
   function findProductBySlug(slug) { return allProducts().filter(function (p) { return p.slug === slug; })[0]; }
   // Re-derives the panel from the current URL - used on boot and whenever
   // the user navigates with the browser's own back/forward buttons.
@@ -1698,6 +1701,8 @@
       })();
       return;
     }
+    // In-app back/forward to one commission (/admin/commissions/<id>/); no static file at that depth.
+    if (section === 'commissions' && sub && window.AGENCY) { window.AGENCY.open(sub, { skipUrl: true }); return; }
     showPanel(section, { skipUrl: true });
   }
   window.addEventListener('popstate', function () { routeFromLocation(); });
@@ -1722,6 +1727,7 @@
       renderStaff(); renderUsers(); renderAudit(); refreshAuditLog();
     }
     else if (name === 'content') { renderPosts(); renderTutorials(); renderReleases(); }
+    else if (window.AGENCY && window.AGENCY.has(name)) window.AGENCY.render(name);
   }
   function renderAll() { renderPanel(curPanel); }
 
