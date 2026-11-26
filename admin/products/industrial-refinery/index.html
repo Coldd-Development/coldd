@@ -14,8 +14,8 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=adm20261126a" />
-  <link rel="stylesheet" href="/admin-agency.css?v=adm20261126a" />
+  <link rel="stylesheet" href="/styles.css?v=adm20261126b" />
+  <link rel="stylesheet" href="/admin-agency.css?v=adm20261126b" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -993,10 +993,10 @@
           <!-- ============ Agency (admin-agency.js renders these) ============ -->
           <section class="dash-panel ag" id="adm-panel-commissions" hidden>
             <div class="dash-head adm-home-head">
-              <div class="ag-h1"><h1>Commissions</h1><span class="ag-sample" hidden>Sample data</span></div>
+              <div class="ag-h1"><h1>Commissions</h1></div>
               <div class="ag-tools">
-                <div class="adm-seg" role="group" aria-label="Time period"><button type="button">7d</button><button type="button" class="active">30d</button><button type="button">1y</button><button type="button">All time</button></div>
-                <button class="btn btn-primary adm-btn-sm" type="button">New commission</button>
+                <div class="adm-seg ag-range" role="group" aria-label="Time period" id="agCmRange"><button type="button" data-v="7">7d</button><button type="button" data-v="30" class="active">30d</button><button type="button" data-v="365">1y</button><button type="button" data-v="0">All time</button></div>
+                <button class="btn btn-primary adm-btn-sm" type="button" data-ag-new="commission">New commission</button>
               </div>
             </div>
             <p class="ag-loading" hidden></p>
@@ -1024,7 +1024,7 @@
                   <div class="adm-work-list" id="agNeeds"></div>
                 </aside>
                 <aside class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>By service</h2><span>Last 30 days</span></div></div>
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>By service</h2><span id="agSvcTitleSub">Last 30 days</span></div></div>
                   <div id="agSvcDonut"></div>
                 </aside>
               </div>
@@ -1035,8 +1035,8 @@
 
           <section class="dash-panel ag" id="adm-panel-leads" hidden>
             <div class="dash-head adm-home-head">
-              <div class="ag-h1"><h1>Leads</h1><span class="ag-sample" hidden>Sample data</span></div>
-              <div class="ag-tools"><div class="adm-seg" role="group" aria-label="Time period"><button type="button">7d</button><button type="button" class="active">30d</button><button type="button">1y</button><button type="button">All time</button></div></div>
+              <div class="ag-h1"><h1>Leads</h1></div>
+              <div class="ag-tools"><div class="adm-seg ag-range" role="group" aria-label="Time period" id="agLeadRange"><button type="button" data-v="7">7d</button><button type="button" data-v="30" class="active">30d</button><button type="button" data-v="365">1y</button><button type="button" data-v="0">All time</button></div><button class="btn btn-primary adm-btn-sm" type="button" data-ag-new="lead">Add lead</button></div>
             </div>
             <p class="ag-loading" hidden></p>
             <div class="adm-hp adm-kpi"><div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div><div class="adm-kpi-grid" id="agLeadKpi"></div></div>
@@ -1049,11 +1049,11 @@
             </div>
             <div class="ag-grid2">
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Where leads come from</h2><span>Last 30 days</span></div></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Where leads come from</h2><span id="agLeadPoolSub"></span></div></div>
                 <div id="agLeadDonut"></div>
               </div>
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>What they ask for</h2><span>Last 30 days</span></div></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>What they ask for</h2><span id="agLeadPoolSub2"></span></div></div>
                 <div id="agLeadSvcDonut"></div>
               </div>
             </div>
@@ -1061,8 +1061,8 @@
 
           <section class="dash-panel ag" id="adm-panel-devs" hidden>
             <div class="dash-head adm-home-head">
-              <div class="ag-h1"><h1>Devs</h1><span class="ag-sample" hidden>Sample data</span></div>
-              <div class="ag-tools"><button class="btn btn-ghost adm-btn-sm" type="button">Add dev</button></div>
+              <div class="ag-h1"><h1>Devs</h1></div>
+              <div class="ag-tools"><button class="btn btn-primary adm-btn-sm" type="button" data-ag-new="dev">Add dev</button></div>
             </div>
             <p class="ag-loading" hidden></p>
             <div class="adm-hp adm-kpi"><div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div><div class="adm-kpi-grid" id="agDevKpi"></div></div>
@@ -1081,8 +1081,8 @@
 
           <section class="dash-panel ag" id="adm-panel-payouts" hidden>
             <div class="dash-head adm-home-head">
-              <div class="ag-h1"><h1>Payouts</h1><span class="ag-sample" hidden>Sample data</span></div>
-              <div class="ag-tools"><button class="btn btn-ghost adm-btn-sm" type="button">Export CSV</button></div>
+              <div class="ag-h1"><h1>Payouts</h1></div>
+              <div class="ag-tools"><button class="btn btn-ghost adm-btn-sm" type="button" data-ag-export>Export CSV</button></div>
             </div>
             <p class="ag-loading" hidden></p>
             <div class="adm-hp adm-kpi"><div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div><div class="adm-kpi-grid" id="agPayKpi"></div></div>
@@ -1102,7 +1102,7 @@
           </section>
 
           <section class="dash-panel ag" id="adm-panel-services" hidden>
-            <div class="dash-head adm-home-head"><div class="ag-h1"><h1>Services</h1><span class="ag-sample" hidden>Sample data</span></div></div>
+            <div class="dash-head adm-home-head"><div class="ag-h1"><h1>Services</h1></div></div>
             <p class="ag-loading" hidden></p>
             <div class="adm-hp adm-ro">
               <div class="adm-hp-head"><div class="adm-hp-title"><h2>What we offer</h2><span>Prices in US$</span></div></div>
@@ -2068,7 +2068,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/admin-agency.js?v=adm20261126a"></script>
-  <script src="/catalog.js?v=adm20261126a" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=adm20261126a"></script>
+  <script src="/admin-agency.js?v=adm20261126b"></script>
+  <script src="/catalog.js?v=adm20261126b" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=adm20261126b"></script>
 </body>
 </html>
