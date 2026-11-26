@@ -5216,8 +5216,9 @@
       drawPlatChart(netBox);
     }
     renderAnConv(sales, w);
-    renderPlatTable(gross, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
-      curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label, only: AN_PF.gross === 'all' ? null : AN_PF.gross });
+    // Platform performance shows every platform, whatever the Gross sales chart is filtered to.
+    renderPlatTable(sales, { id: 'admAnPlatTable', start: w.start, end: w.end, prevStart: w.prevStart, prevEnd: w.prevEnd,
+      curLabel: RANGE_DAYS ? 'Last ' + label : 'All time', prevLabel: 'Previous ' + label, only: null });
     renderAnTop(w);
     renderAnMix(sales, w);
     renderAnVolume(only('vol'), w);
