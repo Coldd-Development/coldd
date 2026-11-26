@@ -4709,6 +4709,74 @@
   }
   wirePlatChart($('admVolChart'));
 
+  // Creator Store: Roblox holds each sale in a 30-day escrow, then pays it out on the 1st of the
+  // next month (create.roblox.com/docs/production/sell-on-creator-store). The forecast adds up the
+  // net Roblox reports for each sale, in AU$ at the sale day's rate, so the bank's figure can differ
+  // a little with the exchange rate. Coverage is the share of live products listed on Creator Store
+  // (the Marketplaces ticks).
+  var CS_ESCROW_MS = 30 * DAY_MS;
+  function csPayoutDay(t) { var d = new Date(t + CS_ESCROW_MS); return new Date(d.getFullYear(), d.getMonth() + 1, 1); }
+  function csDay(d) { return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }); }
+  function renderAnCreator() {
+    var facts = $('admCsFacts'); if (!facts) return;
+    var now = Date.now();
+    var list = PSALES.filter(function (s) { return s.platform === 'creatorstore' && s.status !== 'refunded' && s.usd > 0; }).map(function (s) {
+      return { t: s.t, aud: usdToAudAt(s.usd, s.t), net: usdToAudAt(s.net != null ? s.net : s.usd, s.t) };
+    });
+    var pays = {}, escrow = 0, escrowN = 0;
+    list.forEach(function (s) {
+      var day = csPayoutDay(s.t), k = day.getTime(), p = pays[k] = pays[k] || { day: day, aud: 0, n: 0 };
+      p.aud += s.net; p.n++;
+      if (s.t + CS_ESCROW_MS > now) { escrow += s.net; escrowN++; }
+    });
+    var keys = Object.keys(pays).map(Number).sort(function (a, b) { return a - b; });
+    var ahead = keys.filter(function (k) { return k > now; });
+    var p1 = ahead.length ? pays[ahead[0]] : null, p2 = ahead.length > 1 ? pays[ahead[1]] : null;
+    var prods = allProducts().filter(function (p) { return p.visible; }), cov = { live: 0, upd: 0 };
+    prods.forEach(function (p) { var st = mpStatus(p.dbId, 'creatorstore'); if (st === 'live') cov.live++; else if (st === 'needs_update') cov.upd++; });
+    facts.innerHTML =
+      anFig('Next payout', fmtA(p1 ? p1.aud : 0), '', '', p1 ? csDay(p1.day) + ', ' + plural(p1.n, 'sale') : 'Nothing waiting') +
+      anFig('The one after', fmtA(p2 ? p2.aud : 0), '', '', p2 ? csDay(p2.day) + ', so far' : 'No sales for it yet') +
+      anFig('In escrow', fmtA(escrow), '', '', plural(escrowN, 'sale') + ' from the last 30 days') +
+      anFig('Coverage', prods.length ? sharePct(cov.live / prods.length * 100) : '–', '', '',
+        num(cov.live) + ' of ' + plural(prods.length, 'live product') + ' listed' + (cov.upd ? ', ' + num(cov.upd) + ' to update' : ''));
+
+    var box = $('admCsChart');
+    if (box) {
+      var b = anBuckets(list), buckets = b.buckets, n = buckets.length;
+      var ends = buckets.map(function (x) { return x.end.getTime(); }), first = buckets[0].start.getTime(), last = ends[n - 1];
+      var gross = buckets.map(function () { return 0; }), net = gross.slice(), cnt = gross.slice();
+      list.forEach(function (s) {
+        if (s.t < first || s.t >= last) return;
+        var lo = 0, hi = n - 1;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (s.t < ends[mid]) hi = mid; else lo = mid + 1; }
+        gross[lo] += s.aud; net[lo] += s.net; cnt[lo]++;
+      });
+      box.__chart = { buckets: buckets, step: b.step, single: true, aria: 'Creator Store revenue in AU$ over the selected range',
+        series: [{ key: 'creatorstore', label: 'Creator Store', color: pfVar('creatorstore'), data: gross, total: anSum(gross) }],
+        tip: function (i) {
+          return '<div style="--pf:' + pfVar('creatorstore') + '"><i></i>Revenue<b>' + fmtA(gross[i]) + '</b></div>' +
+            '<div><i></i>Roblox fees<b>' + fmtA(gross[i] - net[i]) + '</b></div>' +
+            '<div class="adm-pc-tip-total">' + plural(cnt[i], 'sale') + ', you keep<b>' + fmtA(net[i]) + '</b></div>';
+        } };
+      drawPlatChart(box);
+      var sub = $('admCsSub');
+      if (sub) sub.textContent = fmtA(anSum(gross), true) + ' revenue, ' + fmtA(anSum(net), true) + ' after fees ' + (RANGE_DAYS ? 'in the last ' + anRangeWord() : 'all time');
+    }
+
+    var tbl = $('admCsPayouts');
+    if (tbl) {
+      var shown = keys.filter(function (k) { return k <= now; }).slice(-3).concat(ahead);
+      tbl.innerHTML = shown.length ? '<thead><tr><th scope="col">Payout</th><th scope="col">Sales</th><th scope="col">Amount</th><th scope="col">Status</th></tr></thead><tbody>' +
+        shown.slice().reverse().map(function (k) {
+          var p = pays[k], open = k - CS_ESCROW_MS > now;
+          var st = k <= now ? 'Paid out' : open ? 'Still adding sales' : 'Upcoming';
+          return '<tr' + (k <= now ? ' class="is-paid"' : '') + '><th scope="row">' + csDay(p.day) + '</th><td>' + num(p.n) + '</td><td>' + fmtA(p.aud) + '</td><td>' + st + '</td></tr>';
+        }).join('') + '</tbody>' : '';
+    }
+  }
+  wirePlatChart($('admCsChart'));
+
   // External fees: what the platforms and payment processors keep from money sales, in AU$
   // at the rate of the sale's day. Robux is not included. Exact where the platform reports
   // it: Creator Store and Payhip nets, BuiltByBit's platform fee and featured-ad fee
@@ -5210,6 +5278,7 @@
     renderAnTop(w);
     renderAnMix(sales, w);
     renderAnVolume(only('vol'), w);
+    renderAnCreator();
     renderAnFees(sales, w);
     renderAnCats(w);
     renderAnPrices(w);
@@ -7383,6 +7452,7 @@
       if (mpUploadShown && !mpUploadShown.touched) mpFillUploadChecks(mpUploadShown.dbId);
       if (curPanel === 'marketplaces') renderMarketplaces();
       if (curPanel === 'home') renderHome();
+      if (curPanel === 'analytics') renderAnCreator();
     });
   }
 

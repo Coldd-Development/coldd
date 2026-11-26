@@ -5637,6 +5637,8 @@ html[data-theme="light"] .adm-range-dock .adm-range { background: color-mix(in s
 @media (max-width: 720px) { .adm-range-dock { top: auto; bottom: 16px; right: 50%; transform: translateX(50%); animation: none; } }
 @media (prefers-reduced-motion: reduce) { .adm-range-dock { animation: none; } }
 .adm-pc-tip .adm-pc-tip-total { margin-top: 4px; padding-top: 5px; border-top: 1px solid var(--hairline); color: var(--fg-1); font-weight: 600; }
+.adm-cs-pay { min-width: 420px; }
+.adm-cs-pay tr.is-paid th, .adm-cs-pay tr.is-paid td { color: var(--fg-3); }
 .adm-plat-tablewrap { margin: 8px -20px 0; padding: 0 20px; overflow-x: auto; border-top: 1px solid var(--hairline); }
 .adm-plat-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13px; }
 .adm-plat-table thead th { padding: 12px 8px 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); text-align: right; white-space: nowrap; }
