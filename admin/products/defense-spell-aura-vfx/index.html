@@ -14,7 +14,8 @@
   <!-- meta:end -->
 
 
-  <link rel="stylesheet" href="/styles.css?v=adm20261125b" />
+  <link rel="stylesheet" href="/styles.css?v=adm20261126a" />
+  <link rel="stylesheet" href="/admin-agency.css?v=adm20261126a" />
 </head>
 <body class="adm-body">
   <div class="backdrop"></div>
@@ -120,6 +121,12 @@
               <a href="/admin/products/" data-panel="products"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span>Products</span></a>
               <a href="/admin/reviews/" data-panel="reviews"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9 9 8z"/></svg><span>Reviews</span></a>
               <a href="/admin/marketplaces/" data-panel="marketplaces"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg><span>Marketplaces</span></a>
+              <span class="adm-nav-label">Agency</span>
+              <a href="/admin/commissions/" data-panel="commissions"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg><span>Commissions</span><span class="adm-nav-count" id="agNavCm" hidden></span></a>
+              <a href="/admin/leads/" data-panel="leads"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>Leads</span><span class="adm-nav-count" id="agNavLeads" hidden></span></a>
+              <a href="/admin/devs/" data-panel="devs"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg><span>Devs</span></a>
+              <a href="/admin/payouts/" data-panel="payouts"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg><span>Payouts</span><span class="adm-nav-count" id="agNavPay" hidden></span></a>
+              <a href="/admin/services/" data-panel="services"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Services</span></a>
               <span class="adm-nav-label">Community</span>
               <a href="/admin/giveaways/" data-panel="giveaways"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C9.5 3 12 8 12 8s2.5-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg><span>Prizes &amp; Payouts</span><span class="adm-nav-count" id="admGwNavCount" hidden></span></a>
               <a href="/admin/marketing/" data-panel="marketing"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l4 4V6L7 10H4a1 1 0 0 0-1 1Z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6.5a8 8 0 0 1 0 11"/></svg><span>Marketing</span></a>
@@ -981,6 +988,136 @@
           <section class="dash-panel" id="adm-panel-order-detail" hidden>
             <div class="dash-head"><a href="#" data-panel="orders" class="lnk-back">Back to orders</a></div>
             <div id="admOrderDetailBody"></div>
+          </section>
+
+          <!-- ============ Agency (admin-agency.js renders these) ============ -->
+          <section class="dash-panel ag" id="adm-panel-commissions" hidden>
+            <div class="dash-head adm-home-head">
+              <div class="ag-h1"><h1>Commissions</h1><span class="ag-sample" hidden>Sample data</span></div>
+              <div class="ag-tools">
+                <div class="adm-seg" role="group" aria-label="Time period"><button type="button">7d</button><button type="button" class="active">30d</button><button type="button">1y</button><button type="button">All time</button></div>
+                <button class="btn btn-primary adm-btn-sm" type="button">New commission</button>
+              </div>
+            </div>
+            <p class="ag-loading" hidden></p>
+            <div class="adm-hp adm-kpi">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div>
+              <div class="adm-kpi-grid" id="agKpi"></div>
+              <div class="adm-kpi-foot" id="agKpiFoot"></div>
+            </div>
+            <div class="adm-hp adm-ro">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2 id="agCmTitle">Active commissions</h2><span id="agCmCount"></span></div>
+                <div class="adm-seg" role="group" aria-label="Show" id="agCmSeg"><button type="button" data-v="active" class="active">Active</button><button type="button" data-v="done">Delivered</button><button type="button" data-v="all">All</button></div>
+              </div>
+              <div class="ag-list" id="agCmList"></div>
+            </div>
+            <div class="ag-grid">
+              <div class="adm-hp adm-plat">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Revenue by source</h2></div></div>
+                <div class="ag-chart" id="agSrcChart"></div>
+                <div class="adm-plat-tablewrap"><table class="adm-plat-table" id="agSrcTable"></table></div>
+              </div>
+              <div class="ag-col">
+                <aside class="adm-hp adm-work">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Needs you</h2><span id="agNeedsCount"></span></div></div>
+                  <div class="adm-work-list" id="agNeeds"></div>
+                </aside>
+                <aside class="adm-hp">
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>By service</h2><span>Last 30 days</span></div></div>
+                  <div id="agSvcDonut"></div>
+                </aside>
+              </div>
+            </div>
+          </section>
+
+          <section class="dash-panel ag" id="adm-panel-commission" hidden></section>
+
+          <section class="dash-panel ag" id="adm-panel-leads" hidden>
+            <div class="dash-head adm-home-head">
+              <div class="ag-h1"><h1>Leads</h1><span class="ag-sample" hidden>Sample data</span></div>
+              <div class="ag-tools"><div class="adm-seg" role="group" aria-label="Time period"><button type="button">7d</button><button type="button" class="active">30d</button><button type="button">1y</button><button type="button">All time</button></div></div>
+            </div>
+            <p class="ag-loading" hidden></p>
+            <div class="adm-hp adm-kpi"><div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div><div class="adm-kpi-grid" id="agLeadKpi"></div></div>
+            <div class="adm-hp adm-ro">
+              <div class="adm-hp-head">
+                <div class="adm-hp-title"><h2>Inbox</h2><span id="agLeadCount"></span></div>
+                <div class="adm-seg" role="group" aria-label="Show" id="agLeadSeg"><button type="button" data-v="open" class="active">Open</button><button type="button" data-v="won">Converted</button><button type="button" data-v="lost">Declined</button></div>
+              </div>
+              <div class="ag-list" id="agLeadList"></div>
+            </div>
+            <div class="ag-grid2">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Where leads come from</h2><span>Last 30 days</span></div></div>
+                <div id="agLeadDonut"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>What they ask for</h2><span>Last 30 days</span></div></div>
+                <div id="agLeadSvcDonut"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dash-panel ag" id="adm-panel-devs" hidden>
+            <div class="dash-head adm-home-head">
+              <div class="ag-h1"><h1>Devs</h1><span class="ag-sample" hidden>Sample data</span></div>
+              <div class="ag-tools"><button class="btn btn-ghost adm-btn-sm" type="button">Add dev</button></div>
+            </div>
+            <p class="ag-loading" hidden></p>
+            <div class="adm-hp adm-kpi"><div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div><div class="adm-kpi-grid" id="agDevKpi"></div></div>
+            <div class="ag-devs" id="agDevCards"></div>
+            <div class="ag-grid2">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Who can do what</h2></div></div>
+                <div id="agCoverage"></div>
+              </div>
+              <div class="adm-hp adm-ro">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Candidates</h2><span id="agCandCount"></span></div></div>
+                <div class="ag-list" id="agCandList"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dash-panel ag" id="adm-panel-payouts" hidden>
+            <div class="dash-head adm-home-head">
+              <div class="ag-h1"><h1>Payouts</h1><span class="ag-sample" hidden>Sample data</span></div>
+              <div class="ag-tools"><button class="btn btn-ghost adm-btn-sm" type="button">Export CSV</button></div>
+            </div>
+            <p class="ag-loading" hidden></p>
+            <div class="adm-hp adm-kpi"><div class="adm-hp-head"><div class="adm-hp-title"><h2>Overview</h2></div></div><div class="adm-kpi-grid" id="agPayKpi"></div></div>
+            <div class="ag-grid">
+              <div class="adm-hp adm-ro">
+                <div class="adm-hp-head">
+                  <div class="adm-hp-title"><h2 id="agPayTitle">To pay</h2><span id="agPayCount"></span></div>
+                  <div class="adm-seg" role="group" aria-label="Show" id="agPaySeg"><button type="button" data-v="owed" class="active">To pay</button><button type="button" data-v="paid">Paid</button></div>
+                </div>
+                <div class="ag-list" id="agPayList"></div>
+              </div>
+              <aside class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Paid out</h2><span>Per month</span></div></div>
+                <div class="ag-bars" id="agPayBars"></div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="dash-panel ag" id="adm-panel-services" hidden>
+            <div class="dash-head adm-home-head"><div class="ag-h1"><h1>Services</h1><span class="ag-sample" hidden>Sample data</span></div></div>
+            <p class="ag-loading" hidden></p>
+            <div class="adm-hp adm-ro">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>What we offer</h2><span>Prices in US$</span></div></div>
+              <div class="ag-list" id="agSvcList"></div>
+            </div>
+            <div class="ag-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Game trailer packages</h2></div></div>
+                <div class="ag-tiers" id="agTiers"></div>
+              </div>
+              <aside class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Taking work</h2></div></div>
+                <div id="agSettings"></div>
+              </aside>
+            </div>
           </section>
 
           <section class="dash-panel adm-prizes" id="adm-panel-giveaways" hidden>
@@ -1931,6 +2068,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.min.js" integrity="sha384-B2duOBIryCXbX4eDE4BdJwtNkQMRQde3o6IsjfPW28E6aH1CYE96hHeZRG3zY56O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/supabase-init.js?v=20261014d"></script>
   <script src="/site-gate.js?v=20261008c"></script>
-  <script src="/catalog.js?v=adm20261125b" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=adm20261125b"></script>
+  <script src="/admin-agency.js?v=adm20261126a"></script>
+  <script src="/catalog.js?v=adm20261126a" data-then="/app.js?v=20261026-credit,/reviews.js?v=20260729a,/admin.js?v=adm20261126a"></script>
 </body>
 </html>
