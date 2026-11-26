@@ -164,7 +164,59 @@ html[data-theme="light"] .ag { --src-x: #2b2e35; }
 .ag-bar b { position: absolute; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 600; color: var(--fg-2); font-variant-numeric: tabular-nums; transform: translateY(-18px); }
 .ag-bar span { margin-top: 8px; text-align: center; font-size: 12px; color: var(--fg-3); }
 
+/* Empty states: say what will show up and offer the next step. */
+.ag-empty-cta { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 30px 16px 26px; text-align: center; color: var(--fg-3); }
+.ag-empty-cta b { font-size: 14px; font-weight: 700; color: var(--fg-1); }
+.ag-empty-cta span { max-width: 380px; font-size: 13px; line-height: 1.5; }
+.ag-empty-cta .btn { margin-top: 8px; }
+.ag-chart-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 100%; text-align: center; color: var(--fg-3); border: 1px dashed var(--hairline-strong); border-radius: var(--r-ctl); }
+.ag-chart .ag-chart-empty svg { width: 22px; height: 22px; overflow: visible; }
+.ag-chart-empty b { font-size: 14px; font-weight: 700; color: var(--fg-1); }
+.ag .adm-plat-tablewrap[hidden] { display: none; }
+.ag-chart-empty span { max-width: 340px; font-size: 13px; line-height: 1.5; }
+
+/* Small inline actions */
+.ag-rowacts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.ag-iconbtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--r-pill); background: none; color: var(--fg-3); cursor: pointer; transition: color .18s, background .18s, opacity .18s; }
+@media (hover: hover) and (pointer: fine) { .ag-iconbtn:hover { color: var(--fg); background: rgba(255,255,255,0.07); } }
+.ag-link { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .ag-link:hover { color: var(--fg); text-decoration: underline; text-decoration-color: var(--hairline-strong); text-underline-offset: 3px; } }
+.ag-payrow { grid-template-columns: minmax(0, 1fr) 110px 40px; min-height: 48px; }
+.ag-kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px 16px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--hairline); font-size: 13px; }
+.ag-kv dt { color: var(--fg-3); }
+.ag-kv dd { margin: 0; color: var(--fg-1); }
+.ag-brief.ag-dim { color: var(--fg-3); }
+
+/* Dev cards are buttons (click to edit) */
+button.ag-dev { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: border-color .18s, background .18s; }
+@media (hover: hover) and (pointer: fine) { button.ag-dev:not(.ag-dev-add):hover { border-color: var(--hairline-strong); } }
+button.ag-dev:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ag-dev-stats > span { display: block; }
+.ag-dev-stats > span > span { display: block; font-size: 12px; color: var(--fg-3); }
+.ag { --sv-cloth: #b4793a; }
+.ag-row[data-ag-edit-svc] { cursor: pointer; }
+
+/* Forms (pay-modal dialog, admin field styles) */
+body.ag-dlg-open { overflow: hidden; }
+.ag-dlg { width: 600px; max-width: 100%; max-height: calc(100vh - 48px); overflow-y: auto; }
+.ag-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 14px; margin-top: 18px; }
+.ag-form .adm-input { width: 100%; min-width: 0; }
+.ag-form .adm-textarea { resize: vertical; min-height: 70px; }
+.ag-opt { font-style: normal; font-size: 12px; color: var(--fg-3); }
+.ag-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.ag-check { position: relative; display: inline-flex; cursor: pointer; }
+.ag-check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ag-check span { padding: 6px 12px; border-radius: var(--r-pill); border: 1px solid var(--hairline); background: rgba(255,255,255,0.03); font-size: 13px; color: var(--fg-2); transition: background .18s, border-color .18s, color .18s; }
+.ag-check input:checked + span { background: rgba(255,255,255,0.11); border-color: var(--hairline-strong); color: var(--fg); }
+.ag-check input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ag-form-err { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--accent-ink); }
+.ag-form-err[hidden] { display: none; }
+.ag-form-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.ag-grow { flex: 1; }
+.ag-danger { color: var(--accent-ink); }
+
 @media (max-width: 1279px) { .ag-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .ag-form { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) {
   .ag-lh { display: none; }
   .ag-commissions-cols, .ag-leads-cols, .ag-pay-cols, .ag-services-cols { grid-template-columns: minmax(0, 1fr) auto; }
