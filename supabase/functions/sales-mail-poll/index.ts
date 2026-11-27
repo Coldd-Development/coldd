@@ -177,13 +177,19 @@ Deno.serve(async (req) => {
       currency: parsed.currency, amount: parsed.total, amount_usd: Math.round(parsed.total * perUnit * 10000) / 10000,
       net_amount: parsed.net, net_usd: parsed.net == null ? null : Math.round(parsed.net * perUnit * 10000) / 10000,
       quantity: qty, buyer_name: parsed.buyer, status: "paid",
-      raw: { email_message_id: m.messageId, email_sent_at: m.sentAt, forwarded, quoted_sent_at: quoted }, updated_at: new Date().toISOString(),
+      // Each product with ClearlyDev's own price for it: the phone alert trigger
+      // (sale_alert_platform) sends one alert per product from these.
+      raw: {
+        email_message_id: m.messageId, email_sent_at: m.sentAt, forwarded, quoted_sent_at: quoted,
+        items: parsed.items.filter((i) => i.name).map((i) => ({ name: i.name, qty: i.qty || 1, amount: i.amount })),
+      },
+      updated_at: new Date().toISOString(),
     }, { onConflict: "platform,external_id", ignoreDuplicates: true });
     if (up.error) throw new Error(up.error.message);
   }
 
   const imap = new Imap();
-  let loginOk: boolean | null = null, error = "";
+  let loginOk = null as boolean | null, error = "";
   const summary = { read: 0, parsed: 0, ignored: 0, failed: 0, written: 0, retried: 0 };
   try {
     await imap.open(host);
