@@ -1017,17 +1017,18 @@
 
             <div class="adm-mps-grid">
               <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>To do</h2><span id="admMpShowing">Every marketplace</span></div><button type="button" class="btn btn-ghost adm-btn-sm" id="admMpShowAll" hidden>Show all</button></div>
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>To do</h2><span id="admMpShowing"></span></div></div>
+                <div class="adm-mp-tools">
+                  <input type="search" id="admMpSearch" class="adm-input adm-input-sm" placeholder="Search products or tasks" autocomplete="off" aria-label="Search tasks" />
+                  <div class="adm-dd adm-dd-inline" id="admMpPfDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Marketplace"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Marketplace" hidden></div></div>
+                  <div class="adm-dd adm-dd-inline" id="admMpKindDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Task type"><span class="adm-dd-val"></span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Task type" hidden></div></div>
+                </div>
                 <div id="admMpTasks"></div>
               </div>
               <div class="adm-mps-side">
                 <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Coverage</h2><span>Live coldd.dev products on each marketplace</span></div></div>
+                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Coverage</h2></div></div>
                   <div id="admMpCoverage"></div>
-                </div>
-                <div class="adm-hp">
-                  <div class="adm-hp-head"><div class="adm-hp-title"><h2>Recently completed</h2></div></div>
-                  <div id="admMpDoneLog"></div>
                 </div>
               </div>
             </div>

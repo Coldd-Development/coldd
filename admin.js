@@ -2024,6 +2024,17 @@
     if (d) d.textContent = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     syncHomePeriod();
     var sales = ORDERS_LOADED ? homeSales() : [];
+    // The owner's greeting: today's gross sales (AU$, since midnight). Others see "Dashboard".
+    var h1 = document.querySelector('#adm-panel-home .dash-head h1');
+    if (h1) {
+      if (REV_OWNER === null) revOwner().then(function () { if (curPanel === 'home') renderHome(); });
+      if (REV_OWNER && ORDERS_LOADED) {
+        var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+        var today = sumSales(sales, t0, new Date(Date.now() + 60000));
+        h1.textContent = 'Hey ' + (ADMIN.username || 'there') + ', you\'ve made ' + fmtA(today.aud) + ' off Roblox today!';
+        h1.classList.add('adm-hello');
+      } else { h1.textContent = 'Dashboard'; h1.classList.remove('adm-hello'); }
+    }
     renderHomeKpis(sales);
     renderHomeRecent();
     renderPlatforms(sales);
@@ -5558,7 +5569,17 @@
       return d == null || Math.abs(d) < 0.5 ? '' : '<span class="adm-kpi-delta ' + (d > 0 ? 'up' : 'down') + '">' + homeIcon(d > 0 ? 'arrow_upward' : 'arrow_downward', 13) + fmtPctAbs(d) + '</span><span class="adm-kpi-cmp">vs previous 30 days</span>';
     }
     var best = 'This month\'s best seller';
-    var cells = ['<div class="adm-kpi-cell"><span class="adm-kpi-label">Products</span><span class="adm-kpi-value"><b>' + num(live.length) + '</b><em>live</em></span></div>'];
+    // Global coverage from the Marketplaces ticks: live products listed on every marketplace,
+    // and how many listings are still missing (needs-update counts as listed).
+    var everywhere = 0, missing = 0, byMk = {};
+    live.forEach(function (p) {
+      var all = true;
+      MARKETPLACES.forEach(function (m) { var st = mpStatus(p.dbId, m.key); if (st !== 'live' && st !== 'needs_update') { all = false; missing++; byMk[m.label] = (byMk[m.label] || 0) + 1; } });
+      if (all) everywhere++;
+    });
+    var covTitle = Object.keys(byMk).map(function (k) { return k + ': ' + byMk[k] + ' missing'; }).join(', ');
+    var cells = ['<div class="adm-kpi-cell"' + (covTitle ? ' title="' + esc(covTitle) + '"' : '') + '><span class="adm-kpi-label">Products</span><span class="adm-kpi-value"><b>' + num(live.length) + '</b><em>live</em></span>' +
+      (live.length ? '<span class="adm-kpi-sub">' + sharePct(everywhere / live.length * 100) + ' on every marketplace · ' + plural(missing, 'listing') + ' missing</span>' : '') + '</div>'];
     if (!ready) { grid.innerHTML = cells.concat(['Sold in 30 days', 'Gross revenue', best].map(loading)).join(''); return; }
     var list = anAllItems(), now = Date.now(), cS = new Date(now - 30 * DAY_MS), cE = new Date(now + 60000), pS = new Date(now - 60 * DAY_MS);
     var cur = anIn(list, cS, cE), prev = anIn(list, pS, cS);
@@ -7616,13 +7637,19 @@
     { key: 'creatorstore', label: 'Creator Store' }
   ];
   // Places a custom to-do can be set for: the marketplaces plus our own site.
-  var MP_TASK_TARGETS = MARKETPLACES.concat([{ key: 'site', label: 'Site' }]);
+  // coldd.dev: tasks for a product on our own site. Site development: work on the site itself
+  // (reported issues, bugs), not about one product.
+  var MP_TASK_TARGETS = MARKETPLACES.concat([{ key: 'site', label: 'coldd.dev' }, { key: 'sitedev', label: 'Site development' }]);
+  var SITEDEV_P = { dbId: '', title: 'Site development', image: '', visible: true };
   var MP_LISTINGS = {};   // product db id -> { marketplace key -> status }
   var MP_TASKS = [];      // custom per-product tasks (open and done)
-  var MP_FILTER = 'all';
+  var MP_FILTER = 'all', MP_KIND = 'all', MP_Q = '';
   // Real marketplace logos (web-sized copies in /mp-logos; Creator Store uses
   // the same Roblox mark as the homepage hero).
-  function mpLogo(key) { if (key === 'site') return '<svg class="adm-mp-logo" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>'; return '<img class="adm-mp-logo" src="/mp-logos/' + key + '.png" alt="" width="22" height="22" loading="lazy" />'; }
+  function mpLogo(key) {
+    if (key === 'site') return '<img class="adm-mp-logo" src="/logo.png" alt="" width="22" height="22" loading="lazy" />';
+    if (key === 'sitedev') return '<svg class="adm-mp-logo" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>';
+    if (key === 'globe') return '<svg class="adm-mp-logo" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>'; return '<img class="adm-mp-logo" src="/mp-logos/' + key + '.png" alt="" width="22" height="22" loading="lazy" />'; }
   function mpLabel(key) { var m = MP_TASK_TARGETS.filter(function (x) { return x.key === key; })[0]; return m ? m.label : key; }
   function mpStatus(dbId, key) { var l = MP_LISTINGS[dbId]; return (l && l[key]) || 'pending'; }
 
@@ -7646,6 +7673,7 @@
       if (curPanel === 'marketplaces') renderMarketplaces();
       if (curPanel === 'home') renderHome();
       if (curPanel === 'analytics') renderAnCreator();
+      if (curPanel === 'products') renderProducts();
     });
   }
 
@@ -7716,6 +7744,7 @@
       if (t.done) return;
       var p = prods.filter(function (x) { return x.dbId === t.product_id; })[0];
       if (p) items.push({ kind: 'task', product: p, mk: t.marketplace, text: t.title, taskId: t.id });
+      else if (!t.product_id && t.marketplace === 'sitedev') items.push({ kind: 'task', product: SITEDEV_P, mk: 'sitedev', text: t.title, taskId: t.id });
     });
     return items;
   }
@@ -8683,11 +8712,12 @@
     // The platform tiles are the filter: click one to see only its tasks, click it again for all.
     $('admMpStats').innerHTML = MP_TASK_TARGETS.map(function (m) {
       var n = items.filter(function (i) { return i.mk === m.key; }).length;
-      var c = m.key === 'site' ? null : cover(m.key);
+      var c = m.key === 'site' || m.key === 'sitedev' ? null : cover(m.key);
       return '<button type="button" class="adm-kpi-cell adm-mp-stat mk-' + m.key + (MP_FILTER === m.key ? ' is-active' : '') + (MP_FILTER !== 'all' && MP_FILTER !== m.key ? ' is-dim' : '') + '" data-mp="' + m.key + '" aria-pressed="' + (MP_FILTER === m.key) + '">' +
-        '<span class="adm-kpi-label adm-mp-statlabel">' + mpLogo(m.key) + esc(m.label) + '</span>' +
-        '<span class="adm-kpi-value"><b>' + num(n) + '</b><em>' + (n ? 'to do' : 'done') + '</em></span><span class="adm-kpi-line"></span>' +
-        '<span class="adm-kpi-sub">' + (c ? num(c.live) + ' of ' + num(live.length) + ' live' : (n ? 'Site tasks' : 'All caught up')) + '</span></button>';
+        '<span class="adm-mp-stat-top">' + mpLogo(m.key) + esc(m.label) + '</span>' +
+        '<span class="adm-mp-stat-num"><b>' + num(n) + '</b><em>' + (n ? (n === 1 ? 'task to do' : 'tasks to do') : 'all done') + '</em></span>' +
+        (c ? '<span class="adm-mp-stat-bar" aria-hidden="true"><i style="width:' + (live.length ? c.live / live.length * 100 : 0).toFixed(1) + '%"></i></span>' +
+          '<span class="adm-mp-stat-sub">' + num(c.live) + ' of ' + num(live.length) + ' live</span>' : '<span class="adm-mp-stat-sub">' + (m.key === 'sitedev' ? 'Bugs and reported issues' : 'Product tasks on our site') + '</span>') + '</button>';
     }).join('');
     var cov = $('admMpCoverage');
     if (cov) cov.innerHTML = live.length ? '<div class="adm-mp-cov">' + MARKETPLACES.map(function (m) {
@@ -8699,10 +8729,20 @@
         '<span class="adm-mp-cov-sub">' + num(c.live) + ' live' + (c.upd ? ' · ' + num(c.upd) + ' to update' : '') + (c.none ? ' · ' + num(c.none) + ' not uploaded' : '') + '</span></div>';
     }).join('') + '</div><div class="adm-mp-cov-key" aria-hidden="true"><span><i class="is-live"></i>Live</span><span><i class="is-upd"></i>Needs update</span><span><i class="is-none"></i>Not uploaded</span></div>' : anEmpty('No live products yet.');
 
-    var showing = $('admMpShowing'); if (showing) showing.textContent = MP_FILTER === 'all' ? 'Every marketplace' : mpLabel(MP_FILTER) + ' only';
-    var showAll = $('admMpShowAll'); if (showAll) showAll.hidden = MP_FILTER === 'all';
+    // Task types for the filter: Upload, Update the listing, and each task typed by hand (one name).
+    function kindKey(i) { return i.kind === 'task' ? 't:' + String(i.text || '').trim().toLowerCase() : i.kind; }
+    var kinds = {}, kindOrder = [];
+    items.forEach(function (i) { var k = kindKey(i); if (!kinds[k]) { kinds[k] = { label: i.kind === 'upload' ? 'Upload' : i.kind === 'update' ? 'Update the listing' : String(i.text || '').trim(), n: 0 }; kindOrder.push(k); } kinds[k].n++; });
+    if (MP_KIND !== 'all' && !kinds[MP_KIND]) MP_KIND = 'all';
+    mpKindDD.setOptions([{ value: 'all', label: 'Every task type' }].concat(kindOrder.map(function (k) { return { value: k, label: kinds[k].label + ' (' + kinds[k].n + ')' }; })), MP_KIND);
+    mpPfDD.setOptions([{ value: 'all', label: 'Every marketplace' }].concat(MP_TASK_TARGETS.map(function (m) { return { value: m.key, label: m.label }; })), MP_FILTER);
 
-    var shown = items.filter(function (i) { return MP_FILTER === 'all' || i.mk === MP_FILTER; });
+    var q = MP_Q.trim().toLowerCase();
+    var shown = items.filter(function (i) {
+      return (MP_FILTER === 'all' || i.mk === MP_FILTER) && (MP_KIND === 'all' || kindKey(i) === MP_KIND) &&
+        (!q || i.product.title.toLowerCase().indexOf(q) >= 0 || String(i.text || '').toLowerCase().indexOf(q) >= 0);
+    });
+    var showing = $('admMpShowing'); if (showing) showing.textContent = plural(shown.length, 'task');
     var groups = {}, order = [];
     shown.forEach(function (i) {
       if (!groups[i.product.dbId]) { groups[i.product.dbId] = { product: i.product, rows: [] }; order.push(i.product.dbId); }
@@ -8711,7 +8751,7 @@
     order.sort(function (a, b) { return groups[a].product.title.localeCompare(groups[b].product.title); });
     // One row per task (the same task on several marketplaces shares a row), a chip per marketplace.
     var KIND_ORDER = { upload: 0, update: 1, task: 2 };
-    $('admMpTasks').innerHTML = order.map(function (id) {
+    $('admMpTasks').innerHTML = '<ul class="adm-mp-flat">' + order.map(function (id) {
       var g = groups[id], p = g.product, rows = {}, rowOrder = [];
       g.rows.forEach(function (r) {
         var k = r.kind + '|' + (r.kind === 'task' ? r.text.trim().toLowerCase() : '');
@@ -8720,10 +8760,8 @@
       });
       rowOrder.sort(function (a, b) { return KIND_ORDER[rows[a].kind] - KIND_ORDER[rows[b].kind]; });
       var mks = {}; g.rows.forEach(function (r) { mks[r.mk] = 1; });
-      return '<article class="adm-mp-card">' +
-        '<header class="adm-mp-card-head"><span class="adm-mp-thumb"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>' +
-        '<div class="adm-mp-card-title"><strong>' + esc(p.title) + '</strong><span>' + plural(g.rows.length, 'task') + ' on ' + plural(Object.keys(mks).length, 'marketplace') + '</span></div></header>' +
-        '<ul class="adm-mp-list">' + rowOrder.map(function (k) {
+      var thumb = '<span class="adm-mp-thumb"' + (p.image ? ' style="background-image:url(\'' + esc(p.image) + '\')"' : '') + '></span>';
+      return rowOrder.map(function (k) {
           var row = rows[k];
           // The same task more than once on a marketplace is one chip with a count.
           var byMk = {}, mkOrder = [];
@@ -8731,29 +8769,16 @@
           var chips = mkOrder.map(function (mk) {
             var list = byMk[mk], ids = list.map(function (r) { return r.taskId; }).filter(Boolean);
             return '<button type="button" class="adm-mp-chipbtn mk-' + mk + '" data-act="done" data-pid="' + esc(p.dbId) + '" data-mk="' + mk + '" data-kind="' + row.kind + '"' + (ids.length ? ' data-task="' + esc(ids.join(',')) + '"' : '') +
-              ' title="Mark done on ' + esc(mpLabel(mk)) + '">' + mpLogo(mk) + '<span>' + esc(mpLabel(mk)) + '</span>' + (list.length > 1 ? '<b class="adm-mp-x">×' + list.length + '</b>' : '') + '<svg class="adm-mp-chk" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' + '</button>';
+              ' title="' + esc(mpLabel(mk) + (list.length > 1 ? ' (' + list.length + ')' : '') + ': mark done') + '" aria-label="' + esc('Mark done on ' + mpLabel(mk)) + '">' + mpLogo(mk) + (list.length > 1 ? '<b class="adm-mp-x">' + list.length + '</b>' : '') + '<svg class="adm-mp-chk" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' + '</button>';
           }).join('');
-          return '<li class="adm-mp-item adm-mp-row" data-kind="' + row.kind + '" data-pid="' + esc(p.dbId) + '">' +
-            '<span class="adm-mp-what">' + esc(row.text) + '</span>' +
+          return '<li class="adm-mp-item adm-mp-row" data-kind="' + row.kind + '" data-pid="' + esc(p.dbId) + '">' + thumb +
+            '<span class="adm-mp-main"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><span class="adm-mp-what">' + esc(row.text) + '</span></span>' +
             '<span class="adm-mp-chips">' + chips + '</span>' +
-            '<span class="adm-mp-rowact">' + (mkOrder.length > 1 ? '<button type="button" class="adm-mp-done" data-act="done-row">All done</button>' : '') +
+            '<span class="adm-mp-rowact">' + (mkOrder.length > 1 ? '<button type="button" class="adm-mp-done" data-act="done-row" title="Mark done everywhere">All done</button>' : '') +
             (row.kind === 'task' ? '<button type="button" class="adm-mp-del" data-act="delete-row" title="Delete task" aria-label="Delete task">' + ADM_ICON_TRASH + '</button>' : '') + '</span></li>';
-        }).join('') + '</ul></article>';
-    }).join('') || '<p class="adm-empty adm-mp-empty">Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.') + '</p>';
-
-    var logBox = $('admMpDoneLog');
-    if (logBox) {
-      var doneRows = MP_TASKS.filter(function (t) { return t.done && t.done_at; })
-        .sort(function (a, b) { return String(b.done_at).localeCompare(String(a.done_at)); }).slice(0, 15);
-      var prodsById = {};
-      prods.forEach(function (p) { prodsById[p.dbId] = p; });
-      logBox.innerHTML = doneRows.length ? '<ul class="adm-mp-donelog">' + doneRows.map(function (t) {
-        var p = prodsById[t.product_id];
-        return '<li><span class="adm-mp-tag mk-' + esc(t.marketplace) + '">' + mpLogo(t.marketplace) + esc(mpLabel(t.marketplace)) + '</span>' +
-          '<span class="adm-mp-what">' + esc(t.title) + (p ? ' <span class="adm-sub">' + esc(p.title) + '</span>' : '') + '</span>' +
-          '<span class="adm-mp-by">' + esc(t.done_by_name || 'Unknown') + ' · ' + esc(new Date(t.done_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) + '</span></li>';
-      }).join('') + '</ul>' : '<p class="adm-empty">No completed tasks yet.</p>';
-    }
+        }).join('');
+    }).join('') + '</ul>';
+    if (!order.length) $('admMpTasks').innerHTML = '<p class="adm-empty adm-mp-empty">' + (q || MP_KIND !== 'all' ? 'No tasks match.' : 'Everything is up to date' + (MP_FILTER === 'all' ? ' on every marketplace.' : ' on ' + esc(mpLabel(MP_FILTER)) + '.')) + '</p>';
 
     var mxBody = $('admMpMatrix');
     if (mxBody) mxBody.innerHTML = prods.map(function (p) {
@@ -8812,7 +8837,10 @@
     MP_FILTER = MP_FILTER === k ? 'all' : k; renderMarketplaces();
   });
   var mpShowAll = $('admMpShowAll');
-  if (mpShowAll) mpShowAll.addEventListener('click', function () { MP_FILTER = 'all'; renderMarketplaces(); });
+  var mpPfDD = makeDropdown($('admMpPfDD'), { placeholder: 'Every marketplace', onChange: function (v) { MP_FILTER = v || 'all'; renderMarketplaces(); } });
+  var mpKindDD = makeDropdown($('admMpKindDD'), { placeholder: 'Every task type', onChange: function (v) { MP_KIND = v || 'all'; renderMarketplaces(); } });
+  var mpSearch = $('admMpSearch');
+  if (mpSearch) mpSearch.addEventListener('input', function () { MP_Q = mpSearch.value; renderMarketplaces(); });
 
   var mpMatrixBox = $('admMpMatrix');
   if (mpMatrixBox) mpMatrixBox.addEventListener('click', function (e) {
@@ -8827,15 +8855,17 @@
     if (!can('admin')) return;
     var pid = $('admMpProduct').value, mk = $('admMpMarket').value, title = $('admMpTaskTitle').value.trim();
     var msg = $('admMpMsg');
-    if (!pid || !mk || !title) { if (msg) msg.textContent = 'Pick a product, a marketplace, and write the task.'; return; }
+    // Site development work is not about one product.
+    if (mk === 'sitedev') pid = '';
+    if ((!pid && mk !== 'sitedev') || !mk || !title) { if (msg) msg.textContent = mk === 'sitedev' || !mk ? 'Pick where it goes and write the task.' : 'Pick a product, a marketplace, and write the task.'; return; }
     var p = allProducts().filter(function (x) { return x.dbId === pid; })[0];
     if (msg) msg.textContent = 'Adding…';
-    window.coldSupabase.from('marketplace_tasks').insert({ product_id: pid, marketplace: mk, title: title, created_by: ADMIN.id }).then(function (res) {
+    window.coldSupabase.from('marketplace_tasks').insert({ product_id: pid || null, marketplace: mk, title: title, created_by: ADMIN.id }).then(function (res) {
       if (res.error) { if (msg) msg.textContent = 'Could not add the task.'; return; }
       if (msg) msg.textContent = '';
       $('admMpTaskTitle').value = '';
       admToast('Task added', true);
-      logAudit('Marketplaces: added task "' + title + '" on ' + mpLabel(mk) + ' for "' + (p ? p.title : pid) + '"');
+      logAudit('Marketplaces: added task "' + title + '" on ' + mpLabel(mk) + (mk === 'sitedev' ? '' : ' for "' + (p ? p.title : pid) + '"'));
       return refreshMarketplaces();
     });
   });
