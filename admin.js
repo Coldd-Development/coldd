@@ -2205,6 +2205,7 @@
       var over = labels[labels.length - 1].y - bottom;
       if (over > 0) labels.forEach(function (l) { l.y -= over; });
       for (var j = labels.length - 2; j >= 0; j--) if (labels[j].y > labels[j + 1].y - gap) labels[j].y = labels[j + 1].y - gap;
+      labels.forEach(function (l) { if (l.y < padT + 6) l.y = padT + 6; });
       var lx = padL + iw + 12;
       labels.forEach(function (l) {
         svg += '<line class="pc-key" style="stroke:' + (l.s.color || pfVar(l.s.key)) + '" x1="' + lx + '" x2="' + (lx + 10) + '" y1="' + l.y.toFixed(1) + '" y2="' + l.y.toFixed(1) + '"/>' +
@@ -4755,15 +4756,20 @@
     return out;
   }
   // Time between a buyer's orders (every order, before the 5-minute merge), for the bands.
-  var RET_BANDS = [[5, '5m', 'Within 5 minutes, not counted as a return'], [30, '30m', '5 to 30 minutes'], [60, '1h', '30 minutes to an hour'], [1440, '24h', '1 hour to a day'],
+  var RET_BANDS = [[15, '5m', '5 to 15 minutes'], [30, '30m', '15 to 30 minutes'], [60, '1h', '30 minutes to an hour'], [1440, '24h', '1 hour to a day'],
     [10080, '1w', '1 day to a week'], [43200, '1m', '1 week to a month'], [131400, '3m', '1 to 3 months'], [262800, '6m', '3 to 6 months'], [Infinity, '1y', 'More than 6 months']];
   var RET_GAPS = { src: null, list: [] };
   function retGaps() {
     var items = anAllItems();
     if (RET_GAPS.src === items) return RET_GAPS.list;
-    var by = {}, seen = {}, out = [];
-    items.forEach(function (x) { if (!x.buyer || !isFinite(x.t) || seen[x.order]) return; seen[x.order] = 1; (by[x.buyer] = by[x.buyer] || []).push(x.t); });
-    Object.keys(by).forEach(function (b) { var l = by[b].sort(function (p, q) { return p - q; }); for (var i = 1; i < l.length; i++) out.push({ t: l[i], min: (l[i] - l[i - 1]) / 60000 }); });
+    var by = {}, ord = {}, out = [];
+    items.forEach(function (x) {
+      if (!x.buyer || !isFinite(x.t)) return;
+      var o = ord[x.order];
+      if (!o) { o = ord[x.order] = { t: x.t, v: 0 }; (by[x.buyer] = by[x.buyer] || []).push(o); }
+      o.v += anVal(x.aud, x.robux);
+    });
+    Object.keys(by).forEach(function (b) { var l = by[b].sort(function (p, q) { return p.t - q.t; }); for (var i = 1; i < l.length; i++) out.push({ t: l[i].t, v: l[i].v, min: (l[i].t - l[i - 1].t) / 60000 }); });
     RET_GAPS = { src: items, list: out };
     return out;
   }
@@ -4833,11 +4839,11 @@
     // How long buyers took to order again, for repeat orders placed in the range.
     var bandsBox = $('admRetBands');
     if (bandsBox) {
-      var s0 = w.start ? w.start.getTime() : -Infinity, e0 = w.end.getTime(), cnt = RET_BANDS.map(function () { return 0; });
-      retGaps().forEach(function (gp) { if (gp.t < s0 || gp.t >= e0) return; for (var i = 0; i < RET_BANDS.length; i++) if (gp.min < RET_BANDS[i][0]) { cnt[i]++; break; } });
+      var s0 = w.start ? w.start.getTime() : -Infinity, e0 = w.end.getTime(), cnt = RET_BANDS.map(function () { return 0; }), money = cnt.slice();
+      retGaps().forEach(function (gp) { if (gp.t < s0 || gp.t >= e0 || gp.min < 5) return; for (var i = 0; i < RET_BANDS.length; i++) if (gp.min < RET_BANDS[i][0]) { cnt[i]++; money[i] += gp.v; break; } });
       var totG = anSum(cnt), maxG = Math.max.apply(null, cnt.concat([1]));
       bandsBox.innerHTML = totG ? '<div class="adm-bars" role="table" aria-label="Time before ordering again">' + RET_BANDS.map(function (bd, i) {
-        return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + bd[1] + '<small>' + esc(bd[2]) + '</small></span>' +
+        return '<div class="adm-bar-row" role="row" title="' + esc(fmtA(money[i]) + ' from these repeat orders') + '"><span class="adm-bar-name" role="cell">' + bd[1] + '<small>' + esc(bd[2]) + '</small></span>' +
           '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (cnt[i] ? Math.max(1.5, cnt[i] / maxG * 100) : 0).toFixed(1) + '%"></i></span>' +
           '<span class="adm-bar-val" role="cell">' + plural(cnt[i], 'repeat order') + '<small>' + sharePct(cnt[i] / totG * 100) + ' of repeat orders</small></span></div>';
       }).join('') + '</div>' : '';
@@ -5142,8 +5148,7 @@
       return '<div class="adm-catr-grp' + (open ? ' is-open' : '') + '" role="listitem">' +
         '<button type="button" class="adm-catr-row is-btn is-cat" data-cat-open="' + esc(id) + '" aria-expanded="' + open + '">' +
           '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
-          '<span class="adm-catr-name"><b>' + esc(c) + '</b></span>' +
-          '<span class="adm-catr-share">' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</span>' + change(c, i + 1) +
+          '<span class="adm-catr-name"><b title="' + esc(c) + '">' + esc(c) + '</b><span class="adm-catr-meta"><span class="adm-catr-share">' + sharePct(tot ? g[c].v / tot * 100 : 0) + '</span>' + change(c, i + 1) + '</span></span>' +
           '<span class="adm-catr-val"><b>' + money(g[c]) + '</b><small>' + sub(g[c]) + '</small></span>' +
           '<span class="adm-catr-chev">' + AN_CAT_CHEV + '</span>' +
         '</button>' + (open ? anCatTopList(g[c]) : '') + '</div>';
@@ -5154,8 +5159,7 @@
       rows.push('<div class="adm-catr-unc' + (open ? ' is-open' : '') + '" role="listitem">' +
         '<button type="button" class="adm-catr-row is-btn is-cat" data-cat-open="unc" aria-expanded="' + open + '">' +
           '<span class="adm-catr-rank"></span>' +
-          '<span class="adm-catr-name"><b>Uncategorised</b></span>' +
-          '<span class="adm-catr-note">' + plural(nItems, 'product') + ' to sort</span>' +
+          '<span class="adm-catr-name"><b>Uncategorised</b><span class="adm-catr-meta"><span class="adm-catr-note">' + plural(nItems, 'product') + ' to sort</span></span></span>' +
           '<span class="adm-catr-val"><b>' + money(unc) + '</b><small>' + sub(unc) + '</small></span>' +
           '<span class="adm-catr-chev">' + AN_CAT_CHEV + '</span>' +
         '</button>' + (open ? anCatUncList(unc) : '') + '</div>');
@@ -5273,8 +5277,7 @@
     var rows = keys.map(function (k, i) {
       return '<div class="adm-catr-row is-pm" role="listitem">' +
         '<span class="adm-catr-rank">' + (i + 1) + '</span>' +
-        '<span class="adm-catr-name"><b title="' + esc(k) + '">' + esc(k) + '</b></span>' +
-        '<span class="adm-catr-share">' + sharePct(tot ? g[k].v / tot * 100 : 0) + '</span>' + change(k, i + 1) +
+        '<span class="adm-catr-name"><b title="' + esc(k) + '">' + esc(k) + '</b><span class="adm-catr-meta"><span class="adm-catr-share">' + sharePct(tot ? g[k].v / tot * 100 : 0) + '</span>' + change(k, i + 1) + '</span></span>' +
         '<span class="adm-catr-val"><b>' + money(g[k]) + '</b><small>' + sub(g[k]) + '</small></span></div>';
     });
     var slices = keys.map(function (k) { return { v: g[k].v, color: pmColor(k), label: k, tip: sharePct(tot ? g[k].v / tot * 100 : 0) + ', ' + money(g[k]) }; });

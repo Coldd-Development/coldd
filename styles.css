@@ -6766,12 +6766,17 @@ html[data-theme="light"] .adm-mkt-line { background: rgba(0,0,0,0.025); }
 /* Categories and Payment methods rows: rank, name, share, rank move, change, value (and the
    open arrow on categories). Kept last with stronger selectors: the older .adm-catr-row rules
    above would otherwise squeeze these rows into four columns. */
-.adm-catr .adm-catr-row.is-cat.is-btn { grid-template-columns: 22px minmax(0, 1fr) 56px 40px 64px minmax(104px, auto) 16px; }
-.adm-catr.no-chg .adm-catr-row.is-cat.is-btn { grid-template-columns: 22px minmax(0, 1fr) 56px minmax(104px, auto) 16px; }
-.adm-catr .adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) 56px 40px 64px minmax(104px, auto); }
-.adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) 56px minmax(104px, auto); }
+.adm-catr .adm-catr-row.is-cat.is-btn, .adm-catr.no-chg .adm-catr-row.is-cat.is-btn { grid-template-columns: 22px minmax(0, 1fr) minmax(104px, auto) 16px; }
+.adm-catr .adm-catr-row.is-pm, .adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) minmax(104px, auto); }
+/* The share and changes sit on a line under the name, each in a fixed width so they line up. */
+.adm-catr .adm-catr-name { flex-direction: column; align-items: flex-start; gap: 5px; }
+.adm-catr .adm-catr-name b { max-width: 100%; }
+.adm-catr-meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.adm-catr-meta .adm-catr-share { min-width: 46px; text-align: center; }
+.adm-catr-meta .adm-catr-chg { flex-direction: row; align-items: center; }
+.adm-catr-meta .adm-catr-move { min-width: 34px; }
+.adm-catr-meta .adm-catr-note { grid-column: auto; }
 @media (max-width: 560px) {
-  .adm-catr .adm-catr-row.is-cat.is-btn, .adm-catr.no-chg .adm-catr-row.is-cat.is-btn { grid-template-columns: 18px minmax(0, 1fr) 52px auto 16px; }
-  .adm-catr .adm-catr-row.is-pm, .adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 18px minmax(0, 1fr) 52px auto; }
-  .adm-catr-note { grid-column: span 1; }
+  .adm-catr .adm-catr-row.is-cat.is-btn, .adm-catr.no-chg .adm-catr-row.is-cat.is-btn { grid-template-columns: 18px minmax(0, 1fr) auto 16px; }
+  .adm-catr .adm-catr-row.is-pm, .adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 18px minmax(0, 1fr) auto; }
 }
