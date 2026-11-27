@@ -1942,7 +1942,7 @@
       renderWork();
     });
     return fetchAllRows(function () {
-      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_amount, net_usd, quantity, status, source, method:raw->>method, sale_type:raw->>sale_type').order('sold_at', { ascending: false }).order('id');
+      return window.coldSupabase.from('platform_sales').select('id, platform, external_id, product_id, sold_at, product_name, buyer_name, currency, amount, amount_usd, net_amount, net_usd, quantity, status, source, method:raw->>method, sale_type:raw->>sale_type, items:raw->items').order('sold_at', { ascending: false }).order('id');
     }).then(function (res) {
       var firstLoad = !PSALES_LOADED;
       PSALES_LOADED = true;
@@ -1959,7 +1959,7 @@
           id: r.id, ext: r.external_id, productId: r.product_id, buyer: r.buyer_name, platform: r.platform, t: Date.parse(r.sold_at), name: untagName(r.product_name) || r.product_name, currency: r.currency, amount: Number(r.amount) || 0, usd: Number(r.amount_usd) || 0, net: r.net_usd == null ? null : Number(r.net_usd),
           // A Robux sale's net_amount is what the group received (Parcel orders take it from the group ledger).
           netRbx: r.currency === 'ROBUX' && r.net_amount != null ? Number(r.net_amount) : null, method: r.method || '', saleType: r.sale_type || '',
-          qty: r.quantity || 1, status: r.status, source: r.source || '' };
+          qty: r.quantity || 1, status: r.status, source: r.source || '', items: pricedItems(r.items) };
       });
       if (curPanel === 'orders') renderOrders();
       if (curPanel === 'analytics') renderAnalytics();
@@ -4446,7 +4446,7 @@
     });
     PSALES.forEach(function (s) {
       if (s.status === 'refunded') return;
-      var rb = s.currency === 'ROBUX', names = splitOrderNames(s.name, s.qty || 1), sh = saleShares(s, names);
+      var rb = s.currency === 'ROBUX', names = saleNames(s), sh = saleShares(s, names);
       names.forEach(function (raw, j) {
         var nm = canonName(raw, rb ? 0 : s.usd * sh[j]);
         add({ pf: s.platform, t: s.t, id: names.length > 1 ? null : s.productId, title: nm, aud: rb ? 0 : usdToAudAt(s.usd * sh[j], s.t), robux: rb ? psRbx(s) * sh[j] : 0,
@@ -8710,9 +8710,26 @@
     var sum = w.reduce(function (a, b) { return a + b; }, 0) || 1;
     return w.map(function (x) { return x / sum; });
   }
-  // Each product's share (adding up to 1) of a multi-product marketplace sale.
+  // A sale's products with the platform's own price for each (raw.items, saved from
+  // ClearlyDev order emails), when every one has a price; else null.
+  function pricedItems(a) {
+    if (!Array.isArray(a) || a.length < 2) return null;
+    var out = a.map(function (i) { return { name: untagName(i && i.name), amount: Number(i && i.amount) || 0 }; });
+    return out.every(function (i) { return i.name && i.amount > 0; }) ? out : null;
+  }
+  // The products of a sale: its priced items when it has them, else split from its name.
+  function saleNames(s, fallback) {
+    if (s.items) return s.items.map(function (i) { return i.name; });
+    return splitOrderNames(fallback == null ? s.name : (s.name || fallback), s.qty || 1);
+  }
+  // Each product's share (adding up to 1) of a multi-product marketplace sale: by the
+  // platform's own prices when the sale has them, else estimated (splitAmounts).
   function saleShares(s, names) {
     if (names.length < 2) return [1];
+    if (s.items && s.items.length === names.length) {
+      var tot = s.items.reduce(function (a, i) { return a + i.amount; }, 0);
+      return s.items.map(function (i) { return i.amount / tot; });
+    }
     if (!(s.usd > 0)) return names.map(function () { return 1 / names.length; });
     return splitAmounts(names, s.platform, s.t, s.usd).map(function (v) { return v / s.usd; });
   }
@@ -8777,7 +8794,7 @@
     }
     PSALES.forEach(function (s) {
       var robux = s.currency === 'ROBUX';
-      var names = splitOrderNames(s.name || 'Order', s.qty || 1);
+      var names = saleNames(s, 'Order');
       var shares = saleShares(s, names);
       names.forEach(function (raw, j) {
         var usd = robux ? null : s.usd * shares[j], nm = canonName(raw, usd);
