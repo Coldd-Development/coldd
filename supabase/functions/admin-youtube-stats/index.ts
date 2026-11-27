@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
             .filter(Boolean);
           if (ids.length) {
             const vRes = await fetch(
-              `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${ids.join(",")}&key=${key}`,
+              `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet,contentDetails&id=${ids.join(",")}&key=${key}`,
             );
             if (vRes.ok) {
               const vJson = await vRes.json();
@@ -111,7 +111,11 @@ Deno.serve(async (req: Request) => {
                 const likes = Number(s.likeCount ?? 0);
                 const comments = Number(s.commentCount ?? 0);
                 vViews += views; vLikes += likes; vComments += comments;
-                return { id: v.id, title: v?.snippet?.title ?? "", publishedAt: v?.snippet?.publishedAt ?? null, views, likes, comments };
+                // Length from the ISO 8601 duration (PT1M5S). YouTube Shorts run up to 3 minutes.
+                const dm = String(v?.contentDetails?.duration ?? "").match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+                const durationSec = dm ? (Number(dm[1] ?? 0) * 86400 + Number(dm[2] ?? 0) * 3600 + Number(dm[3] ?? 0) * 60 + Number(dm[4] ?? 0)) : null;
+                const isShort = durationSec != null && durationSec > 0 && durationSec <= 180;
+                return { id: v.id, title: v?.snippet?.title ?? "", publishedAt: v?.snippet?.publishedAt ?? null, views, likes, comments, durationSec, isShort };
               });
               const n = vids.length;
               const interactions = vLikes + vComments;

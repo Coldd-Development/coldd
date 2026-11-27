@@ -122,6 +122,7 @@
               <a href="/admin/products/" data-panel="products"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span>Products</span></a>
               <a href="/admin/reviews/" data-panel="reviews"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9 9 8z"/></svg><span>Reviews</span></a>
               <a href="/admin/marketplaces/" data-panel="marketplaces"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/></svg><span>Marketplaces</span></a>
+              <a href="/admin/social/" data-panel="social"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a3 3 0 1 0-3-3"/><path d="M6 15a3 3 0 1 0 3 3"/><path d="M18 22a3 3 0 1 0-3-3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/><circle cx="6" cy="12" r="3"/></svg><span>Social media</span></a>
               <span class="adm-nav-label">Agency</span>
               <a href="/admin/commissions/" data-panel="commissions"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg><span>Commissions</span><span class="adm-nav-count" id="agNavCm" hidden></span></a>
               <a href="/admin/leads/" data-panel="leads"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>Leads</span><span class="adm-nav-count" id="agNavLeads" hidden></span></a>
@@ -438,6 +439,68 @@
             </div>
           </section>
 
+          <section class="dash-panel adm-an adm-social" id="adm-panel-social" hidden>
+            <div class="dash-head adm-home-head">
+              <h1>Social media</h1>
+              <div class="adm-seg adm-range" role="group" aria-label="Date range">
+                <button type="button" data-range="1">24h</button>
+                <button type="button" data-range="7">7d</button>
+                <button type="button" data-range="30" class="active">30d</button>
+                <button type="button" data-range="365">1y</button>
+                <button type="button" data-range="0">All time</button>
+              </div>
+            </div>
+
+            <div class="adm-hp adm-kpi">
+              <div class="adm-kpi-grid" id="admSocKpis"></div>
+            </div>
+
+            <div class="adm-hp adm-plat">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Audience growth</h2></div></div>
+              <div class="adm-plat-chart" id="admSocGrowth"><div class="adm-skel adm-skel-chart"></div></div>
+            </div>
+
+            <div class="adm-an-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Content plan</h2><span>What to post, and which product it promotes</span></div></div>
+                <form class="adm-soc-add" id="admSocAdd" autocomplete="off">
+                  <div class="adm-dd adm-dd-inline" id="admSocPfDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Platform"><span class="adm-dd-val placeholder">Platform</span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Platform" hidden></div></div>
+                  <input type="date" id="admSocDate" class="adm-input adm-input-sm" aria-label="Post date" required />
+                  <input type="text" id="admSocTitle" class="adm-input" placeholder="What is the post?" maxlength="200" aria-label="Post" required />
+                  <div class="adm-dd adm-dd-inline" id="admSocProdDD"><button type="button" class="adm-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Product to promote"><span class="adm-dd-val placeholder">Product (optional)</span><svg class="adm-dd-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="adm-dd-menu" role="listbox" aria-label="Product to promote" hidden></div></div>
+                  <button class="btn btn-primary adm-btn-sm" type="submit">Add</button>
+                </form>
+                <div id="admSocPlan"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Posting cadence</h2><span>Last 4 weeks against a steady target</span></div></div>
+                <div id="admSocCadence"></div>
+              </div>
+            </div>
+
+            <div class="adm-hp">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>Top content</h2></div>
+                <div class="adm-an-tools"><div class="adm-seg adm-vol-grain" role="group" aria-label="Show" id="admSocTopSeg">
+                  <button type="button" data-soc-top="all">All</button>
+                  <button type="button" data-soc-top="youtube">Long-form</button>
+                  <button type="button" data-soc-top="shorts">Shorts</button>
+                  <button type="button" data-soc-top="tiktok">TikTok</button>
+                </div></div></div>
+              <div id="admSocTop"></div>
+            </div>
+
+            <div class="adm-an-grid">
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Platforms</h2><span>Open one for its stats</span></div></div>
+                <div id="admMktChannels"></div>
+              </div>
+              <div class="adm-hp">
+                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Social to the site</h2><span>How buyers say they found coldd</span></div></div>
+                <div id="admSocSite"></div>
+              </div>
+            </div>
+          </section>
+
           <section class="dash-panel adm-mkt" id="adm-panel-marketing" hidden>
             <div class="dash-head adm-home-head">
               <h1>Marketing</h1>
@@ -454,16 +517,10 @@
               <div class="adm-kpi-grid" id="admMktStats"></div>
             </div>
 
-            <div class="adm-mkt-sec"><h2>Growth</h2><span>Your audience and how buyers find coldd</span></div>
-            <div class="adm-mkt-grid">
-              <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>Audience</h2><span>Open a channel for its charts</span></div></div>
-                <div id="admMktChannels"></div>
-              </div>
-              <div class="adm-hp">
-                <div class="adm-hp-head"><div class="adm-hp-title"><h2>How buyers found us</h2><span>Thank-you page survey</span></div></div>
-                <div id="admMktHeard"></div>
-              </div>
+            <div class="adm-mkt-sec"><h2>Growth</h2><span>How buyers find coldd</span></div>
+            <div class="adm-hp">
+              <div class="adm-hp-head"><div class="adm-hp-title"><h2>How buyers found us</h2><span>Thank-you page survey</span></div></div>
+              <div id="admMktHeard"></div>
             </div>
 
             <div class="adm-mkt-sec"><h2>Demand</h2><span>What people look for and leave behind</span></div>

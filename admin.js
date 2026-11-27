@@ -799,6 +799,7 @@
     return window.coldSupabase.from('client_events').select('type, session_id, meta, created_at').gte('created_at', cutoff).limit(50000).then(function (res) {
       if (res.error) { console.error('[admin] failed to load client events:', res.error.message); return; }
       CLIENT_EVENT_ROWS = (res.data || []).map(function (r) { return { type: r.type, s: r.session_id, meta: r.meta || {}, d: r.created_at }; });
+      if (curPanel === 'social') renderSocial();
       if (curPanel === 'analytics') renderAnalytics(); else if (curPanel === 'site') renderSite();
     });
   }
@@ -821,6 +822,7 @@
   function refreshDiscordStats() {
     return invokeAdminFn('admin-discord-stats', {}, 'Could not load Discord stats.').then(function (data) {
       DISCORD_STATS = { memberCount: data.memberCount, onlineCount: data.onlineCount, history: data.history || [] };
+      if (curPanel === 'social') renderSocial();
       if (curPanel === 'home') renderHome();
       if (curPanel === 'analytics') renderAnalytics(); else if (curPanel === 'site') renderSite();
     if (curPanel === 'marketing') renderMarketing();
@@ -1219,6 +1221,7 @@
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === n); });
     if (curPanel === 'analytics') renderAnalytics(); else if (curPanel === 'site') renderSite();
     if (curPanel === 'marketing') renderMarketing();
+    if (curPanel === 'social') renderSocial();
     if (curPanel === 'home') renderHome();
   }
 
@@ -1620,7 +1623,7 @@
   /* ================================================================
      NAV / PANEL SWITCHING
      ================================================================ */
-  var PANELS = ['home', 'finances', 'tasks', 'site', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content', 'commissions', 'commission', 'leads', 'devs', 'payouts', 'services'];
+  var PANELS = ['home', 'finances', 'tasks', 'site', 'social', 'analytics', 'marketing', 'marketplaces', 'products', 'unreleased', 'product-edit', 'product-update', 'orders', 'order-detail', 'giveaways', 'giveaway-detail', 'resellers', 'reseller-edit', 'reviews', 'sales', 'sitemgmt', 'content', 'commissions', 'commission', 'leads', 'devs', 'payouts', 'services'];
   var curPanel = 'home';
 
   /* ---- URL routing ----
@@ -1635,7 +1638,7 @@
      own - those IDs are unbounded and not worth pre-rendering, so a hard
      refresh on one of those exact deep URLs falls back to its parent list. */
   var PANEL_PATH = {
-    home: '/admin/', finances: '/admin/finances/', tasks: '/admin/tasks/', site: '/admin/site/', products: '/admin/products/', sales: '/admin/sales/',
+    home: '/admin/', finances: '/admin/finances/', tasks: '/admin/tasks/', site: '/admin/site/', social: '/admin/social/', products: '/admin/products/', sales: '/admin/sales/',
     marketing: '/admin/marketing/', marketplaces: '/admin/marketplaces/', analytics: '/admin/analytics/', orders: '/admin/orders/',
     giveaways: '/admin/giveaways/', resellers: '/admin/resellers/', reviews: '/admin/reviews/', content: '/admin/content/',
     sitemgmt: '/admin/sitemgmt/',
@@ -1712,6 +1715,7 @@
     else if (name === 'tasks') renderWork();
     else if (name === 'analytics') renderAnalytics();
     else if (name === 'site') renderSite();
+    else if (name === 'social') renderSocial();
     else if (name === 'marketing') renderMarketing();
     else if (name === 'marketplaces') renderMarketplaces();
     else if (name === 'products') renderProducts();
@@ -2528,8 +2532,9 @@
   var MKT_CHANNELS = [
     { key: 'discord', name: 'Discord', note: 'Members, presence, growth and daily swings.' },
     { key: 'x', name: 'X (Twitter)', note: 'Followers, posting cadence and recent-post engagement.', needs: 'Needs TWITTER_BEARER_TOKEN + TWITTER_USERNAME secrets' },
-    { key: 'youtube', name: 'YouTube', note: 'Subscribers, views, uploads and per-video engagement.', needs: 'Needs YOUTUBE_API_KEY + YOUTUBE_CHANNEL_ID secrets' },
-    { key: 'tiktok', name: 'TikTok', note: 'Followers, likes, uploads and per-video engagement.', needs: 'Not connected yet - click Connect TikTok to authorize.' }
+    { key: 'youtube', name: 'YouTube', note: 'Subscribers, views, long-form and Shorts, per-video engagement.', needs: 'Needs YOUTUBE_API_KEY + YOUTUBE_CHANNEL_ID secrets' },
+    { key: 'tiktok', name: 'TikTok', note: 'Followers, likes, uploads and per-video engagement.', needs: 'Not connected yet - click Connect TikTok to authorize.' },
+    { key: 'instagram', name: 'Instagram', note: 'Followers, reach and post engagement.', needs: 'Needs an Instagram business account linked to a Facebook page' }
   ];
 
   // TIKTOK_CLIENT_KEY is the public half of the OAuth pair (as opposed to
@@ -2568,6 +2573,7 @@
       invokeAdminFn('admin-youtube-analytics', { days: 28 }).then(function (d) { YT_ANALYTICS = d; }).catch(function () { YT_ANALYTICS = null; })
     ]).then(function () {
       if (curPanel === 'marketing') renderMarketing();
+      if (curPanel === 'social') renderSocial();
     });
   }
   // Kicks off the Google OAuth consent flow for the YouTube Analytics API.
@@ -3328,30 +3334,214 @@
     });
     panel.addEventListener('mouseleave', function () { tip.hidden = true; });
   })();
+  /* ---- Social media page ----
+     Growing the site through social: each platform's audience over time, a content plan that
+     can promote a product, posting cadence against a steady target, the best recent content
+     (YouTube long-form and Shorts are told apart by length, Shorts up to 3 minutes), and what
+     buyers say brought them (the thank-you page survey). Platforms holds each channel's detail. */
+  var SOC_PLATFORMS = [
+    { key: 'youtube', label: 'YouTube', color: '#f0555a', perWeek: 1 },
+    { key: 'shorts', label: 'YouTube Shorts', color: '#ff8a8e', perWeek: 3 },
+    { key: 'tiktok', label: 'TikTok', color: '#45cf8e', perWeek: 3 },
+    { key: 'x', label: 'X', color: '#8a8f98', perWeek: 5 },
+    { key: 'instagram', label: 'Instagram', color: '#e0559b', perWeek: 3 },
+    { key: 'discord', label: 'Discord', color: '#5865F2', perWeek: 2 }
+  ];
+  function socPf(k) { return SOC_PLATFORMS.filter(function (x) { return x.key === k; })[0] || { key: k, label: k, color: 'var(--fg-3)' }; }
+  var SOC_POSTS = [], SOC_TOP = 'all';
+  function refreshSocialPosts() {
+    if (!window.coldSupabase) return Promise.resolve();
+    return window.coldSupabase.from('social_posts').select('id, platform, planned_for, title, product_id, status, posted_at, created_at').order('planned_for', { ascending: true }).limit(1000).then(function (r) {
+      if (r.error) { console.error('[admin] social posts:', r.error.message); return; }
+      SOC_POSTS = r.data || [];
+      if (curPanel === 'social') renderSocial();
+    });
+  }
+  // Every video we can see: YouTube (long-form, or Shorts by length) and TikTok.
+  function socVideos() {
+    var out = [];
+    ((YOUTUBE_STATS && YOUTUBE_STATS.recentVideos) || []).forEach(function (v) {
+      out.push({ pf: v.isShort ? 'shorts' : 'youtube', title: v.title, t: Date.parse(v.publishedAt), views: v.views || 0, inter: (v.likes || 0) + (v.comments || 0),
+        url: 'https://www.youtube.com/' + (v.isShort ? 'shorts/' : 'watch?v=') + encodeURIComponent(v.id) });
+    });
+    ((TIKTOK_STATS && TIKTOK_STATS.recentVideos) || []).forEach(function (v) {
+      var t = typeof v.postedAt === 'number' ? v.postedAt * 1000 : Date.parse(v.postedAt);
+      out.push({ pf: 'tiktok', title: v.title, t: t, views: v.views || 0, inter: (v.likes || 0) + (v.comments || 0) + (v.shares || 0), url: '' });
+    });
+    return out.filter(function (v) { return isFinite(v.t); });
+  }
+  function socDayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function socDayLabel(key) { return new Date(key + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }); }
+  var socPfDD = makeDropdown($('admSocPfDD'), { placeholder: 'Platform' });
+  var socProdDD = makeDropdown($('admSocProdDD'), { placeholder: 'Product (optional)', searchable: true });
+  socPfDD.setOptions(SOC_PLATFORMS.map(function (p) { return { value: p.key, label: p.label }; }), '');
+  function renderSocial() {
+    var w = anWindow(), s = w.start ? w.start.getTime() : -Infinity, e = w.end.getTime(), now = Date.now();
+    var ta = totalAudience(), vids = socVideos(), inR = vids.filter(function (v) { return v.t >= s && v.t < e; });
+    var byPf = {}; inR.forEach(function (v) { byPf[v.pf] = (byPf[v.pf] || 0) + 1; });
+    var views = anSum(inR.map(function (v) { return v.views; }));
+    // Survey answers in the range: which ones are social.
+    var heard = {}, heardTot = 0;
+    CLIENT_EVENT_ROWS.forEach(function (x) { if (x.type !== 'how_heard' || !x.meta || !x.meta.id) return; var t = Date.parse(x.d); if (t < s || t >= e) return; heard[x.meta.id] = (heard[x.meta.id] || 0) + 1; heardTot++; });
+    var heardSoc = (heard.youtube || 0) + (heard.tiktok || 0) + (heard.discord || 0);
+    var kp = $('admSocKpis');
+    if (kp) kp.innerHTML = [
+      kpiCell({ label: 'Audience', value: ta.channels.length ? num(ta.total) : '–', delta: ta.delta ? mktDelta(ta.delta) : '', sub: ta.channels.length ? 'Followers and members on ' + plural(ta.channels.length, 'platform') : 'No platform connected' }),
+      kpiCell({ label: 'Posts', value: num(inR.length), delta: '', sub: inR.length ? [['youtube', 'long-form'], ['shorts', 'Shorts'], ['tiktok', 'TikTok']].filter(function (x) { return byPf[x[0]]; }).map(function (x) { return num(byPf[x[0]]) + ' ' + x[1]; }).join(' · ') : 'No videos in this range' }),
+      kpiCell({ label: 'Views on new posts', value: num(views), delta: '', sub: inR.length ? num(Math.round(views / inR.length)) + ' a post on average' : 'No videos in this range' }),
+      kpiCell({ label: 'Buyers from social', value: heardTot ? sharePct(heardSoc / heardTot * 100) : '–', delta: '', sub: heardTot ? num(heardSoc) + ' of ' + plural(heardTot, 'survey answer') : 'No survey answers in this range' })
+    ].join('');
+
+    // Audience growth: each platform's followers day by day (the last snapshot carries forward).
+    var gbox = $('admSocGrowth');
+    if (gbox) {
+      var chans = ta.channels.filter(function (c) { return (c.history || []).length; });
+      if (!chans.length) { gbox.__chart = null; gbox.innerHTML = anEmpty('Connect a platform to see its growth.'); }
+      else {
+        var first = Infinity;
+        chans.forEach(function (c) { c.history.forEach(function (r) { var t = Date.parse(r.snapshot_date + 'T00:00:00'); if (t < first) first = t; }); });
+        var d0 = new Date(w.start ? Math.max(w.start.getTime(), first) : first); d0.setHours(0, 0, 0, 0);
+        var days = [];
+        for (var d = new Date(d0); d.getTime() <= now; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push(d);
+        var buckets = days.map(function (x) { return { start: x, end: new Date(x.getFullYear(), x.getMonth(), x.getDate() + 1), short: x.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }), long: x.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) }; });
+        var series = chans.map(function (c) {
+          var hist = c.history.slice().sort(function (a, b) { return a.snapshot_date < b.snapshot_date ? -1 : 1; }), j = 0, last = null;
+          var tot = days.map(function (x) { var k = socDayKey(x); while (j < hist.length && hist[j].snapshot_date <= k) { if (hist[j].followers != null) last = Number(hist[j].followers); j++; } return last; });
+          // Followers gained since the first day shown, so platforms of any size show their growth.
+          var base = null; tot.forEach(function (v) { if (base == null && v != null) base = v; });
+          var data = tot.map(function (v) { return v == null || base == null ? 0 : v - base; });
+          return { key: c.key, label: c.name, color: c.color, data: data, tot: tot, total: anSum(data) };
+        });
+        gbox.__chart = { buckets: buckets, step: Math.max(1, Math.ceil(buckets.length / 8)), complete: true, intTicks: true, aria: 'Followers gained on each platform over time',
+          axis: function (t) { return axisNum(t); }, series: series,
+          tip: function (i) { return series.map(function (x) { return '<div style="--pf:' + x.color + '"><i></i>' + esc(x.label) + '<b>' + (x.data[i] >= 0 ? '+' : '') + num(x.data[i]) + ' <small>' + (x.tot[i] != null ? num(x.tot[i]) : '–') + ' total</small></b></div>'; }).join(''); } };
+        drawPlatChart(gbox);
+      }
+    }
+
+    // Content plan: what is coming up (overdue first), with the product each post promotes.
+    var plan = $('admSocPlan');
+    if (plan) {
+      var prods = allProducts(), byId = {};
+      prods.forEach(function (p) { byId[p.dbId] = p; });
+      socProdDD.setOptions([{ value: '', label: 'No product' }].concat(prods.filter(function (p) { return p.visible; }).map(function (p) { return { value: p.dbId, label: p.title }; })), socProdDD.getValue() || '');
+      var today = socDayKey(new Date());
+      var open = SOC_POSTS.filter(function (p) { return p.status === 'planned'; });
+      var postedN = SOC_POSTS.filter(function (p) { var t = Date.parse(p.posted_at || p.planned_for); return p.status === 'posted' && t >= s && t < e; }).length;
+      plan.innerHTML = (open.length ? '<ul class="adm-soc-plan">' + open.slice(0, 40).map(function (p) {
+        var pf = socPf(p.platform), pr = p.product_id ? byId[p.product_id] : null, late = p.planned_for < today;
+        return '<li class="adm-soc-post' + (late ? ' is-late' : '') + (p.planned_for === today ? ' is-today' : '') + '" data-id="' + esc(p.id) + '">' +
+          '<span class="adm-soc-date">' + (p.planned_for === today ? 'Today' : esc(socDayLabel(p.planned_for))) + (late ? '<small>Overdue</small>' : '') + '</span>' +
+          '<span class="adm-soc-main"><b title="' + esc(p.title) + '">' + esc(p.title) + '</b><small><i style="background:' + pf.color + '"></i>' + esc(pf.label) + (pr ? ' · promotes ' + esc(pr.title) : '') + '</small></span>' +
+          '<span class="adm-soc-act"><button type="button" class="adm-mp-done" data-soc="posted">Posted</button>' +
+          '<button type="button" class="adm-mp-del" data-soc="delete" title="Delete" aria-label="Delete">' + ADM_ICON_TRASH + '</button></span></li>';
+      }).join('') + '</ul>' : anEmpty('Nothing planned. Add the next post above.')) +
+        '<p class="adm-soc-note">' + plural(postedN, 'planned post') + ' marked posted in this range.</p>';
+    }
+
+    // Posting cadence: posts in the last 4 weeks against a steady weekly target.
+    var cad = $('admSocCadence');
+    if (cad) {
+      var lastT = {}, n28 = {};
+      vids.forEach(function (v) { if (!lastT[v.pf] || v.t > lastT[v.pf]) lastT[v.pf] = v.t; if (v.t >= now - 28 * DAY_MS) n28[v.pf] = (n28[v.pf] || 0) + 1; });
+      if (X_STATS && X_STATS.configured && X_STATS.latestPostAt) lastT.x = Math.max(lastT.x || 0, Date.parse(X_STATS.latestPostAt));
+      // Platforms we cannot read posts from count the plan's posts marked posted.
+      SOC_POSTS.forEach(function (p) {
+        if (p.status !== 'posted' || ['x', 'instagram', 'discord'].indexOf(p.platform) < 0) return;
+        var t = Date.parse(p.posted_at || p.planned_for);
+        if (!lastT[p.platform] || t > lastT[p.platform]) lastT[p.platform] = t;
+        if (t >= now - 28 * DAY_MS) n28[p.platform] = (n28[p.platform] || 0) + 1;
+      });
+      cad.innerHTML = '<div class="adm-bars">' + SOC_PLATFORMS.map(function (p) {
+        var want = p.perWeek * 4, have = n28[p.key] || 0, ago = lastT[p.key] ? Math.floor((now - lastT[p.key]) / DAY_MS) : null;
+        return '<div class="adm-bar-row"><span class="adm-bar-name">' + esc(p.label) + '<small>' + (ago == null ? 'No posts seen yet' : ago === 0 ? 'Posted today' : 'Last post ' + plural(ago, 'day') + ' ago') + '</small></span>' +
+          '<span class="adm-bar-track" aria-hidden="true"><i style="width:' + (have ? Math.max(2, Math.min(100, have / want * 100)) : 0).toFixed(1) + '%;background:' + p.color + '"></i></span>' +
+          '<span class="adm-bar-val">' + num(have) + ' of ' + num(want) + '<small>aim for ' + p.perWeek + ' a week</small></span></div>';
+      }).join('') + '</div>';
+    }
+
+    // Top content in the range, by views.
+    var top = $('admSocTop');
+    if (top) {
+      document.querySelectorAll('#admSocTopSeg [data-soc-top]').forEach(function (b) { var on = b.getAttribute('data-soc-top') === SOC_TOP; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+      var list = inR.filter(function (v) { return SOC_TOP === 'all' || v.pf === SOC_TOP; }).sort(function (a, b) { return b.views - a.views; }).slice(0, 10);
+      top.innerHTML = list.length ? '<div class="adm-an-list">' + list.map(function (v, i) {
+        var pf = socPf(v.pf), er = v.views ? v.inter / v.views * 100 : 0;
+        var name = v.url ? '<a href="' + esc(v.url) + '" target="_blank" rel="noopener" title="' + esc(v.title) + '">' + esc(v.title || 'Untitled') + '</a>' : '<b title="' + esc(v.title) + '">' + esc(v.title || 'Untitled') + '</b>';
+        return '<div class="adm-soc-vid"><span class="adm-an-rank">' + (i + 1) + '</span><span class="adm-soc-main">' + name +
+          '<small><i style="background:' + pf.color + '"></i>' + esc(pf.label) + ' · ' + esc(new Date(v.t).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })) + '</small></span>' +
+          '<span class="adm-soc-num">' + num(v.views) + '<small>views</small></span><span class="adm-soc-num">' + pct(er) + '<small>engagement</small></span></div>';
+      }).join('') + '</div>' : anEmpty(vids.length ? 'No videos in this range.' : 'Connect YouTube or TikTok to see your videos.');
+    }
+
+    // Platforms: each channel's own stats (moved from Marketing).
+    if ($('admMktChannels')) setHtmlPreservingCollapse($('admMktChannels'), MKT_CHANNELS.map(channelRow).join(''));
+
+    // Social to the site: what buyers answered on the thank-you page.
+    var site = $('admSocSite');
+    if (site) {
+      var LABELS = { youtube: 'YouTube', tiktok: 'TikTok', discord: 'Discord', friend: 'A friend', search: 'Google / search', roblox: 'In a Roblox game', other: 'Somewhere else' };
+      var SOCIAL = { youtube: '#f0555a', tiktok: '#45cf8e', discord: '#5865F2' };
+      var keys = Object.keys(heard).sort(function (a, b) { return heard[b] - heard[a]; }), mx = Math.max.apply(null, keys.map(function (k) { return heard[k]; }).concat([1]));
+      site.innerHTML = (heardTot ? '<div class="adm-bars">' + keys.map(function (k) {
+        return '<div class="adm-bar-row"><span class="adm-bar-name">' + esc(LABELS[k] || k) + '<small>' + (SOCIAL[k] ? 'Social' : 'Other') + '</small></span>' +
+          '<span class="adm-bar-track" aria-hidden="true"><i style="width:' + Math.max(2, heard[k] / mx * 100).toFixed(1) + '%' + (SOCIAL[k] ? ';background:' + SOCIAL[k] : ';opacity:.45') + '"></i></span>' +
+          '<span class="adm-bar-val">' + plural(heard[k], 'buyer') + '<small>' + sharePct(heard[k] / heardTot * 100) + ' of answers</small></span></div>';
+      }).join('') + '</div>' : anEmpty('No survey answers in this range.')) +
+        '<p class="adm-soc-note">Put a campaign link (Marketing, Campaign links) in each post to count its visits and sales.</p>';
+    }
+  }
+  wirePlatChart($('admSocGrowth'));
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#admSocTopSeg [data-soc-top]');
+    if (b) { SOC_TOP = b.getAttribute('data-soc-top'); renderSocial(); }
+  });
+  var socAdd = $('admSocAdd');
+  if (socAdd) {
+    var socDate = $('admSocDate'); if (socDate && !socDate.value) socDate.value = socDayKey(new Date());
+    socAdd.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!can('admin')) return;
+      var pf = socPfDD.getValue(), date = $('admSocDate').value, title = $('admSocTitle').value.trim(), pid = socProdDD.getValue() || null;
+      if (!pf || !date || !title) { admToast('Pick a platform and a date, and write the post', false); return; }
+      window.coldSupabase.from('social_posts').insert({ platform: pf, planned_for: date, title: title, product_id: pid, created_by: ADMIN.id }).then(function (r) {
+        if (r.error) { admToast('Could not add the post', false); return; }
+        $('admSocTitle').value = '';
+        admToast('Added to the plan', true);
+        logAudit('Social media: planned "' + title + '" on ' + socPf(pf).label + ' for ' + date);
+        return refreshSocialPosts();
+      });
+    });
+  }
+  var socPlanBox = $('admSocPlan');
+  if (socPlanBox) socPlanBox.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-soc]'); if (!b || !can('admin')) return;
+    var li = b.closest('[data-id]'), id = li && li.getAttribute('data-id'), act = b.getAttribute('data-soc');
+    var post = SOC_POSTS.filter(function (p) { return p.id === id; })[0]; if (!post) return;
+    b.disabled = true;
+    var op = act === 'delete' ? window.coldSupabase.from('social_posts').delete().eq('id', id)
+      : window.coldSupabase.from('social_posts').update({ status: 'posted', posted_at: new Date().toISOString() }).eq('id', id);
+    op.then(function (r) {
+      if (r.error) { b.disabled = false; admToast('Could not update the post', false); return; }
+      logAudit('Social media: ' + (act === 'delete' ? 'deleted' : 'posted') + ' "' + post.title + '" on ' + socPf(post.platform).label);
+      return refreshSocialPosts();
+    });
+  });
+
   function renderMarketing() {
     var sales = REFERRALS.reduce(function (s, r) { return s + r.sales; }, 0);
     var owed = REFERRALS.reduce(function (s, r) { return s + (r.earnedUSD - r.paidUSD); }, 0);
 
     if ($('admMktStats')) {
-      var ta = totalAudience();
-      var dc = ta.channels.filter(function (c) { return c.key === 'discord'; })[0];
-      // Social followers: X, YouTube and TikTok together, with each one under it.
-      var soc = ta.channels.filter(function (c) { return c.key !== 'discord'; });
-      var socTotal = 0, socPrev = 0, socHasPrev = soc.length > 0;
-      soc.forEach(function (c) { socTotal += c.count || 0; var d = histDelta(c.history, function (r) { return r.followers; }); if (d) socPrev += d.base; else socHasPrev = false; });
-      function short(n) { n = Number(n) || 0; return n >= 10000 ? (Math.round(n / 100) / 10) + 'k' : num(n); }
+      var carts = cartsIn(RANGE_DAYS ? rangeStart() : null, new Date(Date.now() + 60000));
       // Where buyers found us (survey) and searches that found nothing, over the range.
       var heard = howHeard(), heardTot = anSum(heard.map(function (r) { return r.count; }));
       var start = RANGE_DAYS ? rangeStart() : new Date(0), sTot = 0, sEmpty = 0;
       CLIENT_EVENT_ROWS.forEach(function (e) { if (e.type !== 'search' || !e.meta || !e.meta.q || new Date(e.d) < start) return; sTot++; if (e.meta.results === 0) sEmpty++; });
       var missing = topSearches(10).filter(function (x) { return x.noResults && x.noResults === x.count; })[0];
       $('admMktStats').innerHTML = [
-        kpiCell({ label: 'Discord members', value: DISCORD_STATS.memberCount != null ? num(DISCORD_STATS.memberCount) : '–',
-          delta: mktDelta(dc ? histDelta(dc.history, function (r) { return r.followers; }) : null),
-          sub: DISCORD_STATS.onlineCount != null ? num(DISCORD_STATS.onlineCount) + ' online now' : 'Not connected' }),
-        kpiCell({ label: 'Social followers', value: soc.length ? num(socTotal) : '–',
-          delta: socHasPrev ? mktDelta({ abs: socTotal - socPrev, pct: socPrev ? (socTotal - socPrev) / socPrev * 100 : null }) : '',
-          sub: soc.length ? soc.map(function (c) { return c.name + ' ' + short(c.count); }).join(' · ') : 'No channel connected' }),
+        kpiCell({ label: 'Abandoned carts', value: num(carts.n), delta: '', sub: carts.n ? fmtA(carts.aud) + ' left in carts' : 'No carts left in this range' }),
+        kpiCell({ label: 'Referral sales', value: num(sales), delta: '', sub: owed > 0.005 ? 'US$' + owed.toFixed(2) + ' owed to referrers' : 'Nothing owed' }),
         kpiCell({ label: 'Buyers found us through', value: heardTot ? esc(heard[0].label) : '–', delta: '',
           sub: heardTot ? sharePct(heard[0].count / heardTot * 100) + ' of ' + plural(heardTot, 'answer') : 'No survey answers in this range' }),
         kpiCell({ label: 'Searches that found nothing', value: sTot ? sharePct(sEmpty / sTot * 100) : '–', delta: '',
@@ -3360,9 +3550,6 @@
     }
 
 
-    if ($('admMktChannels')) {
-      setHtmlPreservingCollapse($('admMktChannels'), MKT_CHANNELS.map(channelRow).join(''));
-    }
 
     renderCampaigns();
 
@@ -13821,6 +14008,7 @@
   refreshLiveSessions();
   refreshDiscordStats();
   refreshSocialStats();
+  refreshSocialPosts();
   refreshCampaigns();
   refreshAdbloxStats();
   refreshEmailStats();
