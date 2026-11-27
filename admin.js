@@ -4280,7 +4280,7 @@
     grid.innerHTML = [
       kpiCell({ label: 'Gross sales', value: fmtA(cur.aud, cur.aud >= 1000), delta: anDelta(cur.aud, prev && prev.aud, w),
         sub: cur.robux ? '+ ' + robuxRaw(cur.robux) + ' in Robux sales' : 'No Robux sales', panel: 'orders' }),
-      kpiCell({ label: 'Net revenue', value: fmtA(net, net >= 1000), delta: anDelta(net, netP, w), sub: fmtA(cur.aud - net) + ' in platform and processor fees' }),
+      kpiCell({ label: 'Net revenue', value: fmtA(net, net >= 1000), delta: anDelta(net, netP, w), sub: fmtA(cur.aud - net, true) + ' in fees', title: 'Gross sales less what the platforms and payment processors took' }),
       kpiCell({ label: 'Order volume', value: num(cur.n), delta: anDelta(cur.n, prev && prev.n, w),
         sub: RANGE_DAYS > 1 ? (Math.round(cur.n / RANGE_DAYS * 10) / 10) + ' a day on average' : RANGE_DAYS ? 'In the last 24 hours' : 'Every order so far', panel: 'orders' }),
       kpiCell({ label: 'Average sale price', value: n ? fmtA(avg) : '–', delta: anDelta(avg, avgP, w), sub: n ? plural(n, 'money sale') : 'No money sales' })
@@ -4492,7 +4492,7 @@
     return '<div class="adm-an-fig"><span class="adm-an-fig-label">' + esc(label) + '</span>' +
       '<span class="adm-an-fig-val"><b>' + value + '</b>' + (suffix ? '<em>' + suffix + '</em>' : '') + '</span>' +
       (delta ? '<span class="adm-kpi-line">' + delta + '</span>' : '') +
-      '<span class="adm-an-fig-sub">' + (sub || '&nbsp;') + '</span></div>';
+      (sub ? '<span class="adm-an-fig-sub">' + sub + '</span>' : '') + '</div>';
   }
   function anEmpty(msg) { return '<p class="adm-empty">' + esc(msg) + '</p>'; }
   function moneyBoth(aud, robux) { return robux ? (aud ? fmtA(aud) + '<span class="adm-rbx"> | ' + robuxRaw(robux) + '</span>' : robuxRaw(robux)) : fmtA(aud); }
@@ -4735,20 +4735,36 @@
   function retVisits() {
     var items = anAllItems();
     if (RET_CACHE.src === items) return RET_CACHE.list;
-    var by = {}, seen = {}, out = [];
+    // One entry per order (its items' value added up), then orders under 5 minutes apart join one visit.
+    var by = {}, ord = {}, out = [];
     items.forEach(function (x) {
-      if (!x.buyer || !isFinite(x.t) || seen[x.order]) return;
-      seen[x.order] = 1;
-      (by[x.buyer] = by[x.buyer] || []).push({ pf: x.pf, t: x.t });
+      if (!x.buyer || !isFinite(x.t)) return;
+      var o = ord[x.order];
+      if (!o) { o = ord[x.order] = { pf: x.pf, t: x.t, v: 0 }; (by[x.buyer] = by[x.buyer] || []).push(o); }
+      o.v += anVal(x.aud, x.robux);
     });
     Object.keys(by).forEach(function (b) {
-      var last = -Infinity, k = 0;
+      var last = -Infinity, k = 0, cur = null;
       by[b].sort(function (p, q) { return p.t - q.t; }).forEach(function (o) {
-        if (o.t - last >= RET_GAP_MS) { out.push({ buyer: b, pf: o.pf, t: o.t, back: k > 0 }); k++; }
+        if (o.t - last >= RET_GAP_MS) { cur = { buyer: b, pf: o.pf, t: o.t, v: o.v, back: k > 0 }; out.push(cur); k++; }
+        else if (cur) cur.v += o.v;
         last = o.t;
       });
     });
     RET_CACHE = { src: items, list: out };
+    return out;
+  }
+  // Time between a buyer's orders (every order, before the 5-minute merge), for the bands.
+  var RET_BANDS = [[5, '5m', 'Within 5 minutes, not counted as a return'], [30, '30m', '5 to 30 minutes'], [60, '1h', '30 minutes to an hour'], [1440, '24h', '1 hour to a day'],
+    [10080, '1w', '1 day to a week'], [43200, '1m', '1 week to a month'], [131400, '3m', '1 to 3 months'], [262800, '6m', '3 to 6 months'], [Infinity, '1y', 'More than 6 months']];
+  var RET_GAPS = { src: null, list: [] };
+  function retGaps() {
+    var items = anAllItems();
+    if (RET_GAPS.src === items) return RET_GAPS.list;
+    var by = {}, seen = {}, out = [];
+    items.forEach(function (x) { if (!x.buyer || !isFinite(x.t) || seen[x.order]) return; seen[x.order] = 1; (by[x.buyer] = by[x.buyer] || []).push(x.t); });
+    Object.keys(by).forEach(function (b) { var l = by[b].sort(function (p, q) { return p - q; }); for (var i = 1; i < l.length; i++) out.push({ t: l[i], min: (l[i] - l[i - 1]) / 60000 }); });
+    RET_GAPS = { src: items, list: out };
     return out;
   }
   // Buyers seen in a list of visits, and how many of them were coming back.
@@ -4802,14 +4818,30 @@
       } };
     drawPlatChart(box);
     function inWin(s, e) { var a = s ? s.getTime() : -Infinity, z = e ? e.getTime() : Infinity; return visits.filter(function (v) { return v.t >= a && v.t < z; }); }
-    var cur = retTally(inWin(w.start, w.end)), prev = w.prevStart ? retTally(inWin(w.prevStart, w.prevEnd)) : null;
+    var curV = inWin(w.start, w.end), prevV = w.prevStart ? inWin(w.prevStart, w.prevEnd) : null;
+    var cur = retTally(curV), prev = prevV ? retTally(prevV) : null;
+    // Returning revenue: what buyers who had bought before spent in the range (Robux at its DevEx value).
+    function backRev(list) { return list.reduce(function (s, v) { return v.back ? s + v.v : s; }, 0); }
+    var revBack = backRev(curV), revAll = curV.reduce(function (s, v) { return s + v.v; }, 0), revBackP = prevV ? backRev(prevV) : null;
     if (stats) stats.innerHTML = anFig('Return rate', pct(cur.rate), '', anDelta(cur.rate, prev && prev.rate, w), 'Buyers who had bought before') +
-      anFig('Returning buyers', num(cur.back), '', anDelta(cur.back, prev && prev.back, w), 'Came back after 5+ minutes') +
-      anFig('Buyers', num(cur.buyers), '', anDelta(cur.buyers, prev && prev.buyers, w), 'Named buyers in this range');
+      anFig('Returning buyers', num(cur.back), '', anDelta(cur.back, prev && prev.back, w), '') +
+      anFig('Returning revenue', fmtA(revBack, revBack >= 1000), '', anDelta(revBack, revBackP, w), revAll ? sharePct(revBack / revAll * 100) + ' of revenue from named buyers' : 'No named buyers in this range');
     if (leg) leg.innerHTML = pfs.map(function (p) {
       var t = retTally(inWin(w.start, w.end).filter(function (v) { return v.pf === p.key; }));
       return t.buyers ? '<span style="--pf:' + pfVar(p.key) + '"><i></i>' + esc(p.label) + '<b>' + pct(t.rate) + '</b></span>' : '';
     }).join('');
+    // How long buyers took to order again, for repeat orders placed in the range.
+    var bandsBox = $('admRetBands');
+    if (bandsBox) {
+      var s0 = w.start ? w.start.getTime() : -Infinity, e0 = w.end.getTime(), cnt = RET_BANDS.map(function () { return 0; });
+      retGaps().forEach(function (gp) { if (gp.t < s0 || gp.t >= e0) return; for (var i = 0; i < RET_BANDS.length; i++) if (gp.min < RET_BANDS[i][0]) { cnt[i]++; break; } });
+      var totG = anSum(cnt), maxG = Math.max.apply(null, cnt.concat([1]));
+      bandsBox.innerHTML = totG ? '<div class="adm-bars" role="table" aria-label="Time before ordering again">' + RET_BANDS.map(function (bd, i) {
+        return '<div class="adm-bar-row" role="row"><span class="adm-bar-name" role="cell">' + bd[1] + '<small>' + esc(bd[2]) + '</small></span>' +
+          '<span class="adm-bar-track" role="cell" aria-hidden="true"><i style="width:' + (cnt[i] ? Math.max(1.5, cnt[i] / maxG * 100) : 0).toFixed(1) + '%"></i></span>' +
+          '<span class="adm-bar-val" role="cell">' + plural(cnt[i], 'repeat order') + '<small>' + sharePct(cnt[i] / totG * 100) + ' of repeat orders</small></span></div>';
+      }).join('') + '</div>' : '';
+    }
   }
   wirePlatChart($('admRetChart'));
 
@@ -5059,6 +5091,13 @@
           : '<div class="adm-cat-sub-row">' + inner + '</div>';
       }).join('') + (items.length > shown.length ? '<p class="adm-cat-hint">And ' + num(items.length - shown.length) + ' more</p>' : '') + '</div>';
   }
+  // Rank move against the previous period. Something new counts as if it had been just below the
+  // last one ranked then, so a newcomer that climbs past others shows how far it went.
+  function rankMove(was, k, rank) {
+    var n = Object.keys(was).length, pr = was[k] || n + 1, nu = !was[k];
+    if (nu && pr <= rank) return '<b class="up" title="New this period">New</b>';
+    return pr > rank ? '<b class="up"' + (nu ? ' title="New this period"' : '') + '>▲ ' + (pr - rank) + '</b>' : pr < rank ? '<b class="down">▼ ' + (rank - pr) + '</b>' : '<b class="same">–</b>';
+  }
   // A category's five best sellers in the range.
   function anCatTopList(x) {
     return '<div class="adm-cat-sub">' + anCatItems(x).slice(0, 5).map(function (it) {
@@ -5094,7 +5133,7 @@
     function sub(x) { return (x.aud && x.robux ? robuxRaw(x.robux) + ' · ' : '') + plural(x.n, 'sale'); }
     function change(c, rank) {
       if (!gp) return '';
-      var move = !was[c] ? '<b class="up">New</b>' : was[c] > rank ? '<b class="up">▲ ' + (was[c] - rank) + '</b>' : was[c] < rank ? '<b class="down">▼ ' + (rank - was[c]) + '</b>' : '<b class="same">–</b>';
+      var move = rankMove(was, c, rank);
       var pv = gp[c] ? gp[c].v : 0, pct = pv ? (g[c].v - pv) / pv * 100 : null;
       return '<span class="adm-catr-chg adm-catr-move">' + move + '</span><span class="adm-catr-chg adm-catr-pct">' + (pct == null ? '' : '<small class="' + (pct >= 0 ? 'up' : 'down') + '">' + (pct >= 0 ? '+' : '−') + fmtPctAbs(pct) + '</small>') + '</span>';
     }
@@ -5227,7 +5266,7 @@
     function sub(x) { return (x.aud && x.robux ? robuxRaw(x.robux) + ' · ' : '') + plural(x.n, 'sale'); }
     function change(k, rank) {
       if (!gp) return '';
-      var move = !was[k] ? '<b class="up">New</b>' : was[k] > rank ? '<b class="up">▲ ' + (was[k] - rank) + '</b>' : was[k] < rank ? '<b class="down">▼ ' + (rank - was[k]) + '</b>' : '<b class="same">–</b>';
+      var move = rankMove(was, k, rank);
       var pv = gp[k] ? gp[k].v : 0, pct = pv ? (g[k].v - pv) / pv * 100 : null;
       return '<span class="adm-catr-chg adm-catr-move">' + move + '</span><span class="adm-catr-chg adm-catr-pct">' + (pct == null ? '' : '<small class="' + (pct >= 0 ? 'up' : 'down') + '">' + (pct >= 0 ? '+' : '−') + fmtPctAbs(pct) + '</small>') + '</span>';
     }
@@ -5265,8 +5304,8 @@
     var totA = anSum(b.map(function (x) { return x.aud; })), maxN = Math.max.apply(null, b.map(function (x) { return x.n; }));
     var sorted = list.map(function (x) { return x.aud; }).sort(function (x, y) { return x - y; }), med = sorted[sorted.length >> 1];
     var topRev = 0; b.forEach(function (x, i) { if (x.aud > b[topRev].aud) topRev = i; });
-    if (facts) facts.innerHTML = anFig('Average order value', fmtA(cur.aov), '', anDelta(cur.aov, prev && prev.aov, w), plural(cur.n, 'money order')) +
-      anFig('Typical price', fmtA(med), '', '', 'Half of products sell for less') +
+    if (facts) facts.innerHTML = anFig('Average order value', fmtA(cur.aov), '', anDelta(cur.aov, prev && prev.aov, w), '') +
+      anFig('Typical price', fmtA(med), '', '', '') +
       anFig('Most revenue from', esc(AN_BANDS[topRev][2]), '', '', sharePct(b[topRev].aud / totA * 100) + ' of revenue');
     if (chart) {
       var bk = anBuckets(orders), buckets = bk.buckets, n = buckets.length, ends = buckets.map(function (x) { return x.end.getTime(); });
@@ -5328,6 +5367,31 @@
       }
     }
     if (salesReady()) renderAnConv(homeSales(), w);
+    // Conversion over time: site orders, conversion rate or revenue per visit for each period.
+    var cv = $('admConvChart');
+    if (cv) {
+      document.querySelectorAll('#admConvView [data-cv]').forEach(function (b) { var on = b.getAttribute('data-cv') === SITE_CV; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+      if (!rows.length || !salesReady()) { cv.__chart = null; cv.innerHTML = anEmpty(rows.length ? 'Loading sales…' : 'No visits in this range.'); }
+      else {
+        var cbk = anBuckets(rows), cbs = cbk.buckets, cn = cbs.length, cends = cbs.map(function (x) { return x.end.getTime(); }), cfirst = cbs[0].start.getTime(), clast = cends[cn - 1];
+        var cses = cbs.map(function () { return {}; }), cord = cbs.map(function () { return 0; }), caud = cord.slice();
+        function at(t) { var lo = 0, hi = cn - 1; while (lo < hi) { var mid = (lo + hi) >> 1; if (t < cends[mid]) hi = mid; else lo = mid + 1; } return lo; }
+        rows.forEach(function (r) { if (r.t >= cfirst && r.t < clast) cses[at(r.t)][r.s] = 1; });
+        homeSales().forEach(function (x) { if (x.pf !== 'site' || !(x.n > 0) || x.t < cfirst || x.t >= clast) return; var i = at(x.t); cord[i] += x.n; caud[i] += x.aud; });
+        var cvis = cses.map(function (o) { return Object.keys(o).length; });
+        var crate = cvis.map(function (v, i) { return v ? Math.round(cord[i] / v * 1000) / 10 : 0; }), crpv = cvis.map(function (v, i) { return v ? caud[i] / v : 0; });
+        var cdata = SITE_CV === 'orders' ? cord : SITE_CV === 'rpv' ? crpv : crate;
+        var clabel = SITE_CV === 'orders' ? 'Site orders' : SITE_CV === 'rpv' ? 'Revenue per visit' : 'Conversion rate';
+        cv.__chart = { buckets: cbs, step: cbk.step, single: true, intTicks: SITE_CV === 'orders', aria: clabel + ' over the selected range',
+          axis: SITE_CV === 'rate' ? function (t) { return axisNum(t) + '%'; } : SITE_CV === 'orders' ? function (t) { return axisNum(t); } : null,
+          series: [{ key: 'cv', label: clabel, color: 'var(--price)', data: cdata, total: anSum(cdata) }],
+          tip: function (i) {
+            return '<div><i></i>Visits<b>' + num(cvis[i]) + '</b></div><div><i></i>Site orders<b>' + num(cord[i]) + '</b></div>' +
+              '<div><i></i>Revenue per visit<b>' + fmtA(crpv[i]) + '</b></div><div class="adm-pc-tip-total">Conversion rate<b>' + pct(crate[i]) + '</b></div>';
+          } };
+        drawPlatChart(cv);
+      }
+    }
     var fun = $('admSiteFunnel');
     if (fun) {
       var prod = {}, cart = {}, chk = {};
@@ -5354,6 +5418,17 @@
       }).join('') : anEmpty('No page views in this range.');
     }
   }
+  var SITE_CV = 'rate';
+  try { SITE_CV = localStorage.getItem('coldd_admin_site_cv_v1') || 'rate'; } catch (_) {}
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#admConvView [data-cv]');
+    if (!b) return;
+    SITE_CV = b.getAttribute('data-cv');
+    try { localStorage.setItem('coldd_admin_site_cv_v1', SITE_CV); } catch (_) {}
+    renderSite();
+  });
+  wirePlatChart($('admSiteChart'));
+  wirePlatChart($('admConvChart'));
 
   function renderAnalytics() {
     document.querySelectorAll('.adm-range button').forEach(function (b) { b.classList.toggle('active', +b.getAttribute('data-range') === RANGE_DAYS); });

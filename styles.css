@@ -6113,21 +6113,11 @@ html[data-theme="light"] .adm-donut-empty { stroke: rgba(0,0,0,0.06) !important;
 .adm-catr-unc .adm-cat-sub { padding-left: 36px; }
 .adm-catr-grp { border-top: 1px solid var(--hairline); }
 .adm-catr-grp > .adm-catr-row { border-top: 0; }
-/* Rank, name, share, rank move, change, value (and the open arrow): fixed columns so rows line up. */
-.adm-catr-row.is-cat { grid-template-columns: 22px minmax(0, 1fr) 56px 40px 64px minmax(104px, auto) 16px; }
-.adm-catr.no-chg .adm-catr-row.is-cat { grid-template-columns: 22px minmax(0, 1fr) 56px minmax(104px, auto) 16px; }
-.adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) 56px 40px 64px minmax(104px, auto); }
-.adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) 56px minmax(104px, auto); }
 .adm-catr-share { justify-self: start; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.06); font-size: 11px; font-weight: 700; letter-spacing: 0.03em; color: var(--fg-3); font-variant-numeric: tabular-nums; }
 html[data-theme="light"] .adm-catr-share { background: rgba(0,0,0,0.05); }
 .adm-catr-move { align-items: flex-start; }
 .adm-catr-note { grid-column: span 3; font-size: 12px; color: var(--fg-3); }
 .adm-catr.no-chg .adm-catr-note { grid-column: span 1; }
-@media (max-width: 560px) {
-  .adm-catr-row.is-cat, .adm-catr.no-chg .adm-catr-row.is-cat { grid-template-columns: 18px minmax(0, 1fr) 52px auto 16px; }
-  .adm-catr-row.is-pm, .adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 18px minmax(0, 1fr) 52px auto; }
-  .adm-catr-note { grid-column: span 1; }
-}
 /* Categories and Payment methods side by side at the same height; payment methods scroll inside. */
 .adm-an-pair { align-items: stretch; }
 .adm-pm-scroll { overflow-y: auto; margin-right: -8px; padding-right: 8px; }
@@ -6772,3 +6762,16 @@ html[data-theme="light"] .adm-mkt-line { background: rgba(0,0,0,0.025); }
 .adm-an-figs:has(> .adm-mkt-line) { display: block; margin: 0 0 14px; border-bottom: 0; }
 .adm-an-figs > .adm-mkt-line { margin: 0; }
 #admEmailSentHead[hidden], #admEmailSentWrap[hidden], .adm-mkt .adm-po-wrap[hidden], .adm-mkt .adm-mkt-h3[hidden] { display: none; }
+
+/* Categories and Payment methods rows: rank, name, share, rank move, change, value (and the
+   open arrow on categories). Kept last with stronger selectors: the older .adm-catr-row rules
+   above would otherwise squeeze these rows into four columns. */
+.adm-catr .adm-catr-row.is-cat.is-btn { grid-template-columns: 22px minmax(0, 1fr) 56px 40px 64px minmax(104px, auto) 16px; }
+.adm-catr.no-chg .adm-catr-row.is-cat.is-btn { grid-template-columns: 22px minmax(0, 1fr) 56px minmax(104px, auto) 16px; }
+.adm-catr .adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) 56px 40px 64px minmax(104px, auto); }
+.adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 22px minmax(0, 1fr) 56px minmax(104px, auto); }
+@media (max-width: 560px) {
+  .adm-catr .adm-catr-row.is-cat.is-btn, .adm-catr.no-chg .adm-catr-row.is-cat.is-btn { grid-template-columns: 18px minmax(0, 1fr) 52px auto 16px; }
+  .adm-catr .adm-catr-row.is-pm, .adm-catr.no-chg .adm-catr-row.is-pm { grid-template-columns: 18px minmax(0, 1fr) 52px auto; }
+  .adm-catr-note { grid-column: span 1; }
+}
