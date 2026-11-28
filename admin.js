@@ -2182,12 +2182,20 @@
     // One line (CH.single) needs no end labels; the hover gives the breakdown.
     var padL = 56, padR = narrow || CH.single ? 16 : 118, padT = 12, padB = 28;
     var iw = W - padL - padR, ih = H - padT - padB;
-    var max = 0;
+    var max = 0, min = 0;
     // s.plot (when given) is what the line draws; s.data stays what the hover reports.
-    series.forEach(function (s) { (s.plot || s.data).forEach(function (v) { if (v > max) max = v; }); });
-    var sc = niceScale(max);
+    series.forEach(function (s) { (s.plot || s.data).forEach(function (v) { if (v > max) max = v; if (v < min) min = v; }); });
+    var sc = niceScale(max - min), lo = 0;
+    // Values below zero (followers lost): the same step, extended down past the lowest value.
+    if (min < 0) {
+      var st = sc.ticks[1] - sc.ticks[0];
+      lo = Math.floor(min / st - 1e-9) * st;
+      var hi = Math.max(st, Math.ceil(max / st - 1e-9) * st);
+      sc = { top: hi, ticks: [] };
+      for (var tk = lo; tk <= hi + st / 2; tk += st) sc.ticks.push(+tk.toFixed(10));
+    }
     function X(i) { return padL + (n === 1 ? iw / 2 : i / (n - 1) * iw); }
-    function Y(v) { return padT + ih - (v / sc.top) * ih; }
+    function Y(v) { return padT + ih - ((v - lo) / (sc.top - lo)) * ih; }
     var svg = '';
     sc.ticks.forEach(function (t) {
       if (CH.intTicks && t % 1) return;
