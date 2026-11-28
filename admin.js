@@ -2185,6 +2185,8 @@
     var max = 0, min = 0;
     // s.plot (when given) is what the line draws; s.data stays what the hover reports.
     series.forEach(function (s) { (s.plot || s.data).forEach(function (v) { if (v > max) max = v; if (v < min) min = v; }); });
+    // CH.ref: a dashed reference line (a threshold), always inside the scale.
+    if (CH.ref && CH.ref.v > max) max = CH.ref.v;
     var sc = niceScale(max - min), lo = 0;
     // Values below zero (followers lost): the same step, extended down past the lowest value.
     if (min < 0) {
@@ -2203,6 +2205,11 @@
       svg += '<line class="pc-grid" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + y + '" y2="' + y + '"/>' +
         '<text class="pc-axis" x="' + (padL - 10) + '" y="' + y + '" dy="4" text-anchor="end">' + esc(CH.axis ? CH.axis(t) : 'A$' + axisNum(t)) + '</text>';
     });
+    if (CH.ref) {
+      var ry = Y(CH.ref.v).toFixed(1);
+      svg += '<line class="pc-ref" x1="' + padL + '" x2="' + (padL + iw) + '" y1="' + ry + '" y2="' + ry + '"/>' +
+        '<text class="pc-axis pc-ref-label" x="' + (padL + iw) + '" y="' + ry + '" dy="-6" text-anchor="end">' + esc(CH.ref.label) + '</text>';
+    }
     // Axis labels counted back from the newest point, every step-th one.
     var step = (CH.step || 1) * (narrow ? 2 : 1);
     months.forEach(function (m, i) {
@@ -12939,8 +12946,8 @@
     $('admFinRange').hidden = !main;
     finRenderMonthDD();
     $('admFinSettingsBtn').textContent = main ? 'Settings' : 'Back to finances';
-    if (main) { finRenderOverview(); finRenderSheet(); finRenderExpForm(); finRenderExpList(); }
-    else { finRenderSettings(); finRenderInstalments(); finRenderIncomeTax(); finRenderGst(); finRenderInbox(); }
+    if (main) { finRenderOverview(); finRenderGst(); finRenderSheet(); finRenderExpForm(); finRenderExpList(); }
+    else { finRenderSettings(); finRenderInstalments(); finRenderIncomeTax(); finRenderInbox(); }
   }
 
   /* ---- Periods: last week, this month, this year ---- */
@@ -13777,28 +13784,60 @@
         return '<tr' + (here ? ' class="is-latest"' : '') + '><th scope="row">' + finM0(b.start) + (here ? ' <small>you are here</small>' : '') + '</th><td>' + finPct(b.rate, 0) + '</td><td>' + finM0(b.cum) + '</td><td>' + (b.start > P ? finM0(b.start - P) : '–') + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
+  /* ---- GST tracker: 12-month turnover against the registration threshold ---- */
   function finRenderGst() {
-    var t = finToday(), s = FIN.settings, th = Number(s.gst_threshold) || 75000;
-    var yearAgo = finAdd(t, -365), d91 = finAdd(t, -91);
-    var bank = FIN.weeks.filter(function (w) { return w.week_ending <= t; });
-    function sum(list) { return list.reduce(function (a, w) { return a + (Number(w.revenue) || 0) + (Number(w.tcg_revenue) || 0); }, 0); }
-    var trailing = sum(bank.filter(function (w) { return w.week_ending > yearAgo; })), projected = sum(bank.filter(function (w) { return w.week_ending > d91; })) / 13 * 52;
-    var g12 = null, gProj = null;
-    if (salesReady()) {
-      var now = Date.now(), y0 = now - 365 * DAY_MS, q0 = now - 91 * DAY_MS, g91 = 0;
-      g12 = 0;
-      homeSales().forEach(function (x) { if (x.t >= y0) g12 += x.aud; if (x.t >= q0) g91 += x.aud; });
-      gProj = g91 / 91 * 365;
-    } else if (FIN.salesTries++ < 40) setTimeout(function () { if (curPanel === 'finances' && FIN.view === 'settings') finRenderGst(); }, 1500);
-    function meter(v) { return '<span class="adm-share"><span class="adm-share-bar"><i style="--pf:' + (v >= th ? 'var(--warn)' : 'var(--accent)') + ';width:' + Math.min(100, v / th * 100).toFixed(1) + '%"></i></span><span>' + Math.round(v / th * 100) + '%</span></span>'; }
-    var bankOver = trailing >= th || projected >= th, grossOver = g12 != null && (g12 >= th || gProj >= th);
-    $('admFinGst').innerHTML = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>GST</h2><span>threshold ' + finM0(th) + '</span></div>' +
-      '<span class="dt-badge ' + (bankOver || grossOver ? 'err' : 'ok') + '">' + (bankOver ? 'Over on bank revenue' : grossOver ? 'Over on gross sales' : 'Under') + '</span></div>' +
-      '<div class="adm-plat-tablewrap"><table class="adm-plat-table"><thead><tr><th scope="col"></th><th scope="col">Last 12 months</th><th scope="col">Next 12 months at current pace</th></tr></thead><tbody>' +
-      '<tr><th scope="row">Bank revenue <small>coldd + TCG</small></th><td>' + finM0(trailing) + meter(trailing) + '</td><td>' + finM0(projected) + meter(projected) + '</td></tr>' +
-      '<tr><th scope="row">Gross sales <small>dashboard</small></th><td>' + (g12 == null ? 'Loading…' : finM0(g12) + meter(g12)) + '</td><td>' + (gProj == null ? 'Loading…' : finM0(gProj) + meter(gProj)) + '</td></tr>' +
-      '</tbody></table></div>' +
-      '<p class="adm-hint" style="margin-top:10px;">You must register within 21 days once your current or projected 12-month GST turnover reaches ' + finM0(th) + '. Bank revenue follows the sheet; turnover is normally measured on sales before fees, so ask your accountant which figure counts for you. Projections use the last 13 weeks.</p>';
+    var box = $('admFinGst'); if (!box) return;
+    var th = Number(FIN.settings.gst_threshold) || 75000, t = finToday();
+    var head = '<div class="adm-hp-head"><div class="adm-hp-title"><h2>GST tracker</h2><span>registration at ' + finM0(th) + ' a year</span></div>';
+    if (!salesReady()) {
+      if (FIN.salesTries++ < 40) setTimeout(function () { if (curPanel === 'finances' && FIN.view === 'main') finRenderGst(); }, 1500);
+      box.innerHTML = head + '</div><p class="adm-empty">Loading sales…</p>';
+      $('admFinGstChart').__chart = null; $('admFinGstChart').innerHTML = ''; $('admFinGstNote').textContent = '';
+      return;
+    }
+    var now = Date.now(), sales = homeSales().filter(function (x) { return x.aud > 0 && x.t <= now; });
+    // Gross sales per day back from today (index 0 = the last 24 hours).
+    var daily = []; for (var k = 0; k < 365; k++) daily.push(0);
+    sales.forEach(function (x) { var d = Math.floor((now - x.t) / DAY_MS); if (d >= 0 && d < 365) daily[d] += x.aud; });
+    var last12 = daily.reduce(function (a, v) { return a + v; }, 0);
+    var rate = daily.slice(0, 91).reduce(function (a, v) { return a + v; }, 0) / 91, projected = rate * 365;
+    // Rolling 12-month total j days ahead: the sales still inside the window plus j days at the current pace.
+    var keep = [], run = 0;
+    for (k = 0; k < 365; k++) { run += daily[k]; keep.push(run); }
+    var reach = null;
+    if (last12 < th && rate > 0) for (var j = 1; j <= 365; j++) { if ((364 - j >= 0 ? keep[364 - j] : 0) + j * rate >= th) { reach = j; break; } }
+    // Bank revenue (coldd + TCG) from the weekly log, for comparison.
+    var yearAgo = finAdd(t, -365), d91 = finAdd(t, -91), bank = FIN.weeks.filter(function (w) { return w.week_ending <= t; });
+    function bsum(list) { return list.reduce(function (a, w) { return a + (Number(w.revenue) || 0) + (Number(w.tcg_revenue) || 0); }, 0); }
+    var bank12 = bsum(bank.filter(function (w) { return w.week_ending > yearAgo; }));
+    var over = last12 >= th, projOver = projected >= th;
+    var badge = over ? '<span class="dt-badge err">Over: register within 21 days</span>' : projOver ? '<span class="dt-badge err">Projected over</span>' :
+      last12 >= th * 0.8 ? '<span class="dt-badge warn">Getting close</span>' : '<span class="dt-badge ok">Under</span>';
+    var reachTxt = over ? 'Reached' : reach == null ? 'Not within a year' : new Date(now + reach * DAY_MS).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    var reachSub = over ? 'the last 12 months are over' : reach == null ? 'at the pace of the last 13 weeks' : 'in ' + plural(Math.round(reach / 7), 'week') + ' at the current pace';
+    var facts = '<div class="adm-an-facts is-4">' +
+      anFig('Last 12 months', finM0(last12), '', '', Math.round(last12 / th * 100) + '% of ' + finM0(th)) +
+      anFig('Next 12 months', finM0(projected), '', '', 'at the pace of the last 13 weeks') +
+      anFig('Room left', finM0(Math.max(0, th - last12)), '', '', 'before the threshold') +
+      anFig('Reaches ' + finM0(th), esc(reachTxt), '', '', reachSub) + '</div>';
+    // The rolling 12-month total at the end of each of the last 12 months (this month: today).
+    var buckets = [], roll = [], d0 = new Date();
+    for (var i = 11; i >= 0; i--) {
+      var ms = new Date(d0.getFullYear(), d0.getMonth() - i, 1), end = i === 0 ? now : new Date(d0.getFullYear(), d0.getMonth() - i + 1, 1).getTime();
+      var v = 0; sales.forEach(function (x) { if (x.t <= end && x.t > end - 365 * DAY_MS) v += x.aud; });
+      buckets.push({ short: ms.toLocaleDateString('en-AU', { month: 'short' }), long: ms.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }) });
+      roll.push(v);
+    }
+    box.innerHTML = head + badge + '</div>' + facts;
+    $('admFinGstNote').textContent = 'GST turnover is your sales over any 12 months, before platform fees, including sales to overseas buyers. You must register within 21 days once the last 12 months reach ' + finM0(th) + ', or once the next 12 months are expected to. Gross sales here are cash sales on every platform; Robux counts when it is cashed out. Bank revenue for the last 12 months is ' + finM0(bank12) + '. Ask your accountant which figure applies to you.';
+    var cb = $('admFinGstChart');
+    cb.__chart = {
+      buckets: buckets, step: 1, single: true, complete: false, axis: finAxis, aria: 'Gross sales over the previous 12 months, at the end of each month',
+      ref: { v: th, label: finM0(th) + ' threshold' },
+      series: [{ key: 'gst', label: 'Last 12 months', color: 'var(--accent)', data: roll, total: last12 }],
+      tip: function (i) { return '<div style="--pf:var(--accent)"><i></i>12 months to ' + esc(i === 11 ? 'today' : 'end of ' + buckets[i].short) + '<b>' + finM0(roll[i]) + '</b></div><div class="adm-pc-tip-total">Of the threshold<b>' + Math.round(roll[i] / th * 100) + '%</b></div>'; }
+    };
+    drawPlatChart(cb);
   }
   function finSaveInstalment(fyLabel, q, field, value) {
     var rec = FIN.instalments.filter(function (x) { return x.fy === fyLabel && x.quarter === q; })[0];
@@ -13874,6 +13913,7 @@
     finCheckAccess();
     wirePlatChart($('admFinChart'));
     wirePlatChart($('admFinExpChart'));
+    wirePlatChart($('admFinGstChart'));
     document.addEventListener('click', function (e) {
       if (!e.target.closest || !e.target.closest('#admFinHeadTools')) return;
       var b;
